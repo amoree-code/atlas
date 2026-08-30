@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""ai-memory-mounts — where Claude Code keeps memory. Claude-specific by definition.
+
+Claude Code's native memory tool stores files in ~/.claude/projects/<cwd-slug>/memory/.
+That directory is keyed to the working directory, so memory written in one project is
+invisible from another. AI-OS resolves that by pointing every one of those directories at
+the single canonical store.
+
+Two facts live here and nowhere else, because both are Claude Code's and not memory's:
+
+  1. the location  ~/.claude/projects/
+  2. the slug rule every '/' and '.' in the working directory becomes '-'
+
+Everything else — what a healthy mount is, how to attach one, what happens to
+pre-existing files — belongs to the core engine, which never learns this client exists.
+
+  ai-memory-mounts list          every mount path, one per line
+  ai-memory-mounts path <dir>    the mount path serving working directory <dir>
+
+Output contract: newline-separated absolute paths on stdout, exit 0.
+Zero dependencies: stdlib only.
+"""
+import re, sys
+from pathlib import Path
+
+PROJECTS = Path.home() / ".claude" / "projects"
+
+
+def slug(path: Path) -> str:
+    """Claude Code's project-directory encoding. Lossy: '/' and '.' both become '-',
+    so a working directory can never be reconstructed from a slug."""
+    return re.sub(r"[/.]", "-", str(path))
+
+
+def cmd_list():
+    if not PROJECTS.is_dir():
+        return 0
+    for d in sorted(PROJECTS.iterdir()):
+        if d.is_dir() or d.is_symlink():
+            print(d / "memory")
+    return 0
+
+
+def cmd_path(args):
+    cwd = Path(args[0]).resolve() if args else Path.cwd()
+    print(PROJECTS / slug(cwd) / "memory")
+    return 0
+
+
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    verb = a[0] if a else "list"
+    if verb == "list":
+        sys.exit(cmd_list())
+    if verb == "path":
+        sys.exit(cmd_path(a[1:]))
+    print(__doc__, file=sys.stderr)
+    sys.exit(2)

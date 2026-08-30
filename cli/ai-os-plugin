@@ -25,6 +25,9 @@ AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
 CORE_CONTRACT_RANGE = (1, 1)          # this core supports contract 1..1
 CORE_RESOURCES = {"rules.render", "skills.list", "workspace.memory.path",
                   "workspace.knowledge.path", "policies.list"}
+# Integration points core delegates to a plugin. Core defines the point and owns the
+# behaviour; the plugin supplies only its own client's facts. A plugin may not invent one.
+CORE_INTEGRATIONS = {"memory.mounts"}
 CLIENT_DOMAIN = re.compile(r"^~?/?\.?(claude|codex|gemini|cursor|config/opencode|opencode)")
 
 G, Y, R, B, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[34m", "\033[2m", "\033[0m"
@@ -238,6 +241,29 @@ def validate(pid, m):
     for r in (m.get("requires") or []):
         if r not in CORE_RESOURCES:
             err.append(f"requires unknown core resource: {r!r}")
+
+    integ = m.get("integrates")
+    if integ is not None and not isinstance(integ, dict):
+        err.append("integrates: must be a map")
+    elif integ:
+        for point, spec in integ.items():
+            if point not in CORE_INTEGRATIONS:
+                err.append(f"integrates unknown core integration point: {point!r} — "
+                           f"core defines these; a plugin may not invent one")
+                continue
+            if not isinstance(spec, dict):
+                err.append(f"integrates.{point}: must be a map with "
+                           f"command/format/verified"); continue
+            for field in ("command", "format", "verified"):
+                if field not in spec:
+                    err.append(f"integrates.{point}: missing required field {field!r}")
+            cmd = str(spec.get("command") or "")
+            if cmd and ("/" in cmd or cmd.startswith(".")):
+                err.append(f"integrates.{point}.command must be a bare filename inside "
+                           f"adapters/{pid}/ — got {cmd!r}")
+            if spec.get("verified") is not True:
+                warn.append(f"integrates.{point} verified={spec.get('verified')!r} — core "
+                            f"will not call it (a gap stays visible rather than guessed at)")
 
     client = m.get("client") or {}
     if "consumer_verified" not in client:

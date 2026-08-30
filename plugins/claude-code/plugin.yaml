@@ -24,6 +24,11 @@ requires:
   - skills.list
   - workspace.memory.path
 
+integrates:
+  # Claude Code scopes memory by working directory. Core owns the memory engine and never
+  # learns this client exists; this command tells it only WHERE this client's mounts are.
+  memory.mounts: { command: ai-memory-mounts, format: newline-paths, verified: true }
+
 enforces: [git]             # policies/git.yaml, via ai-guard-push (PreToolUse)
 
 conventions:
@@ -41,7 +46,8 @@ conventions:
 notes: >
   The only client with a canonical hook. Its memory tool is scoped by working directory
   (~/.claude/projects/<cwd-slug>/memory/), so this plugin maintains symlinks to the single
-  canonical store — the reason workspace.memory.path is required. That grant is whole-store
+  canonical store — the reason workspace.memory.path is required. That directory layout and
+  the slug rule live in adapters/claude-code/ai-memory-mounts and nowhere else. That grant is whole-store
   today; per-project scoping is V0.2, after the memory schema exists.
   hooks and mcp are verified paths that this plugin deliberately does not write: hooks are
   installed once by the user, and there are no canonical MCP servers to propagate.

@@ -104,6 +104,7 @@ export PATH="$PWD/cli:$PATH"
 ai-os init --dry-run     # see exactly what would happen
 ai-os init               # create ~/.ai-os — never overwrites anything
 ai-os doctor             # verify the contract holds
+ai-os memory doctor      # verify memory + knowledge health
 ```
 
 Requires `bash`, `git`, `python3`. No dependencies, no build step. Full walkthrough in

@@ -38,8 +38,23 @@ timing, priority, destination — is `travel/`. Neither restates the other.
 Some AI clients scope their own native memory tool to the current working directory,
 which means memory written in one folder can be invisible from another. If your adapter
 has this quirk, the fix is one canonical store plus symlinks into it per project
-directory — not copies, and not asking the user to repeat themselves per folder. See
-`adapters/claude-code/` for how the Claude Code adapter handles this.
+directory — not copies, and not asking the user to repeat themselves per folder.
+
+The engine that does this is core and client-agnostic: `cli/ai-os-memory` owns the store,
+the validation, and the non-destructive attach. It contains no client name. A plugin with
+the quirk declares one integration point in its manifest —
+
+```yaml
+integrates:
+  memory.mounts: { command: <exe>, format: newline-paths, verified: true }
+```
+
+— and answers a single question: *where does my client keep its memory directories?* Core
+decides everything else. `adapters/claude-code/ai-memory-mounts` is the only implementation
+today, holding the two facts that are Claude Code's and not memory's: the
+`~/.claude/projects/` location and the working-directory slug rule. Any other client gets
+the same engine by declaring the same point — there is one memory engine, never a fork per
+client.
 
 ## Retrieval discipline
 

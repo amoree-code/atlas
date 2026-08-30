@@ -14,6 +14,7 @@ ai-os v$VERSION — a portable operating layer for AI coding agents.
   ai-os workspace <cmd>      local versioning of the private workspace
   ai-os plugin <cmd>         list | doctor — the client adapter registry
   ai-os render <skill>       resolve a canonical skill for one client
+  ai-os memory <cmd>         status | doctor | attach — the memory engine
   ai-os privacy-scan [path]  check the public repo for credentials and personal data
   ai-os version
 
@@ -28,7 +29,7 @@ EOF
 
 cmd="${1:-status}"; shift || true
 case "$cmd" in
-  init|doctor|status|workspace|privacy-scan|plugin|render) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
+  init|doctor|status|workspace|privacy-scan|plugin|render|memory) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
   version|--version|-V) echo "$VERSION" ;;
   help|--help|-h)       usage ;;
   *) echo "ai-os: unknown command '$cmd'" >&2; echo >&2; usage >&2; exit 2 ;;

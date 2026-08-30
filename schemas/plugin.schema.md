@@ -104,6 +104,37 @@ requires:
   - workspace.memory.path   # a resolved path — a grant, not a filesystem license
 ```
 
+## Integration points
+
+`provides:` covers what core **writes into** a client. Some core capabilities instead need
+one fact only the client's own plugin can supply. Those are declared under `integrates:`:
+
+```yaml
+integrates:
+  memory.mounts: { command: ai-memory-mounts, format: newline-paths, verified: true }
+```
+
+| Field | Meaning |
+|---|---|
+| `command` | a bare filename inside `adapters/<plugin>/` — never a path |
+| `format` | the contract of what it prints on stdout |
+| `verified` | same rule as `provides`: **not `true` ⇒ core MUST NOT call it** |
+
+**Core defines the integration points; a plugin may never invent one.** An unrecognized key
+under `integrates:` is a hard failure, exactly like an unknown `requires:` resource. The
+point exists so core keeps the capability and the plugin keeps only its client's facts:
+
+```
+memory.mounts   plugin answers "where does my client keep memory directories?"
+                core decides what a healthy mount is, attaches it, and rescues
+                anything already there — for every client, identically
+```
+
+This is what lets one memory engine serve every client without a fork. Nothing in
+`cli/ai-os-memory` names a client, and any plugin that declares `memory.mounts` gets the
+whole engine. Today only `claude-code` declares it, because only Claude Code scopes memory
+by working directory — that is a fact about Claude Code, not a shape in core.
+
 ### The honest limitation
 
 `workspace.memory.path` is a real filesystem grant. Claude Code's native memory tool opens

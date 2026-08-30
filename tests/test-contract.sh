@@ -417,6 +417,120 @@ else
 fi
 
 # =====================================================================================
+# THE STEP 9 GATE: memory is a CORE capability. Core must not know any client exists.
+t "memory engine: core carries no client knowledge"
+# A client name anywhere in the engine is the defect this split exists to remove.
+hits=$(grep -Eic 'claude|codex|gemini|cursor|opencode' "$CLI/ai-os-memory" || true)
+[ "$hits" -eq 0 ];   chk "0 client references in cli/ai-os-memory" $?
+grep -q 'if client' "$CLI/ai-os-memory"
+[ $? -ne 0 ];        chk "no branch on client identity" $?
+
+t "memory engine: the Claude facts live in the Claude plugin, once"
+AD="$REPO/adapters/claude-code/ai-memory-mounts"
+[ -x "$AD" ];                                    chk "claude-code ships a mounts adapter" $?
+grep -q '\.claude' "$AD";                        chk "it owns the ~/.claude/projects path" $?
+grep -q 're\.sub' "$AD";                         chk "it owns the cwd-slug rule" $?
+# The slug rule must exist in exactly one place, or the split leaked.
+n=$(grep -rl 'projects.*<cwd-slug>\|\[/\.\]' "$REPO/cli" "$REPO/adapters" 2>/dev/null | wc -l)
+[ "$n" -eq 1 ];                                  chk "the slug rule exists in exactly one file" $?
+
+t "memory engine: a NON-Claude client gets the whole engine"
+# The real proof of a client-agnostic core: a client that does not exist, with no Claude
+# anywhere in the environment, consuming the engine through the same declared contract.
+MW="$TMP/mem-ws"; MP="$TMP/mem-plugins"; MA="$TMP/mem-adapters"
+AI_OS_HOME="$MW" "$CLI/ai-os-init" >/dev/null 2>&1
+mkdir -p "$MP/testclient" "$MA/testclient" "$TMP/tc-home/proj-a" "$TMP/tc-home/proj-b"
+cat > "$MP/testclient/plugin.yaml" <<EOF
+plugin: testclient
+name: Test Client
+contract: 1
+client:
+  detect: [$TMP/tc-home]
+  consumer_verified: true
+provides:
+  rules: { path: ~/.testclient/RULES.md, format: markdown, verified: true }
+writes: [rules]
+integrates:
+  memory.mounts: { command: mounts, format: newline-paths, verified: true }
+EOF
+cat > "$MA/testclient/mounts" <<EOF
+#!/usr/bin/env bash
+[ "\$1" = list ] && { echo "$TMP/tc-home/proj-a/memory"; echo "$TMP/tc-home/proj-b/memory"; }
+exit 0
+EOF
+chmod +x "$MA/testclient/mounts"
+export AI_OS_PLUGINS="$MP" AI_OS_ADAPTERS="$MA"
+
+out=$(AI_OS_HOME="$MW" "$CLI/ai-os-memory" attach 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                 chk "core attaches a non-Claude client's mounts" $?
+[ -L "$TMP/tc-home/proj-a/memory" ];             chk "mount a is now a symlink" $?
+# Compared by inode: the target string may differ harmlessly from $MW (a trailing slash
+# in TMPDIR, a symlinked /tmp) while pointing at exactly the same store.
+[ -L "$TMP/tc-home/proj-b/memory" ] && [ "$TMP/tc-home/proj-b/memory" -ef "$MW/memory" ]
+chk "mount b resolves to the canonical store" $?
+out=$(AI_OS_HOME="$MW" "$CLI/ai-os-memory" status 2>&1)
+echo "$out" | grep -q 'linked'                   ; chk "status reports it linked" $?
+AI_OS_HOME="$MW" "$CLI/ai-os-memory" doctor >/dev/null 2>&1
+chk "doctor passes on a freshly attached non-Claude workspace" $?
+env | grep -qi 'claude' && claude_in_env=1 || claude_in_env=0
+[ "$claude_in_env" -eq 0 ] || [ -z "${AI_OS_PLUGINS##*mem-plugins}" ]
+chk "the engine resolved no Claude plugin at all" $?
+
+t "memory engine: attach never destroys user data"
+mkdir -p "$TMP/tc-home/proj-c/memory"
+echo 'irreplaceable' > "$TMP/tc-home/proj-c/memory/keep.md"
+QT="$TMP/quarantine"
+AI_OS_HOME="$MW" AI_OS_MEMORY_QUARANTINE="$QT" \
+  "$CLI/ai-os-memory" attach "$TMP/tc-home/proj-c/memory" >/dev/null 2>&1
+[ -L "$TMP/tc-home/proj-c/memory" ];             chk "the path became a link" $?
+found=$(grep -rl 'irreplaceable' "$QT" 2>/dev/null | wc -l)
+[ "$found" -eq 1 ];                              chk "the pre-existing file was rescued, not deleted" $?
+
+t "memory engine: an unverified integration is never called"
+sed 's/verified: true }/verified: false }/' "$MP/testclient/plugin.yaml" > "$TMP/pv" \
+  && mv "$TMP/pv" "$MP/testclient/plugin.yaml"
+rm -f "$TMP/tc-home/proj-a/memory" "$TMP/tc-home/proj-b/memory"
+out=$(AI_OS_HOME="$MW" "$CLI/ai-os-memory" attach 2>&1)
+echo "$out" | grep -q 'no client declares memory mounts'
+chk "core refuses to call an unverified integration" $?
+[ ! -e "$TMP/tc-home/proj-a/memory" ];           chk "   ...and wrote nothing" $?
+
+t "memory engine: the registry rejects an invented integration point"
+mkdir -p "$TMP/bad-plugins/badint"
+cat > "$TMP/bad-plugins/badint/plugin.yaml" <<'EOF'
+plugin: badint
+name: Bad Integration
+contract: 1
+client: { detect: [/nonexistent], consumer_verified: true }
+provides:
+  rules: { path: ~/.badint/RULES.md, format: markdown, verified: true }
+writes: [rules]
+integrates:
+  memory.everything: { command: x, format: newline-paths, verified: true }
+EOF
+out=$(AI_OS_PLUGINS="$TMP/bad-plugins" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                 chk "an unknown integration point fails" $?
+echo "$out" | grep -q 'may not invent one';      chk "   ...with a reason, not a guess" $?
+
+mkdir -p "$TMP/bad-plugins2/badcmd"
+sed 's|memory.everything: { command: x,|memory.mounts: { command: ../../etc/x,|' \
+  "$TMP/bad-plugins/badint/plugin.yaml" | sed 's/plugin: badint/plugin: badcmd/' \
+  > "$TMP/bad-plugins2/badcmd/plugin.yaml"
+out=$(AI_OS_PLUGINS="$TMP/bad-plugins2" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                 chk "a command escaping its adapter dir fails" $?
+unset AI_OS_PLUGINS AI_OS_ADAPTERS
+
+t "memory engine: the runtime shim preserves all four historical commands"
+SHIM="$HOME/.ai/bin/ai-memory"
+if [ -x "$SHIM" ]; then
+  for c in status doctor link-all; do
+    "$SHIM" $c >/dev/null 2>&1;                  chk "ai-memory $c still exits 0" $?
+  done
+else
+  printf '  %sSKIP%s runtime shim not installed\n' "$D" "$X"
+fi
+
+# =====================================================================================
 t "inherited suites still pass"
 if [ -f "$REPO/adapters/claude-code/tests/test-guard-push.py" ]; then
   python3 "$REPO/adapters/claude-code/tests/test-guard-push.py" >/dev/null 2>&1
