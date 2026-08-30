@@ -678,6 +678,12 @@ if [ -f "$REPO/adapters/claude-code/tests/test-guard-push.py" ]; then
 else
   printf '  %sSKIP%s claude-code push guard tests not found\n' "$D" "$X"
 fi
+if [ -f "$REPO/tests/test-runtime-relocation.py" ] && [ -x "$HOME/.ai/bin/ai-sync" ]; then
+  python3 "$REPO/tests/test-runtime-relocation.py" >/dev/null 2>&1
+  chk "persistent runtime data lives in the private workspace" $?
+else
+  printf '  %sSKIP%s runtime relocation tests need the runtime layer present\n' "$D" "$X"
+fi
 
 # =====================================================================================
 printf '\n%s%d passed%s' "$G" "$pass" "$X"

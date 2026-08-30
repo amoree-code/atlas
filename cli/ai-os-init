@@ -56,7 +56,7 @@ done
 # --- structure: system-default, always safe to create -------------------------------
 # A directory carries no content, so creating one can never overwrite a fact.
 printf '%sstructure%s\n' "$B" "$X"
-for section in config memory knowledge projects sessions daily skills; do
+for section in config memory knowledge projects sessions daily skills runtime; do
   dir="$AI_OS_HOME/$section"
   if [ -d "$dir" ]; then
     say "exists   $section/"; existed=$((existed+1))
