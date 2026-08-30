@@ -300,15 +300,15 @@ PYEOF
 chk "the 3 writable clients resolve to their original paths" $?
 
 t "ai-sync knows no client by name"
-! grep -qE '^\s*CLIENTS\s*=\s*\{' "$HOME/.ai/bin/ai-sync"
+! grep -qE '^\s*CLIENTS\s*=\s*\{' "$CLI/ai-sync"
 chk "no hardcoded CLIENTS table" $?
-! grep -qE '^\s*PROJECT_ONLY\s*=\s*\[' "$HOME/.ai/bin/ai-sync"
+! grep -qE '^\s*PROJECT_ONLY\s*=\s*\[' "$CLI/ai-sync"
 chk "no hardcoded PROJECT_ONLY list" $?
-! grep -qE 'HOME */ *"\.(claude|codex|gemini|cursor)' "$HOME/.ai/bin/ai-sync"
+! grep -qE 'HOME */ *"\.(claude|codex|gemini|cursor)' "$CLI/ai-sync"
 chk "no hardcoded client config paths" $?
 # The docstring says the words "if client == \"claude\"" to explain why it is gone, so
 # match an actual conditional (trailing colon) rather than the prose about one.
-! grep -qE 'if +client *== *"claude" *:' "$HOME/.ai/bin/ai-sync"
+! grep -qE 'if +client *== *"claude" *:' "$CLI/ai-sync"
 chk "no client-name conditional in core render()" $?
 
 t "the Claude rules fragment lives in the Claude plugin"
@@ -343,10 +343,10 @@ chk "cursor and opencode are never write targets" $?
 chk "nothing was written to opencode's unverified path" $?
 
 t "skill backups are namespaced per client"
-grep -q 'def backup(path, tag, owner=None)' "$HOME/.ai/bin/ai-sync"
+grep -q 'def backup(path, tag, owner=None)' "$CLI/ai-sync"
 chk "backup() takes an owner" $?
 # Call sites only — the def line also contains "owner=".
-n=$(grep 'backup(.*owner=' "$HOME/.ai/bin/ai-sync" | grep -vc '^def ')
+n=$(grep 'backup(.*owner=' "$CLI/ai-sync" | grep -vc '^def ')
 [ "$n" -eq 3 ]
 chk "all 3 skill backup sites namespace their copy ($n)" $?
 
@@ -669,6 +669,91 @@ if [ -f "$SJ" ] && grep -q 'ai-os-hook' "$SJ"; then
 else
   printf '  %sSKIP%s launcher not installed in this environment\n' "$D" "$X"
 fi
+
+# =====================================================================================
+# THE STEP 12a GATE: ai-sync is core. It was never runtime-specific — it resolves every
+# client from the registry and every skill from the canonical bodies, both of which live
+# here. These prove it moved without bringing a client name or a machine with it.
+SY="$CLI/ai-sync"
+
+t "ai-sync is canonical core, and knows no client"
+[ -x "$SY" ];                                        chk "cli/ai-sync exists and is executable" $?
+for name in claude codex gemini cursor opencode; do
+  n=$(grep -ci "$name" "$SY" || true)
+  [ "$n" -eq 0 ];                                    chk "core never says '$name'" $?
+done
+n=$(grep -Ec 'Documents|Projects|Developer|/Users/' "$SY" || true)
+[ "$n" -eq 0 ];                                      chk "core embeds no machine-specific path" $?
+grep -q '_reference_client' "$SY"
+chk "the reference client comes from configuration, not a literal" $?
+grep -q 'active_adapter' "$SY"
+chk "   ...read from active_adapter in the workspace settings" $?
+
+t "ai-sync runs as core, without the runtime layer on PATH"
+out=$(env PATH=/usr/bin:/bin "$SY" status 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "status works with ~/.ai/bin off PATH" $?
+echo "$out" | grep -q 'CLIENT';                      chk "   ...and still renders the client table" $?
+env PATH=/usr/bin:/bin "$SY" verify >/dev/null 2>&1
+chk "verify works with ~/.ai/bin off PATH" $?
+
+t "ai-sync resolves its own repository, not a configured one"
+# A copy of core must sync from the tree it lives in; resolving some other checkout
+# would sync from a tree nobody is looking at.
+grep -q 'Path(__file__).resolve().parent.parent' "$SY"
+chk "the repository is located from the file's own path" $?
+# Scoped to the resolver's own code: the name appears in its docstring, explaining
+# precisely why it is not consulted. A prose mention is not a code path.
+# Scoped to the code: the name also appears in the resolver's docstring, explaining
+# precisely why it is not consulted. A prose mention is not a code path.
+n=$(grep -c 'search(r"\^ai_os_repo' "$SY" || true)
+[ "$n" -eq 0 ];                                      chk "   ...and never resolved from ai_os_repo:" $?
+
+t "ai-sync honours AI_OS_HOME for runtime state"
+grep -q 'AI_OS_HOME = Path(os.environ.get("AI_OS_HOME"' "$SY"
+chk "AI_OS_HOME is read from the environment" $?
+grep -q 'RUNTIME = AI_OS_HOME / "runtime"' "$SY"
+chk "runtime state resolves under it" $?
+grep -q 'STATE = RUNTIME / "state"' "$SY";           chk "   ...state" $?
+grep -q 'BACKUPS = RUNTIME / "backups"' "$SY";       chk "   ...backups" $?
+
+t "the runtime copy is a passthrough shim, not a second implementation"
+RS="$HOME/.ai/bin/ai-sync"
+if [ -x "$RS" ]; then
+  grep -q 'os.execv' "$RS";                          chk "it execs the canonical engine" $?
+  n=$(wc -l < "$RS"); [ "$n" -lt 100 ]
+  chk "it carries no engine of its own ($n lines)" $?
+  a=$("$RS" verify 2>&1); b=$("$SY" verify 2>&1)
+  [ "$a" = "$b" ];                                   chk "shim output is identical to canonical" $?
+  "$RS" bogus >/dev/null 2>&1; rc1=$?
+  "$SY" bogus >/dev/null 2>&1; rc2=$?
+  [ "$rc1" -eq "$rc2" ];                             chk "   ...and so are its exit codes" $?
+else
+  printf '  %sSKIP%s runtime layer not present\n' "$D" "$X"
+fi
+
+t "SessionEnd runs the engine through the dynamic launcher"
+SJ="$HOME/.claude/settings.json"
+if [ -f "$SJ" ] && grep -q 'ai-os-hook' "$SJ"; then
+  grep -q '\$HOME/.claude/ai-os-hook cli/ai-sync sync' "$SJ"
+  chk "SessionEnd goes through the launcher" $?
+  grep -q '\$HOME/.ai/bin/ai-sync' "$SJ"
+  [ $? -ne 0 ];                                      chk "   ...and no longer through ~/.ai/bin" $?
+  n=$(grep -Ec '"command": "[^"]*(Documents|Projects|Developer)/' "$SJ" || true)
+  [ "$n" -eq 0 ];                                    chk "no hook embeds a repository path" $?
+  env -i HOME="$HOME" PATH=/usr/bin:/bin sh -c \
+    '$HOME/.claude/ai-os-hook cli/ai-sync verify' >/dev/null 2>&1
+  chk "the launcher reaches the engine under a hook's minimal env" $?
+else
+  printf '  %sSKIP%s launcher not installed in this environment\n' "$D" "$X"
+fi
+
+t "a clean sync stays a clean no-op"
+before=$("$SY" verify 2>&1)
+"$SY" sync >/dev/null 2>&1;                          chk "sync exits 0 on an already-synced workspace" $?
+after=$("$SY" verify 2>&1)
+[ "$before" = "$after" ];                            chk "   ...and changes nothing verify can see" $?
+out=$("$SY" sync 2>&1)
+echo "$out" | grep -q '0 client(s) changed';         chk "   ...reporting 0 clients changed" $?
 
 # =====================================================================================
 t "inherited suites still pass"

@@ -16,7 +16,9 @@ from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-SYNC = Path.home() / ".ai" / "bin" / "ai-sync"
+# The canonical engine, since step 12a. ~/.ai/bin/ai-sync is a passthrough shim that
+# execs this file, so importing it as a module would exec instead of load.
+SYNC = REPO / "cli" / "ai-sync"
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():

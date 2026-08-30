@@ -1,0 +1,545 @@
+#!/usr/bin/env python3
+"""ai-sync — propagate the canonical AI environment to installed AI clients.
+
+Sources of truth:
+  rules   ~/.ai/rules/*.md
+  skills  <ai-os>/skills/*/SKILL.md   canonical bodies, with {{profile.*}}/{{client.*}}
+  clients <ai-os>/plugins/*/plugin.yaml   the registry — no client is hardcoded here
+
+Which clients exist, where each writes, what it is allowed to write, and how its rules
+block is titled all come from the plugin manifests. A capability marked verified:false is
+never written: writing to a guessed path produces a file the client never reads and a user
+who believes it works.
+
+Generated files carry a marker and a source hash. A generated block edited by hand is
+detected and never silently overwritten. Anything OUTSIDE the markers is the user's and is
+preserved on every write.
+
+Commands: status | diff | sync [--force] | verify | rollback | enable | disable
+Zero dependencies: stdlib only.
+"""
+import hashlib, json, os, re, shutil, subprocess, sys, time
+from pathlib import Path
+
+HOME = Path.home()
+AI = HOME / ".ai"
+RULES = AI / "rules"
+RUNTIME_SKILLS = AI / "skills"      # generated output; see cmd_sync
+DISABLED = AI / "sync" / "DISABLED"  # a toggle the user sets, not accumulated data
+
+AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", HOME / ".ai-os"))
+
+# Persistent runtime data belongs to the private workspace, not the runtime layer.
+# ~/.ai holds tooling and configuration. What accumulates over time — the record of what
+# was synced, and the copies taken before each overwrite — is the user's own and lives
+# with the rest of their data, so retiring ~/.ai never takes it with it.
+RUNTIME = AI_OS_HOME / "runtime"
+STATE = RUNTIME / "state" / "state.json"
+BACKUPS = RUNTIME / "backups"
+
+# Where both lived before V0.1.5. Read once by migrate_runtime(), then never again.
+LEGACY_STATE = AI / "sync" / "state" / "state.json"
+LEGACY_BACKUPS = AI / "sync" / "backups"
+
+MARK_BEGIN = "<!-- ai-sync:generated -->"
+MARK_END = "<!-- ai-sync:end -->"
+
+PROFILE = AI_OS_HOME / "config" / "profile.yaml"
+
+
+def _find_repo():
+    """This file lives in the repository, so the repository is its own parent.
+
+    AI_OS_REPO still wins when set, which is what lets a test point the engine at a
+    fixture tree. The configured ai_os_repo: is deliberately NOT consulted here: a copy
+    of core resolving some *other* checkout as canonical would sync from a tree nobody
+    is looking at.
+    """
+    env = os.environ.get("AI_OS_REPO")
+    if env and (Path(env) / "plugins").is_dir():
+        return Path(env)
+    here = Path(__file__).resolve().parent.parent
+    if (here / "plugins").is_dir():
+        return here
+    raise SystemExit(
+        "ai-sync: cannot locate the AI OS repository (needed for the plugin registry).\n"
+        "         Run it from inside the repository, or point AI_OS_REPO at one.")
+
+
+REPO = _find_repo()
+_pl = {"__file__": str(REPO / "cli" / "ai-os-plugin")}
+exec(compile((REPO / "cli" / "ai-os-plugin").read_text().split("if __name__")[0],
+             "ai-os-plugin", "exec"), _pl)
+parse_manifest, validate_manifest = _pl["parse"], _pl["validate"]
+TOKEN = re.compile(r"\{\{\s*(profile|client)\.([a-z0-9_.]+)\s*\}\}", re.I)
+SKILLS = REPO / "skills"          # canonical skill bodies live in the public repo
+
+
+def _dig(d, dotted):
+    cur = d
+    for part in dotted.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return None
+        cur = cur[part]
+    return cur
+
+
+def load_profile():
+    """The user's private values. Absent is fine — placeholders render as [[unset]]."""
+    return parse_manifest(PROFILE.read_text(), str(PROFILE)) if PROFILE.exists() else {}
+
+
+def resolve(text, profile, conv):
+    def sub(m):
+        ns, key = m.group(1).lower(), m.group(2)
+        v = _dig(profile, key) if ns == "profile" else _dig(conv, key)
+        if v is None or v == "" or v == []:
+            return f"[[{ns}.{key} unset]]"
+        return "|".join(str(x) for x in v) if isinstance(v, list) else str(v)
+    return TOKEN.sub(sub, text)
+
+
+def load_registry():
+    """Build the client table from plugin manifests. Nothing about a client is hardcoded.
+
+    Returns (writable, project_only). `writable` is keyed by each plugin's sync id, which
+    is its legacy_sync_id when it has one — the sync state and backup filenames predate the
+    registry and are keyed on those names.
+    """
+    writable, project_only = {}, []
+    for d in sorted((REPO / "plugins").iterdir()):
+        f = d / "plugin.yaml"
+        if not f.exists():
+            continue
+        man = parse_manifest(f.read_text(), str(f))
+        errs, _ = validate_manifest(d.name, man)
+        if errs:
+            say("SKIP", f"{d.name}: invalid manifest — {errs[0]}", "y"); continue
+        conv = man.get("conventions") or {}
+        writes = man.get("writes") or []
+        sid = conv.get("legacy_sync_id") or man["plugin"]
+        if not writes:
+            project_only.append(man["plugin"]); continue
+        prov = man["provides"]
+        # validate_manifest already refused any `writes` entry that is not verified:true.
+        writable[sid] = {
+            "id": man["plugin"],
+            "dir": d,
+            "rules": Path(os.path.expanduser(str(prov["rules"]["path"]))),
+            "skills": Path(os.path.expanduser(str(prov["skills"]["path"]).rstrip("/"))),
+            "conv": conv,
+            "writes": writes,
+        }
+    return writable, project_only
+
+
+CLIENTS, PROJECT_ONLY = load_registry()
+
+C = {"g": "\033[32m", "y": "\033[33m", "r": "\033[31m", "d": "\033[2m", "x": "\033[0m"}
+def say(sym, msg, col="x"): print(f"  {C[col]}{sym:<5}{C['x']} {msg}")
+
+def sha(text):
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+def _reference_client():
+    """The client whose conventions render the generated runtime copy.
+
+    Read from active_adapter: in the workspace settings — a user preference expressed as
+    a plugin id. Core compares it against the registry and never interprets the value.
+    """
+    cfg = AI_OS_HOME / "config" / "settings.yaml"
+    want = ""
+    if cfg.exists():
+        m = re.search(r"^active_adapter:\s*(\S+)", cfg.read_text(), re.M)
+        if m:
+            want = m.group(1).split("#")[0].strip().strip("\"'")
+    if want:
+        for c in CLIENTS.values():
+            if c["id"] == want:
+                return c
+    return next(iter(CLIENTS.values()), None)
+
+
+def canonical_rules():
+    return "\n".join(p.read_text().rstrip() for p in sorted(RULES.glob("*.md")))
+
+def canonical_skills():
+    """Canonical skill NAMES. The bodies live in the public repo and are rendered
+    per client; ~/.ai/skills is generated output, not a source."""
+    return sorted(p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists())
+
+def header(client, src_hash):
+    return (f"{MARK_BEGIN}\n"
+            f"<!-- source: ~/.ai/rules/  |  hash: {src_hash}  |  client: {client} -->\n"
+            f"<!-- DO NOT EDIT INSIDE THE MARKERS. Edit ~/.ai/rules/*.md and run: ai-sync sync -->\n"
+            f"<!-- Anything you write OUTSIDE the markers is yours and is preserved. -->\n")
+
+def render(client, rules, cfg=None):
+    """The generated block. Everything client-specific comes from the plugin manifest.
+
+    There is no branch on client identity here any more, and there must never be one:
+    the moment core knows a client by name, that client is the architecture rather than an
+    adapter.
+    """
+    h = sha(rules)
+    cfg = cfg if cfg is not None else CLIENTS.get(client, {})
+    conv = cfg.get("conv") or {}
+    title = conv.get("rules_title") or "# Global rules (AGENTS.md)"
+    body = [header(client, h), title, "",
+            "Canonical source: `~/.ai/rules/`. Shared by every AI client on this machine.",
+            "", rules, ""]
+    frag = conv.get("rules_fragment")
+    if frag and cfg.get("dir"):
+        f = cfg["dir"] / frag
+        if f.exists():
+            body += f.read_text().rstrip("\n").split("\n") + [""]
+    body.append(MARK_END)
+    return "\n".join(body) + "\n", h
+
+def split_managed(path):
+    """Return (preserved_text, had_block). Content outside the markers is the user's."""
+    if not path.exists():
+        return "", False
+    t = path.read_text()
+    if MARK_BEGIN in t and MARK_END in t:
+        pre, rest = t.split(MARK_BEGIN, 1)
+        _, post = rest.split(MARK_END, 1)
+        return (pre.rstrip() + "\n" + post.lstrip()).strip(), True
+    return t.strip(), False
+
+def _tree_files(root):
+    return sorted(q.relative_to(root) for q in root.rglob("*") if q.is_file())
+
+
+def _identical(a, b):
+    """Same bytes, whether a is a file or a directory tree."""
+    if a.is_file() and b.is_file():
+        return a.read_bytes() == b.read_bytes()
+    if a.is_dir() and b.is_dir():
+        fa, fb = _tree_files(a), _tree_files(b)
+        return fa == fb and all((a / r).read_bytes() == (b / r).read_bytes() for r in fa)
+    return False
+
+
+def migrate_runtime():
+    """Relocate persistent sync data out of the runtime layer, once.
+
+    ~/.ai/sync/{state,backups} -> $AI_OS_HOME/runtime/{state,backups}
+
+    Idempotent: with nothing at the legacy paths this returns immediately, which is the
+    steady state after the first run. It moves rather than copies, so the old location
+    cannot drift into a second source of truth.
+
+    It never overwrites. Where something already exists at the destination the two are
+    compared: identical means the legacy copy is redundant and is dropped; different
+    means the migration stops and says so. Picking a winner between two versions of a
+    user's own backup is not a decision this can make correctly, and making it silently
+    is how data disappears.
+    """
+    if not LEGACY_STATE.exists() and not LEGACY_BACKUPS.exists():
+        return 0
+
+    moved = dropped = tags = 0
+    conflicts = []
+
+    if LEGACY_STATE.exists():
+        if not STATE.exists():
+            STATE.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(LEGACY_STATE), str(STATE))
+            say("moved", f"sync state -> {STATE}", "g"); moved += 1
+        elif _identical(LEGACY_STATE, STATE):
+            LEGACY_STATE.unlink(); dropped += 1
+        else:
+            conflicts.append(f"state.json differs: {LEGACY_STATE}  vs  {STATE}")
+
+    if LEGACY_BACKUPS.is_dir():
+        BACKUPS.mkdir(parents=True, exist_ok=True)
+        for src in sorted(LEGACY_BACKUPS.iterdir()):
+            dest = BACKUPS / src.name
+            if not dest.exists():
+                shutil.move(str(src), str(dest)); moved += 1; tags += 1
+            elif _identical(src, dest):
+                shutil.rmtree(src) if src.is_dir() else src.unlink(); dropped += 1
+            else:
+                conflicts.append(f"backup {src.name} differs on both sides")
+        if tags:
+            say("moved", f"{tags} backup tag(s) -> {BACKUPS}", "g")
+
+    if conflicts:
+        say("STOP", "runtime relocation cannot complete without losing data:", "r")
+        for c in conflicts:
+            say("    ", c, "y")
+        say("    ", "Nothing was overwritten. Resolve these by hand, then re-run.", "y")
+        return 1
+
+    # Only now, and only if empty: leave no half-migrated shell behind.
+    for d in (LEGACY_STATE.parent, LEGACY_BACKUPS):
+        if d.is_dir() and not any(d.iterdir()):
+            d.rmdir()
+    if dropped and not moved:
+        say("ok", f"runtime already relocated; dropped {dropped} redundant legacy copy", "g")
+    return 0
+
+
+def load_state():
+    if STATE.exists():
+        try: return json.loads(STATE.read_text())
+        except Exception: pass
+    return {"version": 1, "clients": {}, "history": []}
+
+def save_state(s):
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps(s, indent=2) + "\n")
+
+def backup(path, tag, owner=None):
+    """Copy a file into the timestamped backup tag before it is overwritten.
+
+    `owner` namespaces the copy. Without it, two clients' versions of the same skill both
+    land on "<skill>__SKILL.md" and the second silently overwrites the first — harmless
+    while every client held identical content, and a real loss now that each client gets
+    its own rendering. Rules backups keep their original unprefixed names so `rollback`
+    still finds them.
+    """
+    if not path.exists(): return None
+    d = BACKUPS / tag; d.mkdir(parents=True, exist_ok=True)
+    name = f"{path.parent.name}__{path.name}"
+    dest = d / (f"{owner}__{name}" if owner else name)
+    shutil.copy2(path, dest)
+    return str(dest)
+
+def drift(client, cfg, state):
+    """Has the generated block been edited by hand since we wrote it?"""
+    p = cfg["rules"]
+    if not p.exists(): return None
+    rec = state["clients"].get(client, {})
+    if "written_hash" not in rec: return None
+    t = p.read_text()
+    if MARK_BEGIN not in t: return "markers-removed"
+    blk = t.split(MARK_BEGIN, 1)[1].split(MARK_END, 1)[0]
+    return "edited" if sha(blk) != rec["written_hash"] else None
+
+# ---------------------------------------------------------------- commands
+def cmd_status(_):
+    rules = canonical_rules(); rh = sha(rules); skills = canonical_skills()
+    st = load_state()
+    mode = (C["r"] + "AUTO-SYNC DISABLED" + C["x"]) if DISABLED.exists() else "auto-sync on"
+    print("\n  canonical  ~/.ai   rules-hash {}   {} skills   {}\n".format(rh, len(skills), mode))
+    print(f"  {'CLIENT':<10} {'RULES':<12} {'SKILLS':<10} LAST SYNC")
+    for name, cfg in CLIENTS.items():
+        rec = st["clients"].get(name, {})
+        d = drift(name, cfg, st)
+        if d: r = f"{C['y']}{d}{C['x']}"
+        elif rec.get("rules_hash") == rh: r = f"{C['g']}synced{C['x']}"
+        elif cfg["rules"].exists(): r = f"{C['y']}stale{C['x']}"
+        else: r = f"{C['r']}missing{C['x']}"
+        have = len([s for s in skills if (cfg["skills"] / s / "SKILL.md").exists()]) if cfg["skills"].exists() else 0
+        sk = f"{C['g']}{have}/{len(skills)}{C['x']}" if have == len(skills) else f"{C['y']}{have}/{len(skills)}{C['x']}"
+        print(f"  {name:<10} {r:<21} {sk:<19} {rec.get('at','never')}")
+    for name in PROJECT_ONLY:
+        print(f"  {name:<10} {C['d']}project-level AGENTS.md only (no verified global path){C['x']}")
+    print()
+    return 0
+
+def cmd_diff(_):
+    rules = canonical_rules(); n = 0
+    for name, cfg in CLIENTS.items():
+        new, _ = render(name, rules, cfg)
+        old = cfg["rules"].read_text() if cfg["rules"].exists() else ""
+        if old.strip() != new.strip():
+            n += 1
+            print(f"\n{C['y']}--- {name}: {cfg['rules']}{C['x']}")
+            import difflib
+            for l in list(difflib.unified_diff(old.splitlines(), new.splitlines(),
+                                               "current", "generated", lineterm=""))[:40]:
+                col = C['g'] if l.startswith('+') else C['r'] if l.startswith('-') else C['d']
+                print(f"  {col}{l}{C['x']}")
+    print(f"\n  {n} client(s) would change\n" if n else f"\n  {C['g']}all clients up to date{C['x']}\n")
+    return 0
+
+def cmd_sync(args):
+    force = "--force" in args
+    if DISABLED.exists() and not force:
+        say("skip", "auto-sync is disabled (ai-sync enable, or --force)", "y"); return 0
+    rules = canonical_rules(); rh = sha(rules); skills = canonical_skills()
+
+    # Pre-flight: refuse to propagate a secret. Blocks BEFORE anything is written,
+    # rather than reporting it after the fact.
+    secret = re.compile(r'(sk-[A-Za-z0-9]{20}|ghp_[A-Za-z0-9]{30}|AKIA[0-9A-Z]{16}'
+                        r'|-----BEGIN [A-Z ]*PRIVATE KEY|xox[baprs]-[A-Za-z0-9-]{10})')
+    # The profile is injected into every skill, so a secret there would propagate to
+    # every client. It is scanned for the same reason the rules and skills are.
+    for src in sorted(RULES.glob("*.md")) + sorted(SKILLS.glob("*/SKILL.md")) \
+            + ([PROFILE] if PROFILE.exists() else []):
+        if secret.search(src.read_text()):
+            say("ABORT", "credential pattern in {} — nothing written. "
+                         "Remove it; secrets belong in env vars or the keychain."
+                         .format(str(src).replace(str(HOME), "~")), "r")
+            return 1
+
+    profile = load_profile()
+    st = load_state(); tag = time.strftime("%Y%m%d-%H%M%S"); changed = []
+
+    for name, cfg in CLIENTS.items():
+        if not cfg["rules"].parent.exists():
+            say("skip", f"{name}: not installed", "d"); continue
+        d = drift(name, cfg, st)
+        if d and not force:
+            say("HOLD", f"{name}: generated block was {d} by hand — not overwriting. "
+                        f"Review, then: ai-sync sync --force", "y")
+            continue
+        preserved, _ = split_managed(cfg["rules"])
+        new_block, _ = render(name, rules, cfg)
+        out = new_block + (("\n" + preserved + "\n") if preserved else "")
+        if cfg["rules"].exists() and cfg["rules"].read_text() == out:
+            say("ok", f"{name}: rules already current", "g")
+        else:
+            b = backup(cfg["rules"], tag)
+            cfg["rules"].parent.mkdir(parents=True, exist_ok=True)
+            cfg["rules"].write_text(out)
+            say("sync", f"{name}: rules -> {str(cfg['rules']).replace(str(HOME),'~')}"
+                        + (f" {C['d']}(backup kept){C['x']}" if b else ""), "g")
+            changed.append(name)
+
+        # Skills: render the canonical body for THIS client, then write. Additive —
+        # a client's own skills are never touched, only the canonical names.
+        cfg["skills"].mkdir(parents=True, exist_ok=True)
+        for s in skills:
+            src, dst = SKILLS / s, cfg["skills"] / s
+            want = resolve((src / "SKILL.md").read_text(), profile, cfg["conv"])
+            if dst.exists() and (dst / "SKILL.md").exists() \
+                    and sha((dst / "SKILL.md").read_text()) == sha(want):
+                continue
+            if dst.exists():
+                backup(dst / "SKILL.md", tag, owner=name); shutil.rmtree(dst)
+            shutil.copytree(src, dst)          # references/, .graphify_version, etc.
+            (dst / "SKILL.md").write_text(want)
+            say("sync", f"{name}: skill {s}", "g")
+
+        # Remove skills ai-sync itself installed that are no longer canonical.
+        # Only ever touches names recorded in our own state — a client's own skills
+        # are never candidates for removal.
+        previously = set(st["clients"].get(name, {}).get("skills", []))
+        for orphan in sorted(previously - set(skills)):
+            od = cfg["skills"] / orphan
+            if od.exists():
+                backup(od / "SKILL.md", tag, owner=name); shutil.rmtree(od)
+                say("prune", "{}: removed {} (no longer canonical)".format(name, orphan), "y")
+
+        blk = out.split(MARK_BEGIN,1)[1].split(MARK_END,1)[0]
+        st["clients"][name] = {"rules_hash": rh, "written_hash": sha(blk),
+                               "skills": skills, "at": time.strftime("%Y-%m-%d %H:%M"),
+                               "status": "synced"}
+    # The runtime skills directory is GENERATED output, not a source. Nothing consumes it
+    # any more — every client renders straight from the canonical bodies — so it retires
+    # with the rest of the runtime layer. It is kept in step with canonical meanwhile, so
+    # it cannot quietly drift back into being a second source.
+    #
+    # It has to be rendered with SOME client's conventions, and which one is the user's
+    # choice rather than core's: active_adapter: in the workspace settings. Core reads a
+    # preference and matches it against the registry; it never learns what the value
+    # names. A workspace that never set one falls back to the first registered client.
+    ref = _reference_client()
+    if ref:
+        for s in skills:
+            want = resolve((SKILLS / s / "SKILL.md").read_text(), profile, ref["conv"])
+            dst = RUNTIME_SKILLS / s
+            if dst.exists() and (dst / "SKILL.md").exists() \
+                    and (dst / "SKILL.md").read_text() == want:
+                continue
+            if dst.exists():
+                backup(dst / "SKILL.md", tag, owner="runtime"); shutil.rmtree(dst)
+            shutil.copytree(SKILLS / s, dst)
+            (dst / "SKILL.md").write_text(want)
+            say("gen", f"runtime skill {s} regenerated from canonical", "y")
+
+    st["history"] = ([{"tag": tag, "rules_hash": rh, "changed": changed}] + st.get("history", []))[:20]
+    save_state(st); write_manifest(rules, skills, st)
+    print(f"\n  {C['g']}synced{C['x']}  {len(changed)} client(s) changed  ·  backup tag {tag}\n")
+    return 0
+
+def cmd_verify(_):
+    """Semantic check: does every client actually carry every canonical rule heading?"""
+    rules = canonical_rules(); fail = 0
+    _vp = load_profile()
+    heads = re.findall(r'^## (.+)$', rules, re.M)
+    print(f"\n  checking {len(heads)} rule sections across {len(CLIENTS)} clients\n")
+    for name, cfg in CLIENTS.items():
+        if not cfg["rules"].exists():
+            say("FAIL", f"{name}: no rules file", "r"); fail = 1; continue
+        t = cfg["rules"].read_text()
+        missing = [h for h in heads if f"## {h}" not in t]
+        if missing: say("FAIL", f"{name}: missing {missing}", "r"); fail = 1
+        else: say("ok", f"{name}: all {len(heads)} sections present", "g")
+        sk = canonical_skills()
+        gone = [s for s in sk if not (cfg["skills"]/s/"SKILL.md").exists()]
+        if gone: say("FAIL", f"{name}: missing skills {gone}", "r"); fail = 1
+        else: say("ok", f"{name}: all {len(sk)} skills present", "g")
+        stale = [s for s in sk if (cfg["skills"]/s/"SKILL.md").exists()
+                 and (cfg["skills"]/s/"SKILL.md").read_text()
+                     != resolve((SKILLS/s/"SKILL.md").read_text(), _vp, cfg["conv"])]
+        if stale: say("FAIL", f"{name}: skills differ from the canonical render {stale}", "r"); fail = 1
+    # secrets must never reach a generated file
+    pat = re.compile(r'(sk-[A-Za-z0-9]{20}|ghp_[A-Za-z0-9]{30}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY)')
+    for name, cfg in CLIENTS.items():
+        if cfg["rules"].exists() and pat.search(cfg["rules"].read_text()):
+            say("FAIL", f"{name}: credential pattern in generated file", "r"); fail = 1
+    if not fail: say("ok", "no credential patterns in any generated file", "g")
+    print(f"\n  {C['g']}verified{C['x']}\n" if not fail else f"\n  {C['r']}verification failed{C['x']}\n")
+    return fail
+
+def cmd_rollback(args):
+    # only timestamped sync tags are rollback targets; pre-sync-originals is a manual archive
+    tags = sorted((d.name for d in BACKUPS.iterdir()
+                   if d.is_dir() and re.fullmatch(r"\d{8}-\d{6}", d.name)), reverse=True) \
+           if BACKUPS.exists() else []
+    if not tags: say("--", "no backups", "y"); return 1
+    tag = args[0] if args and args[0] in tags else tags[0]
+    for f in (BACKUPS / tag).iterdir():
+        if "__" not in f.name:
+            continue
+        parent, fname = f.name.split("__", 1)
+        for cfg in CLIENTS.values():
+            if cfg["rules"].parent.name == parent and cfg["rules"].name == fname:
+                shutil.copy2(f, cfg["rules"]); say("back", f"restored {cfg['rules']}", "g")
+    say("ok", f"rolled back to {tag}. Run: ai-sync status", "g"); return 0
+
+def cmd_enable(_):
+    DISABLED.unlink(missing_ok=True); say("ok", "auto-sync enabled", "g"); return 0
+
+def cmd_disable(_):
+    DISABLED.parent.mkdir(parents=True, exist_ok=True); DISABLED.write_text("disabled\n")
+    say("ok", "auto-sync disabled (ai-sync sync --force still works)", "y"); return 0
+
+def write_manifest(rules, skills, st):
+    m = AI / "manifest" / "environment.yaml"; m.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["# GENERATED by ai-sync — do not edit. Reflects reality at last sync.",
+             "environment:", "  name: shared-ai-environment",
+             "  source_of_truth: ai-os", f"  canonical_root: ~/.ai",
+             f"  generated_at: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+             f"  rules_hash: {sha(rules)}", "", "rules:"]
+    lines += [f"  - {p.name}" for p in sorted(RULES.glob('*.md'))]
+    lines += ["", "skills:"] + [f"  - {s}" for s in skills]
+    lines += ["", "memory:", "  provider: files", "  root: ~/.ai-os",
+              f"  shared_by: [{', '.join(list(CLIENTS) + PROJECT_ONLY)}]", "",
+              "# Resolved from <ai-os>/plugins/*/plugin.yaml — no client is hardcoded.",
+              "clients:"]
+    for n in list(CLIENTS) + PROJECT_ONLY:
+        rec = st["clients"].get(n, {})
+        lines += [f"  {n}:", f"    enabled: true",
+                  f"    scope: {'global+skills' if n in CLIENTS else 'project-level'}",
+                  f"    status: {rec.get('status','project-only')}",
+                  f"    last_sync: {rec.get('at','n/a')}"]
+    m.write_text("\n".join(lines) + "\n")
+
+CMDS = {"status": cmd_status, "diff": cmd_diff, "sync": cmd_sync, "verify": cmd_verify,
+        "rollback": cmd_rollback, "enable": cmd_enable, "disable": cmd_disable}
+if __name__ == "__main__":
+    a = sys.argv[1:] or ["status"]
+    if a[0] not in CMDS:
+        print(__doc__); sys.exit(1)
+    # Before any command: every one of them reads state or backups, so the relocation
+    # runs first or not at all. It is a no-op once done, and refuses rather than guess.
+    rc = migrate_runtime()
+    if rc:
+        sys.exit(rc)
+    sys.exit(CMDS[a[0]](a[1:]))
