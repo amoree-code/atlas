@@ -1,0 +1,71 @@
+# AI OS policy — data classification for the public repository.
+#
+# Secret scanning is not enough. A repository can be entirely free of credentials and
+# still publish who the user is, where they live on disk, and what they are working on.
+# These are two different failure modes with two different fixes, so they are classified
+# separately.
+
+policy: privacy-classification
+version: 1
+since: V0.1.3
+
+classes:
+
+  credential:
+    definition: a value that grants access to something
+    severity: block
+    rationale: >
+      Publication is irreversible and immediately exploitable. Rotation is the only
+      remedy, and it has to happen whether or not anyone noticed.
+    detectable: generically   # the shapes are standardized, so patterns are portable
+    examples: [private key blocks, cloud access keys, provider API keys, VCS tokens, JWTs, connection strings with a password]
+
+  personal:
+    definition: a value that identifies a person, their machine, or their private work
+    severity: block-in-public-repo
+    rationale: >
+      Nothing is compromised, but the point of the public repository is that it can be
+      published. A real name, a home directory path, or a client's repository name in the
+      history cannot be taken back either.
+    detectable: partly       # shapes are generic; the actual terms are user-specific
+    examples: [real names, email addresses, phone numbers, absolute home paths, private repository names, account handles, employer or client names]
+
+  benign:
+    definition: content that resembles a finding but carries no information
+    severity: ignore
+    examples: [example.com addresses, placeholder paths, documented pattern strings, the detector's own regexes]
+
+# --- where the terms come from ------------------------------------------------------
+# The critical design point. A scanner that hardcodes the user's name, email, employer
+# and repository names IS ITSELF a leak, and it would ship in the public repository.
+# So the public half carries only generic shapes; the identifying terms live private.
+term_sources:
+  generic_patterns:
+    where: built into the scanner
+    contains: shapes only — no name, no email, no path, no repository, belonging to anyone
+  user_terms:
+    where: $AI_OS_HOME/config/privacy-terms.txt
+    contains: the user's own identifying strings, one per line, '#' comments allowed
+    classification: private   # never copied to, referenced by, or committed in the public repo
+    optional: true            # absent means generic-only scanning, with a warning
+  allowlist:
+    where: <ai-os>/policies/privacy-allowlist.txt
+    contains: known-benign strings that would otherwise match
+    purpose: keep the signal-to-noise ratio high enough that the scan is actually run
+
+scope:
+  scan: [working tree, staged content]
+  also_scan_on_request: git history       # --history; slow, and findings there need rewriting, not deletion
+  never_scan: [$AI_OS_HOME, ~/.ai]        # private and runtime are expected to contain all of this
+
+false_positives:
+  stance: >
+    A scanner that cries wolf gets disabled, and a disabled scanner protects nothing.
+    Prefer a missed low-severity personal match over a wall of noise — the credential
+    patterns are the ones tuned for recall.
+  techniques: [allowlist file, skip binaries and .git, minimum entropy/length on generic key shapes, ignore the policy files that define the patterns]
+
+enforcement:
+  command: ai-os privacy-scan
+  exit: non-zero on any finding
+  destructive: false        # reports; never edits, never deletes, never rewrites history

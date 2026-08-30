@@ -1,0 +1,149 @@
+# AI OS policy — the Public / Private / Runtime contract.
+#
+# This is the load-bearing boundary of the whole system. Everything else in AI OS
+# assumes it holds. It is declared here once, client-agnostically; `ai-os doctor`
+# checks it, and each adapter enforces it in whatever mechanism it has.
+
+policy: public-private-contract
+version: 1
+since: V0.1.3
+
+principle: >
+  Access is not ownership. The runtime may read and write the user's private workspace —
+  that is its job. It does not follow that the public repository owns, tracks, ships, or
+  may publish any of that content. Ownership is decided by which layer the artifact
+  belongs to, never by which layer happens to be able to reach it.
+
+# --- the three layers -------------------------------------------------------------
+# V0.1.3 freezes this shape deliberately. Collapsing runtime into the public repository
+# is a later architectural decision, not a cleanup.
+layers:
+
+  public:
+    what: the reusable AI OS software — publishable, installable by anyone
+    default_root: the ai-os repository, wherever it is cloned
+    owns:
+      - code
+      - cli
+      - adapters
+      - policies
+      - schemas
+      - public skills
+      - templates          # initialization seeds only — see templates.contract below
+      - documentation
+      - tests
+      - public examples
+    must_never_contain:
+      - personal memory
+      - personal knowledge
+      - personal projects, sessions or daily records
+      - identity, names, emails, phone numbers
+      - credentials, tokens, API keys
+      - private repository names
+      - absolute user paths
+      - user-specific configuration values
+
+  runtime:
+    what: the live execution layer — how AI OS actually runs on this machine today
+    default_root: ~/.ai
+    owns:
+      - hooks
+      - runtime scripts
+      - execution mechanisms
+      - client-specific integration
+      - synchronization logic
+      - temporary implementation state
+    status: >
+      Implementation detail of the current V0.x migration. It is expected to change or be
+      absorbed in a later version. Until then it is not moved, not deleted, not replaced,
+      and not redesigned. Tools must treat it as read-only unless the user says otherwise.
+
+  private:
+    what: the user's own world — everything the user knows, remembers, owns and configures
+    default_root: $AI_OS_HOME (default ~/.ai-os)
+    owns:
+      - memory
+      - knowledge
+      - projects
+      - sessions
+      - daily records
+      - personal configuration
+      - personal skills
+      - identity
+      - user preferences
+      - private state
+    classification: private-by-default   # see workspace-privacy.yaml
+
+# --- invariants doctor checks -----------------------------------------------------
+invariants:
+  distinct_roots: >
+    public != private, public != runtime, private != runtime. None may be nested inside
+    another, and none may be reached from another by a symlink that makes it look like
+    local content.
+  private_is_local_only: >
+    The private workspace repository has no remote. The public repository may have one.
+    They are never the same repository and never share history.
+  direction_of_flow: >
+    public -> private is allowed, and only at initialization (templates seed a new
+    workspace). private -> public is never automatic; it requires explicit per-item
+    approval, and in practice means rewriting content generically rather than copying it.
+  access_is_not_ownership: >
+    A symlink, an env var, or a hook granting the runtime access to private data does not
+    reclassify that data. Memory reached through ~/.claude/projects/*/memory is still
+    private-workspace-owned.
+
+# --- ownership classes for anything init creates ----------------------------------
+ownership_classes:
+  system-default:
+    meaning: seeded once from a public template; AI OS's opinion of a sensible starting point
+    on_update: never overwritten; divergence from the template is reported, never resolved
+  user-owned:
+    meaning: written by the user or by the agent on the user's behalf; the user's property
+    on_update: never touched by any AI OS tool
+  generated:
+    meaning: derived from other content and reproducible (indexes, registries, manifests)
+    on_update: may be regenerated, but only by the tool that owns it
+  runtime:
+    meaning: transient execution state
+    on_update: may be discarded freely
+
+# --- templates ---------------------------------------------------------------------
+templates:
+  contract: >
+    Templates are initialization SEEDS, not synchronized files. After init, the template
+    and the user's live file are two unrelated documents. Divergence is the expected
+    steady state, not a defect.
+  rules:
+    - a template is copied only when nothing exists at the destination
+    - an existing destination is never overwritten, never merged, never diffed into
+    - divergence is reported so the user can act; the tool does not act
+    - changing a public template has no effect on any existing workspace
+  not_yet: three-way merge, template versioning, update migration
+
+# --- configuration -----------------------------------------------------------------
+configuration:
+  precedence: ai-os defaults < user configuration < project configuration
+  rules:
+    missing_key: may be added by an update
+    existing_key: the user's value is preserved, always
+    removed_key: left in place; deletion is the user's call
+  not_yet: schema validation, typed config, migrations
+
+# --- skills -------------------------------------------------------------------------
+skills:
+  resolution_order: [user, public]
+  rule: >
+    On a name collision the user's skill wins. Public skills are never copied into the
+    private workspace at init — copying would turn public software into user files and
+    make it un-updatable. They stay in the public repository and are resolved by name.
+  user_store: $AI_OS_HOME/skills
+  public_store: <ai-os>/skills
+  never: overwrite, delete or modify a user skill
+
+enforcement:
+  diagnostics: ai-os doctor            # reports; never repairs
+  privacy_scan: ai-os privacy-scan     # see privacy-classification.yaml
+  known_adapters:
+    claude-code: partial               # ai-guard-push covers push/remote; the rest is judgment
+    codex: not-implemented
+    gemini: not-implemented

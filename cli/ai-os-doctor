@@ -1,95 +1,380 @@
 #!/usr/bin/env bash
-# ai-os-doctor — report problems, change nothing.
+# ai-os-doctor — verify the Public / Private / Runtime contract. Report; change nothing.
+#
+# Every check here answers one question: is the boundary between the reusable software,
+# the live runtime, and the user's private data still intact? Nothing in this file
+# repairs, moves, deletes or rewrites. A doctor that silently fixes things is a doctor
+# you stop trusting, and a boundary violation you never saw is worse than one you did.
+#
+#   ai-os-doctor            full check
+#   ai-os-doctor --quiet    findings only
+#
+# Exit: number of problems (0 = clean). See policies/public-private-contract.yaml.
+
 set -uo pipefail
 
 AI_OS_HOME="${AI_OS_HOME:-$HOME/.ai-os}"
-problems=0
+AI_OS_RUNTIME="${AI_OS_RUNTIME:-$HOME/.ai}"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(dirname "$SELF_DIR")"
+VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
+# Overridable so the test suite can point them at a fixture instead of the real client.
+CLAUDE_SETTINGS="${AI_OS_CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+CLAUDE_PROJECTS="${AI_OS_CLAUDE_PROJECTS:-$HOME/.claude/projects}"
 
-echo "ai-os doctor — workspace: $AI_OS_HOME"
-echo
+QUIET=0
+[ "${1:-}" = "--quiet" ] || [ "${1:-}" = "-q" ] && QUIET=1
+
+if [ -t 1 ]; then G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; D=$'\033[2m'; X=$'\033[0m'
+else G=; Y=; R=; B=; D=; X=; fi
+
+fails=0; warns=0
+ok()   { [ "$QUIET" -eq 1 ] || printf '  %sok%s    %s\n'   "$G" "$X" "$1"; }
+warn() { printf '  %sWARN%s  %s\n' "$Y" "$X" "$1"; warns=$((warns+1)); }
+fail() { printf '  %sFAIL%s  %s\n' "$R" "$X" "$1"; fails=$((fails+1)); }
+note() { [ "$QUIET" -eq 1 ] || printf '        %s%s%s\n' "$D" "$1" "$X"; }
+head() { [ "$QUIET" -eq 1 ] || printf '\n%s%s%s\n' "$B" "$1" "$X"; }
+
+# Resolve to a real path when it exists; otherwise keep the literal (so we can report it).
+rp() { cd "$1" 2>/dev/null && pwd -P || echo "$1"; }
+# Is $1 inside $2 (or equal to it)?
+inside() { case "$1/" in "$2"/*) return 0 ;; *) return 1 ;; esac; }
+
+[ "$QUIET" -eq 1 ] || {
+  printf '\nai-os doctor  %sv%s%s\n' "$D" "$VERSION" "$X"
+  printf '  public   %s\n  runtime  %s\n  private  %s\n' "$REPO" "$AI_OS_RUNTIME" "$AI_OS_HOME"
+}
+
+# ====================================================================================
+head "roots"
+# The wrong-root guard. If two layers resolve to the same place, or one is nested in
+# another, then every other check in this file is measuring the wrong thing.
+# ====================================================================================
+R_PUB=$(rp "$REPO"); R_RUN=$(rp "$AI_OS_RUNTIME"); R_PRIV=$(rp "$AI_OS_HOME")
 
 if [ ! -d "$AI_OS_HOME" ]; then
-  echo "FAIL  $AI_OS_HOME does not exist. Run ai-os-init first."
-  exit 1
+  fail "private workspace does not exist: $AI_OS_HOME"
+  note "run: ai-os init"
+  printf '\n%s%d problem(s)%s\n\n' "$R" "$fails" "$X"
+  exit "$fails"
 fi
 
-for section in config memory knowledge projects sessions daily skills; do
-  dir="$AI_OS_HOME/$section"
-  if [ -d "$dir" ]; then
-    count=$(find "$dir" -type f | wc -l | tr -d ' ')
-    echo "OK    $section/  ($count files)"
+check_pair() {  # name-a path-a name-b path-b
+  if [ "$2" = "$4" ]; then
+    fail "$1 and $3 are the same directory: $2"
+    note "these are different layers with different ownership; they cannot share a root"
+  elif inside "$2" "$4"; then
+    fail "$1 is nested inside $3:  $2"
+    note "nesting makes one layer look like content of the other"
+  elif inside "$4" "$2"; then
+    fail "$3 is nested inside $1:  $4"
+    note "nesting makes one layer look like content of the other"
   else
-    echo "FAIL  $section/ missing"
-    problems=$((problems + 1))
+    ok "$1 != $3, neither nested"
   fi
+}
+check_pair "public" "$R_PUB" "private" "$R_PRIV"
+check_pair "public" "$R_PUB" "runtime" "$R_RUN"
+check_pair "runtime" "$R_RUN" "private" "$R_PRIV"
+
+# A symlink can smuggle one layer into another without nesting it.
+smuggled=$(find "$R_PUB" -type l -not -path '*/.git/*' 2>/dev/null | while IFS= read -r l; do
+  t=$(cd "$(dirname "$l")" && cd "$(dirname "$(readlink "$l")")" 2>/dev/null && pwd -P)/$(basename "$(readlink "$l")")
+  if inside "$t" "$R_PRIV" || inside "$t" "$R_RUN"; then echo "$l -> $t"; fi
+done)
+if [ -n "$smuggled" ]; then
+  fail "the public repo contains symlinks reaching into private/runtime:"
+  echo "$smuggled" | sed 's/^/          /'
+  note "a symlink grants access; it must never make private data look like repo content"
+else
+  ok "no symlinks from public into private or runtime"
+fi
+
+# ====================================================================================
+head "workspace"
+# ====================================================================================
+missing=""
+for s in config memory knowledge projects sessions daily skills; do
+  [ -d "$AI_OS_HOME/$s" ] || missing="$missing $s"
 done
-
-echo
-if [ ! -f "$AI_OS_HOME/memory/MEMORY.md" ]; then
-  echo "WARN  memory/MEMORY.md (retrieval index) missing"
-  problems=$((problems + 1))
+if [ -n "$missing" ]; then fail "missing section(s):$missing"; note "run: ai-os init"
+else
+  total=$(find "$AI_OS_HOME" -type f -not -path '*/.git/*' | wc -l | tr -d ' ')
+  ok "7 sections present  ${D}($total files)${X}"
 fi
-if [ ! -f "$AI_OS_HOME/knowledge/README.md" ]; then
-  echo "WARN  knowledge/README.md missing"
-  problems=$((problems + 1))
-fi
+for s in identity education career projects goals travel preferences interests; do
+  [ -d "$AI_OS_HOME/memory/$s" ] || warn "missing memory section: memory/$s/"
+done
+for k in task-results technical-solutions decisions architecture research discoveries failures; do
+  [ -d "$AI_OS_HOME/knowledge/$k" ] || warn "missing knowledge kind: knowledge/$k/"
+done
+[ -f "$AI_OS_HOME/memory/MEMORY.md" ]    || warn "memory/MEMORY.md missing — the retrieval index"
+[ -f "$AI_OS_HOME/knowledge/README.md" ] || warn "knowledge/README.md missing"
 
-# --- privacy boundary (V0.1.2) -----------------------------------------------------
-# The workspace is private and local-only. A remote, or a nested repository, is a defect.
-# Nested repos are reported here rather than hidden in .gitignore — hiding one is worse
-# than having one, because it stops being visible.
-echo
+# ====================================================================================
+head "git safety"
+# ====================================================================================
 if [ -d "$AI_OS_HOME/.git" ]; then
   remote=$(git -C "$AI_OS_HOME" remote -v 2>/dev/null)
   if [ -n "$remote" ]; then
-    echo "FAIL  private workspace has a git remote — it must be local-only:"
-    echo "$remote" | sed 's/^/        /'
-    problems=$((problems + 1))
+    fail "the PRIVATE workspace has a git remote — it must be local-only:"
+    echo "$remote" | sed 's/^/          /'
+    note "not removing it automatically: removing a remote you added on purpose would be"
+    note "as wrong as adding one. Remove it yourself, or confirm you meant it."
   else
-    echo "OK    workspace versioned, no remote (local-only)"
+    ok "private workspace: versioned, no remote"
   fi
   for h in pre-push pre-commit; do
-    [ -x "$AI_OS_HOME/.git/hooks/$h" ] || {
-      echo "WARN  workspace $h hook missing"
-      problems=$((problems + 1))
-    }
+    [ -x "$AI_OS_HOME/.git/hooks/$h" ] && ok "private workspace: $h hook installed" \
+                                       || warn "private workspace: $h hook missing"
   done
 else
-  echo "WARN  workspace is not versioned (no .git) — no rollback or history available"
-  problems=$((problems + 1))
+  warn "private workspace is not versioned — no history, no rollback"
 fi
 
-nested=$(find "$AI_OS_HOME" -mindepth 2 -name .git -maxdepth 6 2>/dev/null)
-if [ -n "$nested" ]; then
-  echo "FAIL  nested git repository inside the private workspace:"
-  echo "$nested" | sed 's/^/        /'
-  echo "        The public AI OS repo must never live inside the private workspace."
-  problems=$((problems + 1))
-else
-  echo "OK    no nested repositories in the workspace"
-fi
+nested=$(find "$AI_OS_HOME" -mindepth 2 -maxdepth 6 -name .git 2>/dev/null)
+[ -n "$nested" ] && { fail "nested git repository inside the private workspace:"; echo "$nested" | sed 's/^/          /'; } \
+                 || ok "private workspace: no nested repositories"
 
-# The mirror check: private data must not be tracked by the public repo.
-SELF_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [ -d "$SELF_REPO/.git" ]; then
-  leaked=$(git -C "$SELF_REPO" ls-files | grep -E '(^|/)\.ai-os/' || true)
-  if [ -n "$leaked" ]; then
-    echo "FAIL  the public repo is tracking private workspace paths:"
-    echo "$leaked" | sed 's/^/        /'
-    problems=$((problems + 1))
+if [ -d "$REPO/.git" ]; then
+  leaked=$(git -C "$REPO" ls-files | grep -E '(^|/)\.ai-os/' || true)
+  [ -n "$leaked" ] && { fail "the public repo is tracking private workspace paths:"; echo "$leaked" | sed 's/^/          /'; } \
+                   || ok "public repo: tracks no private workspace paths"
+  nested_pub=$(find "$REPO" -mindepth 2 -maxdepth 6 -name .git 2>/dev/null)
+  [ -n "$nested_pub" ] && { fail "nested git repository inside the public repo:"; echo "$nested_pub" | sed 's/^/          /'; } \
+                       || ok "public repo: no nested repositories"
+  # Identity is reported, never changed — not global, not local, not ever.
+  pub_email=$(git -C "$REPO" config --local user.email || true)
+  if [ -n "$pub_email" ]; then
+    ok "public repo: repo-local git identity set  ${D}($pub_email)${X}"
   else
-    echo "OK    public repo tracks no private workspace paths"
+    glob_email=$(git -C "$REPO" config --global user.email || true)
+    warn "public repo has no repo-local git identity; commits use the global one${glob_email:+ ($glob_email)}"
+    note "a publishable repo bakes the committer email into every commit, permanently."
+    note "set one for THIS repo only:  git -C <repo> config user.email <public address>"
+    note "doctor will not set it for you, and will never touch your global identity."
   fi
-  [ -f "$SELF_REPO/.gitignore" ] || {
-    echo "WARN  public repo has no .gitignore"
-    problems=$((problems + 1))
-  }
+else
+  warn "public repo is not a git repository"
 fi
 
-echo
-if [ "$problems" -eq 0 ]; then
-  echo "Clean."
+# ====================================================================================
+head "memory access"
+# Access is not ownership. The runtime reaches memory through symlinks; memory is still
+# private-workspace-owned. What matters is that every one of those links points at the
+# single canonical store and nowhere else.
+# ====================================================================================
+CANON="$AI_OS_HOME/memory"
+STALE="$AI_OS_RUNTIME/workspace/memory"
+
+if [ -L "$CANON" ]; then
+  fail "the canonical store is itself a symlink: $CANON -> $(readlink "$CANON")"
+  note "memory must be a real directory in the private workspace, not a pointer"
+elif [ -d "$CANON" ]; then
+  ok "canonical store is a real directory  ${D}($(find "$CANON" -name '*.md' | wc -l | tr -d ' ') files)${X}"
 else
-  echo "$problems problem(s) found."
+  fail "canonical memory store missing: $CANON"
 fi
-exit "$problems"
+
+if [ -d "$CLAUDE_PROJECTS" ]; then
+  linked=0; targets=""
+  for d in "$CLAUDE_PROJECTS"/*/; do
+    m="${d%/}/memory"
+    [ -e "$m" ] || [ -L "$m" ] || continue
+    name=$(basename "${d%/}")
+    if [ -L "$m" ]; then
+      t=$(readlink "$m")
+      case "$t" in /*) abs="$t" ;; *) abs="$(dirname "$m")/$t" ;; esac
+      if [ ! -e "$m" ]; then
+        fail "broken memory link: $name -> $t"
+      elif [ "$(rp "$abs")" = "$(rp "$CANON")" ]; then
+        linked=$((linked+1)); targets="$targets$(rp "$abs")\n"
+      elif [ "$(rp "$abs")" = "$(rp "$STALE")" ]; then
+        fail "memory link points at the FROZEN pre-cutover archive: $name -> $t"
+        note "writes there are invisible to the live workspace"
+      elif inside "$(rp "$abs")" "$R_PRIV"; then
+        warn "memory link targets a non-canonical path inside the workspace: $name -> $t"
+        targets="$targets$(rp "$abs")\n"
+      else
+        fail "memory link targets a path OUTSIDE the private workspace: $name -> $t"
+        note "memory must live in $AI_OS_HOME; anything else is a second, unmanaged store"
+        targets="$targets$(rp "$abs")\n"
+      fi
+      # Recursive means the link sits INSIDE its own target — reading it loops forever.
+      # Compare the link's literal location, never its resolved one: resolving first
+      # makes every correct link equal its target and look recursive.
+      here="$(cd "$(dirname "$m")" && pwd -P)/$(basename "$m")"
+      if inside "$here" "$(rp "$abs")"; then
+        fail "recursive memory link: $name -> $t"
+      fi
+    else
+      fail "memory is a real directory, not a link: $name"
+      note "that is a second live memory store — its contents are invisible elsewhere"
+      note "reconcile it by hand, then link it; doctor will not move your files"
+    fi
+  done
+  distinct=$(printf "%b" "$targets" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')
+  if [ "$distinct" -gt 1 ]; then
+    fail "memory links point at $distinct different stores — there must be exactly one:"
+    printf "%b" "$targets" | sed '/^$/d' | sort -u | sed 's/^/          /'
+  elif [ "$linked" -gt 0 ]; then
+    ok "$linked client memory link(s), all -> $CANON"
+  fi
+else
+  ok "no client project dirs yet — nothing to link"
+fi
+
+# A duplicate live store is the failure mode the whole cutover existed to prevent.
+if [ -d "$STALE" ]; then
+  if [ -w "$STALE" ]; then
+    warn "the pre-cutover archive at $STALE is writable"
+    note "it should stay read-only so nothing can quietly write to the dead store"
+  else
+    ok "pre-cutover archive present and read-only  ${D}(rollback copy)${X}"
+  fi
+fi
+
+# ====================================================================================
+head "runtime"
+# ~/.ai is an implementation detail of the current migration. Doctor confirms it is
+# intact and pointed at the right workspace. It never modifies it.
+# ====================================================================================
+if [ -d "$AI_OS_RUNTIME" ]; then
+  ok "runtime present: $AI_OS_RUNTIME"
+  for b in ai-memory ai-guard-push ai-sync; do
+    [ -x "$AI_OS_RUNTIME/bin/$b" ] && ok "runtime: bin/$b executable" \
+                                   || warn "runtime: bin/$b missing or not executable"
+  done
+  # Does the runtime agree with us about where the workspace is?
+  if [ -x "$AI_OS_RUNTIME/bin/ai-memory" ]; then
+    if grep -qF '.ai-os" / "memory"' "$AI_OS_RUNTIME/bin/ai-memory" 2>/dev/null \
+    || grep -qF "$AI_OS_HOME/memory" "$AI_OS_RUNTIME/bin/ai-memory" 2>/dev/null; then
+      ok "runtime: ai-memory targets the private workspace"
+    else
+      fail "runtime: ai-memory does not target $AI_OS_HOME/memory"
+      note "the runtime and this tool disagree about where memory lives"
+    fi
+  fi
+  # Runtime's own convenience links. These predate the cutover and may point at the
+  # frozen archive — worth knowing, not worth breaking the runtime over.
+  for l in memory knowledge sessions daily; do
+    p="$AI_OS_RUNTIME/$l"
+    [ -L "$p" ] || continue
+    t=$(readlink "$p"); case "$t" in /*) abs="$t" ;; *) abs="$AI_OS_RUNTIME/$t" ;; esac
+    if inside "$(rp "$abs")" "$R_PRIV"; then
+      ok "runtime: ~/.ai/$l -> private workspace"
+    else
+      warn "runtime: ~/.ai/$l -> $t  ${D}(the frozen archive, not the live workspace)${X}"
+      note "read-only convenience link left from before the cutover; not changed here"
+    fi
+  done
+else
+  fail "runtime directory missing: $AI_OS_RUNTIME"
+fi
+
+if [ -f "$CLAUDE_SETTINGS" ]; then
+  # Parse the JSON and read only hooks[].hooks[].command — grepping the whole file
+  # matches permission globs like "Bash(~/.ai/bin/ai-*)" and yields truncated paths.
+  hooked=$(python3 -c '
+import json,re,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception: sys.exit(0)
+out=set()
+for group in (d.get("hooks") or {}).values():
+    for entry in group:
+        for h in entry.get("hooks", []):
+            for m in re.findall(r"(?:\$HOME|~)/\.ai/bin/[A-Za-z0-9_-]+", h.get("command","")):
+                out.add(m)
+print("\n".join(sorted(out)))' "$CLAUDE_SETTINGS" 2>/dev/null)
+  if [ -n "$hooked" ]; then
+    bad=0
+    while IFS= read -r h; do
+      real="${h/\$HOME/$HOME}"; real="${real/#\~/$HOME}"
+      [ -x "$real" ] || { fail "adapter hook points at a missing executable: $h"; bad=1; }
+    done <<< "$hooked"
+    [ "$bad" -eq 0 ] && ok "claude-code adapter: $(echo "$hooked" | wc -l | tr -d ' ') hook target(s) present and executable"
+  else
+    warn "claude-code adapter: no AI OS hooks found in settings.json"
+  fi
+else
+  warn "claude-code adapter: no settings.json at $CLAUDE_SETTINGS"
+fi
+
+# ====================================================================================
+head "configuration"
+# Defaults < user < project. An update may add a missing key; it must never change one
+# the user has set. Doctor reports what an update WOULD add; it adds nothing.
+# ====================================================================================
+CFG="$AI_OS_HOME/config/settings.yaml"
+TPL="$REPO/templates/workspace/config/settings.yaml"
+if [ -f "$CFG" ]; then
+  if grep -qP '^\t' "$CFG" 2>/dev/null; then
+    fail "config/settings.yaml contains tab indentation — not valid YAML"
+  else
+    ok "config/settings.yaml present, no tab indentation"
+  fi
+  if [ -f "$TPL" ]; then
+    tkeys=$(grep -oE '^[a-z_]+:' "$TPL" | sort -u)
+    lkeys=$(grep -oE '^[a-z_]+:' "$CFG" | sort -u)
+    new=$(comm -23 <(echo "$tkeys") <(echo "$lkeys"))
+    if [ -n "$new" ]; then
+      warn "config keys in the current defaults that your config does not have:"
+      echo "$new" | sed 's/^/          /'
+      note "an update MAY add a missing key. It will never change a key you have set."
+    else
+      ok "config: no new default keys  ${D}(your values are authoritative)${X}"
+    fi
+  fi
+else
+  warn "config/settings.yaml missing"
+fi
+[ -f "$AI_OS_HOME/config/privacy-terms.txt" ] \
+  && ok "config/privacy-terms.txt present  ${D}(private — used by privacy-scan)${X}" \
+  || warn "config/privacy-terms.txt missing — privacy-scan runs generic patterns only"
+
+# ====================================================================================
+head "skills"
+# ====================================================================================
+if [ -d "$REPO/skills" ]; then
+  pub=$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ')
+  usr=$(find "$AI_OS_HOME/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+  ok "$pub public skill(s), $usr user skill(s)"
+  shadow=""
+  for d in "$AI_OS_HOME/skills"/*/; do
+    [ -d "$d" ] || continue
+    n=$(basename "${d%/}")
+    [ -d "$REPO/skills/$n" ] && shadow="$shadow $n"
+  done
+  [ -n "$shadow" ] && { ok "user skills override public ones:$shadow"; note "expected — the user's version wins by design"; } \
+                   || ok "no name collisions between user and public skills"
+else
+  warn "public skills directory missing: $REPO/skills"
+fi
+
+# ====================================================================================
+head "privacy"
+# ====================================================================================
+if [ -x "$SELF_DIR/ai-os-privacy-scan" ]; then
+  out=$("$SELF_DIR/ai-os-privacy-scan" --quiet "$REPO" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ]; then
+    ok "public repo: no credential or personal data found"
+  else
+    fail "public repo contains data that must not be published:"
+    echo "$out" | sed 's/^/        /'
+  fi
+  [ -f "$AI_OS_HOME/config/privacy-terms.txt" ] || \
+    note "generic patterns only — add your terms to config/privacy-terms.txt for a real check"
+else
+  warn "ai-os-privacy-scan not found — public repo not checked for private data"
+fi
+
+# ====================================================================================
+[ "$QUIET" -eq 1 ] || printf '\n'
+if [ "$fails" -eq 0 ] && [ "$warns" -eq 0 ]; then
+  printf '%sclean%s — the public/private/runtime contract holds\n\n' "$G" "$X"
+elif [ "$fails" -eq 0 ]; then
+  printf '%s%d warning(s)%s, no failures — the contract holds\n\n' "$Y" "$warns" "$X"
+else
+  printf '%s%d problem(s)%s, %s%d warning(s)%s\n\n' "$R" "$fails" "$X" "$Y" "$warns" "$X"
+fi
+exit "$fails"

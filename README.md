@@ -29,15 +29,22 @@ repository. The personal half never leaves your machine.
           Adapter        Adapter       Adapter
 ```
 
-## What's public vs. private
+## Three layers, three owners
 
-| | Lives | Contains |
+| | Lives | Owns |
 |---|---|---|
-| **This repo (public)** | wherever you clone it | engine concepts, schemas, policies, adapters, reusable skill *templates*, CLI |
-| **Your workspace (private)** | `~/.ai-os/` | your actual memory, knowledge, projects, sessions, daily context, config |
+| **Public** (this repo) | wherever you clone it | code, CLI, adapters, policies, schemas, public skills, templates, docs, tests |
+| **Runtime** | `~/.ai` | hooks, runtime scripts, client integration — *an implementation detail of V0.x* |
+| **Private** (your workspace) | `~/.ai-os/` | your memory, knowledge, projects, sessions, daily records, config, skills |
 
-Nothing under `~/.ai-os/` is ever read by, or copied into, this repository. `ai-os init`
-writes *into* `~/.ai-os/` from this repo's templates; it never writes the other way.
+**Access is not ownership.** The runtime reads and writes your workspace constantly —
+that is its job. It does not follow that this repository owns, tracks, or may publish any
+of it. Nothing under `~/.ai-os/` is ever read by, or copied into, this repository.
+`ai-os init` writes *into* `~/.ai-os/` from this repo's templates, once, and never the
+other way.
+
+See **[docs/public-private-contract.md](docs/public-private-contract.md)** — the boundary
+everything else rests on, and the one `ai-os doctor` verifies.
 
 The workspace is **private by default and versioned locally only** — a git repository
 with no remote, for history, rollback and audit. Versioning is not publishing; adding a
@@ -45,12 +52,14 @@ remote, pushing, exporting, or copying workspace content into this repository al
 explicit approval. See `policies/workspace-privacy.yaml` and
 `docs/workspace-versioning.md`.
 
-## Status: V0.1 — foundation
+## Status: V0.1.3 — the contract
 
-This is early. V0.1's only goal is a clean, vendor-neutral foundation: the public/private
-split, the CLI foundation (`init` / `doctor` / `status`), the memory and knowledge storage
-boundary, a policy abstraction (currently just Git push protection), and one working
-adapter (Claude Code). It deliberately does **not** yet include an autonomous task engine,
+This is early. V0.1's goal was a clean, vendor-neutral foundation: the public/private
+split, the CLI (`init` / `doctor` / `status`), the memory and knowledge storage boundary,
+a policy abstraction, and one working adapter (Claude Code). V0.1.3 makes the boundary
+between the three layers explicit and *executable* — `init` is ownership-aware and
+non-destructive, `doctor` verifies the contract, and `privacy-scan` checks that this
+repository is still publishable. It deliberately does **not** yet include an autonomous task engine,
 a multi-agent system, a full model router, browser/computer automation, additional MCP
 servers, or a GUI. See `docs/design-philosophy.md` for why, and the project roadmap for
 what comes after V0.1.
@@ -59,15 +68,19 @@ what comes after V0.1.
 
 ```
 ai-os/
+├── cli/                    ai-os · init · doctor · status · workspace · privacy-scan
+├── skills/                 public skills — yours in ~/.ai-os/skills override these
+├── policies/               the contract, privacy classification, git approval
 ├── adapters/claude-code/   how Claude Code enforces AI OS policies today
-├── policies/               policy definitions (currently: git push approval)
-├── cli/                    ai-os-init · ai-os-doctor · ai-os-status · ai-os-workspace
 ├── templates/
-│   ├── workspace/           the ~/.ai-os/ shape, placeholder data only
-│   ├── skills/                the canonical skill set, client-agnostic
-│   └── scripts/                the canonical workspace scripts
+│   ├── workspace/          seeds for a new ~/.ai-os — placeholder data only
+│   └── runtime/            seeds for the runtime layer
+├── tests/
 └── docs/
 ```
+
+Templates are **seeds, not a sync**: copied once where nothing exists, never reapplied
+over a file you have edited.
 
 ## Core concepts
 
@@ -86,6 +99,20 @@ it its own way. See `policies/README.md`.
 
 ## Getting started
 
-Not yet ready for general use — `cli/ai-os-init` currently assumes a single-user, local
-setup and has only been exercised against one machine. Treat it as a working sketch, not
-a released tool.
+```bash
+export PATH="$PWD/cli:$PATH"
+ai-os init --dry-run     # see exactly what would happen
+ai-os init               # create ~/.ai-os — never overwrites anything
+ai-os doctor             # verify the contract holds
+```
+
+Requires `bash`, `git`, `python3`. No dependencies, no build step. Full walkthrough in
+[docs/installation.md](docs/installation.md); what lives in your workspace and who owns it
+in [docs/workspace.md](docs/workspace.md).
+
+Not yet ready for general use — this assumes a single-user local setup and has only been
+exercised against one machine. Treat it as a working sketch, not a released tool.
+
+```bash
+tests/test-contract.sh   # 52 checks on the contract, in a throwaway workspace
+```

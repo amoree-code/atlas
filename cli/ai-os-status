@@ -1,28 +1,79 @@
 #!/usr/bin/env bash
-# ai-os-status — a quick read-only snapshot. No mutation, ever.
+# ai-os-status — one screen, read-only. Where the three layers are, and whether the
+# contract between them is holding. Never mutates anything.
 set -uo pipefail
 
 AI_OS_HOME="${AI_OS_HOME:-$HOME/.ai-os}"
+AI_OS_RUNTIME="${AI_OS_RUNTIME:-$HOME/.ai}"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(dirname "$SELF_DIR")"
+VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
 
-echo "AI OS status"
-echo "  workspace: $AI_OS_HOME"
+if [ -t 1 ]; then G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; D=$'\033[2m'; X=$'\033[0m'
+else G=; Y=; R=; B=; D=; X=; fi
+row() { printf '  %-12s %s\n' "$1" "$2"; }
+
+printf '\n%sAI OS%s  %sv%s%s\n\n' "$B" "$X" "$D" "$VERSION" "$X"
+
+row "public"  "$REPO  ${D}(software)${X}"
+row "runtime" "$AI_OS_RUNTIME  ${D}(execution — implementation detail of V0.x)${X}"
+row "private" "$AI_OS_HOME  ${D}(your data)${X}"
 
 if [ ! -d "$AI_OS_HOME" ]; then
-  echo "  not initialized — run ai-os-init"
-  exit 1
+  printf '\n  %snot initialized%s — run: ai-os init\n\n' "$Y" "$X"; exit 1
 fi
 
-echo
-for section in memory knowledge projects sessions daily skills; do
-  dir="$AI_OS_HOME/$section"
-  if [ -d "$dir" ]; then
-    count=$(find "$dir" -type f | wc -l | tr -d ' ')
-    printf "  %-10s %s files\n" "$section" "$count"
-  fi
+printf '\n%sworkspace%s\n' "$B" "$X"
+for s in memory knowledge projects sessions daily skills; do
+  d="$AI_OS_HOME/$s"
+  [ -d "$d" ] && printf '  %-12s %s files\n' "$s" "$(find "$d" -type f -not -path '*/.git/*' | wc -l | tr -d ' ')" \
+              || printf '  %-12s %smissing%s\n' "$s" "$R" "$X"
 done
 
-echo
-if [ -f "$AI_OS_HOME/config/settings.yaml" ]; then
-  adapter=$(grep -m1 '^active_adapter:' "$AI_OS_HOME/config/settings.yaml" 2>/dev/null | cut -d: -f2 | tr -d ' ')
-  echo "  active adapter: ${adapter:-unset}"
+printf '\n%sgit safety%s\n' "$B" "$X"
+if [ -d "$AI_OS_HOME/.git" ]; then
+  if [ -n "$(git -C "$AI_OS_HOME" remote -v 2>/dev/null)" ]; then
+    row "private" "${R}REMOTE CONFIGURED${X} — the workspace must be local-only"
+  else
+    row "private" "${G}local-only${X}, $(git -C "$AI_OS_HOME" rev-list --count HEAD 2>/dev/null || echo 0) snapshot(s)$(
+      [ -n "$(git -C "$AI_OS_HOME" status --porcelain 2>/dev/null)" ] && printf ', %suncommitted changes%s' "$Y" "$X")"
+  fi
+else
+  row "private" "${Y}not versioned${X}"
 fi
+if [ -d "$REPO/.git" ]; then
+  pr=$(git -C "$REPO" remote get-url origin 2>/dev/null || echo "no remote")
+  row "public" "$(git -C "$REPO" rev-list --count HEAD 2>/dev/null || echo 0) commit(s), $pr"
+fi
+
+printf '\n%smemory%s\n' "$B" "$X"
+if [ -d "$AI_OS_HOME/memory" ]; then
+  links=$(find "$HOME/.claude/projects" -maxdepth 2 -name memory -type l 2>/dev/null | wc -l | tr -d ' ')
+  row "store" "$(find "$AI_OS_HOME/memory" -name '*.md' | wc -l | tr -d ' ') files, $(find "$AI_OS_HOME/memory" -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ') sections"
+  row "access" "$links client link(s) -> the canonical store  ${D}(access, not ownership)${X}"
+  cf="$AI_OS_HOME/memory/CONFLICTS.md"
+  [ -f "$cf" ] && n=$(grep -c '^### ' "$cf" 2>/dev/null || echo 0) && [ "${n:-0}" -gt 0 ] \
+    && row "conflicts" "${Y}$n unresolved${X} — see memory/CONFLICTS.md"
+fi
+row "knowledge" "$(find "$AI_OS_HOME/knowledge" -name '*.md' 2>/dev/null | wc -l | tr -d ' ') entries across $(find "$AI_OS_HOME/knowledge" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ') kinds"
+
+printf '\n%sskills%s\n' "$B" "$X"
+row "public" "$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
+row "yours" "$(find "$AI_OS_HOME/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')  ${D}(yours win on a name collision)${X}"
+
+printf '\n%sadapter%s\n' "$B" "$X"
+adapter=$(grep -m1 '^active_adapter:' "$AI_OS_HOME/config/settings.yaml" 2>/dev/null | cut -d: -f2 | tr -d ' ')
+row "active" "${adapter:-claude-code ${D}(default)${X}}"
+
+printf '\n%shealth%s\n' "$B" "$X"
+if [ -x "$SELF_DIR/ai-os-doctor" ]; then
+  out=$("$SELF_DIR/ai-os-doctor" --quiet 2>&1); rc=$?
+  w=$(printf '%s' "$out" | grep -c 'WARN' || true)
+  if [ "$rc" -eq 0 ] && [ "${w:-0}" -eq 0 ]; then row "contract" "${G}clean${X}"
+  elif [ "$rc" -eq 0 ];                        then row "contract" "${G}holds${X}, ${Y}$w warning(s)${X}  ${D}— ai-os doctor${X}"
+  else                                              row "contract" "${R}$rc problem(s)${X}, ${Y}$w warning(s)${X}  ${D}— ai-os doctor${X}"
+  fi
+else
+  row "contract" "${Y}unknown${X} — ai-os-doctor not found"
+fi
+printf '\n'

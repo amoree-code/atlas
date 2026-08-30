@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""ai-os-privacy-scan — keep the public repository publishable.
+
+Two classes of finding, because they are two different problems (see
+policies/privacy-classification.yaml):
+
+  credential   a value that grants access.      Generic shapes, built in.
+  personal     a value that identifies someone. Generic shapes built in; the user's own
+               terms are read from $AI_OS_HOME/config/privacy-terms.txt, which is PRIVATE
+               and never lives in this repository. A scanner that hardcoded a real name,
+               email and employer would itself be the leak it is meant to prevent.
+
+Reports. Never edits, never deletes, never rewrites history.
+
+  ai-os-privacy-scan [PATH]     scan the working tree (default: this repository)
+  ai-os-privacy-scan --history  also scan every blob in git history (slow)
+  ai-os-privacy-scan --quiet    findings only, no progress
+
+Exit: 0 clean · 1 findings · 2 usage error.  Zero dependencies: stdlib only.
+"""
+import os, re, subprocess, sys
+from pathlib import Path
+
+G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
+if not sys.stdout.isatty():
+    G = Y = R = D = X = ""
+
+REPO = Path(__file__).resolve().parent.parent
+AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
+
+SKIP_DIRS = {".git", "node_modules", "dist", "build", "__pycache__", ".venv", "coverage"}
+SKIP_SUFFIX = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".gz", ".tar",
+               ".ico", ".woff", ".woff2", ".ttf", ".mp4", ".mov", ".so", ".dylib"}
+
+# --- credential shapes -------------------------------------------------------------
+# Tuned for recall: a missed credential is unrecoverable, a false positive costs a glance.
+CREDENTIAL = [
+    ("private key block",   re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----")),
+    ("AWS access key id",   re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("GitHub token",        re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{20,})")),
+    ("Slack token",         re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}")),
+    ("Anthropic API key",   re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{20,}")),
+    ("OpenAI API key",      re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9]{32,}")),
+    ("Google API key",      re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
+    ("Stripe secret key",   re.compile(r"\b[sr]k_live_[A-Za-z0-9]{16,}")),
+    ("JWT",                 re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}")),
+    ("connection string with password",
+                            re.compile(r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://[^\s:@/]+:[^\s:@/]+@")),
+    # Assigned literal, not a bare word: `api_key: "…"` with real length behind it.
+    ("assigned secret literal",
+                            re.compile(r"(?i)\b(?:api[_\-]?key|secret[_\-]?key|access[_\-]?token|auth[_\-]?token|client[_\-]?secret|password|passwd)\b\s*[:=]\s*[\"'][^\"'\s]{12,}[\"']")),
+]
+
+# --- personal shapes ---------------------------------------------------------------
+# Deliberately narrower. These are the patterns that produce noise, so each one is
+# anchored on something that is genuinely revealing rather than merely suggestive.
+PERSONAL = [
+    # A home directory path names the account holder. `/Users/you/` is allowlisted.
+    ("absolute home path",  re.compile(r"(?:/Users|/home)/(?!you\b|<)[A-Za-z0-9][A-Za-z0-9._\-]{1,31}/")),
+    ("email address",       re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")),
+    # International or grouped forms only. A bare 10-digit run is far more often an id.
+    ("phone number",        re.compile(r"(?:(?<=\s)|^)\+\d{1,3}[\s\-.]?\(?\d{1,4}\)?(?:[\s\-.]?\d{2,4}){2,4}\b")),
+    ("VCS remote URL",      re.compile(r"(?:git@[A-Za-z0-9.\-]+:|https://[A-Za-z0-9.\-]+/)[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+\.git\b")),
+]
+
+
+def load_allowlist():
+    f = REPO / "policies" / "privacy-allowlist.txt"
+    if not f.exists():
+        return []
+    return [l.strip() for l in f.read_text().splitlines()
+            if l.strip() and not l.startswith("#")]
+
+
+def load_user_terms():
+    """The user's own identifying strings. Private, optional, never in this repository."""
+    f = AI_OS_HOME / "config" / "privacy-terms.txt"
+    if not f.exists():
+        return None
+    terms = []
+    for line in f.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if len(line) >= 3:              # 1-2 char "terms" would match everything
+            terms.append(line)
+    return terms
+
+
+def scannable(path: Path):
+    if path.suffix.lower() in SKIP_SUFFIX:
+        return False
+    try:
+        chunk = path.open("rb").read(4096)
+    except OSError:
+        return False
+    return b"\0" not in chunk           # crude but reliable binary test
+
+
+def walk(root: Path):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for name in filenames:
+            p = Path(dirpath) / name
+            if p.is_symlink() or not scannable(p):
+                continue
+            yield p
+
+
+def scan_text(text, rel, allow, user_terms, findings):
+    allowed_files = [a for a in allow if "/" in a]
+    if any(rel == a or rel.endswith(a) for a in allowed_files):
+        return                                    # the files that define the patterns
+    for n, line in enumerate(text.splitlines(), 1):
+        if any(a in line for a in allow):
+            continue
+        for label, rx in CREDENTIAL:
+            m = rx.search(line)
+            if m:
+                findings.append(("credential", label, rel, n, m.group(0)))
+        for label, rx in PERSONAL:
+            m = rx.search(line)
+            if m:
+                findings.append(("personal", label, rel, n, m.group(0)))
+        for term in (user_terms or []):
+            if term.lower() in line.lower():
+                findings.append(("personal", "user term", rel, n, term))
+
+
+def redact(s, cls):
+    s = s.strip()
+    if cls == "credential":                       # never print a secret in full
+        return s[:6] + "…" + f"[{len(s)} chars]"
+    return s if len(s) <= 72 else s[:72] + "…"
+
+
+def main(argv):
+    args = [a for a in argv if not a.startswith("-")]
+    flags = {a for a in argv if a.startswith("-")}
+    if flags - {"--history", "--quiet", "-q"}:
+        print(__doc__); return 2
+    quiet = bool(flags & {"--quiet", "-q"})
+    root = Path(args[0]).resolve() if args else REPO
+
+    allow = load_allowlist()
+    user_terms = load_user_terms()
+    findings = []
+
+    if not quiet:
+        print(f"\n  privacy scan  {root}")
+        print(f"  {D}allowlist{X} {len(allow)} entries   "
+              f"{D}user terms{X} " + (f"{len(user_terms)} from {AI_OS_HOME}/config/privacy-terms.txt"
+                                      if user_terms is not None else f"{Y}none{X}"))
+
+    n_files = 0
+    for p in walk(root):
+        n_files += 1
+        try:
+            scan_text(p.read_text(errors="replace"), str(p.relative_to(root)),
+                      allow, user_terms, findings)
+        except OSError:
+            pass
+
+    if "--history" in flags and (root / ".git").is_dir():
+        if not quiet:
+            print(f"  {D}scanning git history…{X}")
+        blobs = subprocess.run(["git", "-C", str(root), "rev-list", "--objects", "--all"],
+                               capture_output=True, text=True).stdout.splitlines()
+        for entry in blobs:
+            sha, _, name = entry.partition(" ")
+            if not name or Path(name).suffix.lower() in SKIP_SUFFIX:
+                continue
+            blob = subprocess.run(["git", "-C", str(root), "cat-file", "-p", sha],
+                                  capture_output=True, text=True, errors="replace")
+            if blob.returncode == 0:
+                scan_text(blob.stdout, f"history:{name}", allow, user_terms, findings)
+
+    creds = [f for f in findings if f[0] == "credential"]
+    pers = [f for f in findings if f[0] == "personal"]
+
+    if not quiet:
+        print()
+    for cls, group in (("credential", creds), ("personal", pers)):
+        seen = set()
+        for _, label, rel, line, match in group:
+            key = (label, rel, redact(match, cls))
+            if key in seen:
+                continue
+            seen.add(key)
+            colour = R if cls == "credential" else Y
+            print(f"  {colour}{cls.upper():<10}{X} {label:<28} {rel}:{line}  {D}{redact(match, cls)}{X}")
+
+    if user_terms is None and not quiet:
+        print(f"\n  {Y}note{X} no {AI_OS_HOME}/config/privacy-terms.txt — generic patterns only.")
+        print(f"       Names, handles, employers and private repo names are NOT being checked.")
+
+    if not quiet:
+        print(f"\n  {n_files} file(s) scanned")
+    if findings:
+        print(f"  {R}{len(creds)} credential{X} · {Y}{len(pers)} personal{X} finding(s)\n")
+        return 1
+    print(f"  {G}clean{X} — no credential or personal data found\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

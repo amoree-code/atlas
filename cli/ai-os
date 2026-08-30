@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# ai-os — the single entry point. Everything else is a subcommand of exactly one verb,
+# so the documented `ai-os init` is the command that actually exists.
+set -euo pipefail
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="$(cat "$SELF_DIR/../VERSION" 2>/dev/null || echo unknown)"
+
+usage() { cat <<EOF
+ai-os v$VERSION — a portable operating layer for AI coding agents.
+
+  ai-os init [--dry-run]     create/verify your private workspace (never overwrites)
+  ai-os doctor [--quiet]     verify the public/private/runtime contract (reports only)
+  ai-os status               where the three layers are and whether the contract holds
+  ai-os workspace <cmd>      local versioning of the private workspace
+  ai-os privacy-scan [path]  check the public repo for credentials and personal data
+  ai-os version
+
+Three layers, three owners:
+  public   this repository   reusable software — publishable
+  runtime  ~/.ai             how it executes today; an implementation detail of V0.x
+  private  ~/.ai-os          your memory, knowledge, projects — never published
+
+See docs/public-private-contract.md.
+EOF
+}
+
+cmd="${1:-status}"; shift || true
+case "$cmd" in
+  init|doctor|status|workspace|privacy-scan) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
+  version|--version|-V) echo "$VERSION" ;;
+  help|--help|-h)       usage ;;
+  *) echo "ai-os: unknown command '$cmd'" >&2; echo >&2; usage >&2; exit 2 ;;
+esac

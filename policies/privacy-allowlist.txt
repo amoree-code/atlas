@@ -1,0 +1,22 @@
+# Known-benign strings for `ai-os privacy-scan`.
+# One literal substring per line. A line matching means: this finding is noise.
+# Keep this short. Every entry is a hole in the scan — justify it in a comment.
+
+# Documentation placeholders.
+example.com
+user@example.com
+you@example.com
+/Users/you/
+/home/you/
+/Users/<you>/
+<your-name>
+your-name@example.com
+
+# git's own no-reply form, used for repo-local public identity.
+users.noreply.github.com
+
+# The scanner and the policies that define the patterns describe them in prose;
+# their own text must not count as a finding.
+policies/privacy-classification.yaml
+policies/privacy-allowlist.txt
+cli/ai-os-privacy-scan

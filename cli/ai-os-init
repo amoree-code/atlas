@@ -1,45 +1,114 @@
 #!/usr/bin/env bash
-# ai-os-init — create the private workspace shape if it doesn't exist yet.
-# Never overwrites existing files. Idempotent: safe to run repeatedly.
+# ai-os-init — create the private workspace for a new user.
+#
+# THE ONE RULE: this never destroys anything. It creates what is missing and reports what
+# is different. It does not overwrite, does not merge, does not "fix" a file the user has
+# edited. Running it a hundred times is the same as running it once.
+#
+#   ai-os-init            create/verify the workspace
+#   ai-os-init --dry-run  print exactly what would happen, touch nothing
+#
+# Direction of flow is public -> private, only here, only at initialization. Nothing in
+# this script ever reads private content into the public repository.
+# See policies/public-private-contract.yaml.
+
 set -euo pipefail
 
 AI_OS_HOME="${AI_OS_HOME:-$HOME/.ai-os}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATES="$(dirname "$SELF_DIR")/templates"
+REPO="$(dirname "$SELF_DIR")"
+TEMPLATES="$REPO/templates"
+VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
 
-echo "ai-os init — workspace: $AI_OS_HOME"
+DRY=0
+for a in "$@"; do
+  case "$a" in
+    --dry-run|-n) DRY=1 ;;
+    *) echo "usage: ai-os-init [--dry-run]" >&2; exit 2 ;;
+  esac
+done
 
-for section in config memory knowledge projects sessions daily skills; do
-  dir="$AI_OS_HOME/$section"
-  if [ ! -d "$dir" ]; then
-    mkdir -p "$dir"
-    echo "  created  $section/"
-  else
-    echo "  exists   $section/ (untouched)"
+if [ -t 1 ]; then G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'; D=$'\033[2m'; X=$'\033[0m'
+else G=; Y=; B=; D=; X=; fi
+
+created=0; existed=0; seeded=0; diverged=0
+
+say() { printf '  %s\n' "$1"; }
+act() { [ "$DRY" -eq 0 ]; }
+
+printf '\nai-os init  %sv%s%s\n' "$D" "$VERSION" "$X"
+printf '  public   %s  %s(software — read from)%s\n'  "$REPO"        "$D" "$X"
+printf '  private  %s  %s(your data — written to)%s\n' "$AI_OS_HOME" "$D" "$X"
+[ "$DRY" -eq 1 ] && printf '  %sdry run — nothing will be written%s\n' "$Y" "$X"
+printf '\n'
+
+# --- refuse to initialize somewhere that is not a workspace -------------------------
+# Pointing AI_OS_HOME at the public repo, or at the runtime, would scatter user data
+# through software. Cheap to check, expensive to undo.
+for forbidden in "$REPO" "$HOME/.ai"; do
+  if [ "$(cd "$AI_OS_HOME" 2>/dev/null && pwd || echo "$AI_OS_HOME")" = "$forbidden" ]; then
+    printf '  REFUSED: AI_OS_HOME points at %s\n' "$forbidden" >&2
+    printf '           The private workspace must be its own directory.\n' >&2
+    exit 1
   fi
 done
 
-# The 8 memory sections and 7 knowledge kinds are structural, not personal data — an
-# empty section directory is not the same as a missing fact file, so these are always
-# created even though the files inside them are not.
-for section in identity education career projects goals travel preferences interests; do
-  mkdir -p "$AI_OS_HOME/memory/$section"
-done
-for kind in task-results technical-solutions decisions architecture research discoveries failures; do
-  mkdir -p "$AI_OS_HOME/knowledge/$kind"
+# --- structure: system-default, always safe to create -------------------------------
+# A directory carries no content, so creating one can never overwrite a fact.
+printf '%sstructure%s\n' "$B" "$X"
+for section in config memory knowledge projects sessions daily skills; do
+  dir="$AI_OS_HOME/$section"
+  if [ -d "$dir" ]; then
+    say "exists   $section/"; existed=$((existed+1))
+  else
+    act && mkdir -p "$dir"
+    say "created  $section/"; created=$((created+1))
+  fi
 done
 
-# Seed placeholder/example files ONLY where nothing exists yet — never overwrite.
+# The 8 memory sections and 7 knowledge kinds are structure, not content.
+for s in identity education career projects goals travel preferences interests; do
+  [ -d "$AI_OS_HOME/memory/$s" ] || { act && mkdir -p "$AI_OS_HOME/memory/$s"; created=$((created+1)); }
+done
+for k in task-results technical-solutions decisions architecture research discoveries failures; do
+  [ -d "$AI_OS_HOME/knowledge/$k" ] || { act && mkdir -p "$AI_OS_HOME/knowledge/$k"; created=$((created+1)); }
+done
+say "${D}memory: 8 sections · knowledge: 7 kinds${X}"
+
+# --- seeds: system-default on first write, user-owned forever after -----------------
+# A template is a seed, not a synchronized file. Once a destination exists it belongs to
+# the user, and divergence from the template is the expected steady state — not a defect
+# to repair. We report it so the user can decide; we never decide for them.
+printf '\n%sseeds%s %s(copied only where nothing exists)%s\n' "$B" "$X" "$D" "$X"
 if [ -d "$TEMPLATES/workspace" ]; then
-  while IFS= read -r -d '' tpl; do
+  while IFS= read -r tpl; do
     rel="${tpl#"$TEMPLATES"/workspace/}"
     dest="$AI_OS_HOME/$rel"
     if [ ! -e "$dest" ]; then
-      mkdir -p "$(dirname "$dest")"
-      cp "$tpl" "$dest"
-      echo "  seeded   $rel"
+      act && { mkdir -p "$(dirname "$dest")"; cp "$tpl" "$dest"; }
+      say "seeded   $rel"; seeded=$((seeded+1))
+    elif cmp -s "$tpl" "$dest"; then
+      say "${D}unchanged $rel${X}"
+    else
+      say "${Y}yours${X}    $rel  ${D}(differs from the template — kept, not touched)${X}"
+      diverged=$((diverged+1))
     fi
-  done < <(find "$TEMPLATES/workspace" -type f -print0)
+  done < <(find "$TEMPLATES/workspace" -type f | sort)
 fi
 
-echo "Done. Run ai-os-doctor to verify."
+# --- what init deliberately does NOT do ---------------------------------------------
+printf '\n%snot copied, deliberately%s\n' "$B" "$X"
+say "${D}public skills${X}   stay in $REPO/skills — copying them here would turn"
+say "${D}             ${X}   software into your files and make them un-updatable."
+say "${D}             ${X}   Your own skills go in $AI_OS_HOME/skills and win on name."
+say "${D}runtime scripts${X} belong to the runtime layer, not your data."
+say "${D}git${X}             the workspace repo is local-only and set up separately;"
+say "${D}   ${X}             see docs/workspace-versioning.md. init never creates a remote."
+
+printf '\n%s%d created · %d already present · %d seeded · %d yours (kept)%s\n' \
+  "$D" "$created" "$existed" "$seeded" "$diverged" "$X"
+if [ "$diverged" -gt 0 ]; then
+  printf '  %s%d file(s) differ from their template. That is normal after first use —%s\n' "$D" "$diverged" "$X"
+  printf '  %stemplates seed a workspace once and are never reapplied.%s\n' "$D" "$X"
+fi
+printf '\nRun %sai-os doctor%s to verify.\n\n' "$B" "$X"
