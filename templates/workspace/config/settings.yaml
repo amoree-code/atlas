@@ -1,0 +1,4 @@
+# AI OS settings. See ../../../policies/ for the policies this config participates in.
+
+workspace: ~/.ai-os
+active_adapter: claude-code   # change if you're using a different client as your primary

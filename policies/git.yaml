@@ -1,0 +1,47 @@
+# AI OS policy — git operations.
+# A policy states WHAT must be true, client-agnostically. Each adapter enforces it its
+# own way (see ../adapters/<client>/). This file has no Claude-specific assumptions.
+
+policy: git
+version: 1
+
+rules:
+  git.push:
+    approval: always
+    reason: >
+      Local git is autonomous; anything that writes to a remote is not. A push must
+      never happen silently, regardless of how confident the agent is.
+
+  git.merge:
+    approval: always
+    reason: merging is the human's call, not the agent's, even on a branch it created.
+
+  git.force_push:
+    approval: denied
+    reason: rewrites remote history other people or systems may depend on.
+
+  git.remote_branch_delete:
+    approval: denied
+    reason: destructive and hard to reverse; must be asked for by name if truly needed.
+
+  pr.merge:
+    approval: denied
+    override: ask_by_name
+    reason: same as git.merge — the human decides when a PR lands.
+
+  pr.close:
+    approval: denied
+    override: ask_by_name
+
+  repo.delete:
+    approval: denied
+    reason: irreversible.
+
+enforcement:
+  # Each adapter that can run shell commands must implement REMOTE_WRITE-class rules as
+  # "ask" (block, then request explicit confirmation) and FORBIDDEN-class rules as
+  # "deny" (block outright, never auto-execute even with confirmation).
+  known_adapters:
+    claude-code: implemented   # adapters/claude-code/ai-guard-push
+    codex: not-implemented
+    gemini: not-implemented

@@ -1,0 +1,11 @@
+# Model routing — example. Replace with your own provider/model choices.
+# The mechanism (route by delegating to model-pinned subagents, not a gateway or manual
+# switching) is the reusable part; the specific models below are just an example.
+
+routing:
+  default: balanced
+  fast:      { provider: anthropic, model: claude-haiku-4-5,  used_for: [bookkeeping, summaries] }
+  balanced:  { provider: anthropic, model: claude-sonnet-5,   used_for: [implementation, debugging, tests] }
+  reasoning: { provider: anthropic, model: claude-opus-5,     used_for: [architecture, hard-debugging] }
+
+mechanism: subagent-delegation

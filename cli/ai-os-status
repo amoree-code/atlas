@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ai-os-status — a quick read-only snapshot. No mutation, ever.
+set -uo pipefail
+
+AI_OS_HOME="${AI_OS_HOME:-$HOME/.ai-os}"
+
+echo "AI OS status"
+echo "  workspace: $AI_OS_HOME"
+
+if [ ! -d "$AI_OS_HOME" ]; then
+  echo "  not initialized — run ai-os-init"
+  exit 1
+fi
+
+echo
+for section in memory knowledge projects sessions daily skills; do
+  dir="$AI_OS_HOME/$section"
+  if [ -d "$dir" ]; then
+    count=$(find "$dir" -type f | wc -l | tr -d ' ')
+    printf "  %-10s %s files\n" "$section" "$count"
+  fi
+done
+
+echo
+if [ -f "$AI_OS_HOME/config/settings.yaml" ]; then
+  adapter=$(grep -m1 '^active_adapter:' "$AI_OS_HOME/config/settings.yaml" 2>/dev/null | cut -d: -f2 | tr -d ' ')
+  echo "  active adapter: ${adapter:-unset}"
+fi

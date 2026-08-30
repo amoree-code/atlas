@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ai-os-init — create the private workspace shape if it doesn't exist yet.
+# Never overwrites existing files. Idempotent: safe to run repeatedly.
+set -euo pipefail
+
+AI_OS_HOME="${AI_OS_HOME:-$HOME/.ai-os}"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATES="$(dirname "$SELF_DIR")/templates"
+
+echo "ai-os init — workspace: $AI_OS_HOME"
+
+for section in config memory knowledge projects sessions daily skills; do
+  dir="$AI_OS_HOME/$section"
+  if [ ! -d "$dir" ]; then
+    mkdir -p "$dir"
+    echo "  created  $section/"
+  else
+    echo "  exists   $section/ (untouched)"
+  fi
+done
+
+# The 8 memory sections and 7 knowledge kinds are structural, not personal data — an
+# empty section directory is not the same as a missing fact file, so these are always
+# created even though the files inside them are not.
+for section in identity education career projects goals travel preferences interests; do
+  mkdir -p "$AI_OS_HOME/memory/$section"
+done
+for kind in task-results technical-solutions decisions architecture research discoveries failures; do
+  mkdir -p "$AI_OS_HOME/knowledge/$kind"
+done
+
+# Seed placeholder/example files ONLY where nothing exists yet — never overwrite.
+if [ -d "$TEMPLATES/workspace" ]; then
+  while IFS= read -r -d '' tpl; do
+    rel="${tpl#"$TEMPLATES"/workspace/}"
+    dest="$AI_OS_HOME/$rel"
+    if [ ! -e "$dest" ]; then
+      mkdir -p "$(dirname "$dest")"
+      cp "$tpl" "$dest"
+      echo "  seeded   $rel"
+    fi
+  done < <(find "$TEMPLATES/workspace" -type f -print0)
+fi
+
+echo "Done. Run ai-os-doctor to verify."
