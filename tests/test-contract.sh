@@ -288,8 +288,9 @@ EXPECTED = {
     "gemini": (H/".gemini/GEMINI.md", H/".gemini/skills"),
 }
 EXPECTED_PROJECT_ONLY = ["cursor", "opencode"]
-m = {"__name__": "notmain"}
-exec(compile(Path(H/".ai/bin/ai-sync").read_text(), "ai-sync", "exec"), m)
+m = {"__name__": "notmain",
+     "__file__": str(Path(os.environ["CLI"], "ai-sync"))}
+exec(compile(Path(os.environ["CLI"], "ai-sync").read_text(), "ai-sync", "exec"), m)
 got = m["CLIENTS"]
 assert set(got) == set(EXPECTED), f"clients drifted: {sorted(got)} != {sorted(EXPECTED)}"
 for k, (r, sk) in EXPECTED.items():
@@ -315,9 +316,11 @@ t "the Claude rules fragment lives in the Claude plugin"
 [ -f "$REPO/plugins/claude-code/rules-fragment.md" ]
 chk "plugins/claude-code/rules-fragment.md exists" $?
 python3 - <<'PYEOF'
+import os
 from pathlib import Path
-m = {"__name__": "notmain"}
-exec(compile(Path.home().joinpath(".ai/bin/ai-sync").read_text(), "ai-sync", "exec"), m)
+m = {"__name__": "notmain",
+     "__file__": str(Path(os.environ["CLI"], "ai-sync"))}
+exec(compile(Path(os.environ["CLI"], "ai-sync").read_text(), "ai-sync", "exec"), m)
 rules = m["canonical_rules"]()
 c, _ = m["render"]("claude", rules, m["CLIENTS"]["claude"])
 x, _ = m["render"]("codex", rules, m["CLIENTS"]["codex"])
@@ -330,9 +333,11 @@ chk "fragment and title come from the manifest, not from core" $?
 
 t "unverified capabilities are never written"
 python3 - <<'PYEOF'
+import os
 from pathlib import Path
-m = {"__name__": "notmain"}
-exec(compile(Path.home().joinpath(".ai/bin/ai-sync").read_text(), "ai-sync", "exec"), m)
+m = {"__name__": "notmain",
+     "__file__": str(Path(os.environ["CLI"], "ai-sync"))}
+exec(compile(Path(os.environ["CLI"], "ai-sync").read_text(), "ai-sync", "exec"), m)
 # cursor and opencode declare rules verified:false / null path.
 for pid in ("cursor", "opencode"):
     assert pid in m["PROJECT_ONLY"], f"{pid} should be project-only"
@@ -345,10 +350,12 @@ chk "nothing was written to opencode's unverified path" $?
 t "skill backups are namespaced per client"
 grep -q 'def backup(path, tag, owner=None)' "$CLI/ai-sync"
 chk "backup() takes an owner" $?
-# Call sites only — the def line also contains "owner=".
+# Call sites only — the def line also contains "owner=". Two remain: the per-client skill
+# write and the orphan prune. A third regenerated the runtime copy of the skills, which
+# retired with ~/.ai.
 n=$(grep 'backup(.*owner=' "$CLI/ai-sync" | grep -vc '^def ')
-[ "$n" -eq 3 ]
-chk "all 3 skill backup sites namespace their copy ($n)" $?
+[ "$n" -eq 2 ]
+chk "both skill backup sites namespace their copy ($n)" $?
 
 t "plugin enable/disable refuse until wired (no dead state)"
 out=$("$CLI/ai-os-plugin" enable claude-code 2>&1); rc=$?
@@ -391,13 +398,32 @@ b=$("$CLI/ai-os-render" catch-up --client codex 2>&1 | grep -c 'AGENTS.md')
 c=$("$CLI/ai-os-render" catch-up --client codex 2>&1 | grep -c 'CLAUDE.md')
 [ "$c" -eq 0 ];                                      chk "  ...and codex gets no Claude filename" $?
 
-t "THE STEP 7 GATE: 8 skills render equivalent to the live runtime"
-out=$("$CLI/ai-os-render" --check "$HOME/.ai/skills" --client claude-code 2>&1); rc=$?
+t "THE SKILL GATE: 8 skills render equivalent to the committed goldens"
+# This gate began as a migration check: the canonical bodies had to render equivalent to
+# the hand-maintained copy in the runtime layer. That copy was rendered with the real
+# user's profile — it carried their org folders and VCS handle — so it could never live
+# here, and it retires with ~/.ai. The proof is preserved by rendering against a fictional
+# fixture profile and diffing the committed goldens instead: same eight skills, same
+# renderer, same client conventions, no private data and no runtime dependency.
+GW="$TMP/goldenws"; mkdir -p "$GW/config"
+cp "$REPO/tests/fixtures/profile.yaml" "$GW/config/profile.yaml"
+out=$(AI_OS_HOME="$GW" "$CLI/ai-os-render" --check "$REPO/tests/fixtures/golden-skills" \
+        --client claude-code 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "no semantic loss across all 8 skills" $?
 # Count per-skill result lines only — the summary line says "equivalent" too.
 n=$(echo "$out" | grep -cE '^  (identical|equivalent) ')
 [ "$n" -eq 8 ];                                      chk "all 8 accounted for ($n)" $?
 echo "$out" | grep -q "DIFFERS"; [ $? -ne 0 ];       chk "no skill differs semantically" $?
+# The goldens are public artefacts and must stay that way.
+AI_OS_HOME="$GW" "$CLI/ai-os-privacy-scan" "$REPO/tests/fixtures" >/dev/null 2>&1
+chk "the goldens carry no private data" $?
+# Independence, proved by construction rather than by grepping this file: run the same
+# gate with a HOME that has no runtime layer under it at all. If it still passes, nothing
+# in the path from canonical body to golden touches ~/.ai.
+NOAI="$TMP/no-runtime-home"; mkdir -p "$NOAI"
+HOME="$NOAI" AI_OS_HOME="$GW" "$CLI/ai-os-render" --check \
+  "$REPO/tests/fixtures/golden-skills" --client claude-code >/dev/null 2>&1
+chk "the gate passes with no runtime layer present" $?
 
 t "public skills carry no personal values"
 # The terms are read from the PRIVATE term file, never spelled out here: a test that
@@ -684,10 +710,6 @@ for name in claude codex gemini cursor opencode; do
 done
 n=$(grep -Ec 'Documents|Projects|Developer|/Users/' "$SY" || true)
 [ "$n" -eq 0 ];                                      chk "core embeds no machine-specific path" $?
-grep -q '_reference_client' "$SY"
-chk "the reference client comes from configuration, not a literal" $?
-grep -q 'active_adapter' "$SY"
-chk "   ...read from active_adapter in the workspace settings" $?
 
 t "ai-sync runs as core, without the runtime layer on PATH"
 out=$(env PATH=/usr/bin:/bin "$SY" status 2>&1); rc=$?
@@ -716,20 +738,14 @@ chk "runtime state resolves under it" $?
 grep -q 'STATE = RUNTIME / "state"' "$SY";           chk "   ...state" $?
 grep -q 'BACKUPS = RUNTIME / "backups"' "$SY";       chk "   ...backups" $?
 
-t "the runtime copy is a passthrough shim, not a second implementation"
-RS="$HOME/.ai/bin/ai-sync"
-if [ -x "$RS" ]; then
-  grep -q 'os.execv' "$RS";                          chk "it execs the canonical engine" $?
-  n=$(wc -l < "$RS"); [ "$n" -lt 100 ]
-  chk "it carries no engine of its own ($n lines)" $?
-  a=$("$RS" verify 2>&1); b=$("$SY" verify 2>&1)
-  [ "$a" = "$b" ];                                   chk "shim output is identical to canonical" $?
-  "$RS" bogus >/dev/null 2>&1; rc1=$?
-  "$SY" bogus >/dev/null 2>&1; rc2=$?
-  [ "$rc1" -eq "$rc2" ];                             chk "   ...and so are its exit codes" $?
-else
-  printf '  %sSKIP%s runtime layer not present\n' "$D" "$X"
-fi
+t "the retired runtime layer holds no tooling"
+# ~/.ai kept the engine, then a shim, then nothing. What remains is the frozen archive.
+for gone in bin skills rules tasks docs manifest capabilities.yaml; do
+  [ ! -e "$HOME/.ai/$gone" ];                        chk "~/.ai/$gone is gone" $?
+done
+[ -d "$HOME/.ai/workspace" ];                        chk "the frozen archive is still there" $?
+n=$(find "$HOME/.ai" -maxdepth 1 -type l | wc -l | tr -d ' ')
+[ "$n" -eq 0 ];                                      chk "no stale symlinks into the archive" $?
 
 t "SessionEnd runs the engine through the dynamic launcher"
 SJ="$HOME/.claude/settings.json"
@@ -763,7 +779,7 @@ if [ -f "$REPO/adapters/claude-code/tests/test-guard-push.py" ]; then
 else
   printf '  %sSKIP%s claude-code push guard tests not found\n' "$D" "$X"
 fi
-if [ -f "$REPO/tests/test-runtime-relocation.py" ] && [ -x "$HOME/.ai/bin/ai-sync" ]; then
+if [ -f "$REPO/tests/test-runtime-relocation.py" ]; then
   python3 "$REPO/tests/test-runtime-relocation.py" >/dev/null 2>&1
   chk "persistent runtime data lives in the private workspace" $?
 else

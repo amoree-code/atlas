@@ -10,7 +10,7 @@ Read-only. Diagnose; never fix without being asked.
 ## Steps
 
 1. ```bash
-   {{profile.scripts_dir}}/health-check.sh
+   ~/.ai-os/scripts/health-check.sh
    ```
    (script — unmoved; it checks the live data workspace at `~/.ai-os` internally)
    Covers structure, Claude Code config, skill validity, script syntax, today's folder,

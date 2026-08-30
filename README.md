@@ -61,8 +61,8 @@ between the three layers explicit and *executable* — `init` is ownership-aware
 non-destructive, `doctor` verifies the contract, and `privacy-scan` checks that this
 repository is still publishable. It deliberately does **not** yet include an autonomous task engine,
 a multi-agent system, a full model router, browser/computer automation, additional MCP
-servers, or a GUI. See `docs/design-philosophy.md` for why, and the project roadmap for
-what comes after V0.1.
+servers, or a GUI. See `docs/design-philosophy.md` for why it stays that way, and
+`docs/public-private-contract.md` for the boundary everything else rests on.
 
 ## Layout
 

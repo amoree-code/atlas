@@ -2,7 +2,7 @@
 """ai-sync — propagate the canonical AI environment to installed AI clients.
 
 Sources of truth:
-  rules   ~/.ai/rules/*.md
+  rules   $AI_OS_HOME/rules/*.md
   skills  <ai-os>/skills/*/SKILL.md   canonical bodies, with {{profile.*}}/{{client.*}}
   clients <ai-os>/plugins/*/plugin.yaml   the registry — no client is hardcoded here
 
@@ -22,24 +22,26 @@ import hashlib, json, os, re, shutil, subprocess, sys, time
 from pathlib import Path
 
 HOME = Path.home()
-AI = HOME / ".ai"
-RULES = AI / "rules"
-RUNTIME_SKILLS = AI / "skills"      # generated output; see cmd_sync
-DISABLED = AI / "sync" / "DISABLED"  # a toggle the user sets, not accumulated data
-
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", HOME / ".ai-os"))
 
-# Persistent runtime data belongs to the private workspace, not the runtime layer.
-# ~/.ai holds tooling and configuration. What accumulates over time — the record of what
-# was synced, and the copies taken before each overwrite — is the user's own and lives
-# with the rest of their data, so retiring ~/.ai never takes it with it.
+# Everything this tool owns now lives in the user's private workspace.
+#
+# The canonical rules are the user's own configuration — their identity, their working
+# style, their employers — so they are read from there and never published. The record of
+# what was synced, the copies taken before each overwrite, and the auto-sync switch are
+# equally theirs. None of it belonged to the runtime layer that used to hold it.
+RULES = AI_OS_HOME / "rules"
 RUNTIME = AI_OS_HOME / "runtime"
 STATE = RUNTIME / "state" / "state.json"
 BACKUPS = RUNTIME / "backups"
+DISABLED = RUNTIME / "DISABLED"
 
-# Where both lived before V0.1.5. Read once by migrate_runtime(), then never again.
+# The retired runtime layer. Read once by migrate_runtime(), for anyone upgrading from a
+# pre-V0.1.5 install, and never written.
+AI = HOME / ".ai"
 LEGACY_STATE = AI / "sync" / "state" / "state.json"
 LEGACY_BACKUPS = AI / "sync" / "backups"
+LEGACY_DISABLED = AI / "sync" / "DISABLED"
 
 MARK_BEGIN = "<!-- ai-sync:generated -->"
 MARK_END = "<!-- ai-sync:end -->"
@@ -141,37 +143,18 @@ def say(sym, msg, col="x"): print(f"  {C[col]}{sym:<5}{C['x']} {msg}")
 def sha(text):
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
-def _reference_client():
-    """The client whose conventions render the generated runtime copy.
-
-    Read from active_adapter: in the workspace settings — a user preference expressed as
-    a plugin id. Core compares it against the registry and never interprets the value.
-    """
-    cfg = AI_OS_HOME / "config" / "settings.yaml"
-    want = ""
-    if cfg.exists():
-        m = re.search(r"^active_adapter:\s*(\S+)", cfg.read_text(), re.M)
-        if m:
-            want = m.group(1).split("#")[0].strip().strip("\"'")
-    if want:
-        for c in CLIENTS.values():
-            if c["id"] == want:
-                return c
-    return next(iter(CLIENTS.values()), None)
-
-
 def canonical_rules():
     return "\n".join(p.read_text().rstrip() for p in sorted(RULES.glob("*.md")))
 
 def canonical_skills():
     """Canonical skill NAMES. The bodies live in the public repo and are rendered
-    per client; ~/.ai/skills is generated output, not a source."""
+    per client; each client renders its own copy."""
     return sorted(p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists())
 
 def header(client, src_hash):
     return (f"{MARK_BEGIN}\n"
-            f"<!-- source: ~/.ai/rules/  |  hash: {src_hash}  |  client: {client} -->\n"
-            f"<!-- DO NOT EDIT INSIDE THE MARKERS. Edit ~/.ai/rules/*.md and run: ai-sync sync -->\n"
+            f"<!-- source: $AI_OS_HOME/rules/  |  hash: {src_hash}  |  client: {client} -->\n"
+            f"<!-- DO NOT EDIT INSIDE THE MARKERS. Edit $AI_OS_HOME/rules/*.md and run: ai-sync sync -->\n"
             f"<!-- Anything you write OUTSIDE the markers is yours and is preserved. -->\n")
 
 def render(client, rules, cfg=None):
@@ -186,7 +169,7 @@ def render(client, rules, cfg=None):
     conv = cfg.get("conv") or {}
     title = conv.get("rules_title") or "# Global rules (AGENTS.md)"
     body = [header(client, h), title, "",
-            "Canonical source: `~/.ai/rules/`. Shared by every AI client on this machine.",
+            "Canonical source: `$AI_OS_HOME/rules/`. Shared by every AI client on this machine.",
             "", rules, ""]
     frag = conv.get("rules_fragment")
     if frag and cfg.get("dir"):
@@ -251,6 +234,13 @@ def migrate_runtime():
             LEGACY_STATE.unlink(); dropped += 1
         else:
             conflicts.append(f"state.json differs: {LEGACY_STATE}  vs  {STATE}")
+
+    if LEGACY_DISABLED.exists() and not DISABLED.exists():
+        DISABLED.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(LEGACY_DISABLED), str(DISABLED))
+        say("moved", "auto-sync switch -> the private workspace", "g"); moved += 1
+    elif LEGACY_DISABLED.exists():
+        LEGACY_DISABLED.unlink(); dropped += 1
 
     if LEGACY_BACKUPS.is_dir():
         BACKUPS.mkdir(parents=True, exist_ok=True)
@@ -323,7 +313,9 @@ def cmd_status(_):
     rules = canonical_rules(); rh = sha(rules); skills = canonical_skills()
     st = load_state()
     mode = (C["r"] + "AUTO-SYNC DISABLED" + C["x"]) if DISABLED.exists() else "auto-sync on"
-    print("\n  canonical  ~/.ai   rules-hash {}   {} skills   {}\n".format(rh, len(skills), mode))
+    src = str(RULES).replace(str(HOME), "~")
+    print("\n  canonical  {}   rules-hash {}   {} skills   {}\n"
+          .format(src, rh, len(skills), mode))
     print(f"  {'CLIENT':<10} {'RULES':<12} {'SKILLS':<10} LAST SYNC")
     for name, cfg in CLIENTS.items():
         rec = st["clients"].get(name, {})
@@ -429,29 +421,6 @@ def cmd_sync(args):
         st["clients"][name] = {"rules_hash": rh, "written_hash": sha(blk),
                                "skills": skills, "at": time.strftime("%Y-%m-%d %H:%M"),
                                "status": "synced"}
-    # The runtime skills directory is GENERATED output, not a source. Nothing consumes it
-    # any more — every client renders straight from the canonical bodies — so it retires
-    # with the rest of the runtime layer. It is kept in step with canonical meanwhile, so
-    # it cannot quietly drift back into being a second source.
-    #
-    # It has to be rendered with SOME client's conventions, and which one is the user's
-    # choice rather than core's: active_adapter: in the workspace settings. Core reads a
-    # preference and matches it against the registry; it never learns what the value
-    # names. A workspace that never set one falls back to the first registered client.
-    ref = _reference_client()
-    if ref:
-        for s in skills:
-            want = resolve((SKILLS / s / "SKILL.md").read_text(), profile, ref["conv"])
-            dst = RUNTIME_SKILLS / s
-            if dst.exists() and (dst / "SKILL.md").exists() \
-                    and (dst / "SKILL.md").read_text() == want:
-                continue
-            if dst.exists():
-                backup(dst / "SKILL.md", tag, owner="runtime"); shutil.rmtree(dst)
-            shutil.copytree(SKILLS / s, dst)
-            (dst / "SKILL.md").write_text(want)
-            say("gen", f"runtime skill {s} regenerated from canonical", "y")
-
     st["history"] = ([{"tag": tag, "rules_hash": rh, "changed": changed}] + st.get("history", []))[:20]
     save_state(st); write_manifest(rules, skills, st)
     print(f"\n  {C['g']}synced{C['x']}  {len(changed)} client(s) changed  ·  backup tag {tag}\n")
@@ -511,7 +480,7 @@ def cmd_disable(_):
     say("ok", "auto-sync disabled (ai-sync sync --force still works)", "y"); return 0
 
 def write_manifest(rules, skills, st):
-    m = AI / "manifest" / "environment.yaml"; m.parent.mkdir(parents=True, exist_ok=True)
+    m = RUNTIME / "environment.yaml"; m.parent.mkdir(parents=True, exist_ok=True)
     lines = ["# GENERATED by ai-sync — do not edit. Reflects reality at last sync.",
              "environment:", "  name: shared-ai-environment",
              "  source_of_truth: ai-os", f"  canonical_root: ~/.ai",

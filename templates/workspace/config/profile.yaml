@@ -48,5 +48,5 @@ agents:
 # NOTE: these currently point into ~/.ai, the legacy runtime layer. That is a declared,
 # single-keyed dependency rather than a path hardcoded across fifteen files, and it is one
 # of the conditions gating ~/.ai's eventual removal.
-scripts_dir: ~/.ai/workspace/scripts
-templates_dir: ~/.ai/workspace/templates
+scripts_dir: ~/.ai-os/scripts
+templates_dir: ~/.ai-os/templates

@@ -1,0 +1,34 @@
+# Fixture profile for the skill-rendering gate. Deliberately fictional.
+#
+# The gate used to compare renders against the live runtime copy of the skills. That copy
+# was rendered with the real user's profile, so it carried their org folders and VCS
+# handle — which is exactly why it could never be committed here. This profile stands in
+# for a user's, containing nothing that belongs to anyone, so the rendered goldens beside
+# it are safe to publish and stable to diff.
+#
+# Change a value here and the goldens must be regenerated; that is the point.
+
+code_root: ~/Code
+
+project_roots:
+  orgs: [acme, globex]
+  personal_subdir: personal
+  freelance_subdir: freelance
+
+vcs_owner: example-user
+
+stack:
+  summary: TypeScript · React · Node
+  doc: docs/stack.md
+
+code_graph:
+  output: graph-out
+
+agents:
+  reasoning: architect
+  bookkeeping: scribe
+  curator: curator
+  scribe: scribe
+
+scripts_dir: ~/.ai-os/scripts
+templates_dir: ~/.ai-os/templates

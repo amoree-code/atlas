@@ -14,7 +14,7 @@
 set -uo pipefail
 
 AI_OS_HOME="${AI_OS_HOME:-$HOME/.ai-os}"
-AI_OS_RUNTIME="${AI_OS_RUNTIME:-$HOME/.ai}"
+AI_OS_LEGACY="${AI_OS_LEGACY:-${AI_OS_RUNTIME:-$HOME/.ai}}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(dirname "$SELF_DIR")"
 VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
@@ -42,7 +42,8 @@ inside() { case "$1/" in "$2"/*) return 0 ;; *) return 1 ;; esac; }
 
 [ "$QUIET" -eq 1 ] || {
   printf '\nai-os doctor  %sv%s%s\n' "$D" "$VERSION" "$X"
-  printf '  public   %s\n  runtime  %s\n  private  %s\n' "$REPO" "$AI_OS_RUNTIME" "$AI_OS_HOME"
+  printf '  public   %s\n  private  %s\n  client   %s\n  archive  %s\n' \
+    "$REPO" "$AI_OS_HOME" "$(dirname "$CLAUDE_SETTINGS")" "$AI_OS_LEGACY/workspace"
 }
 
 # ====================================================================================
@@ -50,7 +51,7 @@ head "roots"
 # The wrong-root guard. If two layers resolve to the same place, or one is nested in
 # another, then every other check in this file is measuring the wrong thing.
 # ====================================================================================
-R_PUB=$(rp "$REPO"); R_RUN=$(rp "$AI_OS_RUNTIME"); R_PRIV=$(rp "$AI_OS_HOME")
+R_PUB=$(rp "$REPO"); R_RUN=$(rp "$AI_OS_LEGACY"); R_PRIV=$(rp "$AI_OS_HOME")
 
 if [ ! -d "$AI_OS_HOME" ]; then
   fail "private workspace does not exist: $AI_OS_HOME"
@@ -74,8 +75,8 @@ check_pair() {  # name-a path-a name-b path-b
   fi
 }
 check_pair "public" "$R_PUB" "private" "$R_PRIV"
-check_pair "public" "$R_PUB" "runtime" "$R_RUN"
-check_pair "runtime" "$R_RUN" "private" "$R_PRIV"
+check_pair "public" "$R_PUB" "archive" "$R_RUN"
+check_pair "archive" "$R_RUN" "private" "$R_PRIV"
 
 # A symlink can smuggle one layer into another without nesting it.
 smuggled=$(find "$R_PUB" -type l -not -path '*/.git/*' 2>/dev/null | while IFS= read -r l; do
@@ -165,7 +166,7 @@ head "memory access"
 # single canonical store and nowhere else.
 # ====================================================================================
 CANON="$AI_OS_HOME/memory"
-STALE="$AI_OS_RUNTIME/workspace/memory"
+STALE="$AI_OS_LEGACY/workspace/memory"
 
 if [ -L "$CANON" ]; then
   fail "the canonical store is itself a symlink: $CANON -> $(readlink "$CANON")"
@@ -235,57 +236,71 @@ if [ -d "$STALE" ]; then
 fi
 
 # ====================================================================================
-head "runtime"
-# ~/.ai is an implementation detail of the current migration. Doctor confirms it is
-# intact and pointed at the right workspace. It never modifies it.
+head "legacy archive"
+# ~/.ai is no longer a runtime layer. Its tooling moved into the public repository, its
+# state and configuration into the private workspace, and what remains is a frozen
+# rollback copy from the V0.1.1 cutover. Doctor's job here is the opposite of what it
+# used to be: confirm that nothing active is left behind, and that the archive is intact.
+# It never modifies either.
 # ====================================================================================
-if [ -d "$AI_OS_RUNTIME" ]; then
-  ok "runtime present: $AI_OS_RUNTIME"
-  for b in ai-memory ai-guard-push ai-sync; do
-    [ -x "$AI_OS_RUNTIME/bin/$b" ] && ok "runtime: bin/$b executable" \
-                                   || warn "runtime: bin/$b missing or not executable"
-  done
-  # Does the runtime agree with us about where the workspace is?
-  if [ -x "$AI_OS_RUNTIME/bin/ai-memory" ]; then
-    if grep -qF '.ai-os" / "memory"' "$AI_OS_RUNTIME/bin/ai-memory" 2>/dev/null \
-    || grep -qF "$AI_OS_HOME/memory" "$AI_OS_RUNTIME/bin/ai-memory" 2>/dev/null; then
-      ok "runtime: ai-memory targets the private workspace"
-    else
-      fail "runtime: ai-memory does not target $AI_OS_HOME/memory"
-      note "the runtime and this tool disagree about where memory lives"
-    fi
-  fi
-  # Runtime's own convenience links. These predate the cutover and may point at the
-  # frozen archive — worth knowing, not worth breaking the runtime over.
-  for l in memory knowledge sessions daily; do
-    p="$AI_OS_RUNTIME/$l"
-    [ -L "$p" ] || continue
-    t=$(readlink "$p"); case "$t" in /*) abs="$t" ;; *) abs="$AI_OS_RUNTIME/$t" ;; esac
-    if inside "$(rp "$abs")" "$R_PRIV"; then
-      ok "runtime: ~/.ai/$l -> private workspace"
-    else
-      warn "runtime: ~/.ai/$l -> $t  ${D}(the frozen archive, not the live workspace)${X}"
-      note "read-only convenience link left from before the cutover; not changed here"
-    fi
-  done
+if [ ! -e "$AI_OS_LEGACY" ]; then
+  ok "no legacy layer on this machine"
 else
-  fail "runtime directory missing: $AI_OS_RUNTIME"
+  live=""
+  for r in bin skills rules tasks docs manifest sync capabilities.yaml; do
+    [ -e "$AI_OS_LEGACY/$r" ] && live="$live $r"
+  done
+  n=$(find "$AI_OS_LEGACY" -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
+  if [ -n "$live" ]; then
+    fail "the legacy layer still holds active AI OS components:$live"
+    note "these moved in V0.1.5; anything left here is a second source of truth"
+  else
+    ok "legacy layer holds no active AI OS components"
+  fi
+  if [ "$n" -gt 0 ]; then
+    fail "$n symlink(s) still resolve out of the legacy layer"
+    note "a live path resolving into a frozen archive returns stale data that looks valid"
+  else
+    ok "no symlinks resolving out of the legacy layer"
+  fi
+  if [ -d "$AI_OS_LEGACY/workspace" ]; then
+    ok "frozen archive present: $AI_OS_LEGACY/workspace  ${D}(rollback copy, read-only)${X}"
+    if grep -rqlF "$AI_OS_LEGACY/workspace" "$AI_OS_HOME/config" 2>/dev/null; then
+      fail "private configuration still resolves into the frozen archive"
+      note "the archive is a rollback copy; live configuration must not depend on it"
+    else
+      ok "no live configuration depends on the frozen archive"
+    fi
+  else
+    warn "no frozen archive under $AI_OS_LEGACY  ${D}(nothing to roll back to)${X}"
+  fi
 fi
 
 if [ -f "$CLAUDE_SETTINGS" ]; then
   # Parse the JSON and read only hooks[].hooks[].command — grepping the whole file
-  # matches permission globs like "Bash(~/.ai/bin/ai-*)" and yields truncated paths.
+  # matches permission globs and yields truncated paths.
+  #
+  # Since V0.1.5 a hook names the launcher and a path relative to the repository, so the
+  # repository's own location never appears here. Resolve both halves: the launcher must
+  # exist, and so must what it is asked to run. A legacy hook still naming the retired
+  # runtime layer directly is reported rather than silently accepted.
   hooked=$(python3 -c '
-import json,re,sys
+import json,os,re,sys
 try: d=json.load(open(sys.argv[1]))
 except Exception: sys.exit(0)
+repo = sys.argv[2]
 out=set()
 for group in (d.get("hooks") or {}).values():
     for entry in group:
         for h in entry.get("hooks", []):
-            for m in re.findall(r"(?:\$HOME|~)/\.ai/bin/[A-Za-z0-9_-]+", h.get("command","")):
-                out.add(m)
-print("\n".join(sorted(out)))' "$CLAUDE_SETTINGS" 2>/dev/null)
+            cmd = h.get("command","")
+            m = re.search(r"((?:\$HOME|~)/[^\s]*ai-os-hook)\s+(\S+)", cmd)
+            if m:
+                out.add(m.group(1)); out.add(os.path.join(repo, m.group(2)))
+                continue
+            for x in re.findall(r"(?:\$HOME|~)/\.ai/bin/[A-Za-z0-9_-]+", cmd):
+                out.add(x)
+print("\n".join(sorted(out)))' "$CLAUDE_SETTINGS" "$REPO" 2>/dev/null)
   if [ -n "$hooked" ]; then
     bad=0
     while IFS= read -r h; do
