@@ -14,6 +14,37 @@ Only `PreToolUse` → `ai-guard-push` is a **policy enforcement** in the AI OS s
 the Claude Code implementation of `policies/git.yaml`. The other two are this adapter's
 own bookkeeping and aren't policies other adapters would need to replicate identically.
 
+## How the hooks reach the repository
+
+Hooks run in a non-login shell with a minimal PATH and no guaranteed working directory, so
+they cannot find this repository on their own. Writing its path into the hook is the wrong
+fix twice over: it encodes the machine the hook was written on, and it breaks the moment
+the repository moves.
+
+Instead every hook command goes through a launcher installed once into this client's own
+configuration domain:
+
+```
+$HOME/.claude/ai-os-hook cli/ai-os memory attach --here
+$HOME/.claude/ai-os-hook adapters/claude-code/ai-guard-push
+```
+
+The launcher is a **copy** of `cli/ai-os-hook`, not a symlink — a symlink's target would
+re-encode the repository path and break on a move, while a copy resolves at runtime and
+survives one. It resolves `$AI_OS_REPO`, else `ai_os_repo:` from
+`${AI_OS_HOME:-$HOME/.ai-os}/config/settings.yaml`, and `ai-os init` records that value
+automatically from its own location. Clone anywhere, at any depth, under any name.
+
+The launcher names no client. Any adapter installs the same file into its own client's
+domain; nothing in it answers the question of who called it.
+
+Moving the repository therefore never requires editing `settings.json` — re-running
+`ai-os init` (or updating `ai_os_repo`) is enough.
+
+Resolution failures exit 78 on stderr. `SessionStart` appends `|| true` and tolerates
+that; `PreToolUse` deliberately does not, so a broken installation fails closed rather
+than silently granting every push.
+
 ## Why a hook, not just a permission rule
 
 Glob-based permission rules (e.g. `Bash(git push*)`) miss compound commands like

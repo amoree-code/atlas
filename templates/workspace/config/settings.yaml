@@ -1,6 +1,12 @@
-# Where the public AI OS software lives on this machine. ai-sync reads the plugin
-# registry from it. Set this: hooks run in a non-login shell with a minimal PATH,
-# so discovery via `which ai-os` cannot be relied on.
+# Where the public AI OS software lives on this machine. ai-sync and the client hook
+# launcher read the plugin registry and commands from it. Hooks run in a non-login shell
+# with a minimal PATH, so discovery via `which ai-os` cannot be relied on — the location
+# is recorded here instead.
+#
+# Leave this empty: `ai-os init` fills it in with wherever the repository actually is.
+# If you set it yourself, init keeps your value and never overwrites it. Moving the
+# repository means updating this line (or clearing it and re-running init) — never
+# editing a hook.
 ai_os_repo: ""
 
 # AI OS settings. See ../../../policies/ for the policies this config participates in.

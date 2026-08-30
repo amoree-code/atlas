@@ -545,6 +545,132 @@ else
 fi
 
 # =====================================================================================
+# THE STEP 11 GATE: a hook may not know where the repository is.
+# A path baked into a hook encodes the machine it was written on and breaks the moment
+# the repository moves. These prove the launcher resolves it instead — at any location,
+# any depth, any directory name.
+HK="$CLI/ai-os-hook"
+
+mk_repo() {  # $1 = repo dir. A minimal stand-in: one repo-relative executable.
+  mkdir -p "$1/cli"
+  printf '#!/bin/sh\necho "RESOLVED:$(cd "$(dirname "$0")/.." && pwd)"\n' > "$1/cli/probe"
+  chmod +x "$1/cli/probe"
+}
+mk_ws() {    # $1 = workspace dir, $2 = ai_os_repo value (may be empty or ~-relative)
+  mkdir -p "$1/config"; printf 'ai_os_repo: %s\n' "$2" > "$1/config/settings.yaml"
+}
+resolves() { # $1 = expected repo dir, $2 = the invocation's output
+  # Compare physical paths: TMPDIR can carry a trailing slash, which the shell's own
+  # pwd normalizes away. That is not a resolution failure.
+  exp=$(cd "$1" 2>/dev/null && pwd) || return 1
+  echo "$2" | grep -qF "RESOLVED:$exp"
+}
+
+t "hook launcher: the repository resolves wherever it is"
+FH="$TMP/fakehome"; mkdir -p "$FH"
+
+# 1. directly under $HOME
+R1="$FH/ai-os"; mk_repo "$R1"; mk_ws "$TMP/ws1" "$R1"
+out=$(AI_OS_HOME="$TMP/ws1" "$HK" cli/probe 2>&1)
+resolves "$R1" "$out";                          chk "repository directly under \$HOME" $?
+
+# 2. under Documents
+R2="$FH/Documents/ai-os"; mk_repo "$R2"; mk_ws "$TMP/ws2" "$R2"
+out=$(AI_OS_HOME="$TMP/ws2" "$HK" cli/probe 2>&1)
+resolves "$R2" "$out";                          chk "repository under Documents/" $?
+
+# 3. nested five deep, and 4. an arbitrary directory name
+R3="$FH/a/b/c/d/e/my-weird-ai-os-checkout"; mk_repo "$R3"; mk_ws "$TMP/ws3" "$R3"
+out=$(AI_OS_HOME="$TMP/ws3" "$HK" cli/probe 2>&1)
+resolves "$R3" "$out";                          chk "repository nested 5+ deep" $?
+echo "$out" | grep -q 'my-weird-ai-os-checkout'
+chk "repository directory name is arbitrary" $?
+
+# 5. a ~-prefixed value, expanded against HOME
+R5="$FH/tilde-repo"; mk_repo "$R5"; mk_ws "$TMP/ws5" '~/tilde-repo'
+out=$(HOME="$FH" AI_OS_HOME="$TMP/ws5" "$HK" cli/probe 2>&1)
+resolves "$R5" "$out";                          chk "a ~-prefixed ai_os_repo expands" $?
+
+# 7. explicit override wins over the configured value
+out=$(AI_OS_REPO="$R1" AI_OS_HOME="$TMP/ws3" "$HK" cli/probe 2>&1)
+resolves "$R1" "$out";                          chk "AI_OS_REPO overrides the configured value" $?
+
+t "hook launcher: a broken installation fails loudly, never silently"
+# 6. empty value
+mk_ws "$TMP/ws6" ""
+out=$(AI_OS_HOME="$TMP/ws6" "$HK" cli/probe 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                chk "empty ai_os_repo exits non-zero" $?
+echo "$out" | grep -q "ai-os init";             chk "   ...and says how to fix it" $?
+out=$(AI_OS_HOME="$TMP/nonexistent-ws" "$HK" cli/probe 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                chk "a missing workspace config exits non-zero" $?
+mk_ws "$TMP/ws8" "$TMP/no-such-repo"
+out=$(AI_OS_HOME="$TMP/ws8" "$HK" cli/probe 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                chk "a recorded path that does not exist exits non-zero" $?
+out=$(AI_OS_HOME="$TMP/ws1" "$HK" cli/not-there 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                chk "a missing repo-relative command exits non-zero" $?
+
+t "hook launcher: no client knowledge, and none of this machine"
+n=$(grep -Eic 'claude|codex|gemini|cursor|opencode' "$HK" || true)
+[ "$n" -eq 0 ];                                 chk "the launcher names no client" $?
+n=$(grep -Eic 'Documents|Projects|Developer|/Users/' "$HK" || true)
+[ "$n" -eq 0 ];                                 chk "the launcher hardcodes no location" $?
+
+t "hook launcher: works under a hook's minimal environment"
+# 8. exactly what a client hook gets: no inherited env, a bare PATH.
+out=$(env -i HOME="$FH" PATH=/usr/bin:/bin AI_OS_HOME="$TMP/ws1" "$HK" cli/probe 2>&1)
+resolves "$R1" "$out";                          chk "resolves under env -i with a minimal PATH" $?
+
+t "hook launcher: moving the repository does not touch any hook"
+# 10. THE INVARIANT. The invocation string below is written once and never changed;
+# only the recorded location moves.
+INVOCATION="cli/probe"
+MV_FROM="$TMP/relocate/first/place/ai-os"; MV_TO="$TMP/relocate/somewhere/entirely/different/renamed-os"
+mk_repo "$MV_FROM"; mk_ws "$TMP/ws-mv" "$MV_FROM"
+out=$(AI_OS_HOME="$TMP/ws-mv" "$HK" $INVOCATION 2>&1)
+resolves "$MV_FROM" "$out";                     chk "resolves at its original location" $?
+mkdir -p "$(dirname "$MV_TO")" && mv "$MV_FROM" "$MV_TO"
+out=$(AI_OS_HOME="$TMP/ws-mv" "$HK" $INVOCATION 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                chk "after the move, the stale location fails loudly" $?
+mk_ws "$TMP/ws-mv" "$MV_TO"                     # the one thing that changes: the record
+out=$(AI_OS_HOME="$TMP/ws-mv" "$HK" $INVOCATION 2>&1)
+resolves "$MV_TO" "$out";                       chk "the SAME invocation works after relocation" $?
+
+t "init records the repository location, and never overwrites yours"
+# 11. empty -> recorded automatically
+IW="$TMP/init-ws"
+AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
+got=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$IW/config/settings.yaml" | head -1)
+[ "$got" = "$REPO" ];                           chk "init recorded its own actual location" $?
+# 12. explicit value survives
+sed 's|^ai_os_repo:.*|ai_os_repo: ~/deliberately/elsewhere|' "$IW/config/settings.yaml" > "$TMP/x" \
+  && mv "$TMP/x" "$IW/config/settings.yaml"
+out=$(AI_OS_HOME="$IW" "$CLI/ai-os-init" 2>&1)
+got=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$IW/config/settings.yaml" | head -1)
+[ "$got" = "~/deliberately/elsewhere" ];        chk "an explicit ai_os_repo is NOT overwritten" $?
+echo "$out" | grep -q "kept your value";        chk "   ...and the divergence is reported" $?
+# dry run must still write nothing
+rm -rf "$TMP/init-dry"
+AI_OS_HOME="$TMP/init-dry" "$CLI/ai-os-init" --dry-run >/dev/null 2>&1
+[ ! -e "$TMP/init-dry" ];                       chk "--dry-run records nothing" $?
+
+t "the installed hook commands carry no machine-specific path"
+# 9. The user's real settings.json, if the launcher is installed.
+SJ="$HOME/.claude/settings.json"
+if [ -f "$SJ" ] && grep -q 'ai-os-hook' "$SJ"; then
+  n=$(grep -Eoc '"command": "[^"]*(Documents|Projects|Developer)/' "$SJ" || true)
+  [ "$n" -eq 0 ];                               chk "no repository path in any hook command" $?
+  grep -q '\$HOME/.claude/ai-os-hook cli/ai-os memory attach --here' "$SJ"
+  chk "SessionStart goes through the launcher" $?
+  grep -q '\$HOME/.claude/ai-os-hook adapters/claude-code/ai-guard-push' "$SJ"
+  chk "PreToolUse goes through the launcher" $?
+  cmp -s "$HOME/.claude/ai-os-hook" "$CLI/ai-os-hook"
+  chk "the installed launcher matches the repository's copy" $?
+  [ ! -L "$HOME/.claude/ai-os-hook" ];          chk "it is a copy, not a symlink" $?
+else
+  printf '  %sSKIP%s launcher not installed in this environment\n' "$D" "$X"
+fi
+
+# =====================================================================================
 t "inherited suites still pass"
 if [ -f "$REPO/adapters/claude-code/tests/test-guard-push.py" ]; then
   python3 "$REPO/adapters/claude-code/tests/test-guard-push.py" >/dev/null 2>&1

@@ -96,6 +96,44 @@ if [ -d "$TEMPLATES/workspace" ]; then
   done < <(find "$TEMPLATES/workspace" -type f | sort)
 fi
 
+# --- record where this repository actually is ----------------------------------------
+# Client hooks cannot discover the repository: they run in a non-login shell with a
+# minimal PATH. So the location is written down once, here, by the only thing that
+# reliably knows it — this script, from its own path. Clone anywhere, at any depth,
+# under any name; run init; the hooks resolve it. Moving the repository means re-running
+# init, never editing a hook.
+#
+# An explicitly configured value is the user's and is never overwritten. If it disagrees
+# with where init is running from, that is reported and left alone: silently rewriting it
+# would break a deliberate override, and guessing which one is right is not init's call.
+printf '\n%srepository location%s\n' "$B" "$X"
+cfg="$AI_OS_HOME/config/settings.yaml"
+if [ -f "$cfg" ]; then
+  cur="$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$cfg" | head -n 1 | sed \
+        -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/" \
+        -e 's/[[:space:]]*$//')"
+  case "$cur" in "~")   cur_abs="$HOME" ;;
+                 "~/"*) cur_abs="$HOME/${cur#\~/}" ;;
+                 *)     cur_abs="$cur" ;; esac
+  if [ -z "$cur" ]; then
+    if act; then
+      tmp="$cfg.init.$$"
+      awk -v v="$REPO" '\
+        !d && /^ai_os_repo:/ { print "ai_os_repo: " v; d=1; next } { print }' \
+        "$cfg" > "$tmp" && mv "$tmp" "$cfg"
+    fi
+    say "recorded  ai_os_repo: $REPO"
+  elif [ "$cur_abs" = "$REPO" ]; then
+    say "${D}unchanged ai_os_repo already points here${X}"
+  else
+    say "${Y}yours${X}    ai_os_repo: $cur"
+    say "${D}         ${X}  init is running from $REPO — kept your value, not overwritten."
+    say "${D}         ${X}  If the repository moved, update it or clear it and re-run init."
+  fi
+else
+  say "${Y}no config/settings.yaml — cannot record the repository location${X}"
+fi
+
 # --- what init deliberately does NOT do ---------------------------------------------
 printf '\n%snot copied, deliberately%s\n' "$B" "$X"
 say "${D}public skills${X}   stay in $REPO/skills — copying them here would turn"
