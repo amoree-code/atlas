@@ -456,6 +456,8 @@ EOF
 cat > "$MA/testclient/mounts" <<EOF
 #!/usr/bin/env bash
 [ "\$1" = list ] && { echo "$TMP/tc-home/proj-a/memory"; echo "$TMP/tc-home/proj-b/memory"; }
+# `path <dir>` answers which mount serves a working directory — the client's own rule.
+[ "\$1" = path ] && echo "\$2/memory"
 exit 0
 EOF
 chmod +x "$MA/testclient/mounts"
@@ -475,6 +477,18 @@ chk "doctor passes on a freshly attached non-Claude workspace" $?
 env | grep -qi 'claude' && claude_in_env=1 || claude_in_env=0
 [ "$claude_in_env" -eq 0 ] || [ -z "${AI_OS_PLUGINS##*mem-plugins}" ]
 chk "the engine resolved no Claude plugin at all" $?
+
+t "memory engine: attach --here asks the plugin which mount serves this directory"
+# Step 10 needs exact parity with the historical `link`: one directory, not all of them.
+mkdir -p "$TMP/tc-home/proj-here"
+out=$(cd "$TMP/tc-home/proj-here" && AI_OS_HOME="$MW" "$CLI/ai-os-memory" attach --here 2>&1)
+[ -L "$TMP/tc-home/proj-here/memory" ];          chk "--here attached the current directory" $?
+[ ! -e "$TMP/tc-home/proj-d/memory" ];           chk "   ...and only that one" $?
+out=$(AI_OS_HOME="$MW" "$CLI/ai-os-memory" attach --here /some/path 2>&1); rc=$?
+[ "$rc" -eq 2 ];                                 chk "--here with a PATH is refused" $?
+out=$(AI_OS_HOME="$MW" "$CLI/ai-os-memory" attach --bogus 2>&1); rc=$?
+[ "$rc" -eq 2 ];                                 chk "an unknown option is refused, not ignored" $?
+grep -q 'cwd' "$CLI/ai-os-memory";               chk "core resolves cwd through the plugin, not a rule of its own" $?
 
 t "memory engine: attach never destroys user data"
 mkdir -p "$TMP/tc-home/proj-c/memory"

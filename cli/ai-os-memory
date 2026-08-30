@@ -8,6 +8,7 @@ client identity. Everything it knows about a client arrives through the plugin r
   ai-os memory status              the canonical store, and every mount plugins declare
   ai-os memory doctor              memory + knowledge health; reports, changes nothing
   ai-os memory attach [PATH...]    point PATH at the canonical store; no PATH = every mount
+  ai-os memory attach --here       only the mount(s) serving the current directory
 
 Mounts
 ------
@@ -339,11 +340,38 @@ def cmd_doctor(_):
 
 
 def cmd_attach(args):
-    if args:
-        for a in args:
+    """attach [--here] [PATH...]
+
+    --here attaches only the mounts serving the current working directory. Which mounts
+    those are is a question core asks the plugins — core has no notion of what makes a
+    directory correspond to a mount, and does not acquire one here.
+    """
+    here = "--here" in args
+    paths = [a for a in args if not a.startswith("--")]
+    unknown = [a for a in args if a.startswith("--") and a != "--here"]
+    if unknown:
+        print(f"  unknown option: {unknown[0]}")
+        return 2
+    if here and paths:
+        print("  --here takes no PATH arguments")
+        return 2
+
+    if paths:
+        for a in paths:
             p = Path(os.path.expanduser(a)).resolve()
             print(f"  {attach(p):<8} {p}")
         return 0
+
+    if here:
+        cwd = Path.cwd()
+        ms = mounts_for(cwd)
+        if not ms:
+            print(f"  {'skipped':<8} {cwd}  (no client declares a mount for it)")
+            return 0
+        for m in ms:
+            print(f"  {attach(m.path):<8} {cwd}")
+        return 0
+
     ms = mounts()
     if not ms:
         print("  no client declares memory mounts — nothing to attach")
