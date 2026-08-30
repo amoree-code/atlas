@@ -22,6 +22,7 @@ requires: []
 enforces: []
 
 conventions:
+  rules_title: "# Global rules (AGENTS.md)"
   project_context: AGENTS.md
   project_memory: ""
 

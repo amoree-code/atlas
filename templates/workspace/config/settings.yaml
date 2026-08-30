@@ -1,3 +1,8 @@
+# Where the public AI OS software lives on this machine. ai-sync reads the plugin
+# registry from it. Set this: hooks run in a non-login shell with a minimal PATH,
+# so discovery via `which ai-os` cannot be relied on.
+ai_os_repo: ""
+
 # AI OS settings. See ../../../policies/ for the policies this config participates in.
 
 workspace: ~/.ai-os

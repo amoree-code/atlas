@@ -275,36 +275,80 @@ out=$(AI_OS_PLUGINS="$F2" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
 [ "$before" = "$(shasum "$F2/broken/plugin.yaml")" ]; chk "  ...and nothing was modified" $?
 rm -rf "$F2/broken"
 
-t "plugin registry reproduces ai-sync's hardcoded table"
+t "registry resolution is pinned (the old hardcoded table, as a regression guard)"
+# ai-sync no longer HAS a client table, so comparing against it would be tautological.
+# These are the exact values it used before step 8; drifting off them is a regression.
 python3 - <<'PYEOF'
-import os, types
+import os
 from pathlib import Path
-# Load both tools as plain namespaces — no import machinery, no side effects. The
-# plugin CLI is truncated at __main__ so nothing executes.
-m = types.SimpleNamespace().__dict__
-exec(compile(Path.home().joinpath(".ai/bin/ai-sync").read_text(), "ai-sync", "exec"), m)
-pl = {"__file__": os.environ["CLI"] + "/ai-os-plugin"}
-exec(compile(Path(os.environ["CLI"] + "/ai-os-plugin").read_text().split("if __name__")[0],
-             "ai-os-plugin", "exec"), pl)
-from_manifests, project_only = {}, []
-for pid, man, err in pl["load_all"]():
-    assert not err, f"{pid}: {err}"
-    if man["writes"]:
-        from_manifests[pid] = {
-            "rules": Path(os.path.expanduser(str(man["provides"]["rules"]["path"]))),
-            "skills": Path(os.path.expanduser(str(man["provides"]["skills"]["path"]).rstrip("/"))),
-        }
-    else:
-        project_only.append(pid)
-alias = {"claude-code": "claude"}
-got = {alias.get(k, k): v for k, v in from_manifests.items()}
-assert set(got) == set(m["CLIENTS"]), f"client set differs: {set(got)} vs {set(m['CLIENTS'])}"
-for k, v in m["CLIENTS"].items():
-    assert got[k]["rules"] == v["rules"], f"{k} rules: {got[k]['rules']} != {v['rules']}"
-    assert got[k]["skills"] == v["skills"], f"{k} skills: {got[k]['skills']} != {v['skills']}"
-assert sorted(project_only) == sorted(m["PROJECT_ONLY"]), f"{project_only} != {m['PROJECT_ONLY']}"
+H = Path.home()
+EXPECTED = {
+    "claude": (H/".claude/CLAUDE.md", H/".claude/skills"),
+    "codex":  (H/".codex/AGENTS.md",  H/".codex/skills"),
+    "gemini": (H/".gemini/GEMINI.md", H/".gemini/skills"),
+}
+EXPECTED_PROJECT_ONLY = ["cursor", "opencode"]
+m = {"__name__": "notmain"}
+exec(compile(Path(H/".ai/bin/ai-sync").read_text(), "ai-sync", "exec"), m)
+got = m["CLIENTS"]
+assert set(got) == set(EXPECTED), f"clients drifted: {sorted(got)} != {sorted(EXPECTED)}"
+for k, (r, sk) in EXPECTED.items():
+    assert got[k]["rules"] == r,  f"{k} rules drifted: {got[k]['rules']} != {r}"
+    assert got[k]["skills"] == sk, f"{k} skills drifted: {got[k]['skills']} != {sk}"
+assert sorted(m["PROJECT_ONLY"]) == EXPECTED_PROJECT_ONLY, m["PROJECT_ONLY"]
 PYEOF
-chk "manifest-derived targets are byte-identical to CLIENTS + PROJECT_ONLY" $?
+chk "the 3 writable clients resolve to their original paths" $?
+
+t "ai-sync knows no client by name"
+! grep -qE '^\s*CLIENTS\s*=\s*\{' "$HOME/.ai/bin/ai-sync"
+chk "no hardcoded CLIENTS table" $?
+! grep -qE '^\s*PROJECT_ONLY\s*=\s*\[' "$HOME/.ai/bin/ai-sync"
+chk "no hardcoded PROJECT_ONLY list" $?
+! grep -qE 'HOME */ *"\.(claude|codex|gemini|cursor)' "$HOME/.ai/bin/ai-sync"
+chk "no hardcoded client config paths" $?
+# The docstring says the words "if client == \"claude\"" to explain why it is gone, so
+# match an actual conditional (trailing colon) rather than the prose about one.
+! grep -qE 'if +client *== *"claude" *:' "$HOME/.ai/bin/ai-sync"
+chk "no client-name conditional in core render()" $?
+
+t "the Claude rules fragment lives in the Claude plugin"
+[ -f "$REPO/plugins/claude-code/rules-fragment.md" ]
+chk "plugins/claude-code/rules-fragment.md exists" $?
+python3 - <<'PYEOF'
+from pathlib import Path
+m = {"__name__": "notmain"}
+exec(compile(Path.home().joinpath(".ai/bin/ai-sync").read_text(), "ai-sync", "exec"), m)
+rules = m["canonical_rules"]()
+c, _ = m["render"]("claude", rules, m["CLIENTS"]["claude"])
+x, _ = m["render"]("codex", rules, m["CLIENTS"]["codex"])
+assert "## Claude Code specifics" in c, "claude lost its fragment"
+assert "## Claude Code specifics" not in x, "codex wrongly received the Claude fragment"
+assert c.startswith(m["MARK_BEGIN"]) and c.rstrip().endswith(m["MARK_END"])
+assert "# Global rules\n" in c and "# Global rules (AGENTS.md)" in x, "titles not manifest-driven"
+PYEOF
+chk "fragment and title come from the manifest, not from core" $?
+
+t "unverified capabilities are never written"
+python3 - <<'PYEOF'
+from pathlib import Path
+m = {"__name__": "notmain"}
+exec(compile(Path.home().joinpath(".ai/bin/ai-sync").read_text(), "ai-sync", "exec"), m)
+# cursor and opencode declare rules verified:false / null path.
+for pid in ("cursor", "opencode"):
+    assert pid in m["PROJECT_ONLY"], f"{pid} should be project-only"
+    assert pid not in m["CLIENTS"], f"{pid} must never be a write target"
+PYEOF
+chk "cursor and opencode are never write targets" $?
+[ ! -f "$HOME/.config/opencode/AGENTS.md" ]
+chk "nothing was written to opencode's unverified path" $?
+
+t "skill backups are namespaced per client"
+grep -q 'def backup(path, tag, owner=None)' "$HOME/.ai/bin/ai-sync"
+chk "backup() takes an owner" $?
+# Call sites only — the def line also contains "owner=".
+n=$(grep 'backup(.*owner=' "$HOME/.ai/bin/ai-sync" | grep -vc '^def ')
+[ "$n" -eq 3 ]
+chk "all 3 skill backup sites namespace their copy ($n)" $?
 
 t "plugin enable/disable refuse until wired (no dead state)"
 out=$("$CLI/ai-os-plugin" enable claude-code 2>&1); rc=$?

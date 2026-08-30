@@ -29,6 +29,12 @@ enforces: [git]             # policies/git.yaml, via ai-guard-push (PreToolUse)
 conventions:
   # Client-specific filesystem names. Skills reference these as {{client.*}} so one
   # canonical skill body serves every client instead of one copy per client.
+  rules_title: "# Global rules"
+  rules_fragment: rules-fragment.md
+  # ai-sync recorded this client as "claude" before the registry existed.
+  # Its sync state and backups are keyed on that name; changing it would
+  # orphan the drift-detection record and cause a spurious rewrite.
+  legacy_sync_id: claude
   project_context: CLAUDE.md
   project_memory: .claude/memory/
 
