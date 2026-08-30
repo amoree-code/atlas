@@ -39,6 +39,12 @@ repository. The personal half never leaves your machine.
 Nothing under `~/.ai-os/` is ever read by, or copied into, this repository. `ai-os init`
 writes *into* `~/.ai-os/` from this repo's templates; it never writes the other way.
 
+The workspace is **private by default and versioned locally only** — a git repository
+with no remote, for history, rollback and audit. Versioning is not publishing; adding a
+remote, pushing, exporting, or copying workspace content into this repository all require
+explicit approval. See `policies/workspace-privacy.yaml` and
+`docs/workspace-versioning.md`.
+
 ## Status: V0.1 — foundation
 
 This is early. V0.1's only goal is a clean, vendor-neutral foundation: the public/private
@@ -55,7 +61,7 @@ what comes after V0.1.
 ai-os/
 ├── adapters/claude-code/   how Claude Code enforces AI OS policies today
 ├── policies/               policy definitions (currently: git push approval)
-├── cli/                    ai-os-init · ai-os-doctor · ai-os-status
+├── cli/                    ai-os-init · ai-os-doctor · ai-os-status · ai-os-workspace
 ├── templates/
 │   ├── workspace/           the ~/.ai-os/ shape, placeholder data only
 │   ├── skills/                the canonical skill set, client-agnostic

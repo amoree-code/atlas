@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# ai-os-workspace — local versioning for the PRIVATE user workspace.
+#
+#   ai-os-workspace status     tracked state + the safety checks that matter
+#   ai-os-workspace snapshot   one commit per COMPLETED TASK (not per file edit)
+#
+# Local git only: history, rollback, audit. Never publishing. This tool will not add a
+# remote, will not push, and refuses to operate if it finds one.
+#
+# diff / history / restore are deliberately NOT wrapped — plain git already does them
+# correctly, and a wrapper would add surface without adding capability:
+#   git -C ~/.ai-os diff · log · restore <path> · revert <sha>
+
+set -uo pipefail
+
+W="${AI_OS_HOME:-$HOME/.ai-os}"
+G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; D=$'\033[2m'; X=$'\033[0m'
+
+die() { printf '%s✗%s %s\n' "$R" "$X" "$1" >&2; exit 1; }
+
+[ -d "$W" ]      || die "no workspace at $W"
+[ -d "$W/.git" ] || die "$W is not versioned yet. See the AI OS docs (V0.1.2)."
+
+# --- safety checks shared by both subcommands -------------------------------------
+# Returns non-zero if anything is wrong. Prints findings.
+safety() {
+  local bad=0
+
+  local remote; remote=$(git -C "$W" remote -v 2>/dev/null)
+  if [ -n "$remote" ]; then
+    printf '  %sFAIL%s a remote is configured on the private workspace:\n' "$R" "$X"
+    echo "$remote" | sed 's/^/         /'
+    printf '         This workspace is local-only. Remove it, or get explicit approval.\n'
+    bad=1
+  else
+    printf '  %sok%s   no remote (local-only)\n' "$G" "$X"
+  fi
+
+  # A nested repository is a defect. We report it — never hide it in .gitignore.
+  local nested; nested=$(find "$W" -mindepth 2 -name .git -maxdepth 6 2>/dev/null)
+  if [ -n "$nested" ]; then
+    printf '  %sFAIL%s nested git repository inside the private workspace:\n' "$R" "$X"
+    echo "$nested" | sed 's/^/         /'
+    bad=1
+  else
+    printf '  %sok%s   no nested repositories\n' "$G" "$X"
+  fi
+
+  for h in pre-push pre-commit; do
+    if [ -x "$W/.git/hooks/$h" ]; then
+      printf '  %sok%s   %s hook installed\n' "$G" "$X" "$h"
+    else
+      printf '  %swarn%s %s hook missing — reinstall it\n' "$Y" "$X" "$h"
+    fi
+  done
+
+  return $bad
+}
+
+cmd_status() {
+  printf '\n  private workspace  %s  %s(local-only)%s\n\n' "$W" "$D" "$X"
+  safety
+  local rc=$?
+
+  printf '\n  %ssnapshots%s  %s\n' "$D" "$X" "$(git -C "$W" rev-list --count HEAD 2>/dev/null || echo 0)"
+  local last; last=$(git -C "$W" log -1 --format='%h  %ad  %s' --date=short 2>/dev/null)
+  [ -n "$last" ] && printf '  %slast%s       %s\n' "$D" "$X" "$last"
+
+  local dirty; dirty=$(git -C "$W" status --porcelain 2>/dev/null)
+  if [ -z "$dirty" ]; then
+    printf '\n  %sclean%s — nothing to snapshot\n\n' "$G" "$X"
+  else
+    printf '\n  uncommitted changes (%s file(s)):\n' "$(echo "$dirty" | wc -l | tr -d ' ')"
+    echo "$dirty" | sed 's/^/    /'
+    printf '\n  %s→ ai-os-workspace snapshot "<what the task did>"%s\n\n' "$D" "$X"
+  fi
+  return $rc
+}
+
+cmd_snapshot() {
+  local msg="${1:-}"
+  [ -n "$msg" ] || die 'a snapshot needs a message: ai-os-workspace snapshot "<what the task did>"'
+
+  printf '\n  private workspace  %s\n\n' "$W"
+  safety || die "safety checks failed — not committing. Fix the above first."
+
+  local dirty; dirty=$(git -C "$W" status --porcelain 2>/dev/null)
+  if [ -z "$dirty" ]; then
+    printf '\n  %snothing to snapshot%s — workspace is clean\n\n' "$Y" "$X"
+    return 0
+  fi
+
+  printf '\n  staging %s file(s):\n' "$(echo "$dirty" | wc -l | tr -d ' ')"
+  echo "$dirty" | sed 's/^/    /'
+
+  git -C "$W" add -A || die "git add failed"
+
+  # Which areas did this task touch? Keeps the log readable at a glance.
+  local areas="" a
+  for a in config memory knowledge projects sessions daily skills; do
+    git -C "$W" diff --cached --name-only | grep -q "^$a/" && areas="${areas}${areas:+, }$a"
+  done
+
+  # The pre-commit hook is the credential gate; if it fires, this fails loudly.
+  git -C "$W" commit -q -m "workspace: $msg" -m "Areas: ${areas:-none}" \
+    || die "commit refused (see above — likely the pre-commit credential guard)"
+
+  printf '\n  %ssnapshot%s %s\n\n' "$G" "$X" "$(git -C "$W" log -1 --format='%h  %s')"
+}
+
+case "${1:-status}" in
+  status)   cmd_status ;;
+  snapshot) shift; cmd_snapshot "${1:-}" ;;
+  *) cat >&2 <<EOF
+usage: ai-os-workspace [status|snapshot "<message>"]
+
+  status                  tracked state + safety checks
+  snapshot "<message>"    commit the workspace as one completed task
+
+For history and recovery, use git directly:
+  git -C $W log --oneline
+  git -C $W diff
+  git -C $W restore <path>       # undo an uncommitted edit
+  git -C $W revert <sha>         # undo a snapshot, keeping history
+EOF
+     exit 2 ;;
+esac

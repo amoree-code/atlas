@@ -34,6 +34,58 @@ if [ ! -f "$AI_OS_HOME/knowledge/README.md" ]; then
   problems=$((problems + 1))
 fi
 
+# --- privacy boundary (V0.1.2) -----------------------------------------------------
+# The workspace is private and local-only. A remote, or a nested repository, is a defect.
+# Nested repos are reported here rather than hidden in .gitignore — hiding one is worse
+# than having one, because it stops being visible.
+echo
+if [ -d "$AI_OS_HOME/.git" ]; then
+  remote=$(git -C "$AI_OS_HOME" remote -v 2>/dev/null)
+  if [ -n "$remote" ]; then
+    echo "FAIL  private workspace has a git remote — it must be local-only:"
+    echo "$remote" | sed 's/^/        /'
+    problems=$((problems + 1))
+  else
+    echo "OK    workspace versioned, no remote (local-only)"
+  fi
+  for h in pre-push pre-commit; do
+    [ -x "$AI_OS_HOME/.git/hooks/$h" ] || {
+      echo "WARN  workspace $h hook missing"
+      problems=$((problems + 1))
+    }
+  done
+else
+  echo "WARN  workspace is not versioned (no .git) — no rollback or history available"
+  problems=$((problems + 1))
+fi
+
+nested=$(find "$AI_OS_HOME" -mindepth 2 -name .git -maxdepth 6 2>/dev/null)
+if [ -n "$nested" ]; then
+  echo "FAIL  nested git repository inside the private workspace:"
+  echo "$nested" | sed 's/^/        /'
+  echo "        The public AI OS repo must never live inside the private workspace."
+  problems=$((problems + 1))
+else
+  echo "OK    no nested repositories in the workspace"
+fi
+
+# The mirror check: private data must not be tracked by the public repo.
+SELF_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "$SELF_REPO/.git" ]; then
+  leaked=$(git -C "$SELF_REPO" ls-files | grep -E '(^|/)\.ai-os/' || true)
+  if [ -n "$leaked" ]; then
+    echo "FAIL  the public repo is tracking private workspace paths:"
+    echo "$leaked" | sed 's/^/        /'
+    problems=$((problems + 1))
+  else
+    echo "OK    public repo tracks no private workspace paths"
+  fi
+  [ -f "$SELF_REPO/.gitignore" ] || {
+    echo "WARN  public repo has no .gitignore"
+    problems=$((problems + 1))
+  }
+fi
+
 echo
 if [ "$problems" -eq 0 ]; then
   echo "Clean."
