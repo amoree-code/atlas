@@ -352,6 +352,26 @@ else
 fi
 
 # ====================================================================================
+head "plugins"
+# The plugin contract is checked by the tool that owns it. doctor reports the verdict
+# rather than reimplementing the rules — one definition of "valid manifest", not two.
+# ====================================================================================
+if [ -x "$SELF_DIR/ai-os-plugin" ]; then
+  pout=$("$SELF_DIR/ai-os-plugin" doctor 2>&1); prc=$?
+  pn=$(printf '%s' "$pout" | grep -c '^  ok ' || true)
+  if [ "$prc" -eq 0 ]; then
+    ok "$pn plugin manifest(s) valid  ${D}(contract range 1..1)${X}"
+    printf '%s' "$pout" | grep 'WARN' | sed "s|^  WARN  |        ${D}|;s|\$|${X}|"
+  else
+    fail "plugin manifest(s) violate the contract:"
+    printf '%s' "$pout" | grep -E 'FAIL' | sed 's/^/        /'
+    note "a plugin may never declare a provides: path inside \$AI_OS_HOME"
+  fi
+else
+  warn "ai-os-plugin not found — plugin contract not checked"
+fi
+
+# ====================================================================================
 head "privacy"
 # ====================================================================================
 if [ -x "$SELF_DIR/ai-os-privacy-scan" ]; then

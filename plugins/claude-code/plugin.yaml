@@ -1,0 +1,41 @@
+# Claude Code adapter. Transcribed from observed configuration — see schemas/plugin.schema.md.
+plugin: claude-code
+name: Claude Code
+contract: 1
+
+client:
+  detect: [~/.local/bin/claude, ~/.claude/]
+  version_cmd: claude --version
+  consumer_verified: true
+  evidence: >
+    Reads ~/.claude/CLAUDE.md at session start — confirmed by the generated rules block
+    appearing in live session context.
+
+provides:
+  rules:  { path: ~/.claude/CLAUDE.md, format: markdown, verified: true }
+  skills: { path: ~/.claude/skills/, format: SKILL.md+frontmatter, verified: true }
+  hooks:  { path: ~/.claude/settings.json, key: hooks, format: json, verified: true }
+  mcp:    { path: ~/.claude.json, key: mcpServers, format: json, verified: true }
+
+writes: [rules, skills]     # hooks and mcp are verified but NOT written — see notes
+
+requires:
+  - rules.render
+  - skills.list
+  - workspace.memory.path
+
+enforces: [git]             # policies/git.yaml, via ai-guard-push (PreToolUse)
+
+conventions:
+  # Client-specific filesystem names. Skills reference these as {{client.*}} so one
+  # canonical skill body serves every client instead of one copy per client.
+  project_context: CLAUDE.md
+  project_memory: .claude/memory/
+
+notes: >
+  The only client with a canonical hook. Its memory tool is scoped by working directory
+  (~/.claude/projects/<cwd-slug>/memory/), so this plugin maintains symlinks to the single
+  canonical store — the reason workspace.memory.path is required. That grant is whole-store
+  today; per-project scoping is V0.2, after the memory schema exists.
+  hooks and mcp are verified paths that this plugin deliberately does not write: hooks are
+  installed once by the user, and there are no canonical MCP servers to propagate.

@@ -1,6 +1,6 @@
 ---
 name: project-register
-description: Adopt an existing repository into the workspace - analyze it, write its context files, and add it to the registry without changing any code. Use when the user says register this project, adopt this repo, add to registry, or set up context for this project.
+description: Adopt an existing repository into the workspace - analyze it, write its CLAUDE.md and memory, and add it to the registry without changing any code. Use when the user says register this project, adopt this repo, add to registry, or set up context for this project.
 ---
 
 # Project register
@@ -22,24 +22,25 @@ ls -a <repo> | grep -E 'env|config|docker|CI'
 Then read enough source to state the architecture truthfully — entry point, routing,
 state, data access. If you can't tell, write "unclear" rather than a plausible guess.
 
-For env: list **key names only**, from `.env.example` or by grepping variable names.
+For env: list **key names only**, from `.env.example` or by `grep -oE` on variable names.
 **Never read or record a value.**
 
 ## 2. Write the context pack
 
-- `<repo>/AGENTS.md` — the AAIF standard read by most agent clients, so the project needs
-  one file rather than one per tool. Symlink `CLAUDE.md` to it for Claude Code's native
-  name: one file on disk, both names, nothing to keep in sync. Commands must come from
-  the repo's real scripts/tasks. Record only what differs from the user's own recorded
-  stack conventions — if nothing differs, say so.
-- `<repo>/.claude/memory/context.md` (or your client's equivalent) — what it is, who it
-  serves, where it stands, what's in flight (name the branch and uncommitted work if any).
-- A known-issues note only if the analysis turned up real gotchas.
+- `<repo>/AGENTS.md` from `{{profile.templates_dir}}/project-claude.md` (template —
+  unmoved). **Use `AGENTS.md`, not `{{client.project_context}}`** — it is the AAIF standard read by Claude
+  Code, Codex, Cursor, Gemini, and opencode alike, so the project needs one file rather
+  than one per tool. Then `ln -s AGENTS.md CLAUDE.md` so Claude's native name resolves to
+  the same file: one file on disk, both names, nothing to keep in sync.
+  Commands must come from the real `scripts` block. Conventions section records only what
+  differs from `{{profile.stack.doc}}` — if nothing differs, say so.
+- `<repo>/{{client.project_memory}}context.md` — what it is, who it serves, where it stands, what's
+  in flight (name the branch and uncommitted work if any).
+- `known-issues.md` if the analysis turned up real gotchas. Otherwise skip it.
 
 ## 3. Keep it out of shared repos
 
-If the remote doesn't belong to an account the user owns, the context is personal —
-don't commit it:
+If the remote is **not** under `{{profile.vcs_owner}}`, the context is personal — don't commit it:
 ```bash
 printf 'CLAUDE.md\n.claude/\n' >> <repo>/.git/info/exclude
 ```
@@ -51,13 +52,22 @@ repos, leave the files committable and mention it.
 Count first: `find <repo>/src -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' \) | wc -l`
 
 **Under ~150 source files: skip this.** Reading files directly is faster and cheaper.
-At ~150+ files, use whatever local code-graph tool is configured (see its own skill/docs
-for the exact invocation) — with any local-only / no-external-API flag it offers.
+
+At ~150+ files, from the repo root:
+```bash
+graphify ./src --code-only --out .
+```
+`--code-only` is **mandatory** — the default mode sends docs, PDFs, and images to an
+external LLM API. `--code-only` is pure local AST: no key, no network.
+
+`{{profile.code_graph.output}}` is covered by the global gitignore. Note in `{{client.project_context}}` that the graph
+exists and must be rebuilt after significant changes (`graphify ./src --code-only --out . --update`).
 
 ## 5. Register
 
-Add or update the row in `~/.ai-os/projects/registry.md`: path, stack, repo, status,
-last commit date, real next action. Add any obvious follow-ups to `projects/tasks.md`.
+Add or update the row in `~/.ai-os/projects/registry.md`: path, stack, repo,
+status, last commit date, real next action. Add any obvious follow-ups to
+`projects/tasks.md`.
 
 ## 6. Report
 

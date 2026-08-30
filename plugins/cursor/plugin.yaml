@@ -1,0 +1,32 @@
+# Cursor Agent CLI adapter. Project-channel only — deliberately writes nothing globally.
+plugin: cursor
+name: Cursor Agent CLI
+contract: 1
+
+client:
+  detect: [~/.local/bin/cursor-agent, ~/.cursor/]
+  consumer_verified: false
+
+provides:
+  # verified:false — core MUST NOT write this. No global instruction path could be
+  # confirmed: ~/.cursor/ has no rules directory and no AGENTS.md, and the binary is
+  # compiled. Writing to a guessed path would produce a file Cursor never reads.
+  rules:  { path: null, format: null, verified: false }
+  # Vendor-managed: 22 Cursor built-ins. Verified to exist, explicitly NOT writable.
+  skills: { path: ~/.cursor/skills-cursor/, format: SKILL.md, verified: true, writable: false }
+  mcp:    { path: ~/.cursor/cli-config.json, format: json, verified: partial }
+
+writes: []                  # nothing. This is the correct outcome, not a gap to close.
+
+requires: []
+enforces: []
+
+conventions:
+  project_context: AGENTS.md
+  project_memory: ""
+
+notes: >
+  Cursor reads project-level AGENTS.md natively (AAIF standard), which is verified, so it
+  is covered by the project channel rather than a global file. A plugin that writes nothing
+  is a valid plugin — this manifest exists to record WHY nothing is written, so the gap
+  stays visible instead of looking like an oversight.

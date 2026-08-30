@@ -1,6 +1,6 @@
 ---
 name: workspace-health
-description: Check the AI OS workspace for missing files, broken config, stale tasks, drifted registry, and security problems. Use when the user says health check, check my setup, is everything ok, or audit the workspace.
+description: Check the development workspace for missing files, broken config, stale tasks, drifted registry, and security problems. Use when the user says health check, check my setup, is everything ok, or audit the workspace.
 ---
 
 # Workspace health
@@ -10,38 +10,40 @@ Read-only. Diagnose; never fix without being asked.
 ## Steps
 
 1. ```bash
-   ~/.ai-os/config/scripts/health-check.sh
+   {{profile.scripts_dir}}/health-check.sh
    ```
-   Covers structure, client config (if applicable), skill validity, script syntax,
-   today's folder, global gitignore, SSH perms, and credential patterns.
+   (script — unmoved; it checks the live data workspace at `~/.ai-os` internally)
+   Covers structure, Claude Code config, skill validity, script syntax, today's folder,
+   global gitignore, SSH perms, and credential patterns.
 
 2. **Memory and knowledge health:**
    ```bash
-   ai-os-doctor
+   ~/.ai/bin/ai-memory doctor
+   ~/.ai/bin/ai-memory status
    ```
-   Covers the mechanical checks: the required sections present, frontmatter present on
-   every file, duplicate `name:` slugs, near-identical descriptions (possible duplicate
-   memories), broken `[[wiki-links]]`, files missing from `MEMORY.md`, entries marked
-   `outdated`/`temporary`, and unresolved items in `CONFLICTS.md`.
+   `doctor` covers the mechanical checks: the 8 main memory sections and 7 knowledge
+   sections present, memory-dir scoping unified across every project directory, frontmatter
+   present on every file, duplicate `name:` slugs, near-identical descriptions (possible
+   duplicate memories), broken `[[wiki-links]]`, files missing from `MEMORY.md`, entries
+   marked `outdated`/`temporary`, and unresolved items in `CONFLICTS.md`.
 
-   Then judge what a script cannot:
-   - **Misclassified** — a fact in the wrong section. Apply the test: *would this still
-     be true if the user never wrote another line of code?* Yes → `memory/`, no →
-     `knowledge/`. Country/company/one-off facts belong inside an existing section by
-     meaning, never their own top-level section.
+   Then judge what it cannot:
+   - **Misclassified** — a fact in the wrong section. Apply the test: *would this still be
+     true if he never wrote another line of code?* Yes → `memory/`, no → `knowledge/`.
+     Country facts belong to `education/` or `travel/` by meaning, never their own section.
    - **Duplicated across sections** — the same fact stated in two places rather than one
      canonical home plus a link. Say which copy should be canonical.
    - **Outdated** — a `last_verified` older than ~6 months on something that changes
      (job title, current status, priorities), or a goal already achieved.
-   - **Knowledge quality** — a `knowledge/` entry that is long, narrative, or
-     transcript-like has failed its purpose. Flag it for compression.
+   - **Knowledge quality** — a `knowledge/` entry that is long, narrative, or transcript-like
+     has failed its purpose. Flag it for compression.
 
-3. **Registry drift** — a script can't judge this:
+3. **Registry drift** — checked against `~/.ai-os/projects/registry.md`; the script can't judge this:
    ```bash
    find ~/Documents -maxdepth 6 -type d -name .git -not -path "*/node_modules/*" | sed 's|/.git$||'
    ```
-   Compare against `~/.ai-os/projects/registry.md`. Report repos missing from it, and
-   registry rows whose path no longer exists.
+   Compare against `projects/registry.md`. Report repos missing from it, and registry rows
+   whose path no longer exists.
 
 4. **Stale tasks** — flag any `TODO`/`WIP` in `projects/tasks.md` whose `{created}` is
    more than 30 days old, and any `BLOCKED` with no note on what it's waiting for.

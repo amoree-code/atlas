@@ -8,13 +8,11 @@ description: Start the working day - create today's daily folder and write a bri
 Produce a brief the user can read in under a minute, and a plan grounded in evidence —
 not invented priorities.
 
-Assumes the AI OS private workspace at `~/.ai-os/` (override with `$AI_OS_HOME` if set).
-
 ## Steps
 
 1. Create the folder and stubs:
    ```bash
-   ~/.ai-os/config/scripts/day-start.sh
+   {{profile.scripts_dir}}/day-start.sh
    ```
    It prints the path and never overwrites existing files. If `brief.md` already has
    content beyond the stub headings, the day has started — offer to update it instead of
@@ -22,11 +20,11 @@ Assumes the AI OS private workspace at `~/.ai-os/` (override with `$AI_OS_HOME` 
 
 2. Gather state — one call:
    ```bash
-   ~/.ai-os/config/scripts/context.sh
+   {{profile.scripts_dir}}/context.sh
    ```
 
-3. Read `~/.ai-os/projects/registry.md` (the `active` rows only) and, if the last session
-   record names a project, that project's own context file.
+3. Read `~/.ai-os/projects/registry.md` (the `active` rows only) and, if the
+   last session record names a project, that project's `{{client.project_memory}}context.md`.
 
 4. Write `brief.md`. Sections: **Focus today** · **Active projects** · **Unfinished from
    last session** · **Reminders**. Rules:

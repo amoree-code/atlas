@@ -7,17 +7,15 @@ description: Reconstruct where work left off - current project, last objective, 
 
 Rebuild context so the user never has to re-explain. Answer in the chat; write nothing.
 
-Assumes the AI OS private workspace at `~/.ai-os/` (override with `$AI_OS_HOME` if set).
-
 ## Steps
 
 1. **Identify the project.** In order:
-   - `pwd` — inside a repo the user works in? That's it.
+   - `pwd` — inside a repo under `~/Documents/`? That's it.
    - Otherwise the most recent session record: `ls -t ~/.ai-os/sessions/*/*/*.md | head -1`
-   - Otherwise ask, offering the `active` rows from `~/.ai-os/projects/registry.md`.
+   - Otherwise ask, offering the `active` rows from the registry.
 
 2. **Read, in this order, stopping when you can answer:**
-   - the repo's `AGENTS.md`/`CLAUDE.md` (its **Status** section, if it has one)
+   - the repo's `{{client.project_context}}` (its **Status** section)
    - the newest session record for that project:
      `ls -t ~/.ai-os/sessions/*/*/*-<project>-*.md | head -1`
    - that project's rows in `~/.ai-os/projects/tasks.md`
@@ -39,8 +37,8 @@ Assumes the AI OS private workspace at `~/.ai-os/` (override with `$AI_OS_HOME` 
 ## Rules
 
 - **Do not read the whole workspace.** Four files at most.
-- If the project has a local code-graph tool's output and the user's next question is
-  structural ("where does X live", "what depends on Y"), query that instead of opening
-  files. For resuming context, the session record and git log are enough.
+- If the project has `{{profile.code_graph.output}}` and the user's next question is structural ("where
+  does X live", "what depends on Y"), query the graph rather than opening files. For
+  resuming context, the session record and git log are enough — don't query it here.
 - If there's no session record, say so plainly and rebuild from git log + status alone.
 - Don't start working. Report, then wait — unless the user already said "continue and do it".

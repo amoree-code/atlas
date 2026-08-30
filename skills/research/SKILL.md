@@ -1,6 +1,6 @@
 ---
 name: research
-description: Research a technology, library, tool, or technical decision and file the result as a structured knowledge note. Use when the user says research, compare, evaluate, should I use X, look into, or what is the best way to.
+description: Research a technology, library, tool, or technical decision and file the result as a structured intelligence note. Use when the user says research, compare, evaluate, should I use X, look into, or what is the best way to.
 ---
 
 # Research
@@ -16,20 +16,20 @@ Produce a decision, not a link dump.
    dates — an answer that was true two years ago is often wrong now. Check the library's
    last release and open-issue trend before recommending it.
 
-3. **Ground it in the actual stack.** Read the user's recorded stack conventions
-   (`~/.ai-os/config/models.yaml` or `~/.ai-os/memory/preferences/`) and, if a specific
-   project prompted this, that project's context file. A recommendation that ignores the
-   user's actual stack is not useful.
+3. **Ground it in the actual stack.** Read
+   `{{profile.stack.doc}}` and, if a specific project prompted this,
+   its `{{client.project_context}}`. A recommendation that ignores {{profile.stack.summary}} is not useful here.
 
 4. **Answer in chat first** — recommendation, the two or three reasons, and the main
    trade-off being accepted. Lead with the answer.
 
 5. **File it** only if it has lasting value (a decision made, a tool adopted or rejected,
-   a pattern worth keeping). Write it under `~/.ai-os/knowledge/research/<topic>.md`. A
-   throwaway lookup gets no file.
+   a pattern worth keeping). Write `~/.ai-os/knowledge/research/<topic>.md`. A throwaway
+   lookup gets no file. (Not `intelligence/` — that layer is deprecated, superseded by
+   `knowledge/` since the 2026-08-30 memory/knowledge split.)
 
-6. If it settles a real technical decision, also record it in
-   `~/.ai-os/knowledge/decisions/`.
+6. If it settles a real technical decision, also record it: cross-project →
+   `~/.ai-os/knowledge/decisions/`; one project → that repo's `{{client.project_memory}}decisions.md`.
 
 ## Rules
 

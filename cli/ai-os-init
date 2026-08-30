@@ -102,6 +102,8 @@ say "${D}public skills${X}   stay in $REPO/skills — copying them here would tu
 say "${D}             ${X}   software into your files and make them un-updatable."
 say "${D}             ${X}   Your own skills go in $AI_OS_HOME/skills and win on name."
 say "${D}runtime scripts${X} belong to the runtime layer, not your data."
+say "${D}profile.yaml${X}    seeded blank. Fill it in: it is what makes the canonical"
+say "${D}            ${X}    skills yours, and it never leaves this workspace."
 say "${D}git${X}             the workspace repo is local-only and set up separately;"
 say "${D}   ${X}             see docs/workspace-versioning.md. init never creates a remote."
 

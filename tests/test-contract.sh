@@ -7,7 +7,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CLI="$REPO/cli"
+CLI="$REPO/cli"; export CLI
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/ai-os-test.XXXXXX")"
 trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
 
@@ -193,6 +193,184 @@ out=$("$CLI/ai-os-privacy-scan" "$REPO" 2>&1); rc=$?
 t "public repository cleanliness (working tree AND full history)"
 out=$("$CLI/ai-os-privacy-scan" --history --quiet "$REPO" 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "no personal data anywhere in git history" $?
+
+# =====================================================================================
+t "plugin contract: the real registry"
+out=$("$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "all shipped manifests valid" $?
+n=$(echo "$out" | grep -c '^  ok ')
+[ "$n" -eq 5 ];                                      chk "5 manifests present and parsed" $?
+echo "$out" | grep -q "consumer not verified";       chk "unverified consumers are flagged, not hidden" $?
+"$CLI/ai-os-plugin" list 2>&1 | grep -q "cursor.*nothing"
+chk "a plugin that writes nothing is valid" $?
+
+t "plugin contract: violations are rejected"
+F2="$TMP/fixtures"; mkdir -p "$F2"
+mk() { mkdir -p "$F2/$1"; cat > "$F2/$1/plugin.yaml"; }
+
+# THE HARD RULE: a provides: path inside the private workspace.
+mk badpath <<EOF
+plugin: badpath
+name: Bad Path
+contract: 1
+client: { detect: [/nonexistent], consumer_verified: false }
+provides:
+  rules: { path: $AI_OS_HOME/memory/stolen.md, format: markdown, verified: true }
+writes: [rules]
+EOF
+out=$(AI_OS_PLUGINS="$F2" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+echo "$out" | grep -q "INSIDE \$AI_OS_HOME";          chk "provides: path inside \$AI_OS_HOME is rejected" $?
+[ "$rc" -gt 0 ];                                     chk "  ...and it is a hard failure" $?
+rm -rf "$F2/badpath"
+
+# verified:false must never be written.
+mk unverified <<'EOF'
+plugin: unverified
+name: Unverified
+contract: 1
+client: { detect: [/nonexistent], consumer_verified: false }
+provides:
+  rules: { path: ~/.someclient/RULES.md, format: markdown, verified: false }
+writes: [rules]
+EOF
+out=$(AI_OS_PLUGINS="$F2" "$CLI/ai-os-plugin" doctor 2>&1)
+echo "$out" | grep -q "MUST NOT write an unverified";  chk "writing an unverified capability is rejected" $?
+rm -rf "$F2/unverified"
+
+# contract range
+mk future <<'EOF'
+plugin: future
+name: From The Future
+contract: 2
+client: { detect: [/nonexistent], consumer_verified: false }
+provides:
+  rules: { path: ~/.someclient/RULES.md, format: markdown, verified: true }
+writes: [rules]
+EOF
+out=$(AI_OS_PLUGINS="$F2" "$CLI/ai-os-plugin" doctor 2>&1)
+echo "$out" | grep -q "supports 1..1 — DISABLED";      chk "contract 2 on a contract-1 core is disabled with a reason" $?
+rm -rf "$F2/future"
+
+# unknown core resource
+mk greedy <<'EOF'
+plugin: greedy
+name: Greedy
+contract: 1
+client: { detect: [/nonexistent], consumer_verified: false }
+provides:
+  rules: { path: ~/.someclient/RULES.md, format: markdown, verified: true }
+writes: [rules]
+requires:
+  - workspace.everything
+EOF
+out=$(AI_OS_PLUGINS="$F2" "$CLI/ai-os-plugin" doctor 2>&1)
+echo "$out" | grep -q "unknown core resource";         chk "an undeclared core resource is rejected" $?
+rm -rf "$F2/greedy"
+
+# malformed: reports, exits non-zero, changes nothing
+mkdir -p "$F2/broken"; printf 'plugin: broken\n\tbad: [unclosed\n' > "$F2/broken/plugin.yaml"
+before=$(shasum "$F2/broken/plugin.yaml")
+out=$(AI_OS_PLUGINS="$F2" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+[ "$rc" -gt 0 ];                                     chk "a malformed manifest fails" $?
+[ "$before" = "$(shasum "$F2/broken/plugin.yaml")" ]; chk "  ...and nothing was modified" $?
+rm -rf "$F2/broken"
+
+t "plugin registry reproduces ai-sync's hardcoded table"
+python3 - <<'PYEOF'
+import os, types
+from pathlib import Path
+# Load both tools as plain namespaces — no import machinery, no side effects. The
+# plugin CLI is truncated at __main__ so nothing executes.
+m = types.SimpleNamespace().__dict__
+exec(compile(Path.home().joinpath(".ai/bin/ai-sync").read_text(), "ai-sync", "exec"), m)
+pl = {"__file__": os.environ["CLI"] + "/ai-os-plugin"}
+exec(compile(Path(os.environ["CLI"] + "/ai-os-plugin").read_text().split("if __name__")[0],
+             "ai-os-plugin", "exec"), pl)
+from_manifests, project_only = {}, []
+for pid, man, err in pl["load_all"]():
+    assert not err, f"{pid}: {err}"
+    if man["writes"]:
+        from_manifests[pid] = {
+            "rules": Path(os.path.expanduser(str(man["provides"]["rules"]["path"]))),
+            "skills": Path(os.path.expanduser(str(man["provides"]["skills"]["path"]).rstrip("/"))),
+        }
+    else:
+        project_only.append(pid)
+alias = {"claude-code": "claude"}
+got = {alias.get(k, k): v for k, v in from_manifests.items()}
+assert set(got) == set(m["CLIENTS"]), f"client set differs: {set(got)} vs {set(m['CLIENTS'])}"
+for k, v in m["CLIENTS"].items():
+    assert got[k]["rules"] == v["rules"], f"{k} rules: {got[k]['rules']} != {v['rules']}"
+    assert got[k]["skills"] == v["skills"], f"{k} skills: {got[k]['skills']} != {v['skills']}"
+assert sorted(project_only) == sorted(m["PROJECT_ONLY"]), f"{project_only} != {m['PROJECT_ONLY']}"
+PYEOF
+chk "manifest-derived targets are byte-identical to CLIENTS + PROJECT_ONLY" $?
+
+t "plugin enable/disable refuse until wired (no dead state)"
+out=$("$CLI/ai-os-plugin" enable claude-code 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                     chk "enable refuses" $?
+echo "$out" | grep -q "Step 8";                      chk "  ...and names the step that would wire it" $?
+[ ! -e "$AI_OS_HOME/config/plugins.yaml" ];          chk "  ...and wrote no registry state" $?
+
+# =====================================================================================
+t "profile: the public template carries no values"
+TPL="$REPO/templates/workspace/config/profile.yaml"
+[ -f "$TPL" ];                                       chk "profile.yaml template exists" $?
+grep -qE '^(vcs_owner|  default|  summary|  tool|  curator): *""$' "$TPL"
+chk "template ships blank values, not someone's" $?
+grep -q 'never leaves ~/.ai-os' "$TPL";              chk "template states it is private" $?
+
+t "profile: init seeds it once and never overwrites"
+P3="$TMP/profilews"; export AI_OS_HOME="$P3"
+"$CLI/ai-os-init" >/dev/null 2>&1
+[ -f "$P3/config/profile.yaml" ];                    chk "init seeds config/profile.yaml" $?
+echo "vcs_owner: my-own-handle" > "$P3/config/profile.yaml"
+out=$("$CLI/ai-os-init" 2>&1)
+grep -q "my-own-handle" "$P3/config/profile.yaml";   chk "an edited profile is never overwritten" $?
+echo "$out" | grep -q "yours.*profile.yaml";         chk "  ...and the divergence is reported" $?
+
+t "render: unresolved placeholders are visible, never silently blank"
+printf 'x {{profile.nothing.here}} y\n' > "$TMP/probe.md"
+mkdir -p "$REPO/skills/__probe__" && cp "$TMP/probe.md" "$REPO/skills/__probe__/SKILL.md"
+out=$(AI_OS_HOME="$P3" "$CLI/ai-os-render" __probe__ 2>&1)
+echo "$out" | grep -q '\[\[profile.nothing.here unset\]\]'
+chk "an unset value renders as an explicit marker" $?
+echo "$out" | grep -qE '^x  y$'; [ $? -ne 0 ];       chk "  ...not as an empty string" $?
+rm -rf "$REPO/skills/__probe__"
+
+t "render: client conventions come from the plugin manifest"
+export AI_OS_HOME="$HOME/.ai-os"
+a=$("$CLI/ai-os-render" catch-up --client claude-code 2>&1 | grep -c 'CLAUDE.md')
+b=$("$CLI/ai-os-render" catch-up --client codex 2>&1 | grep -c 'AGENTS.md')
+[ "$a" -gt 0 ];                                      chk "claude-code resolves to CLAUDE.md" $?
+[ "$b" -gt 0 ];                                      chk "codex resolves to AGENTS.md" $?
+c=$("$CLI/ai-os-render" catch-up --client codex 2>&1 | grep -c 'CLAUDE.md')
+[ "$c" -eq 0 ];                                      chk "  ...and codex gets no Claude filename" $?
+
+t "THE STEP 7 GATE: 8 skills render equivalent to the live runtime"
+out=$("$CLI/ai-os-render" --check "$HOME/.ai/skills" --client claude-code 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "no semantic loss across all 8 skills" $?
+# Count per-skill result lines only — the summary line says "equivalent" too.
+n=$(echo "$out" | grep -cE '^  (identical|equivalent) ')
+[ "$n" -eq 8 ];                                      chk "all 8 accounted for ($n)" $?
+echo "$out" | grep -q "DIFFERS"; [ $? -ne 0 ];       chk "no skill differs semantically" $?
+
+t "public skills carry no personal values"
+# The terms are read from the PRIVATE term file, never spelled out here: a test that
+# names the strings it asserts are absent puts them in the repo it is guarding.
+TERMS="${AI_OS_HOME:-$HOME/.ai-os}/config/privacy-terms.txt"
+if [ -f "$TERMS" ]; then
+  miss=0; nterms=0
+  while IFS= read -r term; do
+    term="${term%%#*}"; term="$(echo "$term" | sed 's/^ *//;s/ *$//')"
+    [ ${#term} -ge 3 ] || continue
+    nterms=$((nterms+1))
+    grep -rqi -- "$term" "$REPO/skills/" && miss=$((miss+1))
+  done < "$TERMS"
+  [ "$miss" -eq 0 ];   chk "0 of $nterms private terms appear in public skills" $?
+else
+  printf '  %sSKIP%s no privacy-terms.txt — cannot check personal values\n' "$D" "$X"
+fi
 
 # =====================================================================================
 t "inherited suites still pass"

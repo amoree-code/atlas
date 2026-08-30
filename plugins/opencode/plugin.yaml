@@ -1,0 +1,26 @@
+# opencode adapter. Project-channel only until the global path is confirmed on a machine.
+plugin: opencode
+name: opencode
+contract: 1
+
+client:
+  detect: [~/.opencode/bin/opencode, ~/.config/opencode/]
+  consumer_verified: false
+
+provides:
+  # verified:false — the path is documented upstream but ~/.config/opencode is empty here.
+  # Documentation is not evidence; a file the client created is. Core must not write.
+  rules: { path: ~/.config/opencode/AGENTS.md, format: markdown, verified: false }
+
+writes: []
+
+requires: []
+enforces: []
+
+conventions:
+  project_context: AGENTS.md
+  project_memory: ""
+
+notes: >
+  Covered by the project channel (AGENTS.md at a repo root). Flip rules.verified to true
+  only after opencode itself creates or demonstrably reads that file on this machine.
