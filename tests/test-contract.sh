@@ -79,12 +79,33 @@ AI_OS_HOME="$HOME/.ai" "$CLI/ai-os-init" >/dev/null 2>&1
 # =====================================================================================
 t "doctor: clean workspace passes"
 export AI_OS_HOME="$TMP/clean"
+# The legacy layer is NOT created here. Until V0.1.5, ~/.ai was the runtime layer and
+# this fixture seeded it with bin/{ai-memory,ai-guard-push,ai-sync} because doctor
+# checked those were present. V0.1.5 retired ~/.ai and inverted the check: an active
+# component left in the legacy layer is now a FAILURE — a second source of truth. The
+# fixture was never updated, so it was manufacturing the very violation it then asserted
+# was absent. Nothing reads those binaries any more; the two tests below still need
+# $AI_OS_RUNTIME to be *settable*, not populated.
 export AI_OS_RUNTIME="$TMP/fake-runtime"
-mkdir -p "$AI_OS_RUNTIME/bin"
-for b in ai-memory ai-guard-push ai-sync; do printf '#!/bin/sh\n' > "$AI_OS_RUNTIME/bin/$b"; chmod +x "$AI_OS_RUNTIME/bin/$b"; done
-echo 'CANON = HOME / ".ai-os" / "memory"' >> "$AI_OS_RUNTIME/bin/ai-memory"
 out=$("$CLI/ai-os-doctor" 2>&1); rc=$?
 [ "$rc" -eq 0 ];                         chk "no failures on a freshly initialized workspace" $?
+
+# =====================================================================================
+# Removing that fixture must not be able to hide a regression in the check it was
+# tripping, so assert the check still fires — from both directions.
+t "doctor: an active component in the legacy layer is still a failure"
+LEG="$TMP/legacy-live"; mkdir -p "$LEG/bin"
+out=$(AI_OS_RUNTIME="$LEG" "$CLI/ai-os-doctor" 2>&1); rc=$?
+echo "$out" | grep -q "legacy layer still holds active AI OS components"
+chk "bin/ left in the legacy layer is reported" $?
+echo "$out" | grep -q "second source of truth"
+chk "  ...with the reason, not just the fact" $?
+[ "$rc" -gt 0 ];                         chk "  ...and doctor exits non-zero" $?
+rm -rf "$LEG"
+out=$("$CLI/ai-os-doctor" 2>&1); rc=$?
+echo "$out" | grep -q "no legacy layer on this machine"
+chk "an absent legacy layer is clean, not missing" $?
+[ "$rc" -eq 0 ];                         chk "  ...and doctor stays at zero problems" $?
 
 # =====================================================================================
 t "doctor: detects wrong roots"
