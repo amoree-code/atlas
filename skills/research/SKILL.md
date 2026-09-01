@@ -24,12 +24,12 @@ Produce a decision, not a link dump.
    trade-off being accepted. Lead with the answer.
 
 5. **File it** only if it has lasting value (a decision made, a tool adopted or rejected,
-   a pattern worth keeping). Write `~/.ai-os/knowledge/research/<topic>.md`. A throwaway
+   a pattern worth keeping). Write `~/.ai-os/user/05-knowledge/research/<topic>.md`. A throwaway
    lookup gets no file. (Not `intelligence/` — that layer is deprecated, superseded by
    `knowledge/` since the 2026-08-30 memory/knowledge split.)
 
 6. If it settles a real technical decision, also record it: cross-project →
-   `~/.ai-os/knowledge/decisions/`; one project → that repo's `{{client.project_memory}}decisions.md`.
+   `~/.ai-os/user/05-knowledge/decisions/`; one project → that repo's `{{client.project_memory}}decisions.md`.
 
 ## Rules
 

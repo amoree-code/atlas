@@ -1,5 +1,5 @@
 # Gemini CLI adapter. Transcribed from observed configuration.
-plugin: gemini
+adapter: gemini
 name: Gemini CLI
 contract: 1
 

@@ -8,18 +8,20 @@ warn() { printf '  \033[33mwarn\033[0m  %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=1; }
 
 echo "== structure =="
-for f in memory/MEMORY.md memory/README.md knowledge/README.md \
-         projects/registry.md projects/tasks.md; do
+for f in user/02-personal/memory/MEMORY.md user/02-personal/memory/README.md user/05-knowledge/README.md \
+         user/04-projects/registry.md user/04-projects/tasks.md; do
   [ -f "$W/$f" ] && ok "$f" || bad "missing $W/$f"
 done
-for d in daily sessions config skills; do
+for d in user/00-inbox user/01-daily user/03-professional user/06-templates \
+         system/rules system/policies system/schemas \
+         sessions skills agents scripts runtime; do
   [ -d "$W/$d" ] && ok "$d/" || bad "missing $W/$d/"
 done
 for d in identity education career projects goals travel preferences interests; do
-  [ -d "$W/memory/$d" ] && ok "memory/$d/" || bad "missing main section $W/memory/$d/"
+  [ -d "$W/user/02-personal/memory/$d" ] && ok "memory/$d/" || bad "missing main section $W/memory/$d/"
 done
 for d in task-results technical-solutions decisions architecture research discoveries failures; do
-  [ -d "$W/knowledge/$d" ] && ok "knowledge/$d/" || bad "missing $W/knowledge/$d/"
+  [ -d "$W/user/05-knowledge/$d" ] && ok "knowledge/$d/" || bad "missing $W/knowledge/$d/"
 done
 
 echo "== claude code (skip if not your adapter) =="
@@ -51,7 +53,7 @@ else
 fi
 
 echo "== registry =="
-if grep -oE '`~?/[^`]*`' "$W/projects/registry.md" 2>/dev/null | tr -d '`' | while read -r p; do
+if grep -oE '`~?/[^`]*`' "$W/user/04-projects/registry.md" 2>/dev/null | tr -d '`' | while read -r p; do
     expanded="${p/#\~/$HOME}"
     [ -e "$expanded" ] || echo "$p"
   done | grep -q .; then
@@ -61,7 +63,7 @@ else
 fi
 
 echo "== today =="
-DIR="$W/daily/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d)"
+DIR="$W/user/01-daily/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d)"
 [ -d "$DIR" ] && ok "daily folder for today" || warn "no daily folder for today (run day-start)"
 
 echo "== security =="

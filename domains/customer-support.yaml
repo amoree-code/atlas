@@ -1,0 +1,21 @@
+# A DOMAIN, deliberately unrelated to the other one declared here. Two unrelated domains
+# are what prove Core stays domain-agnostic: one domain proves nothing, because a registry
+# with a single entry cannot show that the second did not require changing Core.
+#
+# Note what is NOT in this file: no stages, no ordering, no authority, no verifier, no
+# command. This declaration and the software one differ only in their values.
+domain: customer-support
+name: Customer Support
+contract: 1
+
+# This one's capability is installed, so it validates clean while the other warns — the
+# two halves of the same rule, both exercised for real.
+requires: [browser]
+
+outcomes:
+  resolved-ticket:
+    summary: a customer issue investigated and closed, with the resolution recorded
+  response-draft:
+    summary: a reply drafted for a customer enquiry, ready for a person to send
+  escalation:
+    summary: an issue handed to a named owner with the context they need to act

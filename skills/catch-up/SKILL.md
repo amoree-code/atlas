@@ -18,7 +18,7 @@ Rebuild context so the user never has to re-explain. Answer in the chat; write n
    - the repo's `{{client.project_context}}` (its **Status** section)
    - the newest session record for that project:
      `ls -t ~/.ai-os/sessions/*/*/*-<project>-*.md | head -1`
-   - that project's rows in `~/.ai-os/projects/tasks.md`
+   - that project's rows in `~/.ai-os/user/04-projects/tasks.md`
    - `git -C <repo> log --oneline -5` and `git -C <repo> status --short`
 
 3. **Report, in this shape, short:**

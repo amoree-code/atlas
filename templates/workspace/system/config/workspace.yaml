@@ -1,0 +1,33 @@
+# AI-OS workspace state — the canonical answer to one question:
+#
+#     has this workspace completed onboarding?
+#
+# Exactly one file answers it. Not the presence of a directory, not a session record,
+# not a task, not a daily note, not a client-specific file. Those are all circumstantial:
+# they can exist on a workspace that was never set up, and be absent on one that was.
+#
+# `ai-os init` seeds this file as uninitialized. `ai-os onboard` is the only thing that
+# advances it, and only after the data it promises is actually on disk.
+#
+# This file stores STATE and POINTERS. It never stores a copy of the user's identity or
+# preferences — those have exactly one canonical owner each, named below.
+
+schema: 1
+
+# uninitialized -> onboarding -> initialized
+status: uninitialized
+
+# Set once, when onboarding completes. Never rewritten by a later run.
+workspace_version: ""
+initialized_at: ""
+
+# Per-step ledger, so an interrupted onboarding resumes instead of restarting.
+# pending | done
+step_identity: pending
+step_language: pending
+step_profile: pending
+
+# Where the real data lives. Pointers, not copies.
+canonical_identity: user/02-personal/memory/identity/
+canonical_preferences: user/02-personal/memory/preferences/
+canonical_profile: system/config/profile.yaml

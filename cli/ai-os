@@ -9,10 +9,14 @@ usage() { cat <<EOF
 ai-os v$VERSION — a portable operating layer for AI coding agents.
 
   ai-os init [--dry-run]     create/verify your private workspace (never overwrites)
+  ai-os onboard [cmd]        first-run setup: who you are, so the rest has a starting point
   ai-os doctor [--quiet]     verify the public/private/runtime contract (reports only)
   ai-os status               where the three layers are and whether the contract holds
   ai-os workspace <cmd>      local versioning of the private workspace
-  ai-os plugin <cmd>         list | doctor — the client adapter registry
+  ai-os adapter <cmd>        list | doctor — the client adapter registry
+  ai-os plugin <cmd>         list | doctor — the capability registry
+  ai-os domain <cmd>         list | doctor — the domain registry (declarations only)
+  ai-os run <cmd>            create | step | status | list — bounded execution boundary
   ai-os render <skill>       resolve a canonical skill for one client
   ai-os memory <cmd>         status | doctor | attach — the memory engine
   ai-os privacy-scan [path]  check the public repo for credentials and personal data
@@ -23,13 +27,14 @@ Three layers, three owners:
   runtime  ~/.ai             how it executes today; an implementation detail of V0.x
   private  ~/.ai-os          your memory, knowledge, projects — never published
 
-See docs/public-private-contract.md and schemas/plugin.schema.md.
+See docs/public-private-contract.md, schemas/adapter.schema.md,
+schemas/plugin.schema.md, schemas/domain.schema.md and schemas/run.schema.md.
 EOF
 }
 
 cmd="${1:-status}"; shift || true
 case "$cmd" in
-  init|doctor|status|workspace|privacy-scan|plugin|render|memory) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
+  init|onboard|doctor|status|workspace|privacy-scan|adapter|plugin|domain|run|render|memory) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
   version|--version|-V) echo "$VERSION" ;;
   help|--help|-h)       usage ;;
   *) echo "ai-os: unknown command '$cmd'" >&2; echo >&2; usage >&2; exit 2 ;;

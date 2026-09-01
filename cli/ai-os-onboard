@@ -1,0 +1,445 @@
+#!/usr/bin/env bash
+# ai-os-onboard — first-run initialization. Establishes who the user is, so the rest of
+# AI-OS has something to work from.
+#
+# WHAT THIS IS NOT: it is not a second user-profile system. Onboarding establishes the
+# initial workspace state; memory owns durable facts. Every answer collected here is
+# written to the ONE canonical owner for that fact and nowhere else:
+#
+#   name, languages    -> user/02-personal/memory/identity/       (memory owns user facts)
+#   how to reply       -> user/02-personal/memory/preferences/
+#   work / occupation  -> user/02-personal/memory/career/
+#   skill-render values-> system/config/profile.yaml              (already canonical)
+#   whether we are done-> system/config/workspace.yaml            (this file's only job)
+#
+# workspace.yaml stores state and POINTERS. It never stores a copy of a fact that lives
+# somewhere else, because two copies of a fact is two facts the moment one is edited.
+#
+# THE ONE RULE, inherited from init: this never destroys anything. It writes a canonical
+# file only where nothing exists. An existing memory file, an existing profile value, an
+# existing preference is the user's and is left exactly as it is — onboarding reads it,
+# counts the step satisfied, and moves on.
+#
+#   ai-os onboard              run or resume the interview
+#   ai-os onboard status       has onboarding completed?  (exit code is the answer)
+#   ai-os onboard detect       what the environment is, detected not asked
+#   ai-os onboard set K V      record one answer  (the primitive a client drives)
+#   ai-os onboard complete     validate, then mark initialized
+#   ai-os onboard --adopt      adopt a workspace whose data already exists, no interview
+#   ai-os onboard --repair     re-open onboarding for missing steps only
+#
+# Exit codes for `status`, so any caller gets a deterministic answer without parsing text:
+#   0  initialized     10 uninitialized     11 onboarding (resumable)     12 inconsistent
+#
+# Client-agnostic by construction: no client is named anywhere in this file and no
+# client-owned path is read or written. Where onboarding needs to know which clients are
+# installed, it asks the adapter registry, which is the component that owns that fact.
+# Clients consume the finished result through ai-sync, exactly as they already do.
+
+set -uo pipefail
+
+AI_OS_HOME="${AI_OS_HOME:-$HOME/.ai-os}"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(dirname "$SELF_DIR")"
+VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
+
+STATE="$AI_OS_HOME/system/config/workspace.yaml"
+MEM="$AI_OS_HOME/user/02-personal/memory"
+IDENTITY_DIR="$MEM/identity"
+PREFS_DIR="$MEM/preferences"
+CAREER_DIR="$MEM/career"
+PROFILE="$AI_OS_HOME/system/config/profile.yaml"
+
+if [ -t 1 ]; then G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; D=$'\033[2m'; X=$'\033[0m'
+else G=; Y=; R=; B=; D=; X=; fi
+
+say()  { printf '  %s\n' "$1"; }
+head_() { printf '\n%s%s%s\n' "$B" "$1" "$X"; }
+die()  { printf '  %sERROR%s %s\n' "$R" "$X" "$1" >&2; exit 2; }
+
+# --- state file access ---------------------------------------------------------------
+# One flat key/value file. Flat because a nested map in bash is a parser nobody asked for,
+# and because every value here is a scalar.
+
+ws_get() { # key -> value (empty if unset/missing)
+  [ -f "$STATE" ] || { echo ""; return 0; }
+  sed -n "s/^$1:[[:space:]]*//p" "$STATE" | head -n 1 \
+    | sed -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/" -e 's/[[:space:]]*$//'
+}
+
+ws_set() { # key value — replaces in place, preserving comments and order
+  local k="$1" v="$2" tmp
+  [ -f "$STATE" ] || die "no workspace state file at $STATE — run: ai-os init"
+  tmp="$STATE.onboard.$$"
+  if grep -q "^$k:" "$STATE"; then
+    awk -v k="$k" -v v="$v" '!d && $0 ~ "^"k":" { print k ": " v; d=1; next } { print }' \
+      "$STATE" > "$tmp" && mv "$tmp" "$STATE"
+  else
+    { cat "$STATE"; printf '%s: %s\n' "$k" "$v"; } > "$tmp" && mv "$tmp" "$STATE"
+  fi
+}
+
+# --- canonical data presence ---------------------------------------------------------
+# The question is never "did we write a file" but "is the fact on disk". A directory with
+# one non-empty .md in it is the evidence; who wrote it does not matter, which is exactly
+# what lets an already-populated workspace be adopted instead of re-interviewed.
+
+has_md() { [ -d "$1" ] && [ -n "$(find "$1" -maxdepth 1 -name '*.md' -size +0 2>/dev/null | head -n 1)" ]; }
+have_identity()    { has_md "$IDENTITY_DIR"; }
+have_preferences() { has_md "$PREFS_DIR"; }
+
+# --- assessment ----------------------------------------------------------------------
+# Returns one word on stdout. This is the single definition of "has onboarding completed"
+# and everything else in AI-OS defers to it.
+
+assess() {
+  if [ ! -d "$AI_OS_HOME" ] || [ ! -f "$STATE" ]; then echo uninitialized; return; fi
+  local st; st="$(ws_get status)"
+  case "$st" in
+    initialized)
+      # A marker that claims more than the disk can show is the one case we must never
+      # wave through: it is indistinguishable from success until something reads the
+      # missing data and gets nothing.
+      if have_identity && have_preferences; then echo initialized; else echo inconsistent; fi ;;
+    onboarding)   echo onboarding ;;
+    uninitialized|"") echo uninitialized ;;
+    *)            echo inconsistent ;;
+  esac
+}
+
+# --- environment detection ------------------------------------------------------------
+# Detected, never asked. Anything derivable from the machine is not a question, and it is
+# not persisted either: a snapshot of the environment would be a second copy of a fact the
+# machine already answers, and it would start rotting the moment it was written.
+
+detect() {
+  local os shell_ ws clients tooling
+  os="$(uname -s 2>/dev/null || echo unknown)"
+  case "$os" in Darwin) os="macOS $(sw_vers -productVersion 2>/dev/null || true)" ;; Linux) os="Linux" ;; esac
+  shell_="$(basename "${SHELL:-unknown}")"
+  ws="$AI_OS_HOME"
+  clients=""
+  # Resolved from the adapter registry, so no client name is hardcoded here.
+  if [ -d "$REPO/adapters" ]; then
+    for p in "$REPO/adapters"/*/; do
+      [ -d "$p" ] || continue
+      local n; n="$(basename "${p%/}")"
+      # A client counts as present when one of the paths ITS OWN manifest nominates exists
+      # on this machine. `client.detect` is already the registry's answer to "is this
+      # installed" — reusing it means no client name and no client path is known here.
+      local dline; dline="$(sed -n 's/^[[:space:]]*detect:[[:space:]]*\[\(.*\)\].*/\1/p' "$p/adapter.yaml" 2>/dev/null | head -n1)"
+      local cand found=0
+      local IFS=,
+      for cand in $dline; do
+        cand="$(printf '%s' "$cand" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')"
+        [ -n "$cand" ] || continue
+        cand="${cand/#\~/$HOME}"
+        if [ -e "$cand" ]; then found=1; break; fi
+      done
+      unset IFS
+      [ "$found" -eq 1 ] && clients="$clients $n"
+    done
+  fi
+  [ -n "$clients" ] || clients=" (none detected)"
+  tooling=""
+  for t in git python3 node pnpm npm; do command -v "$t" >/dev/null 2>&1 && tooling="$tooling $t"; done
+  printf 'os:%s\nshell:%s\nhome:%s\nworkspace:%s\nclients:%s\ntooling:%s\n' \
+    "$os" "$shell_" "$HOME" "$ws" "${clients# }" "${tooling# }"
+}
+
+print_detected() {
+  head_ "environment  ${D}(detected, not asked)${X}"
+  detect | while IFS=: read -r k v; do printf '  %-10s %s\n' "$k" "$v"; done
+}
+
+# --- canonical writers ----------------------------------------------------------------
+# Each writes ONE file, and only when its directory holds nothing. Never an edit, never a
+# merge, never a rewrite. If the user already has memory here, that memory wins and the
+# step is satisfied by it.
+
+write_identity() { # name [languages]
+  local langs="${2:-unspecified}"
+  if have_identity; then say "${D}identity already present — kept, not rewritten${X}"; return 0; fi
+  mkdir -p "$IDENTITY_DIR"
+  cat > "$IDENTITY_DIR/profile.md" <<EOF
+---
+name: identity-profile
+description: Who the user is — preferred name and the languages they work in
+metadata:
+  type: long-term
+  domain: identity
+  scope: global
+  status: current
+  confidence: high
+  created: $(date +%F)
+  updated: $(date +%F)
+  source: ai-os onboarding
+---
+
+# Profile
+
+**$1**
+
+- **Languages:** $langs
+
+Recorded at first-run onboarding. Correct or extend it directly — this file is yours, and
+onboarding never rewrites it.
+EOF
+  say "${G}wrote${X}    user/02-personal/memory/identity/profile.md"
+}
+
+write_language_pref() { # language
+  if have_preferences; then say "${D}preferences already present — kept, not rewritten${X}"; return 0; fi
+  mkdir -p "$PREFS_DIR"
+  cat > "$PREFS_DIR/communication.md" <<EOF
+---
+name: communication
+description: The language and register to use when replying to the user
+metadata:
+  type: long-term
+  domain: preferences
+  scope: global
+  status: current
+  confidence: high
+  created: $(date +%F)
+  updated: $(date +%F)
+  source: ai-os onboarding
+---
+
+# Communication
+
+- **Reply in:** $1
+
+Recorded at first-run onboarding. This file is yours; onboarding never rewrites it.
+EOF
+  say "${G}wrote${X}    user/02-personal/memory/preferences/communication.md"
+}
+
+write_work() { # description
+  if has_md "$CAREER_DIR"; then say "${D}career notes already present — kept${X}"; return 0; fi
+  mkdir -p "$CAREER_DIR"
+  cat > "$CAREER_DIR/background.md" <<EOF
+---
+name: career-background
+description: What the user mainly works on
+metadata:
+  type: long-term
+  domain: career
+  scope: global
+  status: current
+  confidence: medium
+  created: $(date +%F)
+  updated: $(date +%F)
+  source: ai-os onboarding
+---
+
+# Background
+
+$1
+
+Recorded at first-run onboarding, and deliberately thin. Depth belongs here over time.
+EOF
+  say "${G}wrote${X}    user/02-personal/memory/career/background.md"
+}
+
+profile_blank() { # key -> true when the profile has no value for it yet
+  [ -f "$PROFILE" ] || return 1
+  [ -z "$(sed -n "s/^$1:[[:space:]]*//p" "$PROFILE" | head -n1 | tr -d '"' | sed 's/[[:space:]]*$//')" ]
+}
+
+profile_set() { # key value — fills a BLANK value only; a set value is the user's
+  local k="$1" v="$2" cur tmp
+  [ -f "$PROFILE" ] || { say "${Y}no profile.yaml — skipped $k${X}"; return 0; }
+  cur="$(sed -n "s/^$k:[[:space:]]*//p" "$PROFILE" | head -n1 | tr -d '"' | sed 's/[[:space:]]*$//')"
+  if [ -n "$cur" ]; then say "${D}profile.$k already set to '$cur' — kept${X}"; return 0; fi
+  tmp="$PROFILE.onboard.$$"
+  awk -v k="$k" -v v="$v" '!d && $0 ~ "^"k":" { print k ": " v; d=1; next } { print }' \
+    "$PROFILE" > "$tmp" && mv "$tmp" "$PROFILE"
+  say "${G}set${X}      profile.$k: $v"
+}
+
+# --- subcommand: status ---------------------------------------------------------------
+cmd_status() {
+  local s; s="$(assess)"
+  case "$s" in
+    initialized)
+      printf '%sinitialized%s  %s(onboarded %s, schema %s)%s\n' \
+        "$G" "$X" "$D" "$(ws_get initialized_at)" "$(ws_get schema)" "$X"; return 0 ;;
+    uninitialized)
+      printf '%suninitialized%s — onboarding required\n' "$Y" "$X"
+      [ -f "$STATE" ] || printf '  %sno %s — run: ai-os init%s\n' "$D" "$STATE" "$X"
+      printf '  run: %sai-os onboard%s\n' "$B" "$X"; return 10 ;;
+    onboarding)
+      printf '%sonboarding in progress%s — incomplete, resumable\n' "$Y" "$X"
+      for k in identity language; do printf '  %-10s %s\n' "$k" "$(ws_get "step_$k")"; done
+      printf '  resume: %sai-os onboard%s\n' "$B" "$X"; return 11 ;;
+    inconsistent)
+      printf '%sINCONSISTENT%s — the marker and the workspace disagree\n' "$R" "$X"
+      printf '  status: %s\n' "$(ws_get status)"
+      have_identity    || printf '  %smissing%s  %s\n' "$R" "$X" "${IDENTITY_DIR#"$AI_OS_HOME"/}"
+      have_preferences || printf '  %smissing%s  %s\n' "$R" "$X" "${PREFS_DIR#"$AI_OS_HOME"/}"
+      printf '\n  Not repairing automatically: the marker may be right and the data may have\n'
+      printf '  been moved, or the marker may be wrong. Guessing would destroy one of them.\n'
+      printf '  recovery: %sai-os onboard --repair%s  (re-opens ONLY the missing steps)\n' "$B" "$X"
+      return 12 ;;
+  esac
+}
+
+# --- subcommand: set ------------------------------------------------------------------
+cmd_set() {
+  local k="${1:-}" v="${2:-}"
+  [ -n "$k" ] && [ -n "$v" ] || die "usage: ai-os onboard set <name|language|work|code_root|vcs_owner> <value>"
+  [ -f "$STATE" ] || die "workspace not initialized — run: ai-os init"
+  [ "$(ws_get status)" = "initialized" ] && {
+    printf '  %salready initialized%s — refusing to re-run the interview.\n' "$Y" "$X"
+    printf '  Edit the canonical file directly, or: ai-os onboard --repair\n'; return 3; }
+  [ "$(ws_get status)" = "uninitialized" ] && ws_set status onboarding
+  case "$k" in
+    name)      write_identity "$v"; ws_set step_identity done ;;
+    language)  write_language_pref "$v"; ws_set step_language done ;;
+    work)      write_work "$v" ;;
+    code_root) profile_set code_root "$v"; ws_set step_profile done ;;
+    vcs_owner) profile_set vcs_owner "$v"; ws_set step_profile done ;;
+    *) die "unknown key '$k' — one of: name language work code_root vcs_owner" ;;
+  esac
+  return 0
+}
+
+# --- subcommand: complete -------------------------------------------------------------
+# Explicit and verified. Marking complete because the script started is how a workspace
+# ends up claiming an identity it never collected.
+cmd_complete() {
+  [ -f "$STATE" ] || die "workspace not initialized — run: ai-os init"
+  local problems=0
+  head_ "validate"
+  if [ "$(ws_get step_identity)" = "done" ]; then say "${G}ok${X}       step identity"; else say "${R}FAIL${X}     step identity not done"; problems=$((problems+1)); fi
+  if [ "$(ws_get step_language)" = "done" ]; then say "${G}ok${X}       step language"; else say "${R}FAIL${X}     step language not done"; problems=$((problems+1)); fi
+  if have_identity;    then say "${G}ok${X}       canonical identity on disk"; else say "${R}FAIL${X}     no identity data at ${IDENTITY_DIR#"$AI_OS_HOME"/}"; problems=$((problems+1)); fi
+  if have_preferences; then say "${G}ok${X}       canonical preferences on disk"; else say "${R}FAIL${X}     no preference data at ${PREFS_DIR#"$AI_OS_HOME"/}"; problems=$((problems+1)); fi
+  for d in system/config user/02-personal/memory user/05-knowledge; do
+    if [ -d "$AI_OS_HOME/$d" ]; then say "${G}ok${X}       $d/"; else say "${R}FAIL${X}     missing $d/"; problems=$((problems+1)); fi
+  done
+  if [ "$problems" -gt 0 ]; then
+    printf '\n  %s%d check(s) failed — NOT marking initialized.%s\n\n' "$R" "$problems" "$X"; return 1
+  fi
+  # Written once. A second completion must not move the date, or the record of when this
+  # workspace came into being is destroyed by a routine re-run.
+  [ -n "$(ws_get initialized_at)" ] || ws_set initialized_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  [ -n "$(ws_get workspace_version)" ] || ws_set workspace_version "$VERSION"
+  ws_set status initialized
+  printf '\n  %sinitialized%s  %s%s%s\n\n' "$G" "$X" "$D" "$(ws_get initialized_at)" "$X"
+  return 0
+}
+
+# --- subcommand: adopt ----------------------------------------------------------------
+# For a workspace that predates onboarding. The data is already there; the only thing
+# missing is the record that it is. Adoption writes no memory file and asks nothing.
+cmd_adopt() {
+  [ -f "$STATE" ] || die "no workspace state file — run: ai-os init first"
+  if [ "$(assess)" = "initialized" ]; then
+    printf '  %salready initialized%s — nothing to adopt.\n' "$D" "$X"; return 0; fi
+  head_ "adopt existing workspace"
+  local missing=0
+  if have_identity; then say "${G}found${X}    ${IDENTITY_DIR#"$AI_OS_HOME"/}"; else say "${R}absent${X}   ${IDENTITY_DIR#"$AI_OS_HOME"/}"; missing=1; fi
+  if have_preferences; then say "${G}found${X}    ${PREFS_DIR#"$AI_OS_HOME"/}"; else say "${R}absent${X}   ${PREFS_DIR#"$AI_OS_HOME"/}"; missing=1; fi
+  if [ "$missing" -eq 1 ]; then
+    printf '\n  %sNothing to adopt%s — this workspace has no identity/preference data.\n' "$Y" "$X"
+    printf '  Run the interview instead: %sai-os onboard%s\n\n' "$B" "$X"; return 1; fi
+  ws_set step_identity done; ws_set step_language done
+  say "${D}no file written — the existing data is the answer${X}"
+  cmd_complete
+}
+
+# --- subcommand: repair ---------------------------------------------------------------
+cmd_repair() {
+  [ -f "$STATE" ] || die "no workspace state file — run: ai-os init"
+  head_ "repair"
+  have_identity    || { ws_set step_identity pending; say "reopened step identity"; }
+  have_preferences || { ws_set step_language pending; say "reopened step language"; }
+  ws_set status onboarding
+  say "status -> onboarding; existing data left untouched"
+  printf '\n  Continue with: %sai-os onboard%s\n\n' "$B" "$X"
+  return 0
+}
+
+# --- the interview --------------------------------------------------------------------
+# Progressive: required first, optional only if asked for. Nothing here asks for something
+# the machine can answer, and nothing asks twice for something already on disk.
+cmd_interview() {
+  [ -f "$STATE" ] || die "workspace not initialized — run: ai-os init"
+  local s; s="$(assess)"
+  case "$s" in
+    initialized)
+      printf '\n  %salready initialized%s  %s(%s)%s\n' "$G" "$X" "$D" "$(ws_get initialized_at)" "$X"
+      printf '  Onboarding does not run again. To redo it deliberately: %sai-os onboard --repair%s\n\n' "$B" "$X"
+      return 0 ;;
+    inconsistent) cmd_status; return 12 ;;
+  esac
+
+  printf '\nai-os onboard  %sv%s%s\n' "$D" "$VERSION" "$X"
+  if [ "$s" = onboarding ]; then printf '  %sresuming an interrupted setup — answered steps are skipped%s\n' "$D" "$X"
+  else printf '  %sfirst run detected — setting up %s%s\n' "$D" "$AI_OS_HOME" "$X"; fi
+  print_detected
+
+  if [ ! -t 0 ]; then
+    printf '\n  %sno terminal%s — cannot run the interview here.\n' "$Y" "$X"
+    printf '  Drive it non-interactively instead:\n'
+    printf '    ai-os onboard set name "<your name>"\n'
+    printf '    ai-os onboard set language "<language>"\n'
+    printf '    ai-os onboard complete\n\n'
+    return 11
+  fi
+
+  ws_set status onboarding
+  head_ "required"
+  local ans
+  if [ "$(ws_get step_identity)" != "done" ] || ! have_identity; then
+    if have_identity; then
+      say "${D}identity already on disk — skipping${X}"; ws_set step_identity done
+    else
+      printf '  What should I call you? '; read -r ans
+      [ -n "$ans" ] || { printf '  %sa name is required%s\n\n' "$R" "$X"; return 1; }
+      local langs; printf '  What language(s) do you work in? '; read -r langs
+      [ -n "$langs" ] || langs="unspecified"
+      write_identity "$ans" "$langs"; ws_set step_identity done
+    fi
+  else say "${D}identity — done${X}"; fi
+
+  if [ "$(ws_get step_language)" != "done" ] || ! have_preferences; then
+    if have_preferences; then
+      say "${D}preferences already on disk — skipping${X}"; ws_set step_language done
+    else
+      printf '  What language should I normally reply in? '; read -r ans
+      [ -n "$ans" ] || { printf '  %sa reply language is required%s\n\n' "$R" "$X"; return 1; }
+      write_language_pref "$ans"; ws_set step_language done
+    fi
+  else say "${D}reply language — done${X}"; fi
+
+  head_ "optional  ${D}(enter to skip any of these)${X}"
+  printf '  Configure a little more? [y/N] '; read -r ans
+  if [ "${ans:-n}" = "y" ] || [ "${ans:-n}" = "Y" ]; then
+    printf '  What do you mainly use AI-OS for? '; read -r ans; [ -n "$ans" ] && write_work "$ans"
+    if profile_blank code_root; then
+      printf '  Where does your code live? '; read -r ans; [ -n "$ans" ] && profile_set code_root "$ans"
+    else say "${D}code root already set to '$(sed -n 's/^code_root:[[:space:]]*//p' "$PROFILE" | head -n1)' — not asking${X}"; fi
+    if profile_blank vcs_owner; then
+      printf '  Your version-control account name? '; read -r ans; [ -n "$ans" ] && profile_set vcs_owner "$ans"
+    else say "${D}version-control account already set — not asking${X}"; fi
+    ws_set step_profile done
+  else say "${D}skipped — everything optional can be added later${X}"; fi
+
+  cmd_complete
+}
+
+# --- dispatch --------------------------------------------------------------------------
+case "${1:-}" in
+  status)     shift; cmd_status "$@" ;;
+  detect)     shift; detect ;;
+  set)        shift; cmd_set "$@" ;;
+  complete)   shift; cmd_complete ;;
+  --adopt)    shift; cmd_adopt ;;
+  --repair)   shift; cmd_repair ;;
+  ""|--run)   cmd_interview ;;
+  -h|--help)  sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "unknown argument '$1' — see: ai-os onboard --help" ;;
+esac

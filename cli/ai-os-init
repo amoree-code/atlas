@@ -56,7 +56,10 @@ done
 # --- structure: system-default, always safe to create -------------------------------
 # A directory carries no content, so creating one can never overwrite a fact.
 printf '%sstructure%s\n' "$B" "$X"
-for section in config memory knowledge projects sessions daily skills runtime; do
+for section in system/config system/rules system/policies system/schemas \
+               user/00-inbox user/01-daily user/02-personal user/03-professional \
+               user/04-projects user/05-knowledge user/06-templates \
+               skills agents scripts sessions runtime; do
   dir="$AI_OS_HOME/$section"
   if [ -d "$dir" ]; then
     say "exists   $section/"; existed=$((existed+1))
@@ -68,10 +71,10 @@ done
 
 # The 8 memory sections and 7 knowledge kinds are structure, not content.
 for s in identity education career projects goals travel preferences interests; do
-  [ -d "$AI_OS_HOME/memory/$s" ] || { act && mkdir -p "$AI_OS_HOME/memory/$s"; created=$((created+1)); }
+  [ -d "$AI_OS_HOME/user/02-personal/memory/$s" ] || { act && mkdir -p "$AI_OS_HOME/user/02-personal/memory/$s"; created=$((created+1)); }
 done
 for k in task-results technical-solutions decisions architecture research discoveries failures; do
-  [ -d "$AI_OS_HOME/knowledge/$k" ] || { act && mkdir -p "$AI_OS_HOME/knowledge/$k"; created=$((created+1)); }
+  [ -d "$AI_OS_HOME/user/05-knowledge/$k" ] || { act && mkdir -p "$AI_OS_HOME/user/05-knowledge/$k"; created=$((created+1)); }
 done
 say "${D}memory: 8 sections · knowledge: 7 kinds${X}"
 
@@ -107,7 +110,7 @@ fi
 # with where init is running from, that is reported and left alone: silently rewriting it
 # would break a deliberate override, and guessing which one is right is not init's call.
 printf '\n%srepository location%s\n' "$B" "$X"
-cfg="$AI_OS_HOME/config/settings.yaml"
+cfg="$AI_OS_HOME/system/config/settings.yaml"
 if [ -f "$cfg" ]; then
   cur="$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$cfg" | head -n 1 | sed \
         -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/" \
@@ -131,7 +134,7 @@ if [ -f "$cfg" ]; then
     say "${D}         ${X}  If the repository moved, update it or clear it and re-run init."
   fi
 else
-  say "${Y}no config/settings.yaml — cannot record the repository location${X}"
+  say "${Y}no system/config/settings.yaml — cannot record the repository location${X}"
 fi
 
 # --- what init deliberately does NOT do ---------------------------------------------

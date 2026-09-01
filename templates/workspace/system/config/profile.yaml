@@ -30,7 +30,7 @@ stack:
   # A short phrase naming the technologies a recommendation must not ignore.
   summary: ""
   # Where your full stack conventions are recorded.
-  doc: ~/.ai-os/memory/preferences/development.md
+  doc: ~/.ai-os/user/02-personal/memory/preferences/development.md
 
 code_graph:
   # A local code-graph tool, if you use one, for structural questions on large repos.
@@ -49,4 +49,4 @@ agents:
 # single-keyed dependency rather than a path hardcoded across fifteen files, and it is one
 # of the conditions gating ~/.ai's eventual removal.
 scripts_dir: ~/.ai-os/scripts
-templates_dir: ~/.ai-os/templates
+templates_dir: ~/.ai-os/user/06-templates

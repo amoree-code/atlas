@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""ai-os-domain — the domain registry. Reads declarations; enforces the contract.
+
+  ai-os domain list      what domains exist, what they require, what outcomes they name
+  ai-os domain doctor    validate every declaration against schemas/domain.schema.md
+
+A DOMAIN is an area of work. It names the outcome kinds that area recognizes and the
+capabilities delivering them needs. A CAPABILITY is something AI-OS can do and lives in
+plugins/ (cli/ai-os-plugin). The arrow runs Domain -> requires -> Capability and never the
+reverse: a domain uses capabilities; it never owns, contains or reimplements one.
+
+A DOMAIN IS INERT. No command, no verifier, no provider, no authority rung, no ordering.
+Nothing here executes anything, and there is deliberately no verb that could — list and
+doctor both only read. Execution stays Task + Capability + Run + Verification. That is not
+a matter of taste: a declaration able to express sequence, or to map an outcome onto an
+operation, would be a workflow engine under another filename.
+
+Core never learns what a domain MEANS. It checks the SHAPE of a declaration and nothing
+else. There is no branch anywhere in this file on a domain id or an outcome name, which is
+exactly what makes a new domain additive rather than a change to Core.
+
+Zero dependencies: stdlib only. The manifest parser is the one ai-os-adapter already owns —
+the same small YAML subset, and a third parser would drift.
+"""
+import importlib.machinery, importlib.util, os, re, sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+# Overridable so the test suite can point at fixtures instead of the real registry.
+DOMAINS = Path(os.environ.get("AI_OS_DOMAINS", REPO / "domains"))
+PLUGINS = Path(os.environ.get("AI_OS_PLUGINS", REPO / "plugins"))
+CORE_CONTRACT_RANGE = (1, 1)
+
+# A declaration is exactly these five keys. Anything else is refused — the allowlist is
+# what keeps a domain inert, and it is cheaper and harder to evade than prose telling an
+# author what not to write.
+FIELDS = ("domain", "name", "contract", "requires", "outcomes")
+REQUIRED = ("domain", "name", "contract", "outcomes")
+
+_ORDERING = ("outcomes are a set, never a sequence — a declaration that can express "
+             "ordering is a workflow engine under another filename")
+_INERT = "a domain is inert: it has no executable of its own"
+# Refused with a reason rather than a generic 'unknown key'. Each entry below is a rejected
+# concept trying to arrive early, and the message names which one.
+FORBIDDEN = {
+    "authority": "a domain grants nothing — authority is declared by a capability and "
+                 "granted in system/config/authority.yaml",
+    "verify": "a domain defines no verifiers — verification is a capability operation's "
+              "own verify:, and executed never implies verified",
+    "command": _INERT,
+    "provider": _INERT + "; a provider belongs to a capability",
+    "detect": "availability is a capability property — a domain is not installed",
+    "operations": "operations belong to a capability; a domain names outcome kinds",
+    "stages": _ORDERING, "steps": _ORDERING, "then": _ORDERING, "order": _ORDERING,
+    "ordering": _ORDERING, "sequence": _ORDERING, "depends_on": _ORDERING,
+    "workflow": _ORDERING,
+    "dispatch": "nothing maps an outcome onto an operation — the model decides that, and "
+                "a table here would be a planner",
+    "run": "a domain is never bound to a Run; a Run carries a task id and nothing else",
+    "task": "a domain declares no task fields — task state is convention-only and Core "
+            "never parses it",
+}
+
+# An id names a domain, an outcome kind or a capability. Never a path.
+ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+# A declaration is client-agnostic, exactly as a capability manifest is.
+CLIENT_NAMES = re.compile(r"\b(claude|claude-code|codex|cursor|gemini|opencode|chatgpt)\b", re.I)
+
+G, Y, R, B, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[34m", "\033[2m", "\033[0m"
+if not sys.stdout.isatty():
+    G = Y = R = B = D = X = ""
+
+
+def _load_parser():
+    """Borrow the manifest parser from ai-os-adapter — one parser, not three."""
+    src = Path(__file__).resolve().parent / "ai-os-adapter"
+    if not src.exists():
+        raise SystemExit("ai-os-domain: cli/ai-os-adapter is missing; it owns the manifest parser")
+    spec = importlib.util.spec_from_loader(
+        "_ai_os_adapter", importlib.machinery.SourceFileLoader("_ai_os_adapter", str(src)))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.parse, mod.ManifestError
+
+
+parse, ManifestError = _load_parser()
+
+
+def known_capabilities():
+    """Capability ids present in the registry. Directory names only — nothing is parsed."""
+    if not PLUGINS.is_dir():
+        return set()
+    return {d.name for d in PLUGINS.iterdir() if d.is_dir() and (d / "plugin.yaml").exists()}
+
+
+def validate(did, m, raw="", known=None):
+    """Return (errors, warnings). Never raises; never executes anything.
+
+    `known` is the set of capability ids present, or None to skip the availability check.
+    """
+    err, warn = [], []
+    for k in REQUIRED:
+        if k not in m:
+            err.append(f"missing required key: {k}")
+    if err:
+        return err, warn
+
+    # Exactly five fields. A key that is a rejected concept is named as one.
+    for k in m:
+        if k in FIELDS:
+            continue
+        why = FORBIDDEN.get(k)
+        err.append(f"{k}: not a domain field — {why}" if why else
+                   f"{k}: not a domain field; a declaration is exactly {', '.join(FIELDS)}")
+
+    if m["domain"] != did:
+        err.append(f"domain id {m['domain']!r} != filename stem {did!r}")
+    elif not ID.match(str(did)):
+        err.append(f"domain id {did!r} is not a valid id (lowercase, digits and dashes)")
+
+    lo, hi = CORE_CONTRACT_RANGE
+    c = m["contract"]
+    if not isinstance(c, int):
+        err.append(f"contract must be an integer, got {c!r}")
+    elif not (lo <= c <= hi):
+        err.append(f"requires contract {c}; this core supports {lo}..{hi} — DISABLED")
+
+    # Outcome KINDS — vocabulary. An outcome INSTANCE belongs to a task, never here.
+    outs = m.get("outcomes")
+    if not isinstance(outs, dict):
+        err.append("outcomes: must be a map of outcome kinds")
+        outs = {}
+    elif not outs:
+        warn.append("declares no outcome kinds — discoverable, but it names nothing to deliver")
+    for name, spec in outs.items():
+        if not ID.match(str(name)):
+            err.append(f"outcomes.{name}: not a valid outcome name "
+                       f"(lowercase, digits and dashes)")
+        if not isinstance(spec, dict):
+            err.append(f"outcomes.{name}: must be a map")
+            continue
+        if "summary" not in spec:
+            err.append(f"outcomes.{name}: missing required field 'summary'")
+        for k in spec:
+            if k == "summary":
+                continue
+            why = FORBIDDEN.get(k)
+            err.append(f"outcomes.{name}.{k}: not an outcome field — {why}" if why else
+                       f"outcomes.{name}.{k}: not an outcome field; an outcome kind is a "
+                       f"name and a summary")
+
+    # Dependencies. A domain names the capabilities it needs, by id and only by id. This is
+    # the same mechanism and the same five rules the capability contract already uses — no
+    # resolver, no version range, no transitive graph.
+    req = m.get("requires")
+    if req is not None:
+        if not isinstance(req, list):
+            err.append("requires: must be a list of capability ids")
+        else:
+            for dep in req:
+                d = str(dep)
+                if "/" in d or ".." in d or d.startswith("."):
+                    err.append(f"requires: {d!r} looks like a path — a domain names a "
+                               f"capability by id, never a location")
+                elif not ID.match(d):
+                    err.append(f"requires: {d!r} is not a valid capability id "
+                               f"(lowercase, digits and dashes)")
+                elif d == did:
+                    err.append(f"requires: {d!r} is itself — and a domain is not a capability")
+                elif known is not None and d not in known:
+                    # Declaring a domain before its capabilities are installed is
+                    # legitimate, so this stays visible rather than fatal — the same
+                    # treatment an unsatisfied capability dependency already gets.
+                    warn.append(f"requires {d!r}, which is not in the capability registry — "
+                                f"the domain is declared but that capability is unavailable")
+
+    hit = CLIENT_NAMES.search(raw)
+    if hit:
+        err.append(f"names an AI client ({hit.group(0)!r}) — a domain is client-agnostic; "
+                   f"client integration belongs in adapters/")
+    return err, warn
+
+
+def load_all():
+    """One flat file per domain: domains/<id>.yaml, where <id> is the filename stem.
+
+    Flat, not a directory per domain, precisely because a domain is inert — there is no
+    executable for a directory to hold, and a directory would invite one.
+    """
+    out = []
+    if not DOMAINS.is_dir():
+        return out
+    for f in sorted(DOMAINS.glob("*.yaml")):
+        raw = f.read_text()
+        try:
+            out.append((f.stem, parse(raw, f"domains/{f.name}"), raw, None))
+        except ManifestError as e:
+            out.append((f.stem, None, raw, str(e)))
+    return out
+
+
+def cmd_list(_):
+    rows = load_all()
+    if not rows:
+        print(f"\n  no domains in {DOMAINS}\n")
+        return 0
+    print(f"\n  {B}domains{X}  {D}{DOMAINS}{X}\n")
+    print(f"  {'ID':<20} {'REQUIRES':<28} OUTCOMES")
+    for did, m, _raw, e in rows:
+        if e:
+            print(f"  {did:<20} {R}unreadable declaration{X}")
+            continue
+        req = ", ".join(str(x) for x in (m.get("requires") or [])) or f"{D}nothing{X}"
+        outs = ", ".join((m.get("outcomes") or {}).keys()) or f"{D}none{X}"
+        print(f"  {did:<20} {req:<28} {outs}")
+    print(f"\n  {D}a domain requires capabilities; it never is one. Outcome kinds are "
+          f"vocabulary —\n  an outcome instance belongs to a task, never to this "
+          f"registry.{X}\n")
+    return 0
+
+
+def cmd_doctor(_):
+    rows = load_all()
+    known = known_capabilities()
+    fails = warns = 0
+    print(f"\n  {B}domain doctor{X}  {D}contract range {CORE_CONTRACT_RANGE[0]}.."
+          f"{CORE_CONTRACT_RANGE[1]} · registry {DOMAINS}{X}\n")
+    if not rows:
+        print(f"  {D}no domains declared — nothing to validate{X}\n")
+        return 0
+    for did, m, raw, e in rows:
+        if e:
+            print(f"  {R}FAIL{X}  {did}: {e}")
+            fails += 1
+            continue
+        errs, ws = validate(did, m, raw, known)
+        for x in errs:
+            print(f"  {R}FAIL{X}  {did}: {x}")
+            fails += 1
+        for x in ws:
+            print(f"  {Y}WARN{X}  {did}: {x}")
+            warns += 1
+        if not errs:
+            print(f"  {G}ok{X}    {did}: declaration valid")
+    print()
+    if fails:
+        print(f"  {R}{fails} failure(s){X}, {Y}{warns} warning(s){X}\n")
+    else:
+        print(f"  {G}all domain declarations valid{X}"
+              f"{f', {Y}{warns} warning(s){X}' if warns else ''}\n")
+    return fails
+
+
+# list and doctor read. There is no third verb, and its absence is the contract: a domain
+# is never invoked, delivered, run, planned or dispatched from here.
+CMDS = {"list": cmd_list, "doctor": cmd_doctor}
+if __name__ == "__main__":
+    a = sys.argv[1:] or ["list"]
+    if a[0] not in CMDS:
+        print(__doc__)
+        sys.exit(2)
+    sys.exit(CMDS[a[0]](a[1:]))

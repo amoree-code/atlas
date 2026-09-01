@@ -1,5 +1,5 @@
 # Cursor Agent CLI adapter. Project-channel only — deliberately writes nothing globally.
-plugin: cursor
+adapter: cursor
 name: Cursor Agent CLI
 contract: 1
 

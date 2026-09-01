@@ -1,5 +1,5 @@
 # Claude Code adapter. Transcribed from observed configuration — see schemas/plugin.schema.md.
-plugin: claude-code
+adapter: claude-code
 name: Claude Code
 contract: 1
 

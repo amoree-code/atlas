@@ -22,6 +22,11 @@ secrets.json
 .netrc
 .npmrc
 
+# --- derived graph state (Graph Brain) ---
+# graphify output is derived data rebuilt on demand from the tree it indexes.
+# It is never source of truth and is never published: graph explains, files decide.
+graphify-out/
+
 # --- OS / editor ---
 .DS_Store
 ._*

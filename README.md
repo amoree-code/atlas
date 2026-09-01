@@ -29,15 +29,18 @@ repository. The personal half never leaves your machine.
           Adapter        Adapter       Adapter
 ```
 
-## Three layers, three owners
+## Two layers, two owners
 
 | | Lives | Owns |
 |---|---|---|
 | **Public** (this repo) | wherever you clone it | code, CLI, adapters, policies, schemas, public skills, templates, docs, tests |
-| **Runtime** | `~/.ai` | hooks, runtime scripts, client integration — *an implementation detail of V0.x* |
-| **Private** (your workspace) | `~/.ai-os/` | your memory, knowledge, projects, sessions, daily records, config, skills |
+| **Private** (your workspace) | `~/.ai-os/` | your memory, projects, knowledge, sessions, daily records, system config — and `runtime/` for transient generated state |
 
-**Access is not ownership.** The runtime reads and writes your workspace constantly —
+Earlier versions had a third layer, a runtime directory at `~/.ai`. It was retired in
+V0.2: its engine became this repository's `cli/`, its user data moved into the private
+workspace, and its transient state now lives at `~/.ai-os/runtime/`.
+
+**Access is not ownership.** The CLI reads and writes your workspace constantly —
 that is its job. It does not follow that this repository owns, tracks, or may publish any
 of it. Nothing under `~/.ai-os/` is ever read by, or copied into, this repository.
 `ai-os init` writes *into* `~/.ai-os/` from this repo's templates, once, and never the
@@ -52,32 +55,65 @@ remote, pushing, exporting, or copying workspace content into this repository al
 explicit approval. See `policies/workspace-privacy.yaml` and
 `docs/workspace-versioning.md`.
 
-## Status: V0.1.3 — the contract
+## Status: V0.3 — the architecture
 
 This is early. V0.1's goal was a clean, vendor-neutral foundation: the public/private
 split, the CLI (`init` / `doctor` / `status`), the memory and knowledge storage boundary,
-a policy abstraction, and one working adapter (Claude Code). V0.1.3 makes the boundary
-between the three layers explicit and *executable* — `init` is ownership-aware and
-non-destructive, `doctor` verifies the contract, and `privacy-scan` checks that this
-repository is still publishable. It deliberately does **not** yet include an autonomous task engine,
-a multi-agent system, a full model router, browser/computer automation, additional MCP
-servers, or a GUI. See `docs/design-philosophy.md` for why it stays that way, and
+a policy abstraction, and one working adapter (Claude Code). V0.1.3 made that boundary
+explicit and *executable* — `init` is ownership-aware and non-destructive, `doctor`
+verifies the contract, and `privacy-scan` checks that this repository is still
+publishable. V0.2 retired the `~/.ai` runtime layer. V0.3 gives the private workspace its
+canonical shape: `user/` for everything the user owns, `system/` for configuration and
+governance, and reserved namespaces for `mcp/` and capability `plugins/`. V0.4 separated
+the two senses of "plugin": `adapters/` holds client integrations, `plugins/` holds
+capabilities.
+
+It deliberately does **not** yet include an autonomous task engine, a multi-agent system,
+a full model router, browser/computer automation, AI-OS-managed MCP servers, capability
+plugins, or a GUI. `mcp/` and `plugins/` are declared namespaces with ownership rules —
+not implementations. See `docs/design-philosophy.md` for why it stays that way, and
 `docs/public-private-contract.md` for the boundary everything else rests on.
 
 ## Layout
 
 ```
-ai-os/
-├── cli/                    ai-os · init · doctor · status · workspace · privacy-scan
+ai-os/                      the public repository — software only
+├── cli/                    ai-os · init · doctor · status · workspace · privacy-scan · sync
 ├── skills/                 public skills — yours in ~/.ai-os/skills override these
+├── agents/                 (none yet — agent definitions live in your workspace)
 ├── policies/               the contract, privacy classification, git approval
-├── adapters/claude-code/   how Claude Code enforces AI OS policies today
+├── schemas/                adapter.schema.md (clients) · plugin.schema.md (capabilities)
+├── adapters/<client>/      client integrations — manifest, hooks, policy enforcement
+├── plugins/<capability>/   what AI OS can do — empty by design, none ship yet
 ├── templates/
 │   ├── workspace/          seeds for a new ~/.ai-os — placeholder data only
-│   └── runtime/            seeds for the runtime layer
+│   └── runtime/            seeds for the operational scripts
 ├── tests/
 └── docs/
 ```
+
+> **Adapter vs capability.** An **adapter** answers *"how does this AI client reach
+> AI OS?"* (`adapters/<client>/adapter.yaml`). A **capability** answers *"what can AI OS
+> do?"* (`plugins/<id>/plugin.yaml`). Until V0.4 the client manifests lived in `plugins/`,
+> inverting the two names; that is now resolved and the directories match the concepts.
+
+Your private workspace, created by `ai-os init`, looks like this:
+
+```
+~/.ai-os/
+├── user/                   everything you own
+│   ├── 00-inbox/ 01-daily/ 03-professional/ 05-knowledge/ 06-templates/
+│   ├── 02-personal/memory/ the single global memory store
+│   └── 04-projects/        registry.md · tasks.md · <project>/ (created on demand)
+├── system/                 rules · policies · schemas · config
+├── mcp/                    global MCP namespace — registry/ servers/ config/
+├── plugins/                your capability configuration (reserved)
+├── skills/ agents/ scripts/
+├── sessions/               session records and the live task checkpoint
+└── runtime/                transient generated state (gitignored)
+```
+
+Full detail in [docs/workspace.md](docs/workspace.md).
 
 Templates are **seeds, not a sync**: copied once where nothing exists, never reapplied
 over a file you have edited.
@@ -115,5 +151,5 @@ Not yet ready for general use — this assumes a single-user local setup and has
 exercised against one machine. Treat it as a working sketch, not a released tool.
 
 ```bash
-tests/test-contract.sh   # 52 checks on the contract, in a throwaway workspace
+tests/test-contract.sh   # the contract suite, in a throwaway workspace
 ```

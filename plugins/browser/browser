@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""browser — the Browser Control capability entry point.
+
+Contract with Core (schemas/plugin.schema.md): argv[1] is the operation, JSON arguments
+arrive on stdin, a JSON result goes to stdout, exit 0 means the operation ran.
+
+It ran is NOT it worked. Whether the result is true is decided by `browser-verify`, which
+re-reads live browser state. This file never claims verification.
+
+No AI client is named here and no browser engine is imported. The engine lives behind
+providers/<name>_provider.py and is named only there.
+"""
+import importlib.util, json, os, sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
+# Ephemeral by design: a browser session is runtime state, never durable task truth.
+RUNTIME = Path(os.environ.get("AI_OS_BROWSER_RUNTIME", AI_OS_HOME / "runtime" / "browser"))
+SESSION = RUNTIME / "session.json"
+# The default provider name lives in providers/default, so this file names no
+# browser technology at all. Swapping providers is a one-line change in that
+# directory and nothing above it moves.
+PROVIDER = os.environ.get("BROWSER_PROVIDER") or (
+    (Path(__file__).resolve().parent / "providers" / "default").read_text().strip())
+
+READ_ONLY = {"read", "observe", "extract", "wait"}
+
+
+def load_provider():
+    f = HERE / "providers" / f"{PROVIDER}_provider.py"
+    if not f.exists():
+        fail(f"no provider {PROVIDER!r} at providers/{PROVIDER}_provider.py")
+    spec = importlib.util.spec_from_file_location(f"_prov_{PROVIDER}", f)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def fail(msg, code=1):
+    print(json.dumps({"ok": False, "error": msg}))
+    sys.exit(code)
+
+
+def read_session():
+    if not SESSION.exists():
+        fail("no browser session — run: ai-os plugin invoke browser.open")
+    return json.loads(SESSION.read_text())
+
+
+def main():
+    if len(sys.argv) < 2:
+        fail("usage: browser <operation>  (JSON arguments on stdin)", 2)
+    op = sys.argv[1]
+    raw = sys.stdin.read().strip() or "{}"
+    try:
+        args = json.loads(raw)
+    except json.JSONDecodeError as e:
+        fail(f"arguments are not valid JSON: {e}", 2)
+    prov = load_provider()
+
+    if op == "detect":
+        ok, detail = prov.detect()
+        print(json.dumps({"ok": ok, "provider": PROVIDER, "detail": detail}))
+        sys.exit(0 if ok else 1)
+
+    if op == "open":
+        ok, detail = prov.detect()
+        if not ok:
+            fail(f"provider unavailable: {detail}")
+        if SESSION.exists():
+            s = json.loads(SESSION.read_text())
+            try:
+                os.kill(int(s["pid"]), 0)
+                print(json.dumps({"ok": True, "reused": True, "session": s["pid"]}))
+                return
+            except OSError:
+                pass  # recorded session is dead; replace it
+        RUNTIME.mkdir(parents=True, exist_ok=True)
+        s = prov.launch(RUNTIME / "profile")
+        SESSION.write_text(json.dumps(s))
+        print(json.dumps({"ok": True, "session": s["pid"], "provider": PROVIDER}))
+        return
+
+    if op == "close":
+        if not SESSION.exists():
+            print(json.dumps({"ok": True, "already_closed": True}))
+            return
+        s = json.loads(SESSION.read_text())
+        prov.close(s)
+        SESSION.unlink()
+        print(json.dumps({"ok": True, "closed": s.get("pid")}))
+        return
+
+    session = read_session()
+    h = prov.connect(session)
+    try:
+        if op == "navigate":
+            r = prov.navigate(h, args["url"], args.get("timeout", 30000))
+        elif op == "read":
+            r = prov.read_text(h)
+        elif op == "observe":
+            r = prov.observe(h)
+        elif op == "extract":
+            r = prov.extract(h, args["selector"], args.get("attribute"))
+        elif op == "click":
+            r = prov.click(h, args["selector"], args.get("timeout", 15000))
+        elif op == "type":
+            r = prov.type_text(h, args["selector"], args["text"], args.get("clear", True))
+        elif op == "select":
+            r = prov.select(h, args["selector"], args["value"])
+        elif op == "scroll":
+            r = prov.scroll(h, args.get("dy", 600))
+        elif op == "wait":
+            r = prov.wait_for(h, args.get("selector"), args.get("url_contains"),
+                              args.get("timeout", 15000))
+        elif op == "upload":
+            paths = args["paths"] if isinstance(args.get("paths"), list) else [args["path"]]
+            for p in paths:
+                if not Path(p).is_file():
+                    fail(f"upload source does not exist: {p}")
+            r = prov.upload(h, args["selector"], paths)
+        elif op == "download":
+            dest = Path(args.get("dest", RUNTIME / "downloads"))
+            r = prov.download(h, args["selector"], dest, args.get("timeout", 60000))
+        elif op == "submit":
+            r = prov.submit(h, args["selector"], args.get("timeout", 20000))
+        else:
+            fail(f"unknown operation {op!r}", 2)
+        # The post-condition the verifier will re-check independently. Recording what to
+        # check is this file's job; deciding whether it holds is not.
+        r["ok"] = True
+        r["operation"] = op
+        r["expect"] = args.get("expect") or {}
+        if op not in READ_ONLY:
+            r.setdefault("expect", {})
+        print(json.dumps(r))
+    except Exception as e:
+        fail(f"{op} failed: {type(e).__name__}: {e}")
+    finally:
+        h.release()
+
+
+if __name__ == "__main__":
+    main()

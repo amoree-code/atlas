@@ -1,0 +1,22 @@
+# Authority grants — what AI-OS is permitted to actually DO on your behalf.
+#
+# A capability manifest declares the rung each of its operations NEEDS. This file is the
+# other half: what you have GRANTED. An operation runs only when both agree, and the
+# default below grants the lowest rung to nothing.
+#
+#     observe                read, look, extract — changes nothing
+#     propose                prepare an action without performing it
+#     execute                perform a reversible action
+#     execute-with-approval  perform it only after you say yes, per action, every time
+#     autonomous             NOT GRANTABLE. No value here enables it.
+#
+# Granting a rung grants everything below it: `execute` implies `propose` and `observe`.
+#
+# There is deliberately no --force, no --unsafe, and no "allow everything". If you want a
+# capability to act, name it and name the rung. Silence means no.
+
+default: observe          # applies to any capability not named below
+
+capabilities: {}
+  # browser: execute              # example — not active
+  # some-capability: observe

@@ -22,7 +22,7 @@ apart, so the boundary is written down here and checked by `ai-os doctor`.
 
 **Access is not ownership.**
 
-The runtime reaches into `~/.ai-os/memory` constantly — that is its job. A symlink, an
+The runtime reaches into `~/.ai-os/user/02-personal/memory` constantly — that is its job. A symlink, an
 environment variable, or a hook that grants it that reach does not reclassify the data it
 reaches. Memory read through `~/.claude/projects/*/memory` is still private-workspace
 data, owned by you, and still may not be copied into the public repository.

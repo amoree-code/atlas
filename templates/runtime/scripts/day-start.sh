@@ -4,7 +4,7 @@
 set -euo pipefail
 W="${AI_OS_HOME:-$HOME/.ai-os}"
 D=$(date +%Y-%m-%d)
-DIR="$W/daily/$(date +%Y)/$(date +%m)/$D"
+DIR="$W/user/01-daily/$(date +%Y)/$(date +%m)/$D"
 mkdir -p "$DIR"
 
 [ -f "$DIR/brief.md" ] || cat > "$DIR/brief.md" <<EOF

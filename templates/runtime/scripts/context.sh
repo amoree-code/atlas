@@ -3,7 +3,7 @@
 set -uo pipefail
 W="${AI_OS_HOME:-$HOME/.ai-os}"
 D=$(date +%Y-%m-%d)
-DIR="$W/daily/$(date +%Y)/$(date +%m)/$D"
+DIR="$W/user/01-daily/$(date +%Y)/$(date +%m)/$D"
 
 echo "=== today: $D ==="
 if [ -d "$DIR" ]; then echo "daily folder: $DIR"; else echo "daily folder: NOT CREATED (run day-start.sh)"; fi
@@ -18,7 +18,7 @@ done
 
 echo
 echo "=== open tasks ==="
-grep -E '^\- \[(TODO|WIP|BLOCKED)\]' "$W/projects/tasks.md" 2>/dev/null || echo "(none)"
+grep -E '^\- \[(TODO|WIP|BLOCKED)\]' "$W/user/04-projects/tasks.md" 2>/dev/null || echo "(none)"
 
 echo
 echo "=== repos with uncommitted work ==="

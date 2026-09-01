@@ -95,22 +95,45 @@ fi
 head "workspace"
 # ====================================================================================
 missing=""
-for s in config memory knowledge projects sessions daily skills; do
+for s in system/config system/rules user/01-daily user/02-personal \
+         user/04-projects user/05-knowledge user/06-templates \
+         skills agents scripts sessions; do
   [ -d "$AI_OS_HOME/$s" ] || missing="$missing $s"
 done
 if [ -n "$missing" ]; then fail "missing section(s):$missing"; note "run: ai-os init"
 else
   total=$(find "$AI_OS_HOME" -type f -not -path '*/.git/*' | wc -l | tr -d ' ')
-  ok "7 sections present  ${D}($total files)${X}"
+  ok "all sections present  ${D}($total files)${X}"
 fi
 for s in identity education career projects goals travel preferences interests; do
-  [ -d "$AI_OS_HOME/memory/$s" ] || warn "missing memory section: memory/$s/"
+  [ -d "$AI_OS_HOME/user/02-personal/memory/$s" ] || warn "missing memory section: user/02-personal/memory/$s/"
 done
 for k in task-results technical-solutions decisions architecture research discoveries failures; do
-  [ -d "$AI_OS_HOME/knowledge/$k" ] || warn "missing knowledge kind: knowledge/$k/"
+  [ -d "$AI_OS_HOME/user/05-knowledge/$k" ] || warn "missing knowledge kind: user/05-knowledge/$k/"
 done
-[ -f "$AI_OS_HOME/memory/MEMORY.md" ]    || warn "memory/MEMORY.md missing — the retrieval index"
-[ -f "$AI_OS_HOME/knowledge/README.md" ] || warn "knowledge/README.md missing"
+[ -f "$AI_OS_HOME/user/02-personal/memory/MEMORY.md" ]    || warn "user/02-personal/memory/MEMORY.md missing — the retrieval index"
+[ -f "$AI_OS_HOME/user/05-knowledge/README.md" ] || warn "user/05-knowledge/README.md missing"
+
+# Onboarding state is reported, never repaired. An inconsistent marker is exactly the kind
+# of thing a doctor must surface and leave alone: the marker and the data disagree, and
+# only the user knows which of the two is the one that moved.
+if [ -x "$SELF_DIR/ai-os-onboard" ]; then
+  ob_out=$("$SELF_DIR/ai-os-onboard" status 2>&1); ob_rc=$?
+  # NB: this file defines a shell function called head(), so `head -n1` would call that
+  # and swallow the text. First line by expansion instead — no external command involved.
+  ob_first="${ob_out%%$'\n'*}"
+  case "$ob_rc" in
+    0)  ok "onboarding: $ob_first" ;;
+    10) warn "workspace has never been onboarded — run: ai-os onboard" ;;
+    11) warn "onboarding started but never completed — resume: ai-os onboard" ;;
+    12) fail "onboarding marker is inconsistent with the workspace"
+        printf '%s' "$ob_out" | sed 's/^/          /'
+        note "recovery: ai-os onboard --repair  (reopens only the missing steps)" ;;
+    *)  warn "onboarding state could not be determined" ;;
+  esac
+else
+  warn "ai-os-onboard not found — onboarding state not checked"
+fi
 
 # ====================================================================================
 head "git safety"
@@ -165,7 +188,7 @@ head "memory access"
 # private-workspace-owned. What matters is that every one of those links points at the
 # single canonical store and nowhere else.
 # ====================================================================================
-CANON="$AI_OS_HOME/memory"
+CANON="$AI_OS_HOME/user/02-personal/memory"
 STALE="$AI_OS_LEGACY/workspace/memory"
 
 if [ -L "$CANON" ]; then
@@ -265,7 +288,7 @@ else
   fi
   if [ -d "$AI_OS_LEGACY/workspace" ]; then
     ok "frozen archive present: $AI_OS_LEGACY/workspace  ${D}(rollback copy, read-only)${X}"
-    if grep -rqlF "$AI_OS_LEGACY/workspace" "$AI_OS_HOME/config" 2>/dev/null; then
+    if grep -rqlF "$AI_OS_LEGACY/workspace" "$AI_OS_HOME/system/config" 2>/dev/null; then
       fail "private configuration still resolves into the frozen archive"
       note "the archive is a rollback copy; live configuration must not depend on it"
     else
@@ -320,13 +343,13 @@ head "configuration"
 # Defaults < user < project. An update may add a missing key; it must never change one
 # the user has set. Doctor reports what an update WOULD add; it adds nothing.
 # ====================================================================================
-CFG="$AI_OS_HOME/config/settings.yaml"
-TPL="$REPO/templates/workspace/config/settings.yaml"
+CFG="$AI_OS_HOME/system/config/settings.yaml"
+TPL="$REPO/templates/workspace/system/config/settings.yaml"
 if [ -f "$CFG" ]; then
   if grep -qP '^\t' "$CFG" 2>/dev/null; then
-    fail "config/settings.yaml contains tab indentation — not valid YAML"
+    fail "system/config/settings.yaml contains tab indentation — not valid YAML"
   else
-    ok "config/settings.yaml present, no tab indentation"
+    ok "system/config/settings.yaml present, no tab indentation"
   fi
   if [ -f "$TPL" ]; then
     tkeys=$(grep -oE '^[a-z_]+:' "$TPL" | sort -u)
@@ -341,11 +364,11 @@ if [ -f "$CFG" ]; then
     fi
   fi
 else
-  warn "config/settings.yaml missing"
+  warn "system/config/settings.yaml missing"
 fi
-[ -f "$AI_OS_HOME/config/privacy-terms.txt" ] \
-  && ok "config/privacy-terms.txt present  ${D}(private — used by privacy-scan)${X}" \
-  || warn "config/privacy-terms.txt missing — privacy-scan runs generic patterns only"
+[ -f "$AI_OS_HOME/system/policies/privacy-terms.txt" ] \
+  && ok "system/policies/privacy-terms.txt present  ${D}(private — used by privacy-scan)${X}" \
+  || warn "system/policies/privacy-terms.txt missing — privacy-scan runs generic patterns only"
 
 # ====================================================================================
 head "skills"
@@ -367,23 +390,43 @@ else
 fi
 
 # ====================================================================================
-head "plugins"
-# The plugin contract is checked by the tool that owns it. doctor reports the verdict
-# rather than reimplementing the rules — one definition of "valid manifest", not two.
+head "adapters and capabilities"
+# Two registries, two contracts, checked by the tools that own them. doctor reports the
+# verdicts rather than reimplementing the rules — one definition of "valid manifest" each.
+# An adapter connects a client; a capability is something AI-OS can do. They are never
+# the same thing, which is why they are never the same registry.
 # ====================================================================================
-if [ -x "$SELF_DIR/ai-os-plugin" ]; then
-  pout=$("$SELF_DIR/ai-os-plugin" doctor 2>&1); prc=$?
+if [ -x "$SELF_DIR/ai-os-adapter" ]; then
+  pout=$("$SELF_DIR/ai-os-adapter" doctor 2>&1); prc=$?
   pn=$(printf '%s' "$pout" | grep -c '^  ok ' || true)
   if [ "$prc" -eq 0 ]; then
-    ok "$pn plugin manifest(s) valid  ${D}(contract range 1..1)${X}"
+    ok "$pn adapter manifest(s) valid  ${D}(contract range 1..1)${X}"
     printf '%s' "$pout" | grep 'WARN' | sed "s|^  WARN  |        ${D}|;s|\$|${X}|"
   else
-    fail "plugin manifest(s) violate the contract:"
+    fail "adapter manifest(s) violate the contract:"
     printf '%s' "$pout" | grep -E 'FAIL' | sed 's/^/        /'
-    note "a plugin may never declare a provides: path inside \$AI_OS_HOME"
+    note "an adapter may never declare a provides: path inside \$AI_OS_HOME"
   fi
 else
-  warn "ai-os-plugin not found — plugin contract not checked"
+  warn "ai-os-adapter not found — adapter contract not checked"
+fi
+if [ -x "$SELF_DIR/ai-os-plugin" ]; then
+  cout=$("$SELF_DIR/ai-os-plugin" doctor 2>&1); crc=$?
+  cn=$(printf '%s' "$cout" | grep -c '^  ok ' || true)
+  if [ "$crc" -eq 0 ]; then
+    if [ "$cn" -eq 0 ]; then
+      ok "no capabilities declared  ${D}(plugins/ is empty by design)${X}"
+    else
+      ok "$cn capability manifest(s) valid"
+      printf '%s' "$cout" | grep 'WARN' | sed "s|^  WARN  |        ${D}|;s|\$|${X}|"
+    fi
+  else
+    fail "capability manifest(s) violate the contract:"
+    printf '%s' "$cout" | grep -E 'FAIL' | sed 's/^/        /'
+    note "a capability is client-agnostic; naming a client belongs in adapters/"
+  fi
+else
+  warn "ai-os-plugin not found — capability contract not checked"
 fi
 
 # ====================================================================================
@@ -397,8 +440,8 @@ if [ -x "$SELF_DIR/ai-os-privacy-scan" ]; then
     fail "public repo contains data that must not be published:"
     echo "$out" | sed 's/^/        /'
   fi
-  [ -f "$AI_OS_HOME/config/privacy-terms.txt" ] || \
-    note "generic patterns only — add your terms to config/privacy-terms.txt for a real check"
+  [ -f "$AI_OS_HOME/system/policies/privacy-terms.txt" ] || \
+    note "generic patterns only — add your terms to system/policies/privacy-terms.txt for a real check"
 else
   warn "ai-os-privacy-scan not found — public repo not checked for private data"
 fi

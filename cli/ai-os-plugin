@@ -1,187 +1,111 @@
 #!/usr/bin/env python3
-"""ai-os-plugin — the plugin registry. Reads manifests; enforces the contract.
+"""ai-os-plugin — the capability registry. Reads manifests; enforces the contract.
 
-  ai-os plugin list              what is declared, what is installed, what gets written
+  ai-os plugin list              what capabilities exist, and whether each is available
   ai-os plugin doctor            validate every manifest against schemas/plugin.schema.md
-  ai-os plugin enable  <id>      not wired yet — see below
-  ai-os plugin disable <id>      not wired yet — see below
+  ai-os plugin invoke <id>.<op>  not wired yet — see below
 
-Core resolves, plugins integrate: a plugin declares paths only inside its OWN client's
-config domain, and never inside $AI_OS_HOME. That rule is mechanically checkable, so it is
-checked here and failed hard.
+A CAPABILITY is what AI-OS can do. An ADAPTER is how one AI client reaches AI-OS and lives
+in adapters/ — see cli/ai-os-adapter. Until 2026-08-31 those two meanings were inverted;
+task AIOS-005 resolved it.
 
-Zero dependencies: stdlib only, like every other tool in this system. That means a small
-strict parser for the manifest subset rather than pyyaml — it REJECTS anything it does not
-understand instead of guessing, because a silently mis-parsed manifest is worse than an
-unreadable one.
+Core owns the mechanism: capability, availability, authority, invocation, result,
+verification, persistence. It never learns the capability's domain — not what a PRD is,
+not what a browser engine is. That boundary is mechanically checked here: a manifest that
+names an AI client is rejected, because naming one means the capability is doing an
+adapter's job.
+
+Zero dependencies: stdlib only. The manifest parser is the one ai-os-adapter already owns
+— both contracts use the same small YAML subset, and two parsers would drift.
 """
-import os, re, sys
+import importlib.util, json, os, re, subprocess, sys, time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 # Overridable so the test suite can point at fixtures instead of the real registry.
 PLUGINS = Path(os.environ.get("AI_OS_PLUGINS", REPO / "plugins"))
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
-CORE_CONTRACT_RANGE = (1, 1)          # this core supports contract 1..1
-CORE_RESOURCES = {"rules.render", "skills.list", "workspace.memory.path",
-                  "workspace.knowledge.path", "policies.list"}
-# Integration points core delegates to a plugin. Core defines the point and owns the
-# behaviour; the plugin supplies only its own client's facts. A plugin may not invent one.
-CORE_INTEGRATIONS = {"memory.mounts"}
-CLIENT_DOMAIN = re.compile(r"^~?/?\.?(claude|codex|gemini|cursor|config/opencode|opencode)")
+CORE_CONTRACT_RANGE = (1, 1)
+
+# The whole ladder. Ordered: an operation may not exceed its capability's rung.
+AUTHORITY = ["observe", "propose", "execute", "execute-with-approval", "autonomous"]
+# Nothing grants this yet. A manifest asking for it is refused, never quietly downgraded.
+UNGRANTABLE = {"autonomous"}
+# A capability that names a client is doing an adapter's job. Checked, not trusted.
+CLIENT_NAMES = re.compile(r"\b(claude|claude-code|codex|cursor|gemini|opencode|chatgpt)\b", re.I)
+# A dependency names a capability by id. Never a path — that is the whole point of the shape.
+CAP_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 G, Y, R, B, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[34m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
     G = Y = R = B = D = X = ""
 
 
-class ManifestError(Exception):
-    pass
+AUTHORITY_FILE = AI_OS_HOME / "system" / "config" / "authority.yaml"
 
 
-# ------------------------------------------------------------------ parser
-def _scalar(tok):
-    t = tok.strip()
-    if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'":
-        return t[1:-1]
-    low = t.lower()
-    if low in ("null", "~", ""):
-        return None
-    if low == "true":
-        return True
-    if low == "false":
-        return False
-    if re.fullmatch(r"-?\d+", t):
-        return int(t)
-    return t
+def die(msg):
+    print(f"  {R}ERROR{X} {msg}", file=sys.stderr)
+    sys.exit(2)
 
 
-def _split_flow(body):
-    """Split a flow collection on top-level commas only."""
-    out, depth, cur, quote = [], 0, "", None
-    for ch in body:
-        if quote:
-            cur += ch
-            if ch == quote:
-                quote = None
-            continue
-        if ch in "\"'":
-            quote = ch; cur += ch; continue
-        if ch in "{[":
-            depth += 1
-        elif ch in "}]":
-            depth -= 1
-        if ch == "," and depth == 0:
-            out.append(cur); cur = ""
-        else:
-            cur += ch
-    if cur.strip():
-        out.append(cur)
-    return out
+def granted_rung(cap_id):
+    """What the USER has granted this capability. Absent file or key => the floor.
+
+    Core reads a grant; it never infers one. A capability asking for more than it was
+    granted is refused, which is the whole reason `invoke` may exist at all.
+    """
+    default, per_cap = "observe", {}
+    if AUTHORITY_FILE.exists():
+        section = False
+        for line in AUTHORITY_FILE.read_text().splitlines():
+            if line.startswith("#") or not line.strip():
+                continue
+            if re.match(r"^default:", line):
+                default = line.split(":", 1)[1].split("#")[0].strip() or "observe"
+            elif re.match(r"^capabilities:", line):
+                section = True
+                rest = line.split(":", 1)[1].strip()
+                if rest and rest != "{}":
+                    section = False
+            elif section and re.match(r"^\s+\S+\s*:", line):
+                k, _, v = line.strip().partition(":")
+                v = v.split("#")[0].strip()
+                if v:
+                    per_cap[k.strip()] = v
+    rung = per_cap.get(cap_id, default)
+    # An unknown rung, or one this core cannot grant at all, falls back to the floor.
+    # Honouring `autonomous` here would hand out every rung from a single line of config —
+    # the precise bypass the ladder exists to make impossible.
+    if rung not in AUTHORITY or rung in UNGRANTABLE:
+        return "observe"
+    return rung
 
 
-def _flow(tok):
-    t = tok.strip()
-    if t.startswith("{") and t.endswith("}"):
-        d = {}
-        for part in _split_flow(t[1:-1]):
-            if ":" not in part:
-                raise ManifestError(f"flow map entry without a key: {part.strip()!r}")
-            k, _, v = part.partition(":")
-            d[k.strip()] = _flow(v)
-        return d
-    if t.startswith("[") and t.endswith("]"):
-        return [_flow(p) for p in _split_flow(t[1:-1])]
-    if t.startswith(("{", "[")) or t.endswith(("}", "]")):
-        raise ManifestError(f"unbalanced flow collection: {t!r}")
-    return _scalar(t)
+def _load_parser():
+    """Borrow the manifest parser from ai-os-adapter — one parser, not two."""
+    src = Path(__file__).resolve().parent / "ai-os-adapter"
+    if not src.exists():
+        raise SystemExit("ai-os-plugin: cli/ai-os-adapter is missing; it owns the manifest parser")
+    spec = importlib.util.spec_from_loader("_ai_os_adapter",
+                                           importlib.machinery.SourceFileLoader("_ai_os_adapter", str(src)))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.parse, mod.ManifestError
 
 
-def parse(text, where="manifest"):
-    """Indent-based parser for the manifest subset. Raises on anything else."""
-    lines = text.splitlines()
-    i = 0
+parse, ManifestError = _load_parser()
 
-    def block(indent):
-        nonlocal i
-        out = {}
-        while i < len(lines):
-            raw = lines[i]
-            if not raw.strip() or raw.lstrip().startswith("#"):
-                i += 1; continue
-            ind = len(raw) - len(raw.lstrip())
-            if ind < indent:
-                return out
-            if ind > indent:
-                raise ManifestError(f"{where}: unexpected indent at line {i+1}")
-            line = raw.strip()
-            if ":" not in line:
-                raise ManifestError(f"{where}: not a key at line {i+1}: {line!r}")
-            key, _, rest = line.partition(":")
-            key = key.strip()
-            rest = rest.strip()
-            i += 1
-            if rest in (">", "|", ">-", "|-"):          # folded/literal scalar
-                buf, child = [], None
-                while i < len(lines):
-                    nxt = lines[i]
-                    if not nxt.strip():
-                        buf.append(""); i += 1; continue
-                    ci = len(nxt) - len(nxt.lstrip())
-                    if ci <= indent:
-                        break
-                    child = ci if child is None else child
-                    buf.append(nxt[child:]); i += 1
-                joined = " ".join(x.strip() for x in buf if x.strip())
-                out[key] = joined
-            elif rest == "":                             # nested block, or a block list
-                j = i
-                while j < len(lines) and (not lines[j].strip()
-                                          or lines[j].lstrip().startswith("#")):
-                    j += 1
-                if j < len(lines) and lines[j].lstrip().startswith("- ") \
-                        and (len(lines[j]) - len(lines[j].lstrip())) > indent:
-                    items, li = [], len(lines[j]) - len(lines[j].lstrip())
-                    i = j
-                    while i < len(lines):
-                        cur = lines[i]
-                        if not cur.strip() or cur.lstrip().startswith("#"):
-                            i += 1; continue
-                        ci = len(cur) - len(cur.lstrip())
-                        if ci < li or not cur.lstrip().startswith("- "):
-                            break
-                        items.append(_flow(cur.lstrip()[2:].split("#", 1)[0].strip()))
-                        i += 1
-                    out[key] = items
-                else:
-                    out[key] = block(indent + 2)
-            else:
-                # An inline comment is only a comment outside quotes and flow collections.
-                if not rest.startswith(("{", "[", '"', "'")):
-                    rest = rest.split("#", 1)[0].strip()
-                elif rest.startswith(("{", "[")):
-                    close = "}" if rest[0] == "{" else "]"
-                    cut = rest.rfind(close)
-                    if cut == -1:
-                        raise ManifestError(f"{where}: unterminated flow at line {i}")
-                    rest = rest[:cut + 1]
-                out[key] = _flow(rest)
-        return out
-
-    doc = block(0)
-    if i < len(lines) and any(l.strip() and not l.lstrip().startswith("#") for l in lines[i:]):
-        raise ManifestError(f"{where}: trailing content the parser could not place")
-    return doc
+REQUIRED = ("plugin", "name", "contract", "capability")
 
 
-# ------------------------------------------------------------------ validation
-REQUIRED = ("plugin", "name", "contract", "client", "provides", "writes")
+def validate(pid, m, raw="", known=None):
+    """Return (errors, warnings). Never raises; never executes anything.
 
-
-def validate(pid, m):
-    """Return (errors, warnings). Never raises; never touches the filesystem."""
+    `known` is the set of capability ids present in the registry, or None to skip the
+    availability check entirely (a caller validating one manifest in isolation).
+    """
     err, warn = [], []
-
     for k in REQUIRED:
         if k not in m:
             err.append(f"missing required key: {k}")
@@ -198,91 +122,95 @@ def validate(pid, m):
     elif not (lo <= c <= hi):
         err.append(f"requires contract {c}; this core supports {lo}..{hi} — DISABLED")
 
-    prov = m["provides"] if isinstance(m["provides"], dict) else {}
-    if not isinstance(m["provides"], dict):
-        err.append("provides: must be a map")
+    cap = m["capability"] if isinstance(m["capability"], dict) else {}
+    if not isinstance(m["capability"], dict):
+        err.append("capability: must be a map")
+        return err, warn
 
-    for cap, spec in prov.items():
+    cap_auth = cap.get("authority")
+    if cap_auth is None:
+        err.append("capability.authority is required — an unstated rung is not a default")
+    elif cap_auth not in AUTHORITY:
+        err.append(f"capability.authority {cap_auth!r} is not a rung: {' -> '.join(AUTHORITY)}")
+    elif cap_auth in UNGRANTABLE:
+        err.append(f"capability.authority {cap_auth!r} cannot be granted by this core — "
+                   f"refused rather than silently downgraded")
+
+    ops = m.get("operations") or {}
+    if ops and not isinstance(ops, dict):
+        err.append("operations: must be a map")
+        ops = {}
+    if not ops:
+        warn.append("declares no operations — discoverable, but there is nothing to invoke")
+
+    for name, spec in (ops.items() if isinstance(ops, dict) else []):
         if not isinstance(spec, dict):
-            err.append(f"provides.{cap}: must be a map with path/format/verified"); continue
-        for field in ("path", "format", "verified"):
+            err.append(f"operations.{name}: must be a map"); continue
+        for field in ("summary", "command"):
             if field not in spec:
-                err.append(f"provides.{cap}: missing required field {field!r}")
-        p = spec.get("path")
-        if p:
-            # THE HARD RULE: never inside the private workspace.
-            expanded = Path(os.path.expanduser(str(p)))
-            try:
-                resolved = expanded if expanded.is_absolute() else (Path.home() / str(p))
-                inside = str(resolved).startswith(str(AI_OS_HOME) + os.sep) or \
-                         str(resolved) == str(AI_OS_HOME)
-            except Exception:
-                inside = False
-            if inside:
-                err.append(f"provides.{cap}.path resolves INSIDE $AI_OS_HOME ({p}) — "
-                           f"a plugin may never declare private workspace paths")
-            elif not CLIENT_DOMAIN.match(str(p).replace(str(Path.home()), "~").lstrip("~/")
-                                         .join(["", ""]) or str(p)):
-                pass  # domain shape is advisory; the hard rule above is the enforced one
+                err.append(f"operations.{name}: missing required field {field!r}")
+        cmd = str(spec.get("command") or "")
+        # A bare filename inside the capability's own directory. Never a path, never an escape.
+        if cmd and ("/" in cmd or cmd.startswith(".")):
+            err.append(f"operations.{name}.command must be a bare filename inside "
+                       f"plugins/{pid}/ — got {cmd!r}")
+        ver = str(spec.get("verify") or "")
+        if ver and ("/" in ver or ver.startswith(".")):
+            err.append(f"operations.{name}.verify must be a bare filename inside "
+                       f"plugins/{pid}/ — got {ver!r}")
+        if not ver:
+            warn.append(f"operations.{name} has no verify: — its result can only ever be "
+                        f"'executed', never 'verified'")
+        idem = spec.get("idempotent", False)
+        if not isinstance(idem, bool):
+            err.append(f"operations.{name}.idempotent must be true or false, got {idem!r}")
+        oa = spec.get("authority", cap_auth)
+        if oa not in AUTHORITY:
+            err.append(f"operations.{name}.authority {oa!r} is not a rung")
+        elif cap_auth in AUTHORITY and AUTHORITY.index(oa) > AUTHORITY.index(cap_auth):
+            err.append(f"operations.{name}.authority {oa!r} exceeds capability.authority "
+                       f"{cap_auth!r}")
+        elif oa in UNGRANTABLE:
+            err.append(f"operations.{name}.authority {oa!r} cannot be granted by this core")
 
-    writes = m["writes"] if isinstance(m["writes"], list) else []
-    if not isinstance(m["writes"], list):
-        err.append("writes: must be a list")
-    for w in writes:
-        if w not in prov:
-            err.append(f"writes lists {w!r} which is not in provides")
-        elif prov[w].get("verified") is not True:
-            err.append(f"writes lists {w!r} but provides.{w}.verified is "
-                       f"{prov[w].get('verified')!r} — core MUST NOT write an unverified "
-                       f"capability")
-        elif prov[w].get("writable") is False:
-            err.append(f"writes lists {w!r} but it is marked writable:false")
+    # Dependencies. A capability may name other capabilities it needs, by id and only by
+    # id. No resolver exists and none is needed yet: what must be impossible is a
+    # dependency that quietly resolves to a filesystem path.
+    req = m.get("requires")
+    if req is not None:
+        if not isinstance(req, list):
+            err.append("requires: must be a list of capability ids")
+        else:
+            for dep in req:
+                d = str(dep)
+                if "/" in d or ".." in d or d.startswith("."):
+                    err.append(f"requires: {d!r} looks like a path — a dependency names a "
+                               f"capability by id, never a location")
+                elif not CAP_ID.match(d):
+                    err.append(f"requires: {d!r} is not a valid capability id "
+                               f"(lowercase, digits and dashes)")
+                elif d == pid:
+                    err.append(f"requires: {d!r} is itself")
+                elif known is not None and d not in known:
+                    # Declared before the thing it needs is installed is legitimate, so this
+                    # stays visible rather than fatal — the same treatment verified:false gets.
+                    warn.append(f"requires {d!r}, which is not in the registry — the "
+                                f"capability is declared but its dependency is unavailable")
 
-    for r in (m.get("requires") or []):
-        if r not in CORE_RESOURCES:
-            err.append(f"requires unknown core resource: {r!r}")
-
-    integ = m.get("integrates")
-    if integ is not None and not isinstance(integ, dict):
-        err.append("integrates: must be a map")
-    elif integ:
-        for point, spec in integ.items():
-            if point not in CORE_INTEGRATIONS:
-                err.append(f"integrates unknown core integration point: {point!r} — "
-                           f"core defines these; a plugin may not invent one")
-                continue
-            if not isinstance(spec, dict):
-                err.append(f"integrates.{point}: must be a map with "
-                           f"command/format/verified"); continue
-            for field in ("command", "format", "verified"):
-                if field not in spec:
-                    err.append(f"integrates.{point}: missing required field {field!r}")
-            cmd = str(spec.get("command") or "")
-            if cmd and ("/" in cmd or cmd.startswith(".")):
-                err.append(f"integrates.{point}.command must be a bare filename inside "
-                           f"adapters/{pid}/ — got {cmd!r}")
-            if spec.get("verified") is not True:
-                warn.append(f"integrates.{point} verified={spec.get('verified')!r} — core "
-                            f"will not call it (a gap stays visible rather than guessed at)")
-
-    client = m.get("client") or {}
-    if "consumer_verified" not in client:
-        warn.append("client.consumer_verified not declared — assumed false")
-    elif client.get("consumer_verified") is not True:
-        warn.append("consumer not verified — paths are confirmed, reading is not observed")
-
-    for cap, spec in prov.items():
-        if isinstance(spec, dict) and spec.get("verified") is not True and cap not in writes:
-            warn.append(f"provides.{cap} verified={spec.get('verified')!r} — not written "
-                        f"(correct: a gap stays visible rather than being guessed at)")
+    # The Core/capability boundary, mechanically enforced.
+    hit = CLIENT_NAMES.search(raw)
+    if hit:
+        err.append(f"names an AI client ({hit.group(0)!r}) — a capability is client-agnostic; "
+                   f"client integration belongs in adapters/")
     return err, warn
 
 
-def installed(m):
-    for p in (m.get("client") or {}).get("detect") or []:
-        if Path(os.path.expanduser(str(p))).exists():
-            return True
-    return False
+def available(m):
+    """detect: absent means 'no machine precondition', which is available."""
+    det = (m.get("capability") or {}).get("detect")
+    if not det:
+        return True
+    return any(Path(os.path.expanduser(str(p))).exists() for p in det)
 
 
 def load_all():
@@ -291,75 +219,175 @@ def load_all():
         return out
     for d in sorted(PLUGINS.iterdir()):
         f = d / "plugin.yaml"
-        if not f.is_dir() and f.exists():
+        if d.is_dir() and f.exists():
+            raw = f.read_text()
             try:
-                out.append((d.name, parse(f.read_text(), f"plugins/{d.name}"), None))
+                out.append((d.name, parse(raw, f"plugins/{d.name}"), raw, None))
             except ManifestError as e:
-                out.append((d.name, None, str(e)))
+                out.append((d.name, None, raw, str(e)))
     return out
 
 
-# ------------------------------------------------------------------ commands
 def cmd_list(_):
     rows = load_all()
     if not rows:
-        print(f"\n  no plugins in {PLUGINS}\n"); return 0
-    print(f"\n  {B}plugins{X}  {D}{PLUGINS}{X}\n")
-    print(f"  {'ID':<14} {'INSTALLED':<11} {'CONTRACT':<9} {'WRITES':<16} CONSUMER")
-    for pid, m, e in rows:
+        print(f"\n  no capabilities in {PLUGINS}")
+        print(f"  {D}empty by design — see {PLUGINS}/README.md{X}\n")
+        return 0
+    print(f"\n  {B}capabilities{X}  {D}{PLUGINS}{X}\n")
+    print(f"  {'ID':<20} {'AVAILABLE':<11} {'AUTHORITY':<22} {'REQUIRES':<24} OPERATIONS")
+    for pid, m, _raw, e in rows:
         if e:
-            print(f"  {pid:<14} {R}unreadable manifest{X}"); continue
-        inst = f"{G}yes{X}" if installed(m) else f"{D}no{X}"
-        w = ", ".join(m.get("writes") or []) or f"{D}nothing{X}"
-        cv = (m.get("client") or {}).get("consumer_verified")
-        cvs = f"{G}verified{X}" if cv is True else f"{Y}unverified{X}"
-        print(f"  {pid:<14} {inst:<20} {m['contract']:<9} {w:<16} {cvs}")
-    print(f"\n  {D}'writes: nothing' is a valid outcome — see each manifest's notes.{X}")
-    print(f"  {D}unverified consumer = path confirmed, reading not observed.{X}\n")
+            print(f"  {pid:<20} {R}unreadable manifest{X}"); continue
+        av = f"{G}yes{X}" if available(m) else f"{D}no{X}"
+        auth = (m.get("capability") or {}).get("authority", "?")
+        ops = ", ".join((m.get("operations") or {}).keys()) or f"{D}none{X}"
+        req = ", ".join(str(x) for x in (m.get("requires") or [])) or f"{D}nothing{X}"
+        print(f"  {pid:<20} {av:<20} {auth:<22} {req:<24} {ops}")
+    print(f"\n  {D}available != allowed != executed != verified — see "
+          f"schemas/plugin.schema.md{X}\n")
     return 0
 
 
 def cmd_doctor(_):
     rows = load_all()
+    known = {pid for pid, m, _r, e in rows if not e}
     fails = warns = 0
-    print(f"\n  {B}plugin doctor{X}  {D}contract range {CORE_CONTRACT_RANGE[0]}.."
-          f"{CORE_CONTRACT_RANGE[1]} · workspace {AI_OS_HOME}{X}\n")
-    for pid, m, e in rows:
+    print(f"\n  {B}capability doctor{X}  {D}contract range {CORE_CONTRACT_RANGE[0]}.."
+          f"{CORE_CONTRACT_RANGE[1]} · registry {PLUGINS}{X}\n")
+    if not rows:
+        print(f"  {D}no capabilities declared — nothing to validate (empty by design){X}\n")
+        return 0
+    for pid, m, raw, e in rows:
         if e:
             print(f"  {R}FAIL{X}  {pid}: {e}"); fails += 1; continue
-        errs, ws = validate(pid, m)
+        errs, ws = validate(pid, m, raw, known)
         for x in errs:
             print(f"  {R}FAIL{X}  {pid}: {x}"); fails += 1
         for x in ws:
             print(f"  {Y}WARN{X}  {pid}: {x}"); warns += 1
         if not errs:
             print(f"  {G}ok{X}    {pid}: manifest valid"
-                  f"{'' if installed(m) else f'  {D}(client not installed){X}'}")
+                  f"{'' if available(m) else f'  {D}(not available on this machine){X}'}")
     print()
     if fails:
         print(f"  {R}{fails} failure(s){X}, {Y}{warns} warning(s){X}\n")
     else:
-        print(f"  {G}all manifests valid{X}"
+        print(f"  {G}all capability manifests valid{X}"
               f"{f', {Y}{warns} warning(s){X}' if warns else ''}\n")
     return fails
 
 
-def cmd_not_wired(args):
-    verb = args[0] if args else "enable"
-    print(f"\n  {Y}not wired yet.{X} `ai-os plugin {verb}` would set a registry flag that "
-          f"nothing reads:\n"
-          f"  ai-sync still resolves clients from its own hardcoded CLIENTS table, not from\n"
-          f"  these manifests. Wiring that is Step 8 and needs explicit approval.\n\n"
-          f"  Writing a flag now would create state nothing consumes — the exact defect\n"
-          f"  this migration already found once. Refusing instead.\n")
-    return 2
+def cmd_invoke(args):
+    """available -> allowed -> invocable -> executed -> verified. In that order, always.
+
+    Each arrow is a separate refusal point. Collapsing any two of them is how a system
+    ends up reporting success for something that never happened, or performing something
+    it was never granted.
+    """
+    if not args or "." not in args[0]:
+        die("usage: ai-os plugin invoke <capability>.<operation> [--json '<args>'] [--dry-run]")
+    cap_id, _, op_name = args[0].partition(".")
+    payload, dry = "{}", False
+    rest = args[1:]
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--json" and i + 1 < len(rest):
+            payload = rest[i + 1]; i += 2
+        elif rest[i] == "--dry-run":
+            dry = True; i += 1
+        else:
+            die(f"unknown argument {rest[i]!r}")
+
+    # --- available -------------------------------------------------------------------
+    d = PLUGINS / cap_id
+    f = d / "plugin.yaml"
+    if not f.exists():
+        print(f"  {R}unavailable{X}  no capability {cap_id!r} in {PLUGINS}"); return 4
+    raw = f.read_text()
+    try:
+        m = parse(raw, f"plugins/{cap_id}")
+    except ManifestError as e:
+        print(f"  {R}unavailable{X}  {cap_id}: unreadable manifest — {e}"); return 4
+    errs, _ = validate(cap_id, m, raw)
+    if errs:
+        print(f"  {R}unavailable{X}  {cap_id}: manifest invalid — {errs[0]}"); return 4
+    if not available(m):
+        print(f"  {R}unavailable{X}  {cap_id}: its detect: paths are not present"); return 4
+    op = (m.get("operations") or {}).get(op_name)
+    if not isinstance(op, dict):
+        print(f"  {R}unavailable{X}  {cap_id} declares no operation {op_name!r}"); return 4
+
+    # --- allowed ---------------------------------------------------------------------
+    need = op.get("authority", (m.get("capability") or {}).get("authority"))
+    have = granted_rung(cap_id)
+    if AUTHORITY.index(need) > AUTHORITY.index(have):
+        print(f"  {R}denied{X}  {cap_id}.{op_name} needs {need!r}; granted {have!r}")
+        print(f"  {D}grant it in {AUTHORITY_FILE} under capabilities: — never with a flag{X}")
+        return 5
+    if need == "execute-with-approval":
+        if not sys.stdin.isatty():
+            print(f"  {R}denied{X}  {cap_id}.{op_name} needs approval and there is no terminal")
+            return 5
+        print(f"  {Y}approval required{X}  {cap_id}.{op_name} — {op.get('summary','')}")
+        if input("  type 'yes' to allow this one action: ").strip() != "yes":
+            print(f"  {R}denied{X}  not approved"); return 5
+
+    # --- invocable -------------------------------------------------------------------
+    exe = d / str(op.get("command"))
+    if not exe.exists() or not os.access(exe, os.X_OK):
+        print(f"  {R}not invocable{X}  {cap_id}.{op_name}: {op.get('command')!r} is missing "
+              f"or not executable"); return 6
+    if dry:
+        print(f"  {G}invocable{X}  {cap_id}.{op_name}  {D}(dry run — nothing executed){X}")
+        print(f"  needs {need!r} · granted {have!r} · idempotent={bool(op.get('idempotent', False))}")
+        return 0
+
+    # --- executed --------------------------------------------------------------------
+    started = time.time()
+    try:
+        proc = subprocess.run([str(exe), op_name], input=payload, capture_output=True,
+                              text=True, cwd=str(d), timeout=300)
+    except subprocess.TimeoutExpired:
+        print(f"  {R}failed{X}  {cap_id}.{op_name} timed out"); return 7
+    out = (proc.stdout or "").strip()
+    if proc.returncode != 0:
+        print(f"  {R}failed{X}  {cap_id}.{op_name} exited {proc.returncode}")
+        if proc.stderr.strip():
+            print("\n".join("        " + l for l in proc.stderr.strip().splitlines()[:8]))
+        return 7
+    print(f"  {G}executed{X}  {cap_id}.{op_name}  {D}({time.time()-started:.1f}s){X}")
+    if out:
+        print("\n".join("        " + l for l in out.splitlines()[:20]))
+
+    # --- verified --------------------------------------------------------------------
+    # The one rule the whole contract exists for: a capability's own exit code is NOT
+    # verification. Only a separate deterministic check may promote executed -> verified.
+    ver = op.get("verify")
+    if not ver:
+        print(f"  {Y}not verified{X}  this operation declares no verify: — its result is "
+              f"'executed', and must not be reported as verified")
+        return 0
+    vexe = d / str(ver)
+    if not vexe.exists() or not os.access(vexe, os.X_OK):
+        print(f"  {Y}not verified{X}  verify command {ver!r} is missing or not executable")
+        return 0
+    v = subprocess.run([str(vexe), op_name], input=out, capture_output=True, text=True,
+                       cwd=str(d), timeout=120)
+    if v.returncode == 0:
+        print(f"  {G}verified{X}  deterministic check passed")
+        return 0
+    print(f"  {R}NOT verified{X}  it ran, but the check did not confirm it")
+    if v.stdout.strip():
+        print("\n".join("        " + l for l in v.stdout.strip().splitlines()[:8]))
+    return 8
 
 
 CMDS = {"list": cmd_list, "doctor": cmd_doctor}
 if __name__ == "__main__":
     a = sys.argv[1:] or ["list"]
-    if a[0] in ("enable", "disable"):
-        sys.exit(cmd_not_wired(a))
+    if a[0] == "invoke":
+        sys.exit(cmd_invoke(a[1:]))
     if a[0] not in CMDS:
         print(__doc__); sys.exit(2)
     sys.exit(CMDS[a[0]](a[1:]))

@@ -1,5 +1,5 @@
 # OpenAI Codex CLI adapter. Transcribed from observed configuration.
-plugin: codex
+adapter: codex
 name: OpenAI Codex CLI
 contract: 1
 

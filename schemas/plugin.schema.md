@@ -1,170 +1,157 @@
-# Plugin contract — version 1
+# Capability (plugin) contract — version 1
 
-An AI-OS plugin adapts **one AI client** to AI-OS. It is code. `$AI_OS_HOME` is the
-user's data. The contract exists to keep those two facts from blurring.
+An AI-OS **plugin** is a capability: something AI-OS can *do*. It answers
+*"what can AI-OS do?"* — never *"how does this client reach AI-OS?"*, which is an
+**adapter** (`schemas/adapter.schema.md`).
 
-> **Core resolves. Plugins integrate.**
-> A plugin never owns, never declares, and never reaches into `$AI_OS_HOME` on its own.
+> Until 2026-08-31 this filename described client adapters. The two meanings had inverted;
+> the inversion was recorded as deferred in `AIOS-001/checkpoint.md` §13.1 and resolved by
+> task AIOS-005. `plugins/` now holds capabilities, `adapters/` holds client integrations.
 
-This schema describes what five already-installed clients do today. It was derived from
-observed configuration, not designed in advance — `~/.ai/capabilities.yaml` had been
-recording exactly this since 2026-08-30, and this file promotes that record from
-documentation into a checkable contract.
+**Core owns the mechanism; the capability owns the domain.** Core understands
+`capability · availability · authority · invocation · result · verification · persistence`
+and nothing else. It must never learn what a PRD is, what a browser engine is, or what a
+deployment provider is. Those belong inside a capability and stay there.
+
+## Status
+
+**No capability ships today, and `plugins/` is empty by design.** This contract exists so
+the first one has a shape to satisfy — not as a promise that one is coming. Discovery and
+validation are implemented (`ai-os plugin list|doctor`). **Invocation is deliberately not
+wired**: an invoke path with no capability to invoke would be machinery nothing consumes,
+which is the defect this repository has already refused once (`ai-os adapter enable`).
 
 ## File
 
-One manifest per plugin: `plugins/<id>/plugin.yaml`.
+One manifest per capability: `plugins/<id>/plugin.yaml`.
 
 ```yaml
-plugin: claude-code        # stable id — MUST equal the directory name
-name: Claude Code          # human label
-contract: 1                # the AI-OS plugin contract version this manifest targets
+plugin: github                 # stable id — MUST equal the directory name
+name: GitHub                   # human label
+contract: 1                    # the capability contract version this manifest targets
 
-client:
-  detect: [~/.local/bin/claude, ~/.claude/]   # any path present ⇒ client installed
-  version_cmd: claude --version               # optional; version is OBSERVED, never declared
-  consumer_verified: true                     # see below
+capability:
+  detect: [...]                # any path present => available on this machine (optional)
+  authority: propose           # the HIGHEST rung any operation here may request
 
-provides: { ... }          # capabilities this plugin can write, in ITS client's domain
-requires: [ ... ]          # core resources it needs; core resolves these
-enforces: [ ... ]          # core policies this plugin implements
+requires: [browser, filesystem]  # other capabilities this one needs. Optional.
+
+operations:
+  pull_request:
+    summary: open a pull request
+    command: run-pull-request  # a bare filename inside plugins/<id>/ — never a path
+    authority: propose         # may not exceed capability.authority
+    idempotent: false          # may a failed run be retried automatically? Default false.
+    verify: check-pull-request # a bare filename; exit 0 = verified. Optional.
 ```
 
-## Lifecycle — exactly three verbs
+## Domains are not capabilities
+
+A **domain** is an area of work that names outcome kinds and requires capabilities
+(`schemas/domain.schema.md`, `domains/`). A capability is something AI-OS can *do*. The
+arrow runs `Domain → requires → Capability` and never the reverse: a capability is never
+owned by, scoped to, or a member of a domain, and **it declares no domain of its own**.
+
+> A `capability.domain:` field existed here until 2026-09-01 as a free-form label. Core
+> never read it, nothing validated it, and exactly one manifest set it — so when Domain
+> became a real concept the field was **removed rather than renamed**, leaving one meaning
+> for the word instead of two. Nothing consumed it, so nothing had to migrate.
+
+## Idempotency and retry
+
+`idempotent:` answers one question: **may this operation be retried automatically after a
+failure?** It defaults to `false`, because the safe default for "may I do this again
+without asking" is no.
 
 ```
-detect()        is this client present on this machine?
-apply(bundle)   render core's bundle into this client's own config domain
-doctor()        report this plugin's health; change nothing
+idempotent: true    reading, navigating, observing   -> bounded automatic retry allowed
+idempotent: false   submitting, purchasing, deleting -> never retried automatically
 ```
 
-Nothing else. `install`, `uninstall`, `enable`, `disable` and `status` are **core registry
-operations**, not plugin behaviour:
+An operation that changes the world outside AI-OS is not idempotent, and a runner that
+retries one is the most dangerous thing this contract can permit. The field exists so that
+the answer is declared by the capability author rather than guessed by a caller.
 
-- installing = placing files core already has → core's job
-- enable/disable = a boolean in the registry → core's job
-- status = derivable from `detect()` + `doctor()` + registry state → a fourth verb that
-  returns only what three already know is surface without capability
+## Dependencies
 
-`rollback` is deliberately absent: core backs up by timestamp tag and restores every
-client at once. Per-plugin rollback would fragment a mechanism that already works.
-
-## Capabilities
-
-Every entry under `provides:` declares three fields. All three are required.
+`requires:` names other capabilities by id — nothing else. It is how one capability reaches
+another:
 
 ```yaml
-provides:
-  rules:  { path: ~/.claude/CLAUDE.md, format: markdown, verified: true }
-  skills: { path: ~/.claude/skills/, format: SKILL.md+frontmatter, verified: true }
+plugin: github
+requires: [browser, terminal, filesystem]
 ```
 
-| Field | Meaning |
+That is the whole mechanism. **There is no resolver**, no version range, no install
+order, and no transitive graph — none of those has a use yet, and a dependency graph with
+one capability in it is a graph nobody needs.
+
+What is checked, deterministically:
+
+| Rule | Verdict |
 |---|---|
-| `path` | where this capability is written, in the client's own domain |
-| `format` | what is written there |
-| `verified` | **has this path been confirmed by evidence?** |
+| `requires:` is a list of strings | error if not |
+| each id matches `^[a-z0-9][a-z0-9-]*$` | error if not |
+| an id contains `/`, `.` or `..` | **error** — a dependency names a capability, never a path |
+| a capability requires itself | error |
+| a required capability is not present in the registry | **warning**, not error |
 
-**`verified: false` ⇒ core MUST NOT write that capability.** Not "should warn" — must not.
-Evidence means a file the client itself created, the client's documented config schema, or
-a published standard. A guess is not evidence, and writing to a guessed path is worse than
-having a gap: it produces a file the client never reads and a user who believes it works.
+The last row is deliberate. A capability may legitimately be declared before the thing it
+needs is installed, so an unsatisfied dependency is reported and left visible rather than
+failing the manifest — the same treatment `verified: false` already gets. What must never
+happen is a dependency that silently resolves to a filesystem path.
 
-`verified: partial` is treated as `false` for writing. It records that something was
-observed without being confirmed writable.
+## Five states that are not the same state
 
-### `consumer_verified`
-
-Separate from, and weaker than, `verified`. `verified` says *we know where the file goes*.
-`consumer_verified` says *we have observed the client actually reading it*. A client can
-have a fully verified path and still be unverified as a consumer — Codex created an empty
-`AGENTS.md` itself, which proves it knows the path, not that it reads what we put there.
-
-Only `consumer_verified: true` may be described as behaviourally supported.
-
-## Path ownership — the hard rule
-
-A plugin may declare `provides:` paths **only inside its own client's configuration
-domain**:
+The whole point of the contract is that these never collapse into one boolean:
 
 ```
-~/.claude/   ~/.codex/   ~/.gemini/   ~/.cursor/   ~/.config/opencode/
+available    the capability exists and its detect: paths are present
+allowed      policy permits the requested authority rung
+invocable    available AND allowed AND the command file exists and is executable
+executed     the command ran and returned a structured result
+verified     a deterministic check confirmed the result — or none was claimed
 ```
 
-It may **never** declare a path under `$AI_OS_HOME`. `ai-os doctor` rejects any manifest
-whose `provides:` path resolves inside the private workspace — a hard failure, not a
-warning. This is mechanically checkable, so it is checked.
+`available` never implies `allowed`. `allowed` never implies `executed`. **`executed`
+never implies `verified`** — that is the rule the whole contract exists to enforce.
 
-When a plugin needs workspace data it asks, and core resolves:
+## Authority
 
-```yaml
-requires:
-  - rules.render            # the rendered canonical rules bundle
-  - skills.list             # the resolved skill set (user skills shadow public ones)
-  - workspace.memory.path   # a resolved path — a grant, not a filesystem license
-```
-
-## Integration points
-
-`provides:` covers what core **writes into** a client. Some core capabilities instead need
-one fact only the client's own plugin can supply. Those are declared under `integrates:`:
-
-```yaml
-integrates:
-  memory.mounts: { command: ai-memory-mounts, format: newline-paths, verified: true }
-```
-
-| Field | Meaning |
-|---|---|
-| `command` | a bare filename inside `adapters/<plugin>/` — never a path |
-| `format` | the contract of what it prints on stdout |
-| `verified` | same rule as `provides`: **not `true` ⇒ core MUST NOT call it** |
-
-**Core defines the integration points; a plugin may never invent one.** An unrecognized key
-under `integrates:` is a hard failure, exactly like an unknown `requires:` resource. The
-point exists so core keeps the capability and the plugin keeps only its client's facts:
+Every operation declares the rung it needs. The ladder is fixed:
 
 ```
-memory.mounts   plugin answers "where does my client keep memory directories?"
-                core decides what a healthy mount is, attaches it, and rescues
-                anything already there — for every client, identically
+observe  ->  propose  ->  execute  ->  execute-with-approval  ->  autonomous
 ```
 
-This is what lets one memory engine serve every client without a fork. Nothing in
-`cli/ai-os-memory` names a client, and any plugin that declares `memory.mounts` gets the
-whole engine. Today only `claude-code` declares it, because only Claude Code scopes memory
-by working directory — that is a fact about Claude Code, not a shape in core.
+An operation may never exceed its capability's `authority:`, and a capability may never
+exceed what policy grants. **`autonomous` is not implementable today** — nothing grants it,
+and a manifest requesting it is rejected rather than silently downgraded. Recording the
+rung now is what keeps a future automation layer from arriving as an `--auto` flag.
 
-### The honest limitation
+## Verification
 
-`workspace.memory.path` is a real filesystem grant. Claude Code's native memory tool opens
-and writes files itself; no wrapper can intermediate it. What the contract guarantees is
-that the grant is **declared in the manifest, scoped to one subtree, and listed by
-`doctor`** — visible, not invisible. Claiming more would be the kind of faked compatibility
-this schema exists to prevent. Narrowing it to per-project scope needs the memory schema
-and belongs to V0.2.
-
-## Enforcement
-
-```yaml
-enforces: [git]     # implements policies/git.yaml in this client's mechanism
-```
-
-A plugin *implements* a policy. It never restates one, never relaxes one, and never
-defines its own. The policy lives in `policies/`, client-agnostic; the plugin is one
-enforcement of it.
-
-## Compatibility
-
-Three versions move independently:
+`verify:` names a deterministic check. It is the mechanism that stops a capability
+reporting its own success:
 
 ```
-Core       0.1.x    supports a contract RANGE
-Contract   1        this schema
-Workspace  1        the ~/.ai-os layout
+invoke  ->  structured result  ->  verify (exit 0 = verified)  ->  verified | failed
 ```
 
-A plugin declaring `contract: 2` on a core supporting `1..1` is **disabled with an explicit
-reason**. It is never partially applied — a half-written `CLAUDE.md` is worse than none —
-and never silently upgraded, downgraded, or disabled. Breaking changes to this schema
-increment `contract`, and nothing else does.
+A capability with **no** `verify:` is valid — but its result is `executed`, never
+`verified`, and core must report it that way. A model asserting success is not
+verification and must never be recorded as one.
+
+## What a capability may not do
+
+- **Name a client.** No capability may contain `claude`, `codex`, `cursor`, `gemini` or
+  `opencode`. Client integration is an adapter's job. This is mechanically checked.
+- **Reach into `$AI_OS_HOME`.** A `command:` is a bare filename inside its own
+  `plugins/<id>/` directory — never a path, never an escape. Also checked.
+- **Invent an authority rung.** The five above are the whole ladder.
+- **Declare itself verified.** Only a `verify:` command's exit status does that.
+
+## Contract versioning
+
+A manifest declaring `contract: 2` on a core supporting `1..1` is **disabled with an
+explicit reason**, never partially honoured — the same rule the adapter contract uses.

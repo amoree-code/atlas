@@ -2,12 +2,12 @@
 """ai-sync — propagate the canonical AI environment to installed AI clients.
 
 Sources of truth:
-  rules   $AI_OS_HOME/rules/*.md
+  rules   $AI_OS_HOME/system/rules/*.md
   skills  <ai-os>/skills/*/SKILL.md   canonical bodies, with {{profile.*}}/{{client.*}}
-  clients <ai-os>/plugins/*/plugin.yaml   the registry — no client is hardcoded here
+  clients <ai-os>/adapters/*/adapter.yaml  the registry — no client is hardcoded here
 
 Which clients exist, where each writes, what it is allowed to write, and how its rules
-block is titled all come from the plugin manifests. A capability marked verified:false is
+block is titled all come from the adapter manifests. A surface marked verified:false is
 never written: writing to a guessed path produces a file the client never reads and a user
 who believes it works.
 
@@ -30,7 +30,7 @@ AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", HOME / ".ai-os"))
 # style, their employers — so they are read from there and never published. The record of
 # what was synced, the copies taken before each overwrite, and the auto-sync switch are
 # equally theirs. None of it belonged to the runtime layer that used to hold it.
-RULES = AI_OS_HOME / "rules"
+RULES = AI_OS_HOME / "system" / "rules"
 RUNTIME = AI_OS_HOME / "runtime"
 STATE = RUNTIME / "state" / "state.json"
 BACKUPS = RUNTIME / "backups"
@@ -46,7 +46,7 @@ LEGACY_DISABLED = AI / "sync" / "DISABLED"
 MARK_BEGIN = "<!-- ai-sync:generated -->"
 MARK_END = "<!-- ai-sync:end -->"
 
-PROFILE = AI_OS_HOME / "config" / "profile.yaml"
+PROFILE = AI_OS_HOME / "system" / "config" / "profile.yaml"
 
 
 def _find_repo():
@@ -58,20 +58,20 @@ def _find_repo():
     is looking at.
     """
     env = os.environ.get("AI_OS_REPO")
-    if env and (Path(env) / "plugins").is_dir():
+    if env and (Path(env) / "adapters").is_dir():
         return Path(env)
     here = Path(__file__).resolve().parent.parent
-    if (here / "plugins").is_dir():
+    if (here / "adapters").is_dir():
         return here
     raise SystemExit(
-        "ai-sync: cannot locate the AI OS repository (needed for the plugin registry).\n"
+        "ai-sync: cannot locate the AI OS repository (needed for the adapter registry).\n"
         "         Run it from inside the repository, or point AI_OS_REPO at one.")
 
 
 REPO = _find_repo()
-_pl = {"__file__": str(REPO / "cli" / "ai-os-plugin")}
-exec(compile((REPO / "cli" / "ai-os-plugin").read_text().split("if __name__")[0],
-             "ai-os-plugin", "exec"), _pl)
+_pl = {"__file__": str(REPO / "cli" / "ai-os-adapter")}
+exec(compile((REPO / "cli" / "ai-os-adapter").read_text().split("if __name__")[0],
+             "ai-os-adapter", "exec"), _pl)
 parse_manifest, validate_manifest = _pl["parse"], _pl["validate"]
 TOKEN = re.compile(r"\{\{\s*(profile|client)\.([a-z0-9_.]+)\s*\}\}", re.I)
 SKILLS = REPO / "skills"          # canonical skill bodies live in the public repo
@@ -102,15 +102,15 @@ def resolve(text, profile, conv):
 
 
 def load_registry():
-    """Build the client table from plugin manifests. Nothing about a client is hardcoded.
+    """Build the client table from adapter manifests. Nothing about a client is hardcoded.
 
-    Returns (writable, project_only). `writable` is keyed by each plugin's sync id, which
+    Returns (writable, project_only). `writable` is keyed by each adapter's sync id, which
     is its legacy_sync_id when it has one — the sync state and backup filenames predate the
     registry and are keyed on those names.
     """
     writable, project_only = {}, []
-    for d in sorted((REPO / "plugins").iterdir()):
-        f = d / "plugin.yaml"
+    for d in sorted((REPO / "adapters").iterdir()):
+        f = d / "adapter.yaml"
         if not f.exists():
             continue
         man = parse_manifest(f.read_text(), str(f))
@@ -119,13 +119,13 @@ def load_registry():
             say("SKIP", f"{d.name}: invalid manifest — {errs[0]}", "y"); continue
         conv = man.get("conventions") or {}
         writes = man.get("writes") or []
-        sid = conv.get("legacy_sync_id") or man["plugin"]
+        sid = conv.get("legacy_sync_id") or man["adapter"]
         if not writes:
-            project_only.append(man["plugin"]); continue
+            project_only.append(man["adapter"]); continue
         prov = man["provides"]
         # validate_manifest already refused any `writes` entry that is not verified:true.
         writable[sid] = {
-            "id": man["plugin"],
+            "id": man["adapter"],
             "dir": d,
             "rules": Path(os.path.expanduser(str(prov["rules"]["path"]))),
             "skills": Path(os.path.expanduser(str(prov["skills"]["path"]).rstrip("/"))),
@@ -153,12 +153,12 @@ def canonical_skills():
 
 def header(client, src_hash):
     return (f"{MARK_BEGIN}\n"
-            f"<!-- source: $AI_OS_HOME/rules/  |  hash: {src_hash}  |  client: {client} -->\n"
-            f"<!-- DO NOT EDIT INSIDE THE MARKERS. Edit $AI_OS_HOME/rules/*.md and run: ai-sync sync -->\n"
+            f"<!-- source: $AI_OS_HOME/system/rules/  |  hash: {src_hash}  |  client: {client} -->\n"
+            f"<!-- DO NOT EDIT INSIDE THE MARKERS. Edit $AI_OS_HOME/system/rules/*.md and run: ai-sync sync -->\n"
             f"<!-- Anything you write OUTSIDE the markers is yours and is preserved. -->\n")
 
 def render(client, rules, cfg=None):
-    """The generated block. Everything client-specific comes from the plugin manifest.
+    """The generated block. Everything client-specific comes from the adapter manifest.
 
     There is no branch on client identity here any more, and there must never be one:
     the moment core knows a client by name, that client is the architecture rather than an
@@ -169,7 +169,7 @@ def render(client, rules, cfg=None):
     conv = cfg.get("conv") or {}
     title = conv.get("rules_title") or "# Global rules (AGENTS.md)"
     body = [header(client, h), title, "",
-            "Canonical source: `$AI_OS_HOME/rules/`. Shared by every AI client on this machine.",
+            "Canonical source: `$AI_OS_HOME/system/rules/`. Shared by every AI client on this machine.",
             "", rules, ""]
     frag = conv.get("rules_fragment")
     if frag and cfg.get("dir"):
@@ -490,7 +490,7 @@ def write_manifest(rules, skills, st):
     lines += ["", "skills:"] + [f"  - {s}" for s in skills]
     lines += ["", "memory:", "  provider: files", "  root: ~/.ai-os",
               f"  shared_by: [{', '.join(list(CLIENTS) + PROJECT_ONLY)}]", "",
-              "# Resolved from <ai-os>/plugins/*/plugin.yaml — no client is hardcoded.",
+              "# Resolved from <ai-os>/adapters/*/adapter.yaml — no client is hardcoded.",
               "clients:"]
     for n in list(CLIENTS) + PROJECT_ONLY:
         rec = st["clients"].get(n, {})

@@ -1,5 +1,5 @@
 # opencode adapter. Project-channel only until the global path is confirmed on a machine.
-plugin: opencode
+adapter: opencode
 name: opencode
 contract: 1
 

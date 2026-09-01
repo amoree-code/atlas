@@ -6,7 +6,7 @@ policies/privacy-classification.yaml):
 
   credential   a value that grants access.      Generic shapes, built in.
   personal     a value that identifies someone. Generic shapes built in; the user's own
-               terms are read from $AI_OS_HOME/config/privacy-terms.txt, which is PRIVATE
+               terms are read from $AI_OS_HOME/system/policies/privacy-terms.txt, which is PRIVATE
                and never lives in this repository. A scanner that hardcoded a real name,
                email and employer would itself be the leak it is meant to prevent.
 
@@ -74,7 +74,7 @@ def load_allowlist():
 
 def load_user_terms():
     """The user's own identifying strings. Private, optional, never in this repository."""
-    f = AI_OS_HOME / "config" / "privacy-terms.txt"
+    f = AI_OS_HOME / "system" / "policies" / "privacy-terms.txt"
     if not f.exists():
         return None
     terms = []
@@ -147,7 +147,7 @@ def main(argv):
     if not quiet:
         print(f"\n  privacy scan  {root}")
         print(f"  {D}allowlist{X} {len(allow)} entries   "
-              f"{D}user terms{X} " + (f"{len(user_terms)} from {AI_OS_HOME}/config/privacy-terms.txt"
+              f"{D}user terms{X} " + (f"{len(user_terms)} from {AI_OS_HOME}/system/policies/privacy-terms.txt"
                                       if user_terms is not None else f"{Y}none{X}"))
 
     n_files = 0
@@ -189,7 +189,7 @@ def main(argv):
             print(f"  {colour}{cls.upper():<10}{X} {label:<28} {rel}:{line}  {D}{redact(match, cls)}{X}")
 
     if user_terms is None and not quiet:
-        print(f"\n  {Y}note{X} no {AI_OS_HOME}/config/privacy-terms.txt — generic patterns only.")
+        print(f"\n  {Y}note{X} no {AI_OS_HOME}/system/policies/privacy-terms.txt — generic patterns only.")
         print(f"       Names, handles, employers and private repo names are NOT being checked.")
 
     if not quiet:

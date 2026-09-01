@@ -1,0 +1,27 @@
+# A DOMAIN: an area of work. It names the outcome kinds this area recognizes and the
+# capabilities that delivering them needs — and nothing else. It is inert: no command, no
+# verifier, no provider, no authority, no ordering. See schemas/domain.schema.md.
+domain: software
+name: Software
+contract: 1
+
+# Capability ids only — ids, never paths. No resolver exists and none is needed.
+# Neither of these capabilities is built yet, so `ai-os domain doctor` reports a warning
+# rather than a failure: declaring a domain before its capabilities exist is legitimate,
+# the same treatment an unsatisfied capability dependency already gets.
+requires: [filesystem, terminal]
+
+# Outcome KINDS — vocabulary, a set, never a sequence. Nothing here says one comes before
+# another, because a declaration that could express that would be a workflow engine.
+#
+# An outcome INSTANCE — a particular app, for a particular client, this quarter — is named
+# by a task in the private workspace and lives with that task. It never appears here.
+outcomes:
+  mobile-app:
+    summary: a mobile application built, packaged and released
+  web-application:
+    summary: a web application built, deployed and reachable at a known address
+  library:
+    summary: a reusable package published with its public API documented
+  bug-fix:
+    summary: a defect diagnosed at its root cause, corrected, and proven by a test
