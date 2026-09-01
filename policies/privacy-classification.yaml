@@ -35,6 +35,47 @@ classes:
     severity: ignore
     examples: [example.com addresses, placeholder paths, documented pattern strings, the detector's own regexes]
 
+# --- publishability exceptions ------------------------------------------------------
+# `personal` is severity block-IN-PUBLIC-REPO. Two cases are therefore not findings at
+# all, because in them nothing becomes public. Both are narrow, both are reported in the
+# scan header rather than applied silently, and NEITHER touches `credential` — a
+# credential is a finding everywhere, always, with no exceptions in this file.
+exceptions:
+
+  git_ignored_files:
+    rule: personal findings are exempt in a file git ignores; credentials are not
+    why: >
+      An ignored file is never committed and never published, so a name or a home path
+      in it identifies the user only to the user. The motivating case is graphify-out/ —
+      derived graph state, rebuilt on demand, gitignored, and full of absolute local
+      paths by construction. Deleting it to satisfy the scan would be treating the
+      report as the problem, and the next `graphify update` would bring it straight back.
+    scope: >
+      Decided by `git ls-files -o -i --exclude-standard`, so .gitignore,
+      .git/info/exclude and the user's core.excludesFile all count. Empty when the path
+      is not a repository.
+    credentials: >
+      Still scanned and still blocking. An ignored file — .env is the obvious one — is a
+      common home for a real secret, and credential recall is never traded away.
+    override: --include-ignored restores the strict, everything-is-scanned behaviour
+
+  license_attribution:
+    rule: on the copyright line of a licence file, an owner name or email is attribution
+    why: >
+      A licence is required to name its copyright holder. Reporting that is the scanner
+      misreading its own purpose: the name is published deliberately, by the owner, as
+      the legal point of the file.
+    scope: >
+      Only LICENSE/LICENCE/COPYING/NOTICE (with .md/.txt), only a line that actually
+      matches a copyright notice, and only the `user term` and `email address` shapes.
+      A home path on that same line is still a finding. Any other line of the file is
+      still scanned normally. Any other file is unaffected.
+    not_an_allowlist_entry: >
+      Deliberately a context rule in the scanner, not a string in
+      policies/privacy-allowlist.txt. Putting the owner's real name in the allowlist
+      would ship that name in the public repository — the exact failure this scanner
+      exists to prevent. A context rule carries no name.
+
 # --- where the terms come from ------------------------------------------------------
 # The critical design point. A scanner that hardcodes the user's name, email, employer
 # and repository names IS ITSELF a leak, and it would ship in the public repository.
@@ -63,7 +104,7 @@ false_positives:
     A scanner that cries wolf gets disabled, and a disabled scanner protects nothing.
     Prefer a missed low-severity personal match over a wall of noise — the credential
     patterns are the ones tuned for recall.
-  techniques: [allowlist file, skip binaries and .git, minimum entropy/length on generic key shapes, ignore the policy files that define the patterns]
+  techniques: [allowlist file, skip binaries and .git, minimum entropy/length on generic key shapes, ignore the policy files that define the patterns, exempt personal findings in git-ignored files, exempt licence copyright attribution]
 
 enforcement:
   command: ai-os privacy-scan

@@ -12,14 +12,28 @@ policies/privacy-classification.yaml):
 
 Reports. Never edits, never deletes, never rewrites history.
 
-  ai-os-privacy-scan [PATH]     scan the working tree (default: this repository)
-  ai-os-privacy-scan --history  also scan every blob in git history (slow)
-  ai-os-privacy-scan --quiet    findings only, no progress
+  ai-os-privacy-scan [PATH]             scan the working tree (default: this repository)
+  ai-os-privacy-scan --history          also scan every blob in git history (slow)
+  ai-os-privacy-scan --quiet            findings only, no progress
+  ai-os-privacy-scan --include-ignored  do not exempt git-ignored files (see below)
+
+Two narrow exceptions, both about publishability rather than about secrecy:
+
+  A file git IGNORES is not published, so personal data in it is not a publishability
+  problem — graphify-out/ is derived state rebuilt on demand and full of local paths.
+  Personal findings there are exempt; CREDENTIAL findings are not. An ignored file is a
+  common home for a real secret, and credential recall is never traded away.
+
+  A licence's copyright line is SUPPOSED to name the owner. On that line, in a licence
+  file, an owner name or email is attribution, not a leak. Nothing else in the file is
+  exempt, no other line is, and a home path there is still a finding.
+
+Both are visible in the header, never silent, and neither touches credential detection.
 
 Exit: 0 clean · 1 findings · 2 usage error.  Zero dependencies: stdlib only.
 """
 import os, re, subprocess, sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -64,6 +78,47 @@ PERSONAL = [
 ]
 
 
+# --- publishability exceptions -----------------------------------------------------
+# A licence names its owner by design. Narrow by construction: only these filenames,
+# only a line that really is a copyright notice, and only the two shapes that constitute
+# attribution. See policies/privacy-classification.yaml.
+LICENSE_FILES = {"LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "LICENCE.md",
+                 "COPYING", "COPYING.md", "NOTICE"}
+COPYRIGHT_LINE = re.compile(r"^\s*(?:[#*/]{1,2}\s*)?Copyright\s*(?:\([cC]\)|©)?\s*\d{4}")
+ATTRIBUTION_LABELS = {"user term", "email address"}
+
+
+def license_attribution(rel, line):
+    """Is this the copyright line of a licence file, where naming the owner is the point?
+
+    Deliberately NOT an allowlist entry: putting the owner's real name in
+    policies/privacy-allowlist.txt would ship that name in the public repository, which
+    is the exact failure this scanner exists to prevent. A context rule carries no name.
+    """
+    name = rel.split("history:", 1)[-1]
+    if PurePosixPath(name).name not in LICENSE_FILES:
+        return False
+    return bool(COPYRIGHT_LINE.match(line))
+
+
+def ignored_paths(root: Path):
+    """Paths git ignores under root, relative to root. Empty when root is not a repo.
+
+    An ignored file is never published, so personal data in it cannot leak by
+    publication — that is the whole claim, and it is why credentials are still scanned
+    there (see scan_text). Uses --exclude-standard, so .gitignore, .git/info/exclude and
+    the user's core.excludesFile all count.
+    """
+    if not (root / ".git").exists():
+        return set()
+    r = subprocess.run(["git", "-C", str(root), "ls-files", "-o", "-i",
+                        "--exclude-standard", "-z"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return set()
+    return {n for n in r.stdout.split("\0") if n}
+
+
 def load_allowlist():
     f = REPO / "policies" / "privacy-allowlist.txt"
     if not f.exists():
@@ -105,7 +160,12 @@ def walk(root: Path):
             yield p
 
 
-def scan_text(text, rel, allow, user_terms, findings):
+def scan_text(text, rel, allow, user_terms, findings, personal=True):
+    """Scan one document.
+
+    personal=False reports CREDENTIAL findings only — used for files git ignores, which
+    cannot be published but can still hold a real secret.
+    """
     allowed_files = [a for a in allow if "/" in a]
     if any(rel == a or rel.endswith(a) for a in allowed_files):
         return                                    # the files that define the patterns
@@ -116,10 +176,18 @@ def scan_text(text, rel, allow, user_terms, findings):
             m = rx.search(line)
             if m:
                 findings.append(("credential", label, rel, n, m.group(0)))
+        if not personal:
+            continue                              # ignored file: not publishable, so
+                                                  # nothing here identifies anyone TO anyone
+        attribution = license_attribution(rel, line)
         for label, rx in PERSONAL:
             m = rx.search(line)
             if m:
+                if attribution and label in ATTRIBUTION_LABELS:
+                    continue
                 findings.append(("personal", label, rel, n, m.group(0)))
+        if attribution:
+            continue                              # the owner's name belongs on this line
         for term in (user_terms or []):
             if term.lower() in line.lower():
                 findings.append(("personal", "user term", rel, n, term))
@@ -135,7 +203,7 @@ def redact(s, cls):
 def main(argv):
     args = [a for a in argv if not a.startswith("-")]
     flags = {a for a in argv if a.startswith("-")}
-    if flags - {"--history", "--quiet", "-q"}:
+    if flags - {"--history", "--quiet", "-q", "--include-ignored"}:
         print(__doc__); return 2
     quiet = bool(flags & {"--quiet", "-q"})
     root = Path(args[0]).resolve() if args else REPO
@@ -143,19 +211,28 @@ def main(argv):
     allow = load_allowlist()
     user_terms = load_user_terms()
     findings = []
+    ignored = set() if "--include-ignored" in flags else ignored_paths(root)
 
     if not quiet:
         print(f"\n  privacy scan  {root}")
         print(f"  {D}allowlist{X} {len(allow)} entries   "
               f"{D}user terms{X} " + (f"{len(user_terms)} from {AI_OS_HOME}/system/policies/privacy-terms.txt"
                                       if user_terms is not None else f"{Y}none{X}"))
+        if ignored:
+            print(f"  {D}git-ignored{X} {len(ignored)} file(s) — not publishable, so personal "
+                  f"findings there are exempt; credentials are still checked")
 
     n_files = 0
+    n_ignored = 0
     for p in walk(root):
         n_files += 1
+        rel = str(p.relative_to(root))
+        publishable = rel not in ignored
+        if not publishable:
+            n_ignored += 1
         try:
-            scan_text(p.read_text(errors="replace"), str(p.relative_to(root)),
-                      allow, user_terms, findings)
+            scan_text(p.read_text(errors="replace"), rel,
+                      allow, user_terms, findings, personal=publishable)
         except OSError:
             pass
 
@@ -193,7 +270,8 @@ def main(argv):
         print(f"       Names, handles, employers and private repo names are NOT being checked.")
 
     if not quiet:
-        print(f"\n  {n_files} file(s) scanned")
+        print(f"\n  {n_files} file(s) scanned"
+              + (f", {n_ignored} git-ignored (credentials only)" if n_ignored else ""))
     if findings:
         print(f"  {R}{len(creds)} credential{X} · {Y}{len(pers)} personal{X} finding(s)\n")
         return 1

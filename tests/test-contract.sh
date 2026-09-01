@@ -188,6 +188,108 @@ grep -rqi "$TERM" "$REPO" --exclude-dir=.git; [ $? -ne 0 ]
 chk "the term itself never entered the public repo" $?
 rm -f "$TMP/clean/system/policies/privacy-terms.txt"
 
+# =====================================================================================
+# `personal` is severity block-IN-PUBLIC-REPO, so two cases are not findings at all: a
+# file git ignores is never published, and a licence is SUPPOSED to name its owner.
+# Both exemptions are narrow, and neither is allowed to touch credential detection.
+t "privacy scan: git-ignored files are not a publishability problem"
+GI="$TMP/ignored-repo"; mkdir -p "$GI/derived"
+git -C "$GI" init -q 2>/dev/null || git init -q "$GI"
+printf 'derived/\n' > "$GI/.gitignore"
+printf 'graph root: /Users/%s/projects/thing\n' 'janedoe' > "$GI/derived/.root"
+printf 'source file, nothing personal\n' > "$GI/src.txt"
+
+# Baseline: the same content in a NON-ignored file is still reported, so the fixture is
+# genuinely detectable and the exemption below is doing real work.
+cp "$GI/derived/.root" "$GI/tracked-copy.txt"
+out=$("$CLI/ai-os-privacy-scan" "$GI" 2>&1); rc=$?
+echo "$out" | grep -q "tracked-copy.txt"
+chk "a home path in a NON-ignored file is still reported" $?
+echo "$out" | grep -q "derived/.root"; [ $? -ne 0 ]
+chk "  ...while the same path in an ignored file is exempt" $?
+rm -f "$GI/tracked-copy.txt"
+
+out=$("$CLI/ai-os-privacy-scan" "$GI" 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "a repo whose only findings are ignored scans clean" $?
+echo "$out" | grep -q "git-ignored";                 chk "  ...and says so in the header, never silently" $?
+
+# --include-ignored must restore the strict behaviour, or the exemption is unauditable.
+out=$("$CLI/ai-os-privacy-scan" --include-ignored "$GI" 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                     chk "--include-ignored reports it again" $?
+echo "$out" | grep -q "derived/.root";               chk "  ...naming the ignored file" $?
+
+# THE LINE THAT MUST NOT MOVE: an ignored file is a common home for a real secret.
+AWSKEY2="AKIA""IOSFODNN7EXAMPLE"
+printf 'aws_key = %s\n' "$AWSKEY2" > "$GI/derived/leak.txt"
+out=$("$CLI/ai-os-privacy-scan" "$GI" 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                     chk "a CREDENTIAL in an ignored file still fails the scan" $?
+echo "$out" | grep -q "AWS access key id";           chk "  ...and is named" $?
+echo "$out" | grep -q "1 credential";                chk "  ...classified as credential, not personal" $?
+rm -f "$GI/derived/leak.txt"
+
+# The exemption is git's answer, not a hardcoded directory name.
+printf '' > "$GI/.gitignore"
+out=$("$CLI/ai-os-privacy-scan" "$GI" 2>&1); rc=$?
+[ "$rc" -ne 0 ];                                     chk "un-ignoring the file brings the finding back" $?
+
+t "privacy scan: licence attribution is allowed only in a licence context"
+LC="$TMP/licence"; mkdir -p "$LC"
+# A generated term, for the same reason as every other user-term test here: a real name
+# written into this file would put it in the public repo.
+LTERM="zz$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')corp"
+LHOME="$TMP/lhome"; mkdir -p "$LHOME/system/policies"
+echo "$LTERM" > "$LHOME/system/policies/privacy-terms.txt"
+# NB: capture, never `lscan | grep`. The scanner exits 1 when it finds something and the
+# suite runs under `set -o pipefail`, so a pipe reports the scanner's exit, not grep's.
+lscan() { AI_OS_HOME="$LHOME" "$CLI/ai-os-privacy-scan" "$LC" 2>&1; }
+
+printf 'MIT License\n\nCopyright (c) 2026 %s\n' "$LTERM" > "$LC/LICENSE"
+out=$(lscan); rc=$?
+[ "$rc" -eq 0 ];                                     chk "a LICENSE naming its owner scans clean" $?
+echo "$out" | grep -q PERSONAL; [ $? -ne 0 ]
+chk "  ...the name on the copyright line is attribution, not a finding" $?
+
+printf 'Copyright (c) 2026 %s <%s@%s>\n' "$LTERM" 'owner' 'corp.example' > "$LC/LICENSE"
+out=$(lscan)
+echo "$out" | grep -q PERSONAL; [ $? -ne 0 ]
+chk "  ...and so is an email on that line" $?
+
+# Narrowness. Each of these must still be caught.
+printf 'MIT License\n\nCopyright (c) 2026 Nobody\n\nMaintained by %s\n' "$LTERM" > "$LC/LICENSE"
+out=$(lscan)
+echo "$out" | grep -q "PERSONAL.*user term"
+chk "the same name on ANOTHER line of LICENSE is still a finding" $?
+
+rm -f "$LC/LICENSE"; printf 'Copyright (c) 2026 %s\n' "$LTERM" > "$LC/README.md"
+out=$(lscan)
+echo "$out" | grep -q "PERSONAL.*user term"
+chk "a copyright line in a NON-licence file is still a finding" $?
+rm -f "$LC/README.md"
+
+printf 'Copyright (c) 2026 Nobody, /Users/%s/dev\n' 'janedoe' > "$LC/LICENSE"
+out=$(lscan)
+echo "$out" | grep -q "absolute home path"
+chk "a home path on the copyright line is still a finding" $?
+
+printf 'Copyright (c) 2026 Nobody %s\n' "$AWSKEY2" > "$LC/LICENSE"
+out=$(lscan)
+echo "$out" | grep -q "CREDENTIAL"
+chk "a credential on the copyright line is still a finding" $?
+
+# The exemption must be a CONTEXT rule, not the owner's name sitting in a public file.
+# Asserted without naming anyone: writing the name here to grep for it would BE the leak
+# — the first draft of this test did exactly that, and the repo scan caught it.
+grep -q 'COPYRIGHT_LINE = re.compile' "$CLI/ai-os-privacy-scan"
+chk "licence attribution is a pattern in the scanner, not a literal name" $?
+n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/policies/privacy-allowlist.txt")
+[ "$n" -eq 12 ]
+chk "the allowlist gained no entry — every one is a hole in the scan ($n)" $?
+grep -q "^exceptions:" "$REPO/policies/privacy-classification.yaml"
+chk "both exemptions are documented as policy" $?
+# And the scan of this very repository is the real guard: if a name, a home path or an
+# email ever lands in a tracked file, the cleanliness test below fails. That is what
+# caught this test's own first draft.
+
 t "privacy scan: no false positive on the repository's own text"
 out=$("$CLI/ai-os-privacy-scan" "$REPO" 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "the public repo scans clean" $?
