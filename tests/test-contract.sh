@@ -360,6 +360,133 @@ n=$(grep 'backup(.*owner=' "$CLI/ai-sync" | grep -vc '^def ')
 [ "$n" -eq 2 ]
 chk "both skill backup sites namespace their copy ($n)" $?
 
+# =====================================================================================
+# A format-on-save pass once reflowed the manifests and took the suite from 3 failures to
+# 13. Prettier puts a flow collection on the line AFTER its key when the line would be
+# long. The document is identical; only the layout changed. The parser — which now lives
+# in cli/ai-os-adapter and is borrowed by cli/ai-os-plugin, so ONE parser serves both
+# registries — must read both layouts, and must still reject a collection that genuinely
+# does not close.
+t "manifest layout: a formatter's reflow is read, not rejected"
+FMT="$TMP/formatted"; mkdir -p "$FMT/adapters" "$FMT/plugins"
+
+# Reflow every SHIPPED manifest: move each `key: { ... }` onto the following line, which
+# is exactly what the formatter did. Reflow only — no other edit.
+reflow() {  # src -> dst
+  sed -E 's/^([[:space:]]*)([A-Za-z0-9_.-]+):[[:space:]]+(\{.*\})[[:space:]]*$/\1\2:\n\1  \3/' \
+    "$1" > "$2"
+}
+for src in "$REPO"/adapters/*/adapter.yaml; do
+  aid=$(basename "$(dirname "$src")"); mkdir -p "$FMT/adapters/$aid"
+  reflow "$src" "$FMT/adapters/$aid/adapter.yaml"
+done
+for src in "$REPO"/plugins/*/plugin.yaml; do
+  cid=$(basename "$(dirname "$src")"); mkdir -p "$FMT/plugins/$cid"
+  reflow "$src" "$FMT/plugins/$cid/plugin.yaml"
+done
+n=$(grep -c '^[[:space:]]*[{[]' "$FMT"/adapters/*/adapter.yaml | awk -F: '{s+=$2} END {print s+0}')
+[ "$n" -gt 0 ];                                      chk "the adapter fixture really is reflowed ($n wrapped collections)" $?
+
+out=$(AI_OS_ADAPTERS="$FMT/adapters" "$CLI/ai-os-adapter" doctor 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "reflowed adapter manifests still validate" $?
+[ "$(echo "$out" | grep -c '^  ok ')" -eq 5 ];       chk "  ...all 5, none unreadable" $?
+echo "$out" | grep -qi "flow collection"; [ $? -ne 0 ]
+chk "  ...and no flow-collection complaint" $?
+
+# The two layouts must not merely both parse — they must parse to the SAME document.
+# (drop the header line, which echoes the fixture directory and so always differs)
+inline=$(AI_OS_ADAPTERS="$REPO/adapters" "$CLI/ai-os-adapter" list 2>&1 | grep -v 'adapters  ')
+split=$(AI_OS_ADAPTERS="$FMT/adapters" "$CLI/ai-os-adapter" list 2>&1 | grep -v 'adapters  ')
+[ "$inline" = "$split" ];                            chk "inline and split forms parse identically" $?
+
+# The capability registry borrows this parser, so the same reflow must be safe there too.
+out=$(AI_OS_PLUGINS="$FMT/plugins" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "reflowed capability manifests still validate" $?
+inline=$(AI_OS_PLUGINS="$REPO/plugins" "$CLI/ai-os-plugin" list 2>&1 | grep -v 'capabilities  ')
+split=$(AI_OS_PLUGINS="$FMT/plugins" "$CLI/ai-os-plugin" list 2>&1 | grep -v 'capabilities  ')
+[ "$inline" = "$split" ];                            chk "  ...to the same document as the shipped layout" $?
+
+# A capability manifest written in the wrapped form from the start, since the shipped one
+# happens to carry no inline flow collection for the reflow to move.
+F4="$TMP/wrapped-cap"; mkdir -p "$F4/wrapped"
+cat > "$F4/wrapped/plugin.yaml" <<'EOF'
+plugin: wrapped
+name: Wrapped Capability
+contract: 1
+capability:
+  { authority: observe }
+operations:
+  look:
+    summary: read something
+    command: wrapped
+    authority: observe
+    idempotent: true
+    verify: wrapped-verify
+EOF
+out=$(AI_OS_PLUGINS="$F4" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "a capability manifest in the wrapped form is read" $?
+
+# Wrapped across several lines, the way a formatter breaks a collection that is too long.
+F3="$TMP/wrapped"; mkdir -p "$F3/multi"
+cat > "$F3/multi/adapter.yaml" <<'EOF'
+adapter: multi
+name: Multi Line
+contract: 1
+client:
+  {
+    detect: [/nonexistent],
+    consumer_verified: false
+  }
+provides:
+  rules:
+    { path: ~/.someclient/RULES.md, format: markdown, verified: true }
+writes: [rules]
+EOF
+out=$(AI_OS_ADAPTERS="$F3" "$CLI/ai-os-adapter" doctor 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "a multi-line wrapped collection is read" $?
+
+# ...and the strictness survives. Loosening the layout must not loosen the parser.
+cat > "$F3/multi/adapter.yaml" <<'EOF'
+adapter: multi
+name: Never Closes
+contract: 1
+client:
+  { detect: [/nonexistent], consumer_verified: false
+provides:
+  rules: { path: ~/.someclient/RULES.md, format: markdown, verified: true }
+writes: [rules]
+EOF
+out=$(AI_OS_ADAPTERS="$F3" "$CLI/ai-os-adapter" doctor 2>&1); rc=$?
+[ "$rc" -gt 0 ];                                     chk "a wrapped collection that never closes still fails" $?
+echo "$out" | grep -qi "unterminated flow collection"
+chk "  ...with a reason, not a guess" $?
+
+cat > "$F3/multi/adapter.yaml" <<'EOF'
+adapter: multi
+name: Trailing Junk
+contract: 1
+client:
+  { detect: [/nonexistent], consumer_verified: false } and then some
+provides:
+  rules: { path: ~/.someclient/RULES.md, format: markdown, verified: true }
+writes: [rules]
+EOF
+out=$(AI_OS_ADAPTERS="$F3" "$CLI/ai-os-adapter" doctor 2>&1); rc=$?
+[ "$rc" -gt 0 ];                                     chk "content after a wrapped collection still fails" $?
+echo "$out" | grep -qi "content after the flow collection"
+chk "  ...naming the trailing content" $?
+rm -rf "$F3" "$F4"
+
+t "the formatter that broke the registry is fenced off"
+[ -f "$REPO/.prettierignore" ];                      chk ".prettierignore ships with the repo" $?
+grep -q '^adapters/' "$REPO/.prettierignore";        chk "  ...covering adapters/" $?
+grep -q '^plugins/' "$REPO/.prettierignore";         chk "  ...covering plugins/" $?
+grep -q '^policies/' "$REPO/.prettierignore";        chk "  ...covering policies/" $?
+grep -q '^schemas/' "$REPO/.prettierignore";         chk "  ...covering the yaml fences in schemas/" $?
+[ -f "$REPO/.vscode/settings.json" ];                chk "repo-level editor settings disable format-on-save" $?
+grep -q '"editor.formatOnSave": false' "$REPO/.vscode/settings.json"
+chk "  ...for anyone who clones it, not just this machine" $?
+
 t "adapter enable/disable refuse until wired (no dead state)"
 out=$("$CLI/ai-os-adapter" enable claude-code 2>&1); rc=$?
 [ "$rc" -ne 0 ];                                     chk "enable refuses" $?

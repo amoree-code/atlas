@@ -18,6 +18,10 @@ Zero dependencies: stdlib only, like every other tool in this system. That means
 strict parser for the manifest subset rather than pyyaml — it REJECTS anything it does not
 understand instead of guessing, because a silently mis-parsed manifest is worse than an
 unreadable one.
+
+Strict about meaning, not about layout: a flow collection is read whether it sits on its
+key's line or on the line(s) below it, because a code formatter moves it and the document
+is unchanged either way. A collection that never closes is still an error.
 """
 import os, re, sys
 from pathlib import Path
@@ -106,6 +110,53 @@ def parse(text, where="manifest"):
     lines = text.splitlines()
     i = 0
 
+    def wrapped_flow(indent):
+        """Read a flow collection a formatter moved onto the line(s) below its key.
+
+        Joins continuation lines until the collection closes. A collection that never
+        closes, or trailing content after it, is an error — the parser reports it rather
+        than inventing a reading."""
+        nonlocal i
+        buf, depth, quote, start = [], 0, None, i + 1
+        while i < len(lines):
+            cur = lines[i]
+            if not cur.strip() or cur.lstrip().startswith("#"):
+                i += 1; continue
+            ci = len(cur) - len(cur.lstrip())
+            if buf and ci <= indent:
+                break
+            body, end = cur.strip(), None
+            for pos, ch in enumerate(body):
+                if quote:
+                    if ch == quote:
+                        quote = None
+                    continue
+                if ch in "\"'":
+                    quote = ch
+                elif ch in "{[":
+                    depth += 1
+                elif ch in "}]":
+                    depth -= 1
+                    if depth < 0:
+                        raise ManifestError(
+                            f"{where}: unbalanced flow collection at line {i+1}")
+                    if depth == 0:
+                        end = pos
+                        break
+            i += 1
+            if end is None:
+                buf.append(body)
+                continue
+            buf.append(body[:end + 1])
+            trailing = body[end + 1:].strip()
+            if trailing and not trailing.startswith("#"):
+                raise ManifestError(f"{where}: content after the flow collection at "
+                                    f"line {i}: {trailing!r}")
+            break
+        if depth != 0:
+            raise ManifestError(f"{where}: unterminated flow collection at line {start}")
+        return " ".join(buf)
+
     def block(indent):
         nonlocal i
         out = {}
@@ -138,13 +189,14 @@ def parse(text, where="manifest"):
                     buf.append(nxt[child:]); i += 1
                 joined = " ".join(x.strip() for x in buf if x.strip())
                 out[key] = joined
-            elif rest == "":                             # nested block, or a block list
+            elif rest == "":               # nested block, block list, or a wrapped flow
                 j = i
                 while j < len(lines) and (not lines[j].strip()
                                           or lines[j].lstrip().startswith("#")):
                     j += 1
-                if j < len(lines) and lines[j].lstrip().startswith("- ") \
-                        and (len(lines[j]) - len(lines[j].lstrip())) > indent:
+                nxt = lines[j] if j < len(lines) else None
+                nind = (len(nxt) - len(nxt.lstrip())) if nxt is not None else -1
+                if nxt is not None and nxt.lstrip().startswith("- ") and nind > indent:
                     items, li = [], len(lines[j]) - len(lines[j].lstrip())
                     i = j
                     while i < len(lines):
@@ -157,6 +209,13 @@ def parse(text, where="manifest"):
                         items.append(_flow(cur.lstrip()[2:].split("#", 1)[0].strip()))
                         i += 1
                     out[key] = items
+                elif nxt is not None and nind > indent and nxt.lstrip()[0] in "{[":
+                    # A formatter (Prettier and friends) moves a flow collection onto the
+                    # line after its key. Same document, different layout — so read it,
+                    # but only when the collection actually closes. An unbalanced one is
+                    # still rejected rather than repaired by guesswork.
+                    i = j
+                    out[key] = _flow(wrapped_flow(indent))
                 else:
                     out[key] = block(indent + 2)
             else:

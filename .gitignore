@@ -37,6 +37,13 @@ graphify-out/
 .vscode/*
 !.vscode/settings.json
 
+# --- test scratch ---
+# tests/_tmp/ is working material the suites write and rewrite. Nothing under it is
+# source, reproducible or reviewable, so none of it is committed. (A negation for its
+# README would not work anyway: git cannot re-include a file inside an excluded
+# directory.)
+tests/_tmp/
+
 # --- build / deps ---
 node_modules/
 dist/

@@ -36,6 +36,32 @@ requires: [ ... ]          # core resources it needs; core resolves these
 enforces: [ ... ]          # core policies this adapter implements
 ```
 
+### Layout
+
+`cli/ai-os-adapter` reads this subset with a hand-written parser, not pyyaml — AI-OS has
+no dependencies. It rejects what it cannot read rather than guessing, because a silently
+mis-parsed manifest is worse than an unreadable one. `cli/ai-os-plugin` and
+`cli/ai-os-domain` borrow the same parser, so this holds for every manifest in the repo.
+
+A flow collection may sit on its key's line or on the line(s) below it. These are the same
+manifest, and both parse:
+
+```yaml
+provides: { rules: { path: ~/.claude/CLAUDE.md, format: markdown, verified: true } }
+```
+
+```yaml
+provides:
+  { rules: { path: ~/.claude/CLAUDE.md, format: markdown, verified: true } }
+```
+
+The second form is what a code formatter produces, and one did — silently breaking every
+tool that resolves clients from the registry. Reading both costs nothing and removes a
+whole class of breakage. Strictness is unchanged otherwise: a collection that never
+closes, or trailing content after one, is still an error with a reason.
+
+Formatters should leave this repository alone regardless — see `.prettierignore`.
+
 ## Lifecycle — exactly three verbs
 
 ```

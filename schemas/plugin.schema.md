@@ -45,6 +45,13 @@ operations:
     verify: check-pull-request # a bare filename; exit 0 = verified. Optional.
 ```
 
+### Layout
+
+The manifest parser is the one `cli/ai-os-adapter` owns — one parser, not two. A flow
+collection may sit on its key's line or on the line(s) below it, because a code formatter
+moves it and the document is unchanged either way; a collection that never closes is still
+an error. See **Layout** in `schemas/adapter.schema.md`, and `.prettierignore`.
+
 ## Domains are not capabilities
 
 A **domain** is an area of work that names outcome kinds and requires capabilities

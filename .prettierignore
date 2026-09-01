@@ -1,0 +1,47 @@
+# Nothing in this repository is Prettier's to reformat.
+#
+# AI-OS is zero-dependency by design: every YAML file here is read by a hand-written
+# parser (cli/ai-os-adapter, borrowed by cli/ai-os-plugin), or by line-oriented shell
+# (grep '^key:' in cli/ai-os-status, the tab-indentation check in cli/ai-os-doctor).
+# Those parsers are deliberately strict — they reject what they do not understand rather
+# than guessing — so a purely cosmetic reflow is a breaking change.
+#
+# This is not hypothetical. A format-on-save pass moved flow maps onto the line after
+# their key:
+#
+#     skills:
+#       { path: ~/.codex/skills/, format: SKILL.md+frontmatter, verified: true }
+#
+# Both manifests became unreadable, and every tool that resolves clients from the
+# registry failed with them: tests/test-contract.sh went from 3 failures to 13.
+#
+# The parser has since been taught to read the wrapped form too, so a formatter is no
+# longer able to break the registry on its own. This file is the belt to that braces:
+# don't reflow files whose readers are stricter than YAML.
+
+# Adapter manifests — read by the strict subset parser in cli/ai-os-adapter.
+adapters/
+
+# Capability manifests — read by the same parser, via cli/ai-os-plugin.
+plugins/
+
+# Domain manifests — read by the same parser, via cli/ai-os-domain.
+domains/
+
+# Policies — read by the same parser and by line-oriented shell.
+policies/
+
+# Templates seeded into the private workspace; settings.yaml is grepped, not parsed.
+templates/
+
+# Shell and Python tools, and the fixtures the contract suite compares byte for byte.
+cli/
+tests/
+
+# Markdown carrying ```yaml fences that document the exact on-disk layout. Prettier
+# reformats inside fenced code blocks, so the documented form drifts from the real one.
+schemas/
+docs/
+skills/
+README.md
+AGENTS.md
