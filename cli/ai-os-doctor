@@ -95,24 +95,44 @@ fi
 head "workspace"
 # ====================================================================================
 missing=""
-for s in system/config system/rules user/01-daily user/02-personal \
-         user/04-projects user/05-knowledge user/06-templates \
+for s in system/config user/01-daily user/06-templates \
          skills agents scripts sessions; do
   [ -d "$AI_OS_HOME/$s" ] || missing="$missing $s"
+done
+# The roots that are mid-migration are asked for, not assumed. A root present in both
+# layouts as two different directories is a FAIL, never a silent choice between them:
+# two stores that disagree is exactly the state a doctor exists to surface.
+# Sourced, not eval'd: the paths are assigned straight into this shell, so a workspace
+# path with a space in it stays one path instead of becoming a command and its arguments.
+. "$SELF_DIR/ai-os-paths"
+aios_paths_export
+for r in memory knowledge projects rules; do
+  u="$(printf '%s' "$r" | tr 'a-z' 'A-Z')"; pv="AI_OS_PATH_$u"; lv="AI_OS_LAYOUT_$u"
+  case "${!lv:-none}" in
+    conflict) fail "private root '$r' exists in both layouts, as different directories"
+              aios_path_conflict "$r" | sed 's/^/          /' ;;
+    *)        [ -d "${!pv:-}" ] || missing="$missing $r" ;;
+  esac
 done
 if [ -n "$missing" ]; then fail "missing section(s):$missing"; note "run: ai-os init"
 else
   total=$(find "$AI_OS_HOME" -type f -not -path '*/.git/*' | wc -l | tr -d ' ')
   ok "all sections present  ${D}($total files)${X}"
 fi
-for s in identity education career projects goals travel preferences interests; do
-  [ -d "$AI_OS_HOME/user/02-personal/memory/$s" ] || warn "missing memory section: user/02-personal/memory/$s/"
-done
-for k in task-results technical-solutions decisions architecture research discoveries failures; do
-  [ -d "$AI_OS_HOME/user/05-knowledge/$k" ] || warn "missing knowledge kind: user/05-knowledge/$k/"
-done
-[ -f "$AI_OS_HOME/user/02-personal/memory/MEMORY.md" ]    || warn "user/02-personal/memory/MEMORY.md missing — the retrieval index"
-[ -f "$AI_OS_HOME/user/05-knowledge/README.md" ] || warn "user/05-knowledge/README.md missing"
+MEM_ROOT="${AI_OS_PATH_MEMORY:-}"; KNOW_ROOT="${AI_OS_PATH_KNOWLEDGE:-}"
+MEM_REL="${MEM_ROOT#"$AI_OS_HOME"/}"; KNOW_REL="${KNOW_ROOT#"$AI_OS_HOME"/}"
+if [ -n "$MEM_ROOT" ]; then
+  for s in identity education career projects goals travel preferences interests; do
+    [ -d "$MEM_ROOT/$s" ] || warn "missing memory section: $MEM_REL/$s/"
+  done
+  [ -f "$MEM_ROOT/MEMORY.md" ] || warn "$MEM_REL/MEMORY.md missing — the retrieval index"
+fi
+if [ -n "$KNOW_ROOT" ]; then
+  for k in task-results technical-solutions decisions architecture research discoveries failures; do
+    [ -d "$KNOW_ROOT/$k" ] || warn "missing knowledge kind: $KNOW_REL/$k/"
+  done
+  [ -f "$KNOW_ROOT/README.md" ] || warn "$KNOW_REL/README.md missing"
+fi
 
 # Onboarding state is reported, never repaired. An inconsistent marker is exactly the kind
 # of thing a doctor must surface and leave alone: the marker and the data disagree, and
@@ -188,7 +208,8 @@ head "memory access"
 # private-workspace-owned. What matters is that every one of those links points at the
 # single canonical store and nowhere else.
 # ====================================================================================
-CANON="$AI_OS_HOME/user/02-personal/memory"
+# Whichever layout it is in — the canonical store is one directory, not one path.
+CANON="${AI_OS_PATH_MEMORY:-$AI_OS_HOME/user/02-personal/memory}"
 STALE="$AI_OS_LEGACY/workspace/memory"
 
 if [ -L "$CANON" ]; then

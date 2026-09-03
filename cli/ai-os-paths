@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# ai-os-paths — where a private-workspace root actually is, right now.
+#
+# The private workspace is being restructured one reversible slice at a time. Until every
+# move has landed, no tool can assume a layout: the same machine may hold the old path,
+# the new one, or — mid-move — both. This file is the one place that answers the question,
+# so nothing downstream has to guess and no two tools can guess differently.
+#
+#   new exists, old absent    -> the new path
+#   old exists, new absent    -> the old path
+#   both, one directory       -> the new name  (a symlink shim is compatibility, not a clash)
+#   both, two directories     -> CONFLICT. Report and stop.
+#   neither                   -> the old path — still the layout `ai-os init` creates
+#
+# It resolves. It never creates, moves, copies, merges or deletes anything, and it never
+# picks a winner when both layouts hold real data: two stores that disagree is a fact only
+# the user can resolve, and merging them would destroy the evidence of which is current.
+#
+# As a library:  . "$SELF_DIR/ai-os-paths" && d=$(aios_path memory) || handle-the-conflict
+# As a command:  ai-os-paths get|layout|list|env [--sh]|check|rewrite [<root>|<path>]
+#
+# `env` prints raw values for machine parsers — never eval it; `env --sh` is the
+# shell-quoted form, and bash callers should source this file and call aios_paths_export.
+#
+# Exit: 0 ok · 2 unknown root · 3 conflict · 4 no single root in the new layout.
+
+# --- the table ----------------------------------------------------------------------
+# One line per root that moves. new-relative, old-relative. A `*` in the new path means
+# the root does not survive the move as a single directory — see aios_path().
+AIOS_PATH_ROOTS="memory knowledge projects work rules runtime"
+
+_aios_pair() {  # <root> -> "<new-rel> <old-rel>"
+  case "$1" in
+    memory)    echo "user/memory                user/02-personal/memory" ;;
+    knowledge) echo "user/knowledge             user/05-knowledge" ;;
+    projects)  echo "projects                   user/04-projects" ;;
+    work)      echo "projects/*/work            tasks" ;;
+    rules)     echo "internal/governance/rules  system/rules" ;;
+    runtime)   echo "internal/runtime           runtime" ;;
+    *) return 1 ;;
+  esac
+}
+
+aios_paths_home() { printf '%s' "${AI_OS_HOME:-$HOME/.ai-os}"; }
+
+# Physical path when it exists, the literal otherwise — so a report can still name it.
+_aios_rp() { (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
+
+# Every directory the new side of <root> currently occupies, one per line. Empty = absent.
+_aios_new_dirs() {  # <home> <new-rel>
+  local home="$1" rel="$2" p
+  case "$rel" in
+    *'*'*)
+      # A wildcard root has as many homes as there are projects. Nullglob so an unmatched
+      # pattern reads as "the new layout is not here yet", never as a literal path.
+      local restore=1; shopt -q nullglob && restore=0
+      shopt -s nullglob
+      for p in "$home"/$rel; do [ -d "$p" ] && printf '%s\n' "$p"; done
+      [ "$restore" -eq 0 ] || shopt -u nullglob
+      ;;
+    *) [ -d "$home/$rel" ] && printf '%s\n' "$home/$rel" ;;
+  esac
+  return 0
+}
+
+# --- the answer ---------------------------------------------------------------------
+aios_path_layout() {  # <root> -> new | old | conflict | none   (2 = unknown root)
+  local root="$1" home pair new_rel old_rel new_dirs old_dir
+  home="$(aios_paths_home)"
+  pair="$(_aios_pair "$root")" || { printf 'unknown\n'; return 2; }
+  new_rel="${pair%% *}"; old_rel="${pair##* }"
+  new_dirs="$(_aios_new_dirs "$home" "$new_rel")"
+  old_dir="$home/$old_rel"
+
+  if [ -n "$new_dirs" ] && [ -d "$old_dir" ]; then
+    # One directory reachable under both names is a deliberate shim, not a conflict.
+    if [ "$(printf '%s\n' "$new_dirs" | wc -l | tr -d ' ')" = "1" ] &&
+       [ "$(_aios_rp "$new_dirs")" = "$(_aios_rp "$old_dir")" ]; then
+      printf 'new\n'
+    else
+      printf 'conflict\n'
+    fi
+  elif [ -n "$new_dirs" ]; then printf 'new\n'
+  elif [ -d "$old_dir" ];  then printf 'old\n'
+  else                          printf 'none\n'
+  fi
+}
+
+aios_path_conflict() {  # <root> -> the report, on stdout
+  local root="$1" home pair new_rel old_rel
+  home="$(aios_paths_home)"
+  pair="$(_aios_pair "$root")" || return 2
+  new_rel="${pair%% *}"; old_rel="${pair##* }"
+  printf 'CONFLICT: private root "%s" exists in both layouts, as different directories\n' "$root"
+  printf '  old  %s\n' "$home/$old_rel"
+  _aios_new_dirs "$home" "$new_rel" | sed 's/^/  new  /'
+  printf '  AI-OS will not merge, copy or pick between them. Resolve it by hand, then re-run.\n'
+}
+
+aios_path() {  # <root> -> the absolute path, on stdout
+  local root="$1" home pair new_rel old_rel layout
+  home="$(aios_paths_home)"
+  pair="$(_aios_pair "$root")" || { printf 'ai-os-paths: unknown private root "%s"\n' "$root" >&2; return 2; }
+  new_rel="${pair%% *}"; old_rel="${pair##* }"
+  layout="$(aios_path_layout "$root")"
+
+  case "$layout" in
+    conflict) aios_path_conflict "$root" >&2; return 3 ;;
+    new)
+      # A wildcard root has no single home once the move lands. Refusing here is the
+      # point: the caller has to learn the new lookup rather than be handed a guess.
+      case "$new_rel" in
+        *'*'*)
+          printf 'ai-os-paths: "%s" has no single root in the new layout (%s)\n' "$root" "$new_rel" >&2
+          printf '             its records moved into per-project work; teach the caller the new lookup\n' >&2
+          return 4 ;;
+      esac
+      printf '%s\n' "$home/$new_rel" ;;
+    # "none" resolves to the old path on purpose: nothing exists yet, and the old layout
+    # is still the one `ai-os init` creates. This keeps a fresh workspace unchanged.
+    old|none) printf '%s\n' "$home/$old_rel" ;;
+    *) return 2 ;;
+  esac
+}
+
+aios_path_rewrite() {  # <workspace-relative path> -> the absolute path in the live layout
+  # The compatibility primitive: a path written against the old layout comes back pointing
+  # at whichever layout this workspace is actually in. Anything under no moving root is
+  # returned unchanged. A conflicting root propagates its exit code rather than a guess.
+  local rel="$1" home root pair old_rel base
+  home="$(aios_paths_home)"
+  for root in $AIOS_PATH_ROOTS; do
+    pair="$(_aios_pair "$root")"; old_rel="${pair##* }"
+    case "$rel" in
+      "$old_rel"|"$old_rel"/*)
+        base="$(aios_path "$root")" || return $?
+        printf '%s%s\n' "$base" "${rel#"$old_rel"}"
+        return 0 ;;
+    esac
+  done
+  printf '%s/%s\n' "$home" "$rel"
+}
+
+aios_paths_check() {  # report every conflicting root; exit = how many
+  local root n=0
+  for root in $AIOS_PATH_ROOTS; do
+    [ "$(aios_path_layout "$root")" = "conflict" ] || continue
+    aios_path_conflict "$root"; n=$((n+1))
+  done
+  return "$n"
+}
+
+aios_paths_export() {  # set AI_OS_PATH_<ROOT> / AI_OS_LAYOUT_<ROOT> in the calling shell
+  # The bash entry point, and the reason no caller needs `eval`. Assigning directly keeps
+  # the values out of the shell's parser entirely, so a workspace path containing a space,
+  # a quote or a `$` cannot come back as a command. `env` below is the text format for
+  # everything that is not bash; it is not, and does not need to be, eval-safe.
+  local root upper path
+  for root in $AIOS_PATH_ROOTS; do
+    upper="$(printf '%s' "$root" | tr 'a-z' 'A-Z')"
+    unset "AI_OS_PATH_$upper"
+    printf -v "AI_OS_LAYOUT_$upper" '%s' "$(aios_path_layout "$root")"
+    # A root with no single answer gets a layout and no path, deliberately: a consumer
+    # that needs the path must notice its absence rather than inherit a guess.
+    path="$(aios_path "$root" 2>/dev/null)" && printf -v "AI_OS_PATH_$upper" '%s' "$path"
+  done
+  return 0
+}
+
+# --- command mode -------------------------------------------------------------------
+# Only when executed. Sourcing this file defines the functions and runs nothing.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  set -uo pipefail
+  _aios_need_root() { [ -n "${1:-}" ] || { echo "ai-os-paths: $2 needs a root name" >&2; exit 2; }; }
+  case "${1:-list}" in
+    get)    _aios_need_root "${2:-}" get;    aios_path "$2" ;;
+    layout) _aios_need_root "${2:-}" layout; aios_path_layout "$2" ;;
+    list)
+      for r in $AIOS_PATH_ROOTS; do
+        l="$(aios_path_layout "$r")"
+        p="$(aios_path "$r" 2>/dev/null)" || p="-"
+        printf '%-10s %-9s %s\n' "$r" "$l" "$p"
+      done ;;
+    env)
+      # One call, every root — so a non-bash caller pays a single process, not six.
+      # A root with no single answer gets a layout and no path, deliberately: a consumer
+      # that needs the path must notice its absence rather than inherit a guess.
+      #
+      # Values are RAW: everything after the first `=` is the literal path, which is what
+      # a machine parser wants and what makes a path with spaces survive intact. That also
+      # makes plain `env` unsafe to hand to `eval` — bash would read the space as an
+      # argument separator. `env --sh` emits the same answers shell-quoted for that, and
+      # bash callers should skip both and source this file for aios_paths_export.
+      q=0; [ "${2:-}" = "--sh" ] && q=1
+      for r in $AIOS_PATH_ROOTS; do
+        u="$(printf '%s' "$r" | tr 'a-z' 'A-Z')"
+        l="$(aios_path_layout "$r")"
+        p="$(aios_path "$r" 2>/dev/null)" || p=""
+        if [ "$q" -eq 1 ]; then
+          printf 'AI_OS_LAYOUT_%s=%q\n' "$u" "$l"
+          [ -n "$p" ] && printf 'AI_OS_PATH_%s=%q\n' "$u" "$p"
+        else
+          printf 'AI_OS_LAYOUT_%s=%s\n' "$u" "$l"
+          [ -n "$p" ] && printf 'AI_OS_PATH_%s=%s\n' "$u" "$p"
+        fi
+      done
+      : ;;
+    rewrite) [ -n "${2:-}" ] || { echo "ai-os-paths: rewrite needs a workspace-relative path" >&2; exit 2; }
+             aios_path_rewrite "$2" ;;
+    check)  aios_paths_check; exit $? ;;
+    help|--help|-h) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) echo "ai-os-paths: unknown command '${1:-}'" >&2
+       echo "usage: ai-os-paths get|layout|list|env [--sh]|check|rewrite [<root>|<path>]" >&2
+       echo "roots: $AIOS_PATH_ROOTS" >&2; exit 2 ;;
+  esac
+fi

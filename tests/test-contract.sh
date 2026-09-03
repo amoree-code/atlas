@@ -991,8 +991,12 @@ n=$(grep -c 'search(r"\^ai_os_repo' "$SY" || true)
 t "ai-sync honours AI_OS_HOME for runtime state"
 grep -q 'AI_OS_HOME = Path(os.environ.get("AI_OS_HOME"' "$SY"
 chk "AI_OS_HOME is read from the environment" $?
-grep -q 'RUNTIME = AI_OS_HOME / "runtime"' "$SY"
+# Still under AI_OS_HOME — through the one resolver, so a relocated runtime/ moves the
+# state with it instead of splitting it across two layouts.
+grep -q 'RUNTIME = private_path_or_die("runtime")' "$SY"
 chk "runtime state resolves under it" $?
+grep -q 'AI_OS_HOME / "runtime"' "$SY"
+[ $? -ne 0 ];                                        chk "   ...and never as a hardcoded layout" $?
 grep -q 'STATE = RUNTIME / "state"' "$SY";           chk "   ...state" $?
 grep -q 'BACKUPS = RUNTIME / "backups"' "$SY";       chk "   ...backups" $?
 
@@ -1852,7 +1856,7 @@ grep -q 'opaque' "$CLI/ai-os-run";        chk "task_id is documented as opaque, 
 
 # =====================================================================================
 t "run: persistence isolation — run state lives only under runtime/"
-grep -q 'RUNS_DIR = AI_OS_HOME / "runtime" / "runs"' "$CLI/ai-os-run"
+grep -q 'RUNS_DIR = private_path_or_die("runtime") / "runs"' "$CLI/ai-os-run"
 chk "run records are rooted under runtime/runs/" $?
 grep -Eq '02-personal|05-knowledge|memory/|knowledge/' "$CLI/ai-os-run"
 [ $? -ne 0 ];                             chk "ai-os-run writes no durable workspace state" $?
@@ -2174,8 +2178,8 @@ grep -q 'TRANSPORTS = Path(os.environ.get("AI_OS_HANDOFF_TRANSPORTS"' "$CLI/ai-o
 chk "the transport is read from a declared registry, never synthesised" $?
 grep -Eiq '\bnext_action\b|def (plan|decide|orchestrat|dispatch|route)' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "no planning, orchestration or dispatch logic" $?
-grep -q 'TASKS = AI_OS_HOME / "tasks"' "$CLI/ai-os-handoff"
-chk "records are bound to \$AI_OS_HOME/tasks/<ID>/ and nowhere else" $?
+grep -q 'TASKS = private_path_or_die("work")' "$CLI/ai-os-handoff"
+chk "records are bound to the resolved work root and nowhere else" $?
 
 # =====================================================================================
 t "handoff send: fixtures"
@@ -2811,6 +2815,189 @@ grep -qi 'Public / Private / Runtime contract' "$REPO/governance/policies/public
 [ $? -ne 0 ];                              chk "the contract policy no longer claims three layers" $?
 grep -q 'legacy_runtime:' "$REPO/governance/policies/public-private-contract.yaml"
 chk "  ...and records the retired runtime layer as history" $?
+
+# =====================================================================================
+t "private path compatibility: the resolver answers for every moving root"
+# The private workspace is being restructured one slice at a time. Until every move has
+# landed a tool may meet the old layout, the new one, or both — and "both" is the case
+# that must never be resolved by guessing. See cli/ai-os-paths.
+PA="$CLI/ai-os-paths"
+[ -x "$PA" ];                             chk "cli/ai-os-paths exists and is executable" $?
+for r in memory knowledge projects work rules runtime; do
+  "$PA" layout "$r" >/dev/null 2>&1;      chk "  declares the '$r' root" $?
+done
+"$PA" layout nonesuch >/dev/null 2>&1
+[ $? -eq 2 ];                             chk "an unknown root is refused, never invented" $?
+
+# =====================================================================================
+t "private path compatibility: old path, new path, neither"
+PW="$TMP/paths"; mkdir -p "$PW"
+export AI_OS_HOME="$PW"
+
+mkdir -p "$PW/user/05-knowledge"
+[ "$("$PA" layout knowledge)" = "old" ];                chk "old path only -> layout old" $?
+[ "$("$PA" get knowledge)" = "$PW/user/05-knowledge" ]; chk "  ...and resolves to the old path" $?
+
+mkdir -p "$PW/user/memory"
+[ "$("$PA" layout memory)" = "new" ];                   chk "new path only -> layout new" $?
+[ "$("$PA" get memory)" = "$PW/user/memory" ];          chk "  ...and resolves to the new path" $?
+
+[ "$("$PA" layout projects)" = "none" ];                chk "neither path -> layout none" $?
+[ "$("$PA" get projects)" = "$PW/user/04-projects" ]
+chk "  ...and resolves to the layout init still creates" $?
+
+# =====================================================================================
+t "private path compatibility: both paths is a conflict, never a merge"
+mkdir -p "$PW/internal/runtime" "$PW/runtime"
+echo "new side" > "$PW/internal/runtime/marker"
+echo "old side" > "$PW/runtime/marker"
+[ "$("$PA" layout runtime)" = "conflict" ];  chk "two real directories -> layout conflict" $?
+out=$("$PA" get runtime 2>&1); rc=$?
+[ "$rc" -eq 3 ];                             chk "  ...get refuses with a distinct exit code" $?
+echo "$out" | grep -q "CONFLICT";            chk "  ...and says so" $?
+echo "$out" | grep -q "$PW/runtime"          && echo "$out" | grep -q "$PW/internal/runtime"
+chk "  ...naming both sides so the user can compare them" $?
+echo "$out" | grep -qi "will not merge";     chk "  ...and states that it will not merge them" $?
+grep -q "old side" "$PW/runtime/marker" && grep -q "new side" "$PW/internal/runtime/marker"
+chk "  ...neither side was touched" $?
+"$PA" check >/dev/null 2>&1
+[ $? -eq 1 ];                                chk "check exits with the number of conflicting roots" $?
+
+# A shim is not a clash: one directory reachable under both names is exactly how a move
+# is made reversible, and reporting it as a conflict would block the safe path.
+mkdir -p "$PW/internal/governance"
+ln -s "$PW/system/rules" "$PW/internal/governance/rules"
+mkdir -p "$PW/system/rules"
+[ "$("$PA" layout rules)" = "new" ];         chk "both names, one directory -> not a conflict" $?
+
+# =====================================================================================
+t "private path compatibility: a root with no single home refuses rather than guesses"
+# tasks/ does not survive as one directory — it becomes per-project work/. Handing a
+# caller the first match would be a guess dressed as an answer.
+PW2="$TMP/paths-work"; mkdir -p "$PW2/projects/ai-os/work" "$PW2/projects/rccm/work"
+out=$(AI_OS_HOME="$PW2" "$PA" get work 2>&1); rc=$?
+[ "$rc" -eq 4 ];                             chk "the new layout has no single work root -> exit 4" $?
+echo "$out" | grep -q "no single root";      chk "  ...and says why" $?
+[ "$(AI_OS_HOME="$PW2" "$PA" layout work)" = "new" ]
+chk "  ...while still reporting the layout it found" $?
+
+# =====================================================================================
+t "private path compatibility: rewrite maps an old-layout path onto the live one"
+[ "$("$PA" rewrite user/05-knowledge/README.md)" = "$PW/user/05-knowledge/README.md" ]
+chk "a path under an unmoved root is unchanged" $?
+[ "$("$PA" rewrite user/02-personal/memory/MEMORY.md)" = "$PW/user/memory/MEMORY.md" ]
+chk "a path under a moved root is rewritten onto the new one" $?
+[ "$("$PA" rewrite sessions/2026/x.md)" = "$PW/sessions/2026/x.md" ]
+chk "a path under no moving root is left alone" $?
+"$PA" rewrite runtime/state/state.json >/dev/null 2>&1
+[ $? -eq 3 ];                                chk "a conflicting root propagates the refusal" $?
+
+# =====================================================================================
+t "private path compatibility: the resolver only reads"
+before=$(find "$PW" | sort | shasum)
+"$PA" list >/dev/null 2>&1; "$PA" env >/dev/null 2>&1; "$PA" check >/dev/null 2>&1
+after=$(find "$PW" | sort | shasum)
+[ "$before" = "$after" ];                    chk "resolving creates, moves and deletes nothing" $?
+grep -Eq '(^|[^a-z-])(cp|mv|rm|rsync|mkdir|install)( |$)' "$PA"
+[ $? -ne 0 ];                                chk "  ...and the file contains no move or copy at all" $?
+
+# =====================================================================================
+t "private path compatibility: one resolver, two languages"
+# A second implementation is how the shell half and the Python half of a half-finished
+# migration end up writing to different stores.
+py=$(cd "$REPO" && AI_OS_HOME="$PW" python3 -c "
+import sys; sys.path.insert(0, 'cli')
+from aios_paths import private_path, private_layout, PathConflict
+print(private_layout('memory'), private_path('memory'))
+try:
+    private_path('runtime'); print('NO-CONFLICT')
+except PathConflict:
+    print('conflict-raised')
+")
+# -ef, not a string compare: TMPDIR can carry a trailing slash, and "the same directory"
+# is what the two implementations have to agree on, not the same spelling of it.
+[ "$(echo "$py" | head -n1 | cut -d' ' -f1)" = "new" ] &&
+  [ "$(echo "$py" | head -n1 | cut -d' ' -f2-)" -ef "$("$PA" get memory)" ]
+chk "Python resolves a moved root exactly as the shell does" $?
+[ "$(echo "$py" | tail -n1)" = "conflict-raised" ]
+chk "  ...and raises on a conflict instead of choosing a side" $?
+
+# =====================================================================================
+t "private path compatibility: init never straddles two layouts"
+IW="$TMP/init-layout"; AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
+mkdir -p "$IW/user/memory" && mv "$IW/user/02-personal/memory/MEMORY.md" "$IW/user/memory/"
+rm -rf "$IW/user/02-personal"
+AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
+[ ! -d "$IW/user/02-personal" ];         chk "init does not re-create a root that has moved" $?
+[ ! -e "$IW/user/02-personal/memory/MEMORY.md" ] && [ -f "$IW/user/memory/MEMORY.md" ]
+chk "  ...and re-seeds into the store that exists, not beside it" $?
+
+mkdir -p "$IW/user/02-personal/memory"; echo "a second store" > "$IW/user/02-personal/memory/x.md"
+out=$(AI_OS_HOME="$IW" "$CLI/ai-os-init" 2>&1); rc=$?
+[ "$rc" -ne 0 ];                         chk "init refuses outright when a root exists in both layouts" $?
+echo "$out" | grep -q "REFUSED";         chk "  ...and says so" $?
+grep -q "a second store" "$IW/user/02-personal/memory/x.md" && [ -f "$IW/user/memory/MEMORY.md" ]
+chk "  ...having touched neither side" $?
+
+out=$(AI_OS_HOME="$IW" "$CLI/ai-os-doctor" 2>&1); rc=$?
+echo "$out" | grep -q "exists in both layouts"; chk "doctor reports the same conflict as a failure" $?
+[ "$rc" -gt 0 ];                                chk "  ...and exits non-zero" $?
+
+# =====================================================================================
+t "private path compatibility: a workspace path containing spaces"
+# Regression. The resolver's answers used to reach the shell as text and be re-parsed
+# with eval, so "/my ai os/user/..." became the command `ai` with an argument: every tool
+# still exited 0 while printing "ai: command not found" and silently reporting no paths
+# at all. The values are assigned now, never parsed — see aios_paths_export.
+SPW="$TMP/with space/my ai os"; mkdir -p "$SPW"
+AI_OS_HOME="$SPW" "$CLI/ai-os-init" >/dev/null 2>"$TMP/sp-init.err"
+chk "init succeeds under a path with spaces" $?
+sp_out=$(AI_OS_HOME="$SPW" "$CLI/ai-os" status 2>"$TMP/sp-status.err")
+chk "ai-os status succeeds" $?
+AI_OS_HOME="$SPW" "$CLI/ai-os" doctor --quiet >/dev/null 2>"$TMP/sp-doctor.err"
+chk "ai-os doctor --quiet succeeds" $?
+
+cat "$TMP/sp-init.err" "$TMP/sp-status.err" "$TMP/sp-doctor.err" | grep -q "command not found"
+[ $? -ne 0 ];                         chk "no fragment of the path was run as a command" $?
+[ ! -s "$TMP/sp-init.err" ] && [ ! -s "$TMP/sp-status.err" ] && [ ! -s "$TMP/sp-doctor.err" ]
+chk "  ...and none of the three wrote anything to stderr" $?
+
+# Exiting 0 while reporting nothing was the actual damage, so assert the counts landed.
+echo "$sp_out" | grep -Eq 'memory +[0-9]+ files';   chk "status counts the memory store" $?
+echo "$sp_out" | grep -Eq 'knowledge +[0-9]+ files'; chk "  ...and knowledge" $?
+echo "$sp_out" | grep -q "missing"
+[ $? -ne 0 ];                         chk "  ...and reports no root as missing" $?
+
+[ "$(AI_OS_HOME="$SPW" "$PA" layout memory)" = "old" ]
+chk "the resolver still reports the old layout for a fresh workspace" $?
+[ "$(AI_OS_HOME="$SPW" "$PA" get memory)" = "$SPW/user/02-personal/memory" ]
+chk "  ...and returns the path with its spaces intact" $?
+
+# `env` stays raw so a machine parser gets the literal path; `env --sh` is the form that
+# survives eval. Quoting one would have broken the other — hence two.
+# Captured, not piped: the suite runs with pipefail and `grep -q` closes the pipe on the
+# first match, so a piped resolver would be killed by SIGPIPE and read as a failure.
+raw_env=$(AI_OS_HOME="$SPW" "$PA" env)
+case "$raw_env" in
+  *"AI_OS_PATH_MEMORY=$SPW/user/02-personal/memory"*) true ;;
+  *) false ;;
+esac
+chk "env keeps values raw for machine parsers" $?
+sh_path=$(eval "$(AI_OS_HOME="$SPW" "$PA" env --sh)"; printf '%s' "$AI_OS_PATH_MEMORY")
+[ "$sh_path" = "$SPW/user/02-personal/memory" ]
+chk "env --sh survives eval with the spaces intact" $?
+
+# The Python adapter reads the raw form; a shell-quoted one would have handed it a path
+# with backslashes in it that exists nowhere.
+pysp=$(cd "$REPO" && AI_OS_HOME="$SPW" python3 -c "
+import sys; sys.path.insert(0, 'cli')
+from aios_paths import private_path
+p = private_path('memory')
+print('yes' if p.is_dir() else 'no')
+")
+[ "$pysp" = "yes" ];                  chk "Python resolves a spaced path to a real directory" $?
+
+export AI_OS_HOME="$TMP/clean"
 
 # =====================================================================================
 t "inherited suites still pass"

@@ -44,7 +44,10 @@ REPO="$(dirname "$SELF_DIR")"
 VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
 
 STATE="$AI_OS_HOME/system/config/workspace.yaml"
-MEM="$AI_OS_HOME/user/02-personal/memory"
+# The memory store is mid-migration and may sit in either layout. Onboarding writes real
+# user facts, so it must write into the store that exists — never into a path that merely
+# used to be right. A conflicting pair leaves MEM empty and every write below refuses.
+MEM="$("$SELF_DIR/ai-os-paths" get memory 2>/dev/null)"
 IDENTITY_DIR="$MEM/identity"
 PREFS_DIR="$MEM/preferences"
 CAREER_DIR="$MEM/career"
@@ -316,8 +319,10 @@ cmd_complete() {
   if [ "$(ws_get step_language)" = "done" ]; then say "${G}ok${X}       step language"; else say "${R}FAIL${X}     step language not done"; problems=$((problems+1)); fi
   if have_identity;    then say "${G}ok${X}       canonical identity on disk"; else say "${R}FAIL${X}     no identity data at ${IDENTITY_DIR#"$AI_OS_HOME"/}"; problems=$((problems+1)); fi
   if have_preferences; then say "${G}ok${X}       canonical preferences on disk"; else say "${R}FAIL${X}     no preference data at ${PREFS_DIR#"$AI_OS_HOME"/}"; problems=$((problems+1)); fi
-  for d in system/config user/02-personal/memory user/05-knowledge; do
-    if [ -d "$AI_OS_HOME/$d" ]; then say "${G}ok${X}       $d/"; else say "${R}FAIL${X}     missing $d/"; problems=$((problems+1)); fi
+  for d in "$AI_OS_HOME/system/config" "$MEM" "$("$SELF_DIR/ai-os-paths" get knowledge 2>/dev/null)"; do
+    rel="${d#"$AI_OS_HOME"/}"
+    if [ -n "$d" ] && [ -d "$d" ]; then say "${G}ok${X}       $rel/"
+    else say "${R}FAIL${X}     missing ${rel:-<unresolved — ai-os-paths check>}/"; problems=$((problems+1)); fi
   done
   if [ "$problems" -gt 0 ]; then
     printf '\n  %s%d check(s) failed — NOT marking initialized.%s\n\n' "$R" "$problems" "$X"; return 1

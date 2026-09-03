@@ -215,7 +215,7 @@ def main():
             not any(s in body for s in ("/Users/", "Documents", "Projects", "Developer")))
         chk("the destination comes from AI_OS_HOME, never a literal",
             "AI_OS_HOME" in src_text.split("def migrate_runtime")[0]
-            and 'RUNTIME = AI_OS_HOME / "runtime"' in src_text)
+            and 'RUNTIME = private_path_or_die("runtime")' in src_text)
     finally:
         if real_home:
             os.environ["HOME"] = real_home

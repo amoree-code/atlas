@@ -53,6 +53,30 @@ for forbidden in "$REPO" "$HOME/.ai"; do
   fi
 done
 
+# --- which layout is this workspace in? ---------------------------------------------
+# Several private roots are being relocated one reversible slice at a time, so init must
+# not assume either layout: re-creating an old root next to a live new one would quietly
+# manufacture a second store. It asks, and it refuses outright when a root already exists
+# in both places — deciding which of two real stores is current is not init's call.
+. "$SELF_DIR/ai-os-paths"
+if ! conflicts="$(aios_paths_check)"; then
+  printf '  REFUSED: the workspace holds a private root in two layouts at once.\n' >&2
+  printf '%s\n' "$conflicts" | sed 's/^/           /' >&2
+  printf '           Resolve it by hand, then re-run init. Nothing was created.\n' >&2
+  exit 1
+fi
+# Old section name -> the moving root it belongs to. Anything absent from this list has
+# not moved and is created exactly as before.
+root_of() {
+  case "$1" in
+    system/rules)      echo rules ;;
+    user/02-personal)  echo memory ;;
+    user/04-projects)  echo projects ;;
+    user/05-knowledge) echo knowledge ;;
+    runtime)           echo runtime ;;
+  esac
+}
+
 # --- structure: system-default, always safe to create -------------------------------
 # A directory carries no content, so creating one can never overwrite a fact.
 printf '%sstructure%s\n' "$B" "$X"
@@ -60,6 +84,10 @@ for section in system/config system/rules system/policies system/schemas \
                user/00-inbox user/01-daily user/02-personal user/03-professional \
                user/04-projects user/05-knowledge user/06-templates \
                skills agents scripts sessions runtime; do
+  root="$(root_of "$section")"
+  if [ -n "$root" ] && [ "$(aios_path_layout "$root")" = "new" ]; then
+    say "${D}moved    $section/ -> $(aios_path "$root" | sed "s|^$AI_OS_HOME/||")/${X}"; existed=$((existed+1)); continue
+  fi
   dir="$AI_OS_HOME/$section"
   if [ -d "$dir" ]; then
     say "exists   $section/"; existed=$((existed+1))
@@ -70,11 +98,12 @@ for section in system/config system/rules system/policies system/schemas \
 done
 
 # The 8 memory sections and 7 knowledge kinds are structure, not content.
+MEM="$(aios_path memory)"; KNOW="$(aios_path knowledge)"
 for s in identity education career projects goals travel preferences interests; do
-  [ -d "$AI_OS_HOME/user/02-personal/memory/$s" ] || { act && mkdir -p "$AI_OS_HOME/user/02-personal/memory/$s"; created=$((created+1)); }
+  [ -d "$MEM/$s" ] || { act && mkdir -p "$MEM/$s"; created=$((created+1)); }
 done
 for k in task-results technical-solutions decisions architecture research discoveries failures; do
-  [ -d "$AI_OS_HOME/user/05-knowledge/$k" ] || { act && mkdir -p "$AI_OS_HOME/user/05-knowledge/$k"; created=$((created+1)); }
+  [ -d "$KNOW/$k" ] || { act && mkdir -p "$KNOW/$k"; created=$((created+1)); }
 done
 say "${D}memory: 8 sections · knowledge: 7 kinds${X}"
 
@@ -86,14 +115,18 @@ printf '\n%sseeds%s %s(copied only where nothing exists)%s\n' "$B" "$X" "$D" "$X
 if [ -d "$TEMPLATES/workspace" ]; then
   while IFS= read -r tpl; do
     rel="${tpl#"$TEMPLATES"/workspace/}"
-    dest="$AI_OS_HOME/$rel"
+    # Templates are written against the old layout; a seed still has to land in the store
+    # this workspace actually has, or init would create a second one beside it.
+    dest="$(aios_path_rewrite "$rel")"
+    # Report where the file actually went, not where the template said it would.
+    at="${dest#"$AI_OS_HOME"/}"
     if [ ! -e "$dest" ]; then
       act && { mkdir -p "$(dirname "$dest")"; cp "$tpl" "$dest"; }
-      say "seeded   $rel"; seeded=$((seeded+1))
+      say "seeded   $at"; seeded=$((seeded+1))
     elif cmp -s "$tpl" "$dest"; then
-      say "${D}unchanged $rel${X}"
+      say "${D}unchanged $at${X}"
     else
-      say "${Y}yours${X}    $rel  ${D}(differs from the template — kept, not touched)${X}"
+      say "${Y}yours${X}    $at  ${D}(differs from the template — kept, not touched)${X}"
       diverged=$((diverged+1))
     fi
   done < <(find "$TEMPLATES/workspace" -type f | sort)

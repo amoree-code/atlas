@@ -91,7 +91,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
-TASKS = AI_OS_HOME / "tasks"
+sys.path.insert(0, str(REPO / "cli"))
+from aios_paths import private_path_or_die  # noqa: E402
+
+# Task records are moving into per-project work, where there is no single root any more.
+# Until a handoff learns that lookup it refuses rather than writing to a stale tasks/.
+TASKS = private_path_or_die("work")
 ADAPTERS = Path(os.environ.get("AI_OS_ADAPTERS", REPO / "adapters"))
 # Declared transports, exactly as adapters/ and capabilities/ are declared: a registry
 # file in the public repo, overridable for tests, never synthesised at runtime.

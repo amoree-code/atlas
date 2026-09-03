@@ -41,8 +41,14 @@ AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
 # adapters/<id>/, so there is nothing left for a second variable to point at.
 ADAPTERS = Path(os.environ.get("AI_OS_ADAPTERS", REPO / "adapters"))
 
-CANON = AI_OS_HOME / "user" / "02-personal" / "memory"
-KNOW_ROOT = AI_OS_HOME / "user" / "05-knowledge"
+# The store and the knowledge base are being relocated one slice at a time; the engine
+# asks where they are now. There is exactly one canonical store either way — two paths
+# that both hold data is a conflict the user resolves, never one this tool picks between.
+sys.path.insert(0, str(REPO / "cli"))
+from aios_paths import private_path_or_die  # noqa: E402
+
+CANON = private_path_or_die("memory")
+KNOW_ROOT = private_path_or_die("knowledge")
 
 # Where a pre-existing real memory directory is moved before its path becomes a link.
 # Overridable so the runtime layer can keep using its historical location until that

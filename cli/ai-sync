@@ -30,8 +30,13 @@ AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", HOME / ".ai-os"))
 # style, their employers — so they are read from there and never published. The record of
 # what was synced, the copies taken before each overwrite, and the auto-sync switch are
 # equally theirs. None of it belonged to the runtime layer that used to hold it.
-RULES = AI_OS_HOME / "system" / "rules"
-RUNTIME = AI_OS_HOME / "runtime"
+# Both roots are mid-migration. Asking rather than assuming is what keeps a half-finished
+# move from splitting the rules Core reads away from the rules the user edits.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from aios_paths import private_path_or_die  # noqa: E402
+
+RULES = private_path_or_die("rules")
+RUNTIME = private_path_or_die("runtime")
 STATE = RUNTIME / "state" / "state.json"
 BACKUPS = RUNTIME / "backups"
 DISABLED = RUNTIME / "DISABLED"

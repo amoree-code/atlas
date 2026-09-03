@@ -32,7 +32,11 @@ from pathlib import Path
 
 CLI_DIR = Path(__file__).resolve().parent
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
-RUNS_DIR = AI_OS_HOME / "runtime" / "runs"
+sys.path.insert(0, str(CLI_DIR))
+from aios_paths import private_path_or_die  # noqa: E402
+
+# Still runtime/runs — but which directory runtime/ is today is the resolver's answer.
+RUNS_DIR = private_path_or_die("runtime") / "runs"
 
 # The whole lifecycle. `continue` is the only non-terminal status; everything else stops
 # the Run from taking further steps until something outside Run changes — a human editing
