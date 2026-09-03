@@ -7,21 +7,44 @@ ok()   { printf '  \033[32mok\033[0m    %s\n' "$1"; }
 warn() { printf '  \033[33mwarn\033[0m  %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=1; }
 
+# Several workspace roots are mid-migration, so this script asks which layout it is in
+# rather than assuming one. It cannot call cli/ai-os-paths — that resolver lives in the
+# public repository and this script only knows its own workspace — so it repeats the same
+# rule in the smallest possible form: the new name when it exists, else the old one, which
+# is still what `ai-os init` creates. Deliberate duplication, not an oversight.
+wrel() {  # <new-rel> <old-rel> -> whichever of the two this workspace actually has
+  if [ -e "$W/$1" ]; then printf '%s' "$1"; else printf '%s' "$2"; fi
+}
+MEMORY=$(wrel personal/memory              user/02-personal/memory)
+KNOWLEDGE=$(wrel personal/knowledge        user/05-knowledge)
+PROJECTS=$(wrel projects                   user/04-projects)
+DAILY=$(wrel personal/daily                user/01-daily)
+PROFESSIONAL=$(wrel personal/professional  user/03-professional)
+TEMPLATES=$(wrel personal/templates        user/06-templates)
+RULES=$(wrel internal/governance/rules     system/rules)
+POLICIES=$(wrel internal/governance/policies system/policies)
+SCHEMAS=$(wrel internal/schemas            system/schemas)
+SKILLS=$(wrel internal/extensions/skills   skills)
+AGENTS=$(wrel internal/extensions/agents   agents)
+HELPERS=$(wrel internal/helpers            scripts)
+RUNTIME=$(wrel internal/runtime            runtime)
+
 echo "== structure =="
-for f in user/02-personal/memory/MEMORY.md user/02-personal/memory/README.md user/05-knowledge/README.md \
-         user/04-projects/registry.md user/04-projects/tasks.md; do
+for f in "$MEMORY/MEMORY.md" "$MEMORY/README.md" "$KNOWLEDGE/README.md" \
+         "$PROJECTS/registry.md" "$PROJECTS/tasks.md"; do
   [ -f "$W/$f" ] && ok "$f" || bad "missing $W/$f"
 done
-for d in user/00-inbox user/01-daily user/03-professional user/06-templates \
-         system/rules system/policies system/schemas \
-         sessions skills agents scripts runtime; do
+# user/00-inbox and sessions/ have not moved; everything else is asked for above.
+for d in user/00-inbox "$DAILY" "$PROFESSIONAL" "$TEMPLATES" \
+         "$RULES" "$POLICIES" "$SCHEMAS" \
+         sessions "$SKILLS" "$AGENTS" "$HELPERS" "$RUNTIME"; do
   [ -d "$W/$d" ] && ok "$d/" || bad "missing $W/$d/"
 done
 for d in identity education career projects goals travel preferences interests; do
-  [ -d "$W/user/02-personal/memory/$d" ] && ok "memory/$d/" || bad "missing main section $W/memory/$d/"
+  [ -d "$W/$MEMORY/$d" ] && ok "memory/$d/" || bad "missing main section $W/$MEMORY/$d/"
 done
 for d in task-results technical-solutions decisions architecture research discoveries failures; do
-  [ -d "$W/user/05-knowledge/$d" ] && ok "knowledge/$d/" || bad "missing $W/knowledge/$d/"
+  [ -d "$W/$KNOWLEDGE/$d" ] && ok "knowledge/$d/" || bad "missing $W/$KNOWLEDGE/$d/"
 done
 
 echo "== claude code (skip if not your adapter) =="
@@ -39,7 +62,8 @@ else
 fi
 
 echo "== scripts =="
-for s in "$W"/config/scripts/*.sh; do
+# These are this script's own neighbours — the helper scripts seeded into the workspace.
+for s in "$W/$HELPERS"/*.sh; do
   [ -e "$s" ] || continue
   [ -x "$s" ] && ok "$(basename "$s") executable" || bad "$(basename "$s") not executable"
   bash -n "$s" 2>/dev/null || bad "$(basename "$s") has a syntax error"
@@ -53,7 +77,7 @@ else
 fi
 
 echo "== registry =="
-if grep -oE '`~?/[^`]*`' "$W/user/04-projects/registry.md" 2>/dev/null | tr -d '`' | while read -r p; do
+if grep -oE '`~?/[^`]*`' "$W/$PROJECTS/registry.md" 2>/dev/null | tr -d '`' | while read -r p; do
     expanded="${p/#\~/$HOME}"
     [ -e "$expanded" ] || echo "$p"
   done | grep -q .; then
@@ -63,7 +87,7 @@ else
 fi
 
 echo "== today =="
-DIR="$W/user/01-daily/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d)"
+DIR="$W/$DAILY/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d)"
 [ -d "$DIR" ] && ok "daily folder for today" || warn "no daily folder for today (run day-start)"
 
 echo "== security =="

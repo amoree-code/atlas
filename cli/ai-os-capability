@@ -60,7 +60,13 @@ if not sys.stdout.isatty():
     G = Y = R = B = D = X = ""
 
 
-AUTHORITY_FILE = AI_OS_HOME / "system" / "config" / "authority.yaml"
+# config/ is mid-migration, and this file is the grant ledger: read it from a path that
+# merely used to be right and every grant reads as absent — so every operation is refused
+# while the workspace still looks healthy. The root is asked for, never assumed.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from aios_paths import private_path_or_die  # noqa: E402
+
+AUTHORITY_FILE = private_path_or_die("config") / "authority.yaml"
 
 
 def die(msg):

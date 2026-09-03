@@ -6,11 +6,14 @@
 # initial workspace state; memory owns durable facts. Every answer collected here is
 # written to the ONE canonical owner for that fact and nowhere else:
 #
-#   name, languages    -> user/02-personal/memory/identity/       (memory owns user facts)
-#   how to reply       -> user/02-personal/memory/preferences/
-#   work / occupation  -> user/02-personal/memory/career/
-#   skill-render values-> system/config/profile.yaml              (already canonical)
-#   whether we are done-> system/config/workspace.yaml            (this file's only job)
+#   name, languages    -> <memory>/identity/                      (memory owns user facts)
+#   how to reply       -> <memory>/preferences/
+#   work / occupation  -> <memory>/career/
+#   skill-render values-> <config>/profile.yaml                   (already canonical)
+#   whether we are done-> <config>/workspace.yaml                 (this file's only job)
+#
+# <memory> and <config> are roots, not paths: both are mid-migration, and `ai-os-paths`
+# is the one place that knows which layout this workspace is actually in.
 #
 # workspace.yaml stores state and POINTERS. It never stores a copy of a fact that lives
 # somewhere else, because two copies of a fact is two facts the moment one is edited.
@@ -43,15 +46,19 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(dirname "$SELF_DIR")"
 VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
 
-STATE="$AI_OS_HOME/system/config/workspace.yaml"
-# The memory store is mid-migration and may sit in either layout. Onboarding writes real
-# user facts, so it must write into the store that exists — never into a path that merely
-# used to be right. A conflicting pair leaves MEM empty and every write below refuses.
+# Config and memory are both mid-migration and may sit in either layout. Onboarding writes
+# real user facts and the one marker that says this workspace is set up, so both must land
+# in the store that exists — never in a path that merely used to be right. A conflicting
+# pair leaves MEM empty and every write below refuses; CONFIG keeps the layout `ai-os init`
+# still creates, which is what the resolver itself returns when neither side exists.
+CONFIG="$("$SELF_DIR/ai-os-paths" get config 2>/dev/null)"
+CONFIG="${CONFIG:-$AI_OS_HOME/system/config}"
+STATE="$CONFIG/workspace.yaml"
 MEM="$("$SELF_DIR/ai-os-paths" get memory 2>/dev/null)"
 IDENTITY_DIR="$MEM/identity"
 PREFS_DIR="$MEM/preferences"
 CAREER_DIR="$MEM/career"
-PROFILE="$AI_OS_HOME/system/config/profile.yaml"
+PROFILE="$CONFIG/profile.yaml"
 
 if [ -t 1 ]; then G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; D=$'\033[2m'; X=$'\033[0m'
 else G=; Y=; R=; B=; D=; X=; fi
@@ -319,7 +326,7 @@ cmd_complete() {
   if [ "$(ws_get step_language)" = "done" ]; then say "${G}ok${X}       step language"; else say "${R}FAIL${X}     step language not done"; problems=$((problems+1)); fi
   if have_identity;    then say "${G}ok${X}       canonical identity on disk"; else say "${R}FAIL${X}     no identity data at ${IDENTITY_DIR#"$AI_OS_HOME"/}"; problems=$((problems+1)); fi
   if have_preferences; then say "${G}ok${X}       canonical preferences on disk"; else say "${R}FAIL${X}     no preference data at ${PREFS_DIR#"$AI_OS_HOME"/}"; problems=$((problems+1)); fi
-  for d in "$AI_OS_HOME/system/config" "$MEM" "$("$SELF_DIR/ai-os-paths" get knowledge 2>/dev/null)"; do
+  for d in "$CONFIG" "$MEM" "$("$SELF_DIR/ai-os-paths" get knowledge 2>/dev/null)"; do
     rel="${d#"$AI_OS_HOME"/}"
     if [ -n "$d" ] && [ -d "$d" ]; then say "${G}ok${X}       $rel/"
     else say "${R}FAIL${X}     missing ${rel:-<unresolved — ai-os-paths check>}/"; problems=$((problems+1)); fi

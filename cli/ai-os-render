@@ -3,7 +3,7 @@
 
 One skill body lives in the public repo. Two things make it yours:
 
-  {{profile.*}}   your values, from $AI_OS_HOME/system/config/profile.yaml — PRIVATE
+  {{profile.*}}   your values, from the workspace's config/profile.yaml — PRIVATE
   {{client.*}}    the client's filesystem conventions, from its plugin manifest
 
 That is the whole mechanism. It exists so there is exactly one skill to maintain rather
@@ -23,7 +23,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SKILLS = REPO / "skills"
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
-PROFILE = AI_OS_HOME / "system" / "config" / "profile.yaml"
+# config/ is mid-migration. The profile is optional, but *which* directory holds it is not
+# a question to guess at: two profiles in two layouts would render two different skills.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from aios_paths import private_path_or_die  # noqa: E402
+
+PROFILE = private_path_or_die("config") / "profile.yaml"
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
     G = Y = R = D = X = ""

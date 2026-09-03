@@ -15,7 +15,13 @@
 #
 # Resolution order:
 #   1. $AI_OS_REPO                                              explicit override
-#   2. ai_os_repo: in ${AI_OS_HOME:-$HOME/.ai-os}/system/config/settings.yaml
+#   2. ai_os_repo: in ${AI_OS_HOME:-$HOME/.ai-os}/internal/config/settings.yaml
+#      falling back to the pre-move .../system/config/settings.yaml
+#
+# Those two paths are the one place in AI-OS that may not ask cli/ai-os-paths which layout
+# the workspace is in: the resolver lives inside the repository, and this file runs before
+# the repository has been found. So it checks both, newest first — the same order the
+# resolver itself uses — and the duplication is deliberate, not an oversight.
 #
 # Nothing here names a client. Every adapter installs the same file into its own client's
 # configuration domain; which client is calling is not a question this needs to answer.
@@ -35,8 +41,10 @@ die() { printf 'ai-os-hook: %s\n' "$*" >&2; exit 78; }
 repo="${AI_OS_REPO:-}"
 
 if [ -z "$repo" ]; then
-    cfg="${AI_OS_HOME:-$HOME/.ai-os}/system/config/settings.yaml"
-    [ -f "$cfg" ] || die "no AI_OS_REPO set and no workspace settings at $cfg"
+    home="${AI_OS_HOME:-$HOME/.ai-os}"
+    cfg="$home/internal/config/settings.yaml"
+    [ -f "$cfg" ] || cfg="$home/system/config/settings.yaml"
+    [ -f "$cfg" ] || die "no AI_OS_REPO set and no workspace settings at $home/internal/config/settings.yaml or $home/system/config/settings.yaml"
     # First ai_os_repo: line; strip an inline comment, surrounding quotes, trailing space.
     repo=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$cfg" | head -n 1 | sed \
         -e 's/[[:space:]]*#.*$//' \

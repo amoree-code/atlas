@@ -6,9 +6,9 @@ governance/policies/privacy-classification.yaml):
 
   credential   a value that grants access.      Generic shapes, built in.
   personal     a value that identifies someone. Generic shapes built in; the user's own
-               terms are read from $AI_OS_HOME/system/policies/privacy-terms.txt, which is PRIVATE
-               and never lives in this repository. A scanner that hardcoded a real name,
-               email and employer would itself be the leak it is meant to prevent.
+               terms are read from the workspace's policies/privacy-terms.txt, which is
+               PRIVATE and never lives in this repository. A scanner that hardcoded a real
+               name, email and employer would itself be the leak it is meant to prevent.
 
 Reports. Never edits, never deletes, never rewrites history.
 
@@ -41,6 +41,13 @@ if not sys.stdout.isatty():
 
 REPO = Path(__file__).resolve().parent.parent
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
+# policies/ is mid-migration. Reading the terms file from a path that merely used to be
+# right would silently check nothing — the user's real name and handles would go unchecked
+# while the scan still printed "clean". So the root is asked for, never assumed.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from aios_paths import private_path_or_die  # noqa: E402
+
+TERMS_FILE = private_path_or_die("policies") / "privacy-terms.txt"
 
 SKIP_DIRS = {".git", "node_modules", "dist", "build", "__pycache__", ".venv", "coverage"}
 SKIP_SUFFIX = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".gz", ".tar",
@@ -130,7 +137,7 @@ def load_allowlist():
 
 def load_user_terms():
     """The user's own identifying strings. Private, optional, never in this repository."""
-    f = AI_OS_HOME / "system" / "policies" / "privacy-terms.txt"
+    f = TERMS_FILE
     if not f.exists():
         return None
     terms = []
@@ -217,7 +224,7 @@ def main(argv):
     if not quiet:
         print(f"\n  privacy scan  {root}")
         print(f"  {D}allowlist{X} {len(allow)} entries   "
-              f"{D}user terms{X} " + (f"{len(user_terms)} from {AI_OS_HOME}/system/policies/privacy-terms.txt"
+              f"{D}user terms{X} " + (f"{len(user_terms)} from {TERMS_FILE}"
                                       if user_terms is not None else f"{Y}none{X}"))
         if ignored:
             print(f"  {D}git-ignored{X} {len(ignored)} file(s) — not publishable, so personal "
@@ -267,7 +274,7 @@ def main(argv):
             print(f"  {colour}{cls.upper():<10}{X} {label:<28} {rel}:{line}  {D}{redact(match, cls)}{X}")
 
     if user_terms is None and not quiet:
-        print(f"\n  {Y}note{X} no {AI_OS_HOME}/system/policies/privacy-terms.txt — generic patterns only.")
+        print(f"\n  {Y}note{X} no {TERMS_FILE} — generic patterns only.")
         print(f"       Names, handles, employers and private repo names are NOT being checked.")
 
     if not quiet:

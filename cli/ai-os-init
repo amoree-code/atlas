@@ -74,6 +74,13 @@ root_of() {
     user/04-projects)  echo projects ;;
     user/05-knowledge) echo knowledge ;;
     runtime)           echo runtime ;;
+    system/config)     echo config ;;
+    system/policies)   echo policies ;;
+    user/01-daily)     echo daily ;;
+    user/06-templates) echo templates ;;
+    skills)             echo skills ;;
+    agents)             echo agents ;;
+    scripts)            echo helpers ;;
   esac
 }
 
@@ -174,7 +181,7 @@ fi
 printf '\n%snot copied, deliberately%s\n' "$B" "$X"
 say "${D}public skills${X}   stay in $REPO/skills — copying them here would turn"
 say "${D}             ${X}   software into your files and make them un-updatable."
-say "${D}             ${X}   Your own skills go in $AI_OS_HOME/skills and win on name."
+say "${D}             ${X}   Your own skills go in $(aios_path skills 2>/dev/null || echo "$AI_OS_HOME/skills") and win on name."
 say "${D}runtime scripts${X} belong to the runtime layer, not your data."
 say "${D}profile.yaml${X}    seeded blank. Fill it in: it is what makes the canonical"
 say "${D}            ${X}    skills yours, and it never leaves this workspace."

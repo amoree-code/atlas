@@ -3,7 +3,13 @@
 set -uo pipefail
 W="${AI_OS_HOME:-$HOME/.ai-os}"
 D=$(date +%Y-%m-%d)
-DIR="$W/user/01-daily/$(date +%Y)/$(date +%m)/$D"
+# Both roots are mid-migration, and this script cannot call cli/ai-os-paths: that resolver
+# lives in the public repository and this script knows only its own workspace. So it
+# repeats the resolver's rule in the smallest form — the new name when it exists, else the
+# old one, which is still what `ai-os init` creates.
+if [ -d "$W/personal/daily" ]; then DAILY="$W/personal/daily"; else DAILY="$W/user/01-daily"; fi
+if [ -d "$W/projects" ];       then PROJECTS="$W/projects";    else PROJECTS="$W/user/04-projects"; fi
+DIR="$DAILY/$(date +%Y)/$(date +%m)/$D"
 
 echo "=== today: $D ==="
 if [ -d "$DIR" ]; then echo "daily folder: $DIR"; else echo "daily folder: NOT CREATED (run day-start.sh)"; fi
@@ -18,7 +24,7 @@ done
 
 echo
 echo "=== open tasks ==="
-grep -E '^\- \[(TODO|WIP|BLOCKED)\]' "$W/user/04-projects/tasks.md" 2>/dev/null || echo "(none)"
+grep -E '^\- \[(TODO|WIP|BLOCKED)\]' "$PROJECTS/tasks.md" 2>/dev/null || echo "(none)"
 
 echo
 echo "=== repos with uncommitted work ==="

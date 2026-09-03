@@ -2834,7 +2834,8 @@ t "private path compatibility: the resolver answers for every moving root"
 # that must never be resolved by guessing. See cli/ai-os-paths.
 PA="$CLI/ai-os-paths"
 [ -x "$PA" ];                             chk "cli/ai-os-paths exists and is executable" $?
-for r in memory knowledge projects work rules runtime; do
+for r in memory knowledge projects work rules runtime \
+         config policies daily templates skills agents helpers; do
   "$PA" layout "$r" >/dev/null 2>&1;      chk "  declares the '$r' root" $?
 done
 "$PA" layout nonesuch >/dev/null 2>&1
@@ -3082,17 +3083,24 @@ mk_pilot "$RP/personal/memory/index.md"
 [ "$(AI_OS_HOME="$RP" "$PA" layout memory)" = "conflict" ]
 chk "a pilot marker under personal/memory exempts nothing" $?
 
-# The other three roots are untouched by this slice, and the roots that do not move are
-# still not resolver roots: daily, professional and templates were not invented here.
+# The other three roots are untouched by this slice.
 RO="$TMP/retarget-others"
 mkdir -p "$RO/projects" "$RO/internal/governance/rules" "$RO/internal/runtime"
 [ "$(AI_OS_HOME="$RO" "$PA" layout projects)" = "new" ] &&
   [ "$(AI_OS_HOME="$RO" "$PA" layout rules)" = "new" ] &&
   [ "$(AI_OS_HOME="$RO" "$PA" layout runtime)" = "new" ]
 chk "projects, rules and runtime keep the new sides they already had" $?
+# The root list is asserted whole, so a root can never be added by accident — only by
+# editing this line. Slice 8b left daily and templates out because nothing resolved them;
+# Slice 10A added them, with config, policies, skills, agents and helpers, because those
+# are exactly the seven the live CLI tools still named literally. `professional` is still
+# absent: nothing resolves it, so inventing a root would widen conflict detection for no
+# caller. See cli/ai-os-paths.
 roots=$(. "$PA"; printf '%s' "$AIOS_PATH_ROOTS")
-[ "$roots" = "memory knowledge projects work rules runtime" ]
-chk "no new resolver root was invented for daily, professional or templates" $?
+[ "$roots" = "memory knowledge projects work rules runtime config policies daily templates skills agents helpers" ]
+chk "the resolver root list is exactly the thirteen declared roots" $?
+case " $roots " in *" professional "*) false ;; *) true ;; esac
+chk "  ...and professional is still not one of them" $?
 
 # =====================================================================================
 t "private path compatibility: an archived pointer layer is not a live root"
@@ -3196,6 +3204,145 @@ chk "  ...named in the report, with both paths" $?
 [ -d "$AR/projects/ai-os/work/items/AIOS-014" ] && [ -d "$AR/projects/other/work/items/AIOS-014" ]
 chk "  ...and neither side was touched" $?
 rm -rf "$AR/projects/other"
+
+# =====================================================================================
+t "contraction: the seven shimmed roots resolve like every other root"
+# Slice 9 moved the private roots but left seven behind as symlink shims, because the CLI
+# tools named them literally: system/config, system/policies, user/01-daily,
+# user/06-templates, skills, agents and scripts. Slice 10A gave each one a resolver root,
+# which is what makes removing those shims possible later. Same four states as the
+# original six roots — old, new, neither, conflict — and the same refusal.
+SEVEN="config:internal/config:system/config
+policies:internal/governance/policies:system/policies
+daily:personal/daily:user/01-daily
+templates:personal/templates:user/06-templates
+skills:internal/extensions/skills:skills
+agents:internal/extensions/agents:agents
+helpers:internal/helpers:scripts"
+
+C_OLD="$TMP/c-old"; C_NEW="$TMP/c-new"; C_NONE="$TMP/c-none"; C_SHIM="$TMP/c-shim"
+mkdir -p "$C_OLD" "$C_NEW" "$C_NONE" "$C_SHIM"
+bad_old=0; bad_new=0; bad_none=0; bad_shim=0; bad_pair=0
+while IFS=: read -r root new old; do
+  [ -n "$root" ] || continue
+  # Each root's own pair, read back from the resolver rather than restated here.
+  pair=$(. "$PA"; _aios_pair "$root")
+  [ "${pair%% *}" = "$new" ] && [ "${pair##* }" = "$old" ] || bad_pair=1
+
+  mkdir -p "$C_OLD/$old"
+  [ "$(AI_OS_HOME="$C_OLD" "$PA" layout "$root")" = "old" ] &&
+    [ "$(AI_OS_HOME="$C_OLD" "$PA" get "$root")" = "$C_OLD/$old" ] || bad_old=1
+
+  mkdir -p "$C_NEW/$new"
+  [ "$(AI_OS_HOME="$C_NEW" "$PA" layout "$root")" = "new" ] &&
+    [ "$(AI_OS_HOME="$C_NEW" "$PA" get "$root")" = "$C_NEW/$new" ] || bad_new=1
+
+  # Nothing there yet resolves to the old path on purpose: that is still the layout
+  # `ai-os init` creates, and a fresh workspace must not change shape under it.
+  [ "$(AI_OS_HOME="$C_NONE" "$PA" layout "$root")" = "none" ] &&
+    [ "$(AI_OS_HOME="$C_NONE" "$PA" get "$root")" = "$C_NONE/$old" ] || bad_none=1
+
+  # The live state of a migrated workspace: the real directory at the new name, the old
+  # name still reaching it through a symlink. One directory, two names — compatibility,
+  # not a clash.
+  mkdir -p "$C_SHIM/$new" "$C_SHIM/$(dirname "$old")"
+  ln -s "$C_SHIM/$new" "$C_SHIM/$old"
+  [ "$(AI_OS_HOME="$C_SHIM" "$PA" layout "$root")" = "new" ] &&
+    [ "$(AI_OS_HOME="$C_SHIM" "$PA" get "$root")" = "$C_SHIM/$new" ] || bad_shim=1
+done <<< "$SEVEN"
+[ "$bad_pair" -eq 0 ];  chk "each new root declares the move Slice 9 actually made" $?
+[ "$bad_old" -eq 0 ];   chk "old path only -> the old path, for all seven" $?
+[ "$bad_new" -eq 0 ];   chk "new path only -> the new path, for all seven" $?
+[ "$bad_none" -eq 0 ];  chk "neither -> the layout init still creates, for all seven" $?
+[ "$bad_shim" -eq 0 ];  chk "a symlink shim resolves to the new path, for all seven" $?
+AI_OS_HOME="$C_SHIM" "$PA" check >/dev/null 2>&1
+[ $? -eq 0 ];           chk "  ...and a fully shimmed workspace reports no conflict" $?
+
+# Two real directories is still a conflict, refused the same way.
+C_BOTH="$TMP/c-both"; mkdir -p "$C_BOTH/internal/config" "$C_BOTH/system/config"
+echo "new side" > "$C_BOTH/internal/config/settings.yaml"
+echo "old side" > "$C_BOTH/system/config/settings.yaml"
+[ "$(AI_OS_HOME="$C_BOTH" "$PA" layout config)" = "conflict" ]
+chk "config in both layouts, as two directories -> conflict" $?
+out=$(AI_OS_HOME="$C_BOTH" "$PA" get config 2>&1); rc=$?
+[ "$rc" -eq 3 ] && echo "$out" | grep -qi "will not merge"
+chk "  ...refused, and it will not merge them" $?
+grep -q "new side" "$C_BOTH/internal/config/settings.yaml" &&
+  grep -q "old side" "$C_BOTH/system/config/settings.yaml"
+chk "  ...neither side was touched" $?
+
+# =====================================================================================
+t "contraction: the tools that named those paths literally now ask"
+# The point of the slice. Each of these used to build a path out of \$AI_OS_HOME and a
+# literal old directory name; a workspace that had moved was reached only through the
+# shim. Asserted at the source, because that is the property that lets the shim go.
+grep -q 'private_path_or_die("config") / "authority.yaml"' "$CLI/ai-os-capability"
+chk "ai-os-capability reads the grant ledger through the resolver" $?
+grep -q 'private_path_or_die("config") / "profile.yaml"' "$CLI/ai-os-render"
+chk "ai-os-render reads the profile through the resolver" $?
+grep -q 'private_path_or_die("policies") / "privacy-terms.txt"' "$CLI/ai-os-privacy-scan"
+chk "ai-os-privacy-scan reads the user's terms through the resolver" $?
+grep -q 'ai-os-paths" get config' "$CLI/ai-os-onboard"
+chk "ai-os-onboard reads its state marker through the resolver" $?
+# An old path is still allowed as the DEFAULT of a resolved variable — ${AI_OS_PATH_X:-…}
+# is how a fresh workspace keeps working when the resolver has no single answer. What must
+# be gone is the bare literal: a path built out of $AI_OS_HOME and a directory name that
+# has moved. So the fallback forms are stripped out first, and whatever remains is a
+# consumer that never asked.
+still_literal=""
+for lit in 'AI_OS_HOME/system/config' 'AI_OS_HOME/system/policies' \
+           'AI_OS_HOME/user/01-daily' 'AI_OS_HOME/user/06-templates' \
+           'AI_OS_HOME/skills' 'AI_OS_HOME/agents' 'AI_OS_HOME/scripts'; do
+  for f in "$CLI/ai-os-status" "$CLI/ai-os-onboard" "$CLI/ai-os-render" \
+           "$CLI/ai-os-privacy-scan" "$CLI/ai-os-capability"; do
+    sed 's/\${[A-Za-z_][A-Za-z0-9_]*:-[^}]*}//g' "$f" | grep -qF "\$$lit" \
+      && still_literal="$still_literal $(basename "$f"):$lit"
+  done
+done
+[ -z "$still_literal" ] || printf '        still literal:%s\n' "$still_literal"
+[ -z "$still_literal" ]
+chk "no live consumer still builds one of the seven paths by hand" $?
+# ai-os-doctor and ai-os-init keep the old names on purpose, in the two places that are
+# about the old layout rather than about reaching data: doctor's conflict report and
+# init's fallback for a workspace that has not moved.
+grep -q 'AI_OS_PATH_CONFIG:-\$AI_OS_HOME/system/config' "$CLI/ai-os-doctor"
+chk "doctor keeps the old path only as the pre-move fallback" $?
+grep -q 'for r in memory knowledge projects rules config daily templates skills agents helpers' "$CLI/ai-os-doctor"
+chk "  ...and checks all of them through the resolver's layout answer" $?
+
+# ai-os-hook is the one file that may not ask: the resolver lives in the repository, and
+# the hook runs before the repository has been found. So it checks both, newest first.
+H_NEW="$TMP/hook-new"; mkdir -p "$H_NEW/internal/config"
+printf 'ai_os_repo: %s\n' "$REPO" > "$H_NEW/internal/config/settings.yaml"
+AI_OS_HOME="$H_NEW" "$CLI/ai-os-hook" cli/ai-os-paths list >/dev/null 2>&1
+chk "the hook finds the repository through the new config path" $?
+H_OLD="$TMP/hook-old"; mkdir -p "$H_OLD/system/config"
+printf 'ai_os_repo: %s\n' "$REPO" > "$H_OLD/system/config/settings.yaml"
+AI_OS_HOME="$H_OLD" "$CLI/ai-os-hook" cli/ai-os-paths list >/dev/null 2>&1
+chk "  ...and still through the old one" $?
+H_BOTH="$TMP/hook-both"; mkdir -p "$H_BOTH/internal/config" "$H_BOTH/system/config"
+printf 'ai_os_repo: %s\n' "$REPO"        > "$H_BOTH/internal/config/settings.yaml"
+printf 'ai_os_repo: %s\n' "/nonexistent" > "$H_BOTH/system/config/settings.yaml"
+AI_OS_HOME="$H_BOTH" "$CLI/ai-os-hook" cli/ai-os-paths list >/dev/null 2>&1
+chk "  ...and prefers the new one when both exist" $?
+out=$(AI_OS_HOME="$TMP/hook-none" "$CLI/ai-os-hook" cli/ai-os-paths list 2>&1); rc=$?
+[ "$rc" -eq 78 ] && echo "$out" | grep -q "internal/config/settings.yaml" \
+                 && echo "$out" | grep -q "system/config/settings.yaml"
+chk "  ...and names both when it finds neither" $?
+
+# A workspace that has fully moved must not be told its sections are missing — that
+# report is what the shims were propping up.
+D_NEW="$TMP/doctor-new"
+mkdir -p "$D_NEW/personal/memory" "$D_NEW/personal/knowledge" "$D_NEW/projects" \
+         "$D_NEW/personal/daily" "$D_NEW/personal/templates" "$D_NEW/sessions" \
+         "$D_NEW/internal/config" "$D_NEW/internal/governance/rules" \
+         "$D_NEW/internal/governance/policies" "$D_NEW/internal/extensions/skills" \
+         "$D_NEW/internal/extensions/agents" "$D_NEW/internal/helpers"
+dout=$(AI_OS_HOME="$D_NEW" "$CLI/ai-os-doctor" --quiet 2>&1)
+printf '%s' "$dout" | grep -q "missing section"
+[ $? -ne 0 ];           chk "doctor reports no missing section on a fully moved workspace" $?
+printf '%s' "$dout" | grep -qE 'exists in both layouts'
+[ $? -ne 0 ];           chk "  ...and no root conflict either" $?
 
 # =====================================================================================
 t "private path compatibility: rewrite maps an old-layout path onto the live one"

@@ -34,16 +34,29 @@
 # --- the table ----------------------------------------------------------------------
 # One line per root that moves. new-relative, old-relative. A `*` in the new path means
 # the root does not survive the move as a single directory — see aios_path().
-AIOS_PATH_ROOTS="memory knowledge projects work rules runtime"
+#
+# The seven added in Slice 10A (config, policies, daily, templates, skills, agents,
+# helpers) are exactly the roots Slice 9 left behind as symlink shims, because
+# ai-os-onboard, ai-os-hook, ai-os-render, ai-os-privacy-scan, ai-os-doctor and
+# ai-os-status named them literally. Giving them a resolver root is what makes those
+# shims removable later — see roadmap.md "What Slice 10 has to remove".
+AIOS_PATH_ROOTS="memory knowledge projects work rules runtime config policies daily templates skills agents helpers"
 
 _aios_pair() {  # <root> -> "<new-rel> <old-rel>"
   case "$1" in
-    memory)    echo "personal/memory            user/02-personal/memory" ;;
-    knowledge) echo "personal/knowledge         user/05-knowledge" ;;
-    projects)  echo "projects                   user/04-projects" ;;
-    work)      echo "projects/*/work            tasks" ;;
-    rules)     echo "internal/governance/rules  system/rules" ;;
-    runtime)   echo "internal/runtime           runtime" ;;
+    memory)    echo "personal/memory                 user/02-personal/memory" ;;
+    knowledge) echo "personal/knowledge              user/05-knowledge" ;;
+    projects)  echo "projects                        user/04-projects" ;;
+    work)      echo "projects/*/work                 tasks" ;;
+    rules)     echo "internal/governance/rules       system/rules" ;;
+    runtime)   echo "internal/runtime                runtime" ;;
+    config)    echo "internal/config                 system/config" ;;
+    policies)  echo "internal/governance/policies    system/policies" ;;
+    daily)     echo "personal/daily                  user/01-daily" ;;
+    templates) echo "personal/templates              user/06-templates" ;;
+    skills)    echo "internal/extensions/skills      skills" ;;
+    agents)    echo "internal/extensions/agents      agents" ;;
+    helpers)   echo "internal/helpers                scripts" ;;
     *) return 1 ;;
   esac
 }

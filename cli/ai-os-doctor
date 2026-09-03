@@ -95,8 +95,7 @@ fi
 head "workspace"
 # ====================================================================================
 missing=""
-for s in system/config user/01-daily user/06-templates \
-         skills agents scripts sessions; do
+for s in sessions; do
   [ -d "$AI_OS_HOME/$s" ] || missing="$missing $s"
 done
 # The roots that are mid-migration are asked for, not assumed. A root present in both
@@ -106,7 +105,7 @@ done
 # path with a space in it stays one path instead of becoming a command and its arguments.
 . "$SELF_DIR/ai-os-paths"
 aios_paths_export
-for r in memory knowledge projects rules; do
+for r in memory knowledge projects rules config daily templates skills agents helpers; do
   u="$(printf '%s' "$r" | tr 'a-z' 'A-Z')"; pv="AI_OS_PATH_$u"; lv="AI_OS_LAYOUT_$u"
   case "${!lv:-none}" in
     conflict) fail "private root '$r' exists in both layouts, as different directories"
@@ -309,7 +308,7 @@ else
   fi
   if [ -d "$AI_OS_LEGACY/workspace" ]; then
     ok "frozen archive present: $AI_OS_LEGACY/workspace  ${D}(rollback copy, read-only)${X}"
-    if grep -rqlF "$AI_OS_LEGACY/workspace" "$AI_OS_HOME/system/config" 2>/dev/null; then
+    if grep -rqlF "$AI_OS_LEGACY/workspace" "${AI_OS_PATH_CONFIG:-$AI_OS_HOME/system/config}" 2>/dev/null; then
       fail "private configuration still resolves into the frozen archive"
       note "the archive is a rollback copy; live configuration must not depend on it"
     else
@@ -364,13 +363,14 @@ head "configuration"
 # Defaults < user < project. An update may add a missing key; it must never change one
 # the user has set. Doctor reports what an update WOULD add; it adds nothing.
 # ====================================================================================
-CFG="$AI_OS_HOME/system/config/settings.yaml"
+CFG="${AI_OS_PATH_CONFIG:-$AI_OS_HOME/system/config}/settings.yaml"
+CFG_REL="${CFG#"$AI_OS_HOME"/}"
 TPL="$REPO/templates/workspace/system/config/settings.yaml"
 if [ -f "$CFG" ]; then
   if grep -qP '^\t' "$CFG" 2>/dev/null; then
-    fail "system/config/settings.yaml contains tab indentation — not valid YAML"
+    fail "$CFG_REL contains tab indentation — not valid YAML"
   else
-    ok "system/config/settings.yaml present, no tab indentation"
+    ok "$CFG_REL present, no tab indentation"
   fi
   if [ -f "$TPL" ]; then
     tkeys=$(grep -oE '^[a-z_]+:' "$TPL" | sort -u)
@@ -385,21 +385,24 @@ if [ -f "$CFG" ]; then
     fi
   fi
 else
-  warn "system/config/settings.yaml missing"
+  warn "$CFG_REL missing"
 fi
-[ -f "$AI_OS_HOME/system/policies/privacy-terms.txt" ] \
-  && ok "system/policies/privacy-terms.txt present  ${D}(private — used by privacy-scan)${X}" \
-  || warn "system/policies/privacy-terms.txt missing — privacy-scan runs generic patterns only"
+TERMS="${AI_OS_PATH_POLICIES:-$AI_OS_HOME/system/policies}/privacy-terms.txt"
+TERMS_REL="${TERMS#"$AI_OS_HOME"/}"
+[ -f "$TERMS" ] \
+  && ok "$TERMS_REL present  ${D}(private — used by privacy-scan)${X}" \
+  || warn "$TERMS_REL missing — privacy-scan runs generic patterns only"
 
 # ====================================================================================
 head "skills"
 # ====================================================================================
 if [ -d "$REPO/skills" ]; then
+  USR_SKILLS="${AI_OS_PATH_SKILLS:-$AI_OS_HOME/skills}"
   pub=$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ')
-  usr=$(find "$AI_OS_HOME/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+  usr=$(find "$USR_SKILLS" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
   ok "$pub public skill(s), $usr user skill(s)"
   shadow=""
-  for d in "$AI_OS_HOME/skills"/*/; do
+  for d in "$USR_SKILLS"/*/; do
     [ -d "$d" ] || continue
     n=$(basename "${d%/}")
     [ -d "$REPO/skills/$n" ] && shadow="$shadow $n"
@@ -461,8 +464,8 @@ if [ -x "$SELF_DIR/ai-os-privacy-scan" ]; then
     fail "public repo contains data that must not be published:"
     echo "$out" | sed 's/^/        /'
   fi
-  [ -f "$AI_OS_HOME/system/policies/privacy-terms.txt" ] || \
-    note "generic patterns only — add your terms to system/policies/privacy-terms.txt for a real check"
+  [ -f "$TERMS" ] || \
+    note "generic patterns only — add your terms to $TERMS_REL for a real check"
 else
   warn "ai-os-privacy-scan not found — public repo not checked for private data"
 fi

@@ -49,7 +49,7 @@ _INERT = "a domain is inert: it has no executable of its own"
 # concept trying to arrive early, and the message names which one.
 FORBIDDEN = {
     "authority": "a domain grants nothing — authority is declared by a capability and "
-                 "granted in system/config/authority.yaml",
+                 "granted in the workspace's config/authority.yaml",
     "verify": "a domain defines no verifiers — verification is a capability operation's "
               "own verify:, and executed never implies verified",
     "command": _INERT,

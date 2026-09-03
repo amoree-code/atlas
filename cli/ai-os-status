@@ -50,7 +50,7 @@ aios_paths_export
 printf '\n%sworkspace%s\n' "$B" "$X"
 for s in "memory:${AI_OS_PATH_MEMORY:-}" "knowledge:${AI_OS_PATH_KNOWLEDGE:-}" \
          "projects:${AI_OS_PATH_PROJECTS:-}" "sessions:$AI_OS_HOME/sessions" \
-         "daily:$AI_OS_HOME/user/01-daily" "skills:$AI_OS_HOME/skills"; do
+         "daily:${AI_OS_PATH_DAILY:-}" "skills:${AI_OS_PATH_SKILLS:-}"; do
   label="${s%%:*}"; d="${s#*:}"
   # Count through the directory, not at it. Some sections are reachable by a compatibility
   # symlink while a move settles, and `find` stops at a symlink instead of descending —
@@ -64,7 +64,8 @@ done
 # Layout is reported only while it is still interesting: a workspace entirely on the old
 # layout is the normal case today and does not need a line about it.
 moved=""
-for r in memory knowledge projects work rules runtime; do
+for r in memory knowledge projects work rules runtime \
+         config policies daily templates skills agents helpers; do
   v="AI_OS_LAYOUT_$(printf '%s' "$r" | tr 'a-z' 'A-Z')"; l="${!v:-old}"
   [ "$l" = "old" ] || moved="${moved}${moved:+ }$r=$l"
 done
@@ -99,10 +100,10 @@ row "knowledge" "$(find "${AI_OS_PATH_KNOWLEDGE:-/nonexistent}" -name '*.md' 2>/
 
 printf '\n%sskills%s\n' "$B" "$X"
 row "public" "$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
-row "yours" "$(find "$AI_OS_HOME/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')  ${D}(yours win on a name collision)${X}"
+row "yours" "$(find "${AI_OS_PATH_SKILLS:-$AI_OS_HOME/skills}" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')  ${D}(yours win on a name collision)${X}"
 
 printf '\n%sadapter%s\n' "$B" "$X"
-adapter=$(grep -m1 '^active_adapter:' "$AI_OS_HOME/system/config/settings.yaml" 2>/dev/null | cut -d: -f2 | tr -d ' ')
+adapter=$(grep -m1 '^active_adapter:' "${AI_OS_PATH_CONFIG:-$AI_OS_HOME/system/config}/settings.yaml" 2>/dev/null | cut -d: -f2 | tr -d ' ')
 row "active" "${adapter:-claude-code ${D}(default)${X}}"
 
 printf '\n%shealth%s\n' "$B" "$X"
