@@ -38,8 +38,8 @@ AIOS_PATH_ROOTS="memory knowledge projects work rules runtime"
 
 _aios_pair() {  # <root> -> "<new-rel> <old-rel>"
   case "$1" in
-    memory)    echo "user/memory                user/02-personal/memory" ;;
-    knowledge) echo "user/knowledge             user/05-knowledge" ;;
+    memory)    echo "personal/memory            user/02-personal/memory" ;;
+    knowledge) echo "personal/knowledge         user/05-knowledge" ;;
     projects)  echo "projects                   user/04-projects" ;;
     work)      echo "projects/*/work            tasks" ;;
     rules)     echo "internal/governance/rules  system/rules" ;;

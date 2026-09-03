@@ -2838,9 +2838,9 @@ mkdir -p "$PW/user/05-knowledge"
 [ "$("$PA" layout knowledge)" = "old" ];                chk "old path only -> layout old" $?
 [ "$("$PA" get knowledge)" = "$PW/user/05-knowledge" ]; chk "  ...and resolves to the old path" $?
 
-mkdir -p "$PW/user/memory"
+mkdir -p "$PW/personal/memory"
 [ "$("$PA" layout memory)" = "new" ];                   chk "new path only -> layout new" $?
-[ "$("$PA" get memory)" = "$PW/user/memory" ];          chk "  ...and resolves to the new path" $?
+[ "$("$PA" get memory)" = "$PW/personal/memory" ];      chk "  ...and resolves to the new path" $?
 
 [ "$("$PA" layout projects)" = "none" ];                chk "neither path -> layout none" $?
 [ "$("$PA" get projects)" = "$PW/user/04-projects" ]
@@ -2961,12 +2961,12 @@ chk "  ...while the marked mirror inside it stays exempt" $?
 
 # Scoped to the two roots a project-local pilot can occupy. Elsewhere the line is text.
 PO="$TMP/pilot-other-roots"
-mkdir -p "$PO/user/memory" "$PO/user/02-personal/memory" \
-         "$PO/user/knowledge" "$PO/user/05-knowledge" \
+mkdir -p "$PO/personal/memory" "$PO/user/02-personal/memory" \
+         "$PO/personal/knowledge" "$PO/user/05-knowledge" \
          "$PO/internal/governance/rules" "$PO/system/rules" \
          "$PO/internal/runtime" "$PO/runtime"
-mk_pilot "$PO/user/memory/index.md";               echo old > "$PO/user/02-personal/memory/i.md"
-mk_pilot "$PO/user/knowledge/index.md";            echo old > "$PO/user/05-knowledge/i.md"
+mk_pilot "$PO/personal/memory/index.md";           echo old > "$PO/user/02-personal/memory/i.md"
+mk_pilot "$PO/personal/knowledge/index.md";        echo old > "$PO/user/05-knowledge/i.md"
 mk_pilot "$PO/internal/governance/rules/index.md"; echo old > "$PO/system/rules/i.md"
 mk_pilot "$PO/internal/runtime/index.md";          echo old > "$PO/runtime/i.md"
 n=0
@@ -2978,10 +2978,116 @@ AI_OS_HOME="$PO" "$PA" check >/dev/null 2>&1
 [ $? -eq 4 ];    chk "  ...and all four are still reported" $?
 
 # =====================================================================================
+t "private path compatibility: the personal/ retarget"
+# The owner renamed the final private root from `user/` to `personal/` before any private
+# data moved: `personal/` holds long-lived personal material, `projects/` holds work, and
+# `internal/` holds the machinery. Only the new side of the table moved. The old roots are
+# still the authoritative ones on this machine, and still what `ai-os init` creates, so
+# every workspace that has not migrated yet must resolve exactly as it did before.
+grep -q '"personal/memory ' "$PA" && grep -q '"personal/knowledge ' "$PA"
+chk "the table's new side names personal/memory and personal/knowledge" $?
+grep -Eq '"user/(memory|knowledge)[[:space:]]' "$PA"
+[ $? -ne 0 ];  chk "  ...and no longer names user/memory or user/knowledge" $?
+
+RT="$TMP/retarget"
+
+# --- memory ---------------------------------------------------------------------------
+mkdir -p "$RT/m-old/user/02-personal/memory"
+[ "$(AI_OS_HOME="$RT/m-old" "$PA" layout memory)" = "old" ]
+chk "the old memory root alone is still layout old" $?
+[ "$(AI_OS_HOME="$RT/m-old" "$PA" get memory)" = "$RT/m-old/user/02-personal/memory" ]
+chk "  ...resolving to user/02-personal/memory, unchanged by the retarget" $?
+
+mkdir -p "$RT/m-new/personal/memory"
+[ "$(AI_OS_HOME="$RT/m-new" "$PA" layout memory)" = "new" ]
+chk "personal/memory alone is layout new" $?
+[ "$(AI_OS_HOME="$RT/m-new" "$PA" get memory)" = "$RT/m-new/personal/memory" ]
+chk "  ...and resolves to personal/memory" $?
+
+# The retarget replaced the new side rather than adding to it: the path this table used to
+# call "new" is now an ordinary directory, and must not stand in for the root.
+mkdir -p "$RT/m-stale/user/memory"
+[ "$(AI_OS_HOME="$RT/m-stale" "$PA" layout memory)" = "none" ]
+chk "user/memory is no longer the new side of memory" $?
+[ "$(AI_OS_HOME="$RT/m-stale" "$PA" get memory)" = "$RT/m-stale/user/02-personal/memory" ]
+chk "  ...so it neither resolves nor puts the old root out of play" $?
+
+mkdir -p "$RT/m-both/user/02-personal/memory" "$RT/m-both/personal/memory"
+echo "old store" > "$RT/m-both/user/02-personal/memory/i.md"
+echo "new store" > "$RT/m-both/personal/memory/i.md"
+[ "$(AI_OS_HOME="$RT/m-both" "$PA" layout memory)" = "conflict" ]
+chk "the old memory root beside personal/memory is still a conflict" $?
+out=$(AI_OS_HOME="$RT/m-both" "$PA" get memory 2>&1); rc=$?
+[ "$rc" -eq 3 ] && echo "$out" | grep -q "$RT/m-both/personal/memory"
+chk "  ...refused, naming the new side by its personal/ path" $?
+grep -q "old store" "$RT/m-both/user/02-personal/memory/i.md" &&
+  grep -q "new store" "$RT/m-both/personal/memory/i.md"
+chk "  ...and neither store was touched" $?
+
+# --- knowledge --------------------------------------------------------------------------
+mkdir -p "$RT/k-old/user/05-knowledge"
+[ "$(AI_OS_HOME="$RT/k-old" "$PA" layout knowledge)" = "old" ]
+chk "the old knowledge root alone is still layout old" $?
+[ "$(AI_OS_HOME="$RT/k-old" "$PA" get knowledge)" = "$RT/k-old/user/05-knowledge" ]
+chk "  ...resolving to user/05-knowledge, unchanged by the retarget" $?
+
+mkdir -p "$RT/k-new/personal/knowledge"
+[ "$(AI_OS_HOME="$RT/k-new" "$PA" layout knowledge)" = "new" ]
+chk "personal/knowledge alone is layout new" $?
+[ "$(AI_OS_HOME="$RT/k-new" "$PA" get knowledge)" = "$RT/k-new/personal/knowledge" ]
+chk "  ...and resolves to personal/knowledge" $?
+
+mkdir -p "$RT/k-stale/user/knowledge"
+[ "$(AI_OS_HOME="$RT/k-stale" "$PA" layout knowledge)" = "none" ]
+chk "user/knowledge is no longer the new side of knowledge" $?
+[ "$(AI_OS_HOME="$RT/k-stale" "$PA" get knowledge)" = "$RT/k-stale/user/05-knowledge" ]
+chk "  ...so it neither resolves nor puts the old root out of play" $?
+
+mkdir -p "$RT/k-both/user/05-knowledge" "$RT/k-both/personal/knowledge"
+echo "old store" > "$RT/k-both/user/05-knowledge/i.md"
+echo "new store" > "$RT/k-both/personal/knowledge/i.md"
+[ "$(AI_OS_HOME="$RT/k-both" "$PA" layout knowledge)" = "conflict" ]
+chk "the old knowledge root beside personal/knowledge is still a conflict" $?
+out=$(AI_OS_HOME="$RT/k-both" "$PA" get knowledge 2>&1); rc=$?
+[ "$rc" -eq 3 ] && echo "$out" | grep -q "$RT/k-both/personal/knowledge"
+chk "  ...refused, naming the new side by its personal/ path" $?
+
+# --- the retarget changed the two paths and nothing else ----------------------------------
+# The pilot exemption is the one narrow hole in conflict detection, and it stayed exactly
+# as narrow: still only `projects` and `work`, still nothing under the personal/ roots.
+RP="$TMP/retarget-pilot"
+mkdir -p "$RP/user/04-projects" "$RP/tasks" "$RP/projects/ai-os/work/context"
+mk_pilot "$RP/projects/ai-os/work/index.md"
+[ "$(AI_OS_HOME="$RP" "$PA" layout work)" = "old" ] &&
+  [ "$(AI_OS_HOME="$RP" "$PA" layout projects)" = "old" ]
+chk "a marked project-local pilot still does not conflict after the retarget" $?
+echo "unmarked work" > "$RP/projects/ai-os/work/index.md"
+[ "$(AI_OS_HOME="$RP" "$PA" layout work)" = "conflict" ] &&
+  [ "$(AI_OS_HOME="$RP" "$PA" layout projects)" = "conflict" ]
+chk "  ...and an unmarked one still does" $?
+mk_pilot "$RP/projects/ai-os/work/index.md"
+mkdir -p "$RP/user/02-personal/memory" "$RP/personal/memory"
+mk_pilot "$RP/personal/memory/index.md"
+[ "$(AI_OS_HOME="$RP" "$PA" layout memory)" = "conflict" ]
+chk "a pilot marker under personal/memory exempts nothing" $?
+
+# The other three roots are untouched by this slice, and the roots that do not move are
+# still not resolver roots: daily, professional and templates were not invented here.
+RO="$TMP/retarget-others"
+mkdir -p "$RO/projects" "$RO/internal/governance/rules" "$RO/internal/runtime"
+[ "$(AI_OS_HOME="$RO" "$PA" layout projects)" = "new" ] &&
+  [ "$(AI_OS_HOME="$RO" "$PA" layout rules)" = "new" ] &&
+  [ "$(AI_OS_HOME="$RO" "$PA" layout runtime)" = "new" ]
+chk "projects, rules and runtime keep the new sides they already had" $?
+roots=$(. "$PA"; printf '%s' "$AIOS_PATH_ROOTS")
+[ "$roots" = "memory knowledge projects work rules runtime" ]
+chk "no new resolver root was invented for daily, professional or templates" $?
+
+# =====================================================================================
 t "private path compatibility: rewrite maps an old-layout path onto the live one"
 [ "$("$PA" rewrite user/05-knowledge/README.md)" = "$PW/user/05-knowledge/README.md" ]
 chk "a path under an unmoved root is unchanged" $?
-[ "$("$PA" rewrite user/02-personal/memory/MEMORY.md)" = "$PW/user/memory/MEMORY.md" ]
+[ "$("$PA" rewrite user/02-personal/memory/MEMORY.md)" = "$PW/personal/memory/MEMORY.md" ]
 chk "a path under a moved root is rewritten onto the new one" $?
 [ "$("$PA" rewrite sessions/2026/x.md)" = "$PW/sessions/2026/x.md" ]
 chk "a path under no moving root is left alone" $?
@@ -3021,18 +3127,18 @@ chk "  ...and raises on a conflict instead of choosing a side" $?
 # =====================================================================================
 t "private path compatibility: init never straddles two layouts"
 IW="$TMP/init-layout"; AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
-mkdir -p "$IW/user/memory" && mv "$IW/user/02-personal/memory/MEMORY.md" "$IW/user/memory/"
+mkdir -p "$IW/personal/memory" && mv "$IW/user/02-personal/memory/MEMORY.md" "$IW/personal/memory/"
 rm -rf "$IW/user/02-personal"
 AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
 [ ! -d "$IW/user/02-personal" ];         chk "init does not re-create a root that has moved" $?
-[ ! -e "$IW/user/02-personal/memory/MEMORY.md" ] && [ -f "$IW/user/memory/MEMORY.md" ]
+[ ! -e "$IW/user/02-personal/memory/MEMORY.md" ] && [ -f "$IW/personal/memory/MEMORY.md" ]
 chk "  ...and re-seeds into the store that exists, not beside it" $?
 
 mkdir -p "$IW/user/02-personal/memory"; echo "a second store" > "$IW/user/02-personal/memory/x.md"
 out=$(AI_OS_HOME="$IW" "$CLI/ai-os-init" 2>&1); rc=$?
 [ "$rc" -ne 0 ];                         chk "init refuses outright when a root exists in both layouts" $?
 echo "$out" | grep -q "REFUSED";         chk "  ...and says so" $?
-grep -q "a second store" "$IW/user/02-personal/memory/x.md" && [ -f "$IW/user/memory/MEMORY.md" ]
+grep -q "a second store" "$IW/user/02-personal/memory/x.md" && [ -f "$IW/personal/memory/MEMORY.md" ]
 chk "  ...having touched neither side" $?
 
 out=$(AI_OS_HOME="$IW" "$CLI/ai-os-doctor" 2>&1); rc=$?
