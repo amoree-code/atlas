@@ -31,17 +31,18 @@ t "init on a clean workspace"
 W="$TMP/clean"; export AI_OS_HOME="$W"
 out=$("$CLI/ai-os-init" 2>&1); rc=$?
 chk "exits 0" $rc
-for s in system/config system/rules system/policies system/schemas \
-         user/00-inbox user/01-daily user/02-personal user/03-professional \
-         user/04-projects user/05-knowledge user/06-templates \
-         skills agents scripts sessions runtime; do
+for s in internal/config internal/governance/rules internal/governance/policies \
+         internal/schemas internal/extensions/skills internal/extensions/agents \
+         internal/helpers internal/runtime user/00-inbox personal/daily \
+         personal/memory personal/professional personal/knowledge personal/templates \
+         projects sessions; do
   [ -d "$W/$s" ]; chk "created $s/" $?
 done
-[ -d "$W/user/02-personal/memory/education" ];  chk "created the 8 memory sections" $?
-[ -d "$W/user/05-knowledge/decisions" ];        chk "created the 7 knowledge kinds" $?
-[ -f "$W/user/02-personal/memory/MEMORY.md" ];  chk "seeded memory/MEMORY.md" $?
-[ ! -d "$W/system/config/scripts" ];     chk "did NOT seed runtime scripts into private data" $?
-[ ! -d "$W/skills/research" ];           chk "did NOT copy public skills into the workspace" $?
+[ -d "$W/personal/memory/education" ];  chk "created the 8 memory sections" $?
+[ -d "$W/personal/knowledge/decisions" ];        chk "created the 7 knowledge kinds" $?
+[ -f "$W/personal/memory/MEMORY.md" ];  chk "seeded memory/MEMORY.md" $?
+[ ! -d "$W/internal/config/scripts" ];     chk "did NOT seed runtime scripts into private data" $?
+[ ! -d "$W/internal/extensions/skills/research" ];           chk "did NOT copy public skills into the workspace" $?
 [ ! -d "$W/.git" ];                      chk "did NOT create a git repo (never a remote)" $?
 
 # =====================================================================================
@@ -54,13 +55,13 @@ after=$(find "$W" -type f -exec shasum {} \; | sort | shasum)
 
 # =====================================================================================
 t "init never overwrites user-owned content"
-echo "MY OWN NOTES — do not touch" > "$W/user/02-personal/memory/MEMORY.md"
-echo "a real memory" > "$W/user/02-personal/memory/education/scholarship.md"
-mkdir -p "$W/skills/research"; echo "my own research skill" > "$W/skills/research/SKILL.md"
+echo "MY OWN NOTES — do not touch" > "$W/personal/memory/MEMORY.md"
+echo "a real memory" > "$W/personal/memory/education/scholarship.md"
+mkdir -p "$W/internal/extensions/skills/research"; echo "my own research skill" > "$W/internal/extensions/skills/research/SKILL.md"
 out=$("$CLI/ai-os-init" 2>&1)
-grep -q "MY OWN NOTES" "$W/user/02-personal/memory/MEMORY.md";        chk "edited seed file preserved verbatim" $?
-grep -q "a real memory" "$W/user/02-personal/memory/education/scholarship.md"; chk "user memory file untouched" $?
-grep -q "my own research skill" "$W/skills/research/SKILL.md"; chk "user skill NOT overwritten by the public one" $?
+grep -q "MY OWN NOTES" "$W/personal/memory/MEMORY.md";        chk "edited seed file preserved verbatim" $?
+grep -q "a real memory" "$W/personal/memory/education/scholarship.md"; chk "user memory file untouched" $?
+grep -q "my own research skill" "$W/internal/extensions/skills/research/SKILL.md"; chk "user skill NOT overwritten by the public one" $?
 echo "$out" | grep -q "yours";                       chk "reports the divergence instead of resolving it" $?
 
 # =====================================================================================
@@ -135,7 +136,7 @@ rm -rf "$AI_OS_HOME/.git"
 # =====================================================================================
 t "doctor: memory symlink validation"
 P="$AI_OS_CLAUDE_PROJECTS"
-mkdir -p "$P/good" && ln -s "$AI_OS_HOME/user/02-personal/memory" "$P/good/memory"
+mkdir -p "$P/good" && ln -s "$AI_OS_HOME/personal/memory" "$P/good/memory"
 out=$("$CLI/ai-os-doctor" 2>&1)
 echo "$out" | grep -q "1 client memory link(s), all ->"; chk "a correct link is reported as correct" $?
 echo "$out" | grep -q "recursive memory link";           rc=$?; [ $rc -ne 0 ]; chk "a correct link is NOT called recursive" $?
@@ -202,12 +203,12 @@ echo "$TERM" > "$F/doc.md"
 out=$(AI_OS_HOME="$TMP/clean" "$CLI/ai-os-privacy-scan" "$F" 2>&1)
 echo "$out" | grep -q "PERSONAL.*user term"; [ $? -ne 0 ]
 chk "unknown term not flagged without a terms file" $?
-mkdir -p "$TMP/clean/system/policies"; echo "$TERM" > "$TMP/clean/system/policies/privacy-terms.txt"
+mkdir -p "$TMP/clean/internal/governance/policies"; echo "$TERM" > "$TMP/clean/internal/governance/policies/privacy-terms.txt"
 out=$(AI_OS_HOME="$TMP/clean" "$CLI/ai-os-privacy-scan" "$F" 2>&1)
 echo "$out" | grep -q "PERSONAL.*user term";         chk "term from ~/.ai-os is applied" $?
 grep -rqi "$TERM" "$REPO" --exclude-dir=.git; [ $? -ne 0 ]
 chk "the term itself never entered the public repo" $?
-rm -f "$TMP/clean/system/policies/privacy-terms.txt"
+rm -f "$TMP/clean/internal/governance/policies/privacy-terms.txt"
 
 # =====================================================================================
 # `personal` is severity block-IN-PUBLIC-REPO, so two cases are not findings at all: a
@@ -258,8 +259,8 @@ LC="$TMP/licence"; mkdir -p "$LC"
 # A generated term, for the same reason as every other user-term test here: a real name
 # written into this file would put it in the public repo.
 LTERM="zz$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')corp"
-LHOME="$TMP/lhome"; mkdir -p "$LHOME/system/policies"
-echo "$LTERM" > "$LHOME/system/policies/privacy-terms.txt"
+LHOME="$TMP/lhome"; mkdir -p "$LHOME/internal/governance/policies"
+echo "$LTERM" > "$LHOME/internal/governance/policies/privacy-terms.txt"
 # NB: capture, never `lscan | grep`. The scanner exits 1 when it finds something and the
 # suite runs under `set -o pipefail`, so a pipe reports the scanner's exit, not grep's.
 lscan() { AI_OS_HOME="$LHOME" "$CLI/ai-os-privacy-scan" "$LC" 2>&1; }
@@ -616,11 +617,11 @@ t "adapter enable/disable refuse until wired (no dead state)"
 out=$("$CLI/ai-os-adapter" enable claude-code 2>&1); rc=$?
 [ "$rc" -ne 0 ];                                     chk "enable refuses" $?
 echo "$out" | grep -q "Step 8";                      chk "  ...and names the step that would wire it" $?
-[ ! -e "$AI_OS_HOME/system/config/plugins.yaml" ];   chk "  ...and wrote no registry state" $?
+[ ! -e "$AI_OS_HOME/internal/config/plugins.yaml" ]; chk "  ...and wrote no registry state" $?
 
 # =====================================================================================
 t "profile: the public template carries no values"
-TPL="$REPO/templates/workspace/system/config/profile.yaml"
+TPL="$REPO/templates/workspace/internal/config/profile.yaml"
 [ -f "$TPL" ];                                       chk "profile.yaml template exists" $?
 grep -qE '^(vcs_owner|  default|  summary|  tool|  curator): *""$' "$TPL"
 chk "template ships blank values, not someone's" $?
@@ -629,10 +630,10 @@ grep -q 'never leaves ~/.ai-os' "$TPL";              chk "template states it is 
 t "profile: init seeds it once and never overwrites"
 P3="$TMP/profilews"; export AI_OS_HOME="$P3"
 "$CLI/ai-os-init" >/dev/null 2>&1
-[ -f "$P3/system/config/profile.yaml" ];             chk "init seeds system/config/profile.yaml" $?
-echo "vcs_owner: my-own-handle" > "$P3/system/config/profile.yaml"
+[ -f "$P3/internal/config/profile.yaml" ];             chk "init seeds internal/config/profile.yaml" $?
+echo "vcs_owner: my-own-handle" > "$P3/internal/config/profile.yaml"
 out=$("$CLI/ai-os-init" 2>&1)
-grep -q "my-own-handle" "$P3/system/config/profile.yaml";   chk "an edited profile is never overwritten" $?
+grep -q "my-own-handle" "$P3/internal/config/profile.yaml";   chk "an edited profile is never overwritten" $?
 echo "$out" | grep -q "yours.*profile.yaml";         chk "  ...and the divergence is reported" $?
 
 t "render: unresolved placeholders are visible, never silently blank"
@@ -660,8 +661,8 @@ t "THE SKILL GATE: 8 skills render equivalent to the committed goldens"
 # here, and it retires with ~/.ai. The proof is preserved by rendering against a fictional
 # fixture profile and diffing the committed goldens instead: same eight skills, same
 # renderer, same client conventions, no private data and no runtime dependency.
-GW="$TMP/goldenws"; mkdir -p "$GW/system/config"
-cp "$REPO/tests/fixtures/profile.yaml" "$GW/system/config/profile.yaml"
+GW="$TMP/goldenws"; mkdir -p "$GW/internal/config"
+cp "$REPO/tests/fixtures/profile.yaml" "$GW/internal/config/profile.yaml"
 out=$(AI_OS_HOME="$GW" "$CLI/ai-os-render" --check "$REPO/tests/fixtures/golden-skills" \
         --client claude-code 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "no semantic loss across all 8 skills" $?
@@ -683,7 +684,7 @@ chk "the gate passes with no runtime layer present" $?
 t "public skills carry no personal values"
 # The terms are read from the PRIVATE term file, never spelled out here: a test that
 # names the strings it asserts are absent puts them in the repo it is guarding.
-TERMS="${AI_OS_HOME:-$HOME/.ai-os}/system/policies/privacy-terms.txt"
+TERMS="${AI_OS_HOME:-$HOME/.ai-os}/internal/governance/policies/privacy-terms.txt"
 if [ -f "$TERMS" ]; then
   miss=0; nterms=0
   while IFS= read -r term; do
@@ -752,7 +753,7 @@ out=$(AI_OS_HOME="$MW" "$CLI/ai-os-memory" attach 2>&1); rc=$?
 [ -L "$TMP/tc-home/proj-a/memory" ];             chk "mount a is now a symlink" $?
 # Compared by inode: the target string may differ harmlessly from $MW (a trailing slash
 # in TMPDIR, a symlinked /tmp) while pointing at exactly the same store.
-[ -L "$TMP/tc-home/proj-b/memory" ] && [ "$TMP/tc-home/proj-b/memory" -ef "$MW/user/02-personal/memory" ]
+[ -L "$TMP/tc-home/proj-b/memory" ] && [ "$TMP/tc-home/proj-b/memory" -ef "$MW/personal/memory" ]
 chk "mount b resolves to the canonical store" $?
 out=$(AI_OS_HOME="$MW" "$CLI/ai-os-memory" status 2>&1)
 echo "$out" | grep -q 'linked'                   ; chk "status reports it linked" $?
@@ -841,7 +842,7 @@ mk_repo() {  # $1 = repo dir. A minimal stand-in: one repo-relative executable.
   chmod +x "$1/cli/probe"
 }
 mk_ws() {    # $1 = workspace dir, $2 = ai_os_repo value (may be empty or ~-relative)
-  mkdir -p "$1/system/config"; printf 'ai_os_repo: %s\n' "$2" > "$1/system/config/settings.yaml"
+  mkdir -p "$1/internal/config"; printf 'ai_os_repo: %s\n' "$2" > "$1/internal/config/settings.yaml"
 }
 resolves() { # $1 = expected repo dir, $2 = the invocation's output
   # Compare physical paths: TMPDIR can carry a trailing slash, which the shell's own
@@ -923,13 +924,13 @@ t "init records the repository location, and never overwrites yours"
 # 11. empty -> recorded automatically
 IW="$TMP/init-ws"
 AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
-got=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$IW/system/config/settings.yaml" | head -1)
+got=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$IW/internal/config/settings.yaml" | head -1)
 [ "$got" = "$REPO" ];                           chk "init recorded its own actual location" $?
 # 12. explicit value survives
-sed 's|^ai_os_repo:.*|ai_os_repo: ~/deliberately/elsewhere|' "$IW/system/config/settings.yaml" > "$TMP/x" \
-  && mv "$TMP/x" "$IW/system/config/settings.yaml"
+sed 's|^ai_os_repo:.*|ai_os_repo: ~/deliberately/elsewhere|' "$IW/internal/config/settings.yaml" > "$TMP/x" \
+  && mv "$TMP/x" "$IW/internal/config/settings.yaml"
 out=$(AI_OS_HOME="$IW" "$CLI/ai-os-init" 2>&1)
-got=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$IW/system/config/settings.yaml" | head -1)
+got=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$IW/internal/config/settings.yaml" | head -1)
 [ "$got" = "~/deliberately/elsewhere" ];        chk "an explicit ai_os_repo is NOT overwritten" $?
 echo "$out" | grep -q "kept your value";        chk "   ...and the divergence is reported" $?
 # dry run must still write nothing
@@ -1033,19 +1034,19 @@ echo "$out" | grep -q '0 client(s) changed';         chk "   ...reporting 0 clie
 t "onboarding: a fresh workspace reports uninitialized"
 OB="$TMP/onboard"; export AI_OS_HOME="$OB"
 "$CLI/ai-os-init" >/dev/null 2>&1
-[ -f "$OB/system/config/workspace.yaml" ];        chk "init seeds the workspace state file" $?
-grep -q '^status: uninitialized' "$OB/system/config/workspace.yaml"; chk "seeded as uninitialized" $?
+[ -f "$OB/internal/config/workspace.yaml" ];        chk "init seeds the workspace state file" $?
+grep -q '^status: uninitialized' "$OB/internal/config/workspace.yaml"; chk "seeded as uninitialized" $?
 "$CLI/ai-os-onboard" status >/dev/null 2>&1
 [ $? -eq 10 ];                                    chk "status exits 10 = onboarding required" $?
 # The point of a canonical marker: a workspace full of directories is still uninitialized.
-[ -d "$OB/user/02-personal/memory" ] && "$CLI/ai-os-onboard" status >/dev/null 2>&1; [ $? -eq 10 ]
+[ -d "$OB/personal/memory" ] && "$CLI/ai-os-onboard" status >/dev/null 2>&1; [ $? -eq 10 ]
 chk "directories existing does NOT count as initialized" $?
 
 # =====================================================================================
 t "onboarding: completion is earned, not announced"
 "$CLI/ai-os-onboard" complete >/dev/null 2>&1
 [ $? -ne 0 ];                                     chk "complete refuses with no data collected" $?
-grep -q '^status: uninitialized' "$OB/system/config/workspace.yaml"; chk "  ...and did not mark initialized" $?
+grep -q '^status: uninitialized' "$OB/internal/config/workspace.yaml"; chk "  ...and did not mark initialized" $?
 
 # =====================================================================================
 t "onboarding: an interrupted run resumes where it stopped"
@@ -1053,8 +1054,8 @@ t "onboarding: an interrupted run resumes where it stopped"
 chk "first answer accepted" $?
 "$CLI/ai-os-onboard" status >/dev/null 2>&1
 [ $? -eq 11 ];                                    chk "status exits 11 = incomplete, resumable" $?
-grep -q '^step_identity: done' "$OB/system/config/workspace.yaml";    chk "answered step recorded done" $?
-grep -q '^step_language: pending' "$OB/system/config/workspace.yaml"; chk "unanswered step still pending" $?
+grep -q '^step_identity: done' "$OB/internal/config/workspace.yaml";    chk "answered step recorded done" $?
+grep -q '^step_language: pending' "$OB/internal/config/workspace.yaml"; chk "unanswered step still pending" $?
 "$CLI/ai-os-onboard" set language "English" >/dev/null 2>&1
 "$CLI/ai-os-onboard" complete >/dev/null 2>&1
 [ $? -eq 0 ];                                     chk "resumed run completes" $?
@@ -1064,25 +1065,25 @@ grep -q '^step_language: pending' "$OB/system/config/workspace.yaml"; chk "unans
 # =====================================================================================
 t "onboarding: idempotent — repeat runs change nothing and duplicate nothing"
 ob_before=$(find "$OB" -type f -exec shasum {} \; | sort | shasum)
-ob_when=$(grep '^initialized_at:' "$OB/system/config/workspace.yaml")
+ob_when=$(grep '^initialized_at:' "$OB/internal/config/workspace.yaml")
 "$CLI/ai-os-onboard"          >/dev/null 2>&1
 "$CLI/ai-os-onboard" complete >/dev/null 2>&1
 "$CLI/ai-os-onboard" --adopt  >/dev/null 2>&1
 "$CLI/ai-os-init"             >/dev/null 2>&1
 ob_after=$(find "$OB" -type f -exec shasum {} \; | sort | shasum)
 [ "$ob_before" = "$ob_after" ];                   chk "four further runs, byte-identical workspace" $?
-[ "$ob_when" = "$(grep '^initialized_at:' "$OB/system/config/workspace.yaml")" ]
+[ "$ob_when" = "$(grep '^initialized_at:' "$OB/internal/config/workspace.yaml")" ]
 chk "the initialization timestamp is written once, never moved" $?
-[ "$(grep -c '^status:' "$OB/system/config/workspace.yaml")" -eq 1 ]; chk "no duplicated state key" $?
-[ "$(find "$OB/user/02-personal/memory/identity" -name '*.md' | wc -l | tr -d ' ')" -eq 1 ]
+[ "$(grep -c '^status:' "$OB/internal/config/workspace.yaml")" -eq 1 ]; chk "no duplicated state key" $?
+[ "$(find "$OB/personal/memory/identity" -name '*.md' | wc -l | tr -d ' ')" -eq 1 ]
 chk "no duplicated identity record" $?
 
 # =====================================================================================
 t "onboarding: never re-interviews or overwrites a completed workspace"
 "$CLI/ai-os-onboard" set name "SOMEONE ELSE" >/dev/null 2>&1
 [ $? -eq 3 ];                                     chk "refuses to re-answer on an initialized workspace" $?
-grep -q "Test User" "$OB/user/02-personal/memory/identity/profile.md"; chk "the original name survives" $?
-grep -q "SOMEONE ELSE" "$OB/user/02-personal/memory/identity/profile.md"
+grep -q "Test User" "$OB/personal/memory/identity/profile.md"; chk "the original name survives" $?
+grep -q "SOMEONE ELSE" "$OB/personal/memory/identity/profile.md"
 [ $? -ne 0 ];                                     chk "the new name was never written" $?
 out=$("$CLI/ai-os-onboard" 2>&1)
 echo "$out" | grep -q "already initialized";      chk "a bare run says so instead of asking again" $?
@@ -1093,31 +1094,31 @@ AD="$TMP/adopt"; export AI_OS_HOME="$AD"
 "$CLI/ai-os-init" >/dev/null 2>&1
 "$CLI/ai-os-onboard" --adopt >/dev/null 2>&1
 [ $? -ne 0 ];                                     chk "refuses to adopt a workspace with no data" $?
-echo "# MY OWN PROFILE"     > "$AD/user/02-personal/memory/identity/profile.md"
-echo "# MY OWN PREFERENCES" > "$AD/user/02-personal/memory/preferences/working-style.md"
-mem_before=$(find "$AD/user/02-personal/memory" -type f -exec shasum {} \; | sort | shasum)
+echo "# MY OWN PROFILE"     > "$AD/personal/memory/identity/profile.md"
+echo "# MY OWN PREFERENCES" > "$AD/personal/memory/preferences/working-style.md"
+mem_before=$(find "$AD/personal/memory" -type f -exec shasum {} \; | sort | shasum)
 "$CLI/ai-os-onboard" --adopt >/dev/null 2>&1
 [ $? -eq 0 ];                                     chk "adopts a workspace whose data already exists" $?
-mem_after=$(find "$AD/user/02-personal/memory" -type f -exec shasum {} \; | sort | shasum)
+mem_after=$(find "$AD/personal/memory" -type f -exec shasum {} \; | sort | shasum)
 [ "$mem_before" = "$mem_after" ];                 chk "adoption wrote no memory file at all" $?
-grep -q "MY OWN PROFILE" "$AD/user/02-personal/memory/identity/profile.md"
+grep -q "MY OWN PROFILE" "$AD/personal/memory/identity/profile.md"
 chk "pre-existing user data preserved byte-for-byte" $?
 
 # =====================================================================================
 t "onboarding: a marker that outruns the data is reported, not believed"
-rm -f "$AD/user/02-personal/memory/identity/profile.md"
+rm -f "$AD/personal/memory/identity/profile.md"
 "$CLI/ai-os-onboard" status >/dev/null 2>&1
 [ $? -eq 12 ];                                    chk "status exits 12 = inconsistent" $?
 out=$("$CLI/ai-os-onboard" status 2>&1)
 echo "$out" | grep -q "INCONSISTENT";             chk "names the inconsistency instead of passing" $?
 echo "$out" | grep -q -- "--repair";              chk "offers a deterministic recovery path" $?
-was=$(grep '^initialized_at:' "$AD/system/config/workspace.yaml")
+was=$(grep '^initialized_at:' "$AD/internal/config/workspace.yaml")
 "$CLI/ai-os-onboard" --repair >/dev/null 2>&1
-grep -q '^step_identity: pending' "$AD/system/config/workspace.yaml"; chk "repair reopens the missing step" $?
-grep -q '^step_language: done'    "$AD/system/config/workspace.yaml"; chk "  ...and only the missing step" $?
-[ -f "$AD/user/02-personal/memory/preferences/working-style.md" ]
+grep -q '^step_identity: pending' "$AD/internal/config/workspace.yaml"; chk "repair reopens the missing step" $?
+grep -q '^step_language: done'    "$AD/internal/config/workspace.yaml"; chk "  ...and only the missing step" $?
+[ -f "$AD/personal/memory/preferences/working-style.md" ]
 chk "repair destroyed no surviving data" $?
-[ "$was" = "$(grep '^initialized_at:' "$AD/system/config/workspace.yaml")" ]
+[ "$was" = "$(grep '^initialized_at:' "$AD/internal/config/workspace.yaml")" ]
 chk "repair preserved the original initialization date" $?
 
 # =====================================================================================
@@ -1589,7 +1590,7 @@ out=$("$CLI/ai-os-capability" invoke nosuchcap.build 2>&1); rc=$?
 echo "$out" | grep -q 'unavailable';     chk "  ...as unavailable, before any authority check" $?
 out=$("$CLI/ai-os-capability" invoke browser.nosuchop 2>&1); rc=$?
 [ "$rc" -eq 4 ];                         chk "invoke refuses an undeclared operation" $?
-[ ! -e "$AI_OS_HOME/system/config/capabilities.yaml" ]
+[ ! -e "$AI_OS_HOME/internal/config/capabilities.yaml" ]
 chk "  ...and wrote no state nothing consumes" $?
 
 # =====================================================================================
@@ -1664,7 +1665,7 @@ grep -Eqi 'github\.com|google\.com|facebook' "$BR/browser" "$BR/capability.yaml"
 # =====================================================================================
 t "authority: Core enforces the ladder, and there is no bypass"
 AW="$TMP/authws"; AI_OS_HOME="$AW" "$CLI/ai-os-init" >/dev/null 2>&1
-grep -q '^default: observe' "$AW/system/config/authority.yaml"
+grep -q '^default: observe' "$AW/internal/config/authority.yaml"
 chk "a fresh workspace grants only observe" $?
 out=$(AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.read --dry-run 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "an observe operation is allowed by default" $?
@@ -1676,7 +1677,7 @@ out=$(AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.submit --dry-run <
 # Grant execute; click becomes allowed, submit still does not.
 python3 - "$AW" <<'PYEOF'
 import sys,pathlib
-f=pathlib.Path(sys.argv[1])/"system/config/authority.yaml"
+f=pathlib.Path(sys.argv[1])/"internal/config/authority.yaml"
 f.write_text(f.read_text().replace("capabilities: {}","capabilities:\n  browser: execute"))
 PYEOF
 AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.click --dry-run >/dev/null 2>&1
@@ -1689,7 +1690,7 @@ grep -Eq '\-\-force|\-\-unsafe|\-\-god-mode|\-\-bypass|allowEverything' "$CLI/ai
 # autonomous is refused, never granted.
 python3 - "$AW" <<'PYEOF'
 import sys,pathlib
-f=pathlib.Path(sys.argv[1])/"system/config/authority.yaml"
+f=pathlib.Path(sys.argv[1])/"internal/config/authority.yaml"
 f.write_text(f.read_text().replace("  browser: execute","  browser: autonomous"))
 PYEOF
 out=$(AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.click --dry-run 2>&1)
@@ -1779,20 +1780,20 @@ out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" create --max-steps 3 --scope 'browser.re
 echo "$out" | grep -q 'created';          chk "creates a run with a finite budget and scope" $?
 RUN_ID=$(echo "$out" | grep -oE 'run-[0-9a-f-]+' | head -1)
 [ -n "$RUN_ID" ];                         chk "  ...and prints its id" $?
-[ -f "$RW/runtime/runs/$RUN_ID.json" ];   chk "  ...persisted under runtime/, not tasks/ or memory" $?
+[ -f "$RW/internal/runtime/runs/$RUN_ID.json" ];   chk "  ...persisted under runtime/, not tasks/ or memory" $?
 
 # =====================================================================================
 t "run: scope — out-of-scope capability/operation is refused, run stays continue"
 out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_ID" browser.click --dry-run 2>&1); rc=$?
 echo "$out" | grep -q 'outside this run.s scope';  chk "an out-of-scope operation is refused" $?
 [ "$rc" -ne 0 ];                          chk "  ...as a non-zero exit" $?
-rec="$RW/runtime/runs/$RUN_ID.json"
+rec="$RW/internal/runtime/runs/$RUN_ID.json"
 grep -q '"status": "continue"' "$rec";    chk "  ...and the run itself is untouched — still continue" $?
 grep -q '"steps_used": 0' "$rec";         chk "  ...a Run-local refusal never consumes budget" $?
 
 # =====================================================================================
 t "run: authority — run scope can only restrict, never elevate, the user's grant"
-grep -q '^default: observe' "$RW/system/config/authority.yaml"
+grep -q '^default: observe' "$RW/internal/config/authority.yaml"
 chk "fresh workspace still grants only observe" $?
 out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_ID" browser.read --dry-run 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "an in-scope, observe-level op is allowed" $?
@@ -1812,7 +1813,7 @@ RUN_A=$(grep -oE 'run-[0-9a-f-]+' /tmp/aios-run-approval.out | head -1)
 out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_A" browser.submit --dry-run </dev/null 2>&1); rc=$?
 echo "$out" | grep -q "needs-approval";   chk "an approval-gated op moves the run to needs-approval" $?
 [ "$rc" -eq 5 ];                          chk "  ...as its own distinct exit code" $?
-grep -q '"status": "needs-approval"' "$RW/runtime/runs/$RUN_A.json"
+grep -q '"status": "needs-approval"' "$RW/internal/runtime/runs/$RUN_A.json"
 chk "  ...and the run record says so" $?
 out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_A" browser.read --dry-run 2>&1); rc=$?
 echo "$out" | grep -q 'refused';          chk "needs-approval is terminal — no further step is taken" $?
@@ -1831,7 +1832,7 @@ BW="$TMP/budgetws"; AI_OS_HOME="$BW" "$CLI/ai-os-init" >/dev/null 2>&1
 AI_OS_HOME="$BW" "$CLI/ai-os-run" create --max-steps 1 --scope 'browser.navigate' >/tmp/aios-run-budget.out 2>&1
 RUN_B=$(grep -oE 'run-[0-9a-f-]+' /tmp/aios-run-budget.out | head -1)
 AI_OS_HOME="$BW" "$CLI/ai-os-run" step "$RUN_B" browser.navigate --json '{"url":"http://example.com"}' >/dev/null 2>&1
-grep -q '"steps_used": 1' "$BW/runtime/runs/$RUN_B.json"
+grep -q '"steps_used": 1' "$BW/internal/runtime/runs/$RUN_B.json"
 chk "the one permitted step consumed the budget" $?
 out=$(AI_OS_HOME="$BW" "$CLI/ai-os-run" step "$RUN_B" browser.navigate --json '{}' 2>&1); rc=$?
 echo "$out" | grep -qE 'blocked|budget exhausted|not .continue.'
@@ -1883,7 +1884,7 @@ t "run: no-progress — an identical unverified step repeated 3x blocks the run"
 NW="$TMP/noprogws"; AI_OS_HOME="$NW" "$CLI/ai-os-init" >/dev/null 2>&1
 python3 - "$NW" <<'PYEOF'
 import sys, pathlib
-f = pathlib.Path(sys.argv[1]) / "system/config/authority.yaml"
+f = pathlib.Path(sys.argv[1]) / "internal/config/authority.yaml"
 f.write_text(f.read_text().replace("capabilities: {}", "capabilities:\n  browser: execute"))
 PYEOF
 NWEB="$TMP/noprog-web"; mkdir -p "$NWEB"
@@ -1900,7 +1901,7 @@ for i in 1 2 3; do
   out=$(AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.click --json '{"selector":"#b"}' 2>&1)
 done
 echo "$out" | grep -q 'no-progress';      chk "the 3rd identical unverified click blocks the run" $?
-grep -q '"status": "blocked"' "$NW/runtime/runs/$RUN_N.json"
+grep -q '"status": "blocked"' "$NW/internal/runtime/runs/$RUN_N.json"
 chk "  ...recorded in the run itself" $?
 out=$(AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.click --json '{"selector":"#b"}' 2>&1); rc=$?
 [ "$rc" -ne 0 ];                          chk "  ...and a 4th attempt is refused, not retried" $?
@@ -2835,7 +2836,7 @@ t "private path compatibility: the resolver answers for every moving root"
 PA="$CLI/ai-os-paths"
 [ -x "$PA" ];                             chk "cli/ai-os-paths exists and is executable" $?
 for r in memory knowledge projects work rules runtime \
-         config policies daily templates skills agents helpers; do
+         config policies daily templates skills agents helpers schemas professional; do
   "$PA" layout "$r" >/dev/null 2>&1;      chk "  declares the '$r' root" $?
 done
 "$PA" layout nonesuch >/dev/null 2>&1
@@ -2855,8 +2856,8 @@ mkdir -p "$PW/personal/memory"
 [ "$("$PA" get memory)" = "$PW/personal/memory" ];      chk "  ...and resolves to the new path" $?
 
 [ "$("$PA" layout projects)" = "none" ];                chk "neither path -> layout none" $?
-[ "$("$PA" get projects)" = "$PW/user/04-projects" ]
-chk "  ...and resolves to the layout init still creates" $?
+[ "$("$PA" get projects)" = "$PW/projects" ]
+chk "  ...and resolves to the new layout init now creates" $?
 
 # =====================================================================================
 t "private path compatibility: both paths is a conflict, never a merge"
@@ -2906,6 +2907,8 @@ mk_pilot() {  # <file> — front matter pointing back at the record that still o
 }
 
 PP="$TMP/pilot"; AI_OS_HOME="$PP" "$CLI/ai-os-init" >/dev/null 2>&1
+rm -rf "$PP/projects"
+mkdir -p "$PP/user/04-projects"
 mkdir -p "$PP/tasks/AIOS-014"
 echo "the authoritative record" > "$PP/tasks/AIOS-014/task.md"
 echo "the real projects root"   > "$PP/user/04-projects/registry.md"
@@ -2936,13 +2939,15 @@ chk "  ...and the pilot changes nothing else it reports" $?
 AI_OS_HOME="$PP" "$CLI/ai-os-handoff" list AIOS-014 >/dev/null 2>&1
 chk "handoff starts up instead of dying on an unresolvable work root" $?
 
-before=$(find "$PP" | sort | shasum)
+task_before=$(shasum "$PP/tasks/AIOS-014/task.md")
+pilot_before=$(shasum "$PP/projects/ai-os/work/index.md" "$PP/projects/ai-os/work/context/current.md")
 out=$(AI_OS_HOME="$PP" "$CLI/ai-os-init" 2>&1); rc=$?
 [ "$rc" -eq 0 ];                         chk "init runs instead of refusing" $?
 echo "$out" | grep -q "REFUSED"
 [ $? -ne 0 ];                            chk "  ...without a layout refusal" $?
-[ "$(find "$PP" | sort | shasum)" = "$before" ]
-chk "  ...having created, moved and deleted nothing" $?
+[ "$task_before" = "$(shasum "$PP/tasks/AIOS-014/task.md")" ] &&
+  [ "$pilot_before" = "$(shasum "$PP/projects/ai-os/work/index.md" "$PP/projects/ai-os/work/context/current.md")" ]
+chk "  ...without touching the old record or pilot marker" $?
 grep -q "the authoritative record" "$PP/tasks/AIOS-014/task.md"
 chk "  ...and left the old task record alone" $?
 
@@ -3021,8 +3026,8 @@ chk "  ...and resolves to personal/memory" $?
 mkdir -p "$RT/m-stale/user/memory"
 [ "$(AI_OS_HOME="$RT/m-stale" "$PA" layout memory)" = "none" ]
 chk "user/memory is no longer the new side of memory" $?
-[ "$(AI_OS_HOME="$RT/m-stale" "$PA" get memory)" = "$RT/m-stale/user/02-personal/memory" ]
-chk "  ...so it neither resolves nor puts the old root out of play" $?
+[ "$(AI_OS_HOME="$RT/m-stale" "$PA" get memory)" = "$RT/m-stale/personal/memory" ]
+chk "  ...so the resolver falls back to init's new memory path" $?
 
 mkdir -p "$RT/m-both/user/02-personal/memory" "$RT/m-both/personal/memory"
 echo "old store" > "$RT/m-both/user/02-personal/memory/i.md"
@@ -3052,8 +3057,8 @@ chk "  ...and resolves to personal/knowledge" $?
 mkdir -p "$RT/k-stale/user/knowledge"
 [ "$(AI_OS_HOME="$RT/k-stale" "$PA" layout knowledge)" = "none" ]
 chk "user/knowledge is no longer the new side of knowledge" $?
-[ "$(AI_OS_HOME="$RT/k-stale" "$PA" get knowledge)" = "$RT/k-stale/user/05-knowledge" ]
-chk "  ...so it neither resolves nor puts the old root out of play" $?
+[ "$(AI_OS_HOME="$RT/k-stale" "$PA" get knowledge)" = "$RT/k-stale/personal/knowledge" ]
+chk "  ...so the resolver falls back to init's new knowledge path" $?
 
 mkdir -p "$RT/k-both/user/05-knowledge" "$RT/k-both/personal/knowledge"
 echo "old store" > "$RT/k-both/user/05-knowledge/i.md"
@@ -3093,14 +3098,16 @@ chk "projects, rules and runtime keep the new sides they already had" $?
 # The root list is asserted whole, so a root can never be added by accident — only by
 # editing this line. Slice 8b left daily and templates out because nothing resolved them;
 # Slice 10A added them, with config, policies, skills, agents and helpers, because those
-# are exactly the seven the live CLI tools still named literally. `professional` is still
-# absent: nothing resolves it, so inventing a root would widen conflict detection for no
-# caller. See cli/ai-os-paths.
+# are exactly the seven the live CLI tools still named literally. Slice 10B adds schemas
+# and professional so init can create the final private layout without spelling the old
+# section names downstream. See cli/ai-os-paths.
 roots=$(. "$PA"; printf '%s' "$AIOS_PATH_ROOTS")
-[ "$roots" = "memory knowledge projects work rules runtime config policies daily templates skills agents helpers" ]
-chk "the resolver root list is exactly the thirteen declared roots" $?
-case " $roots " in *" professional "*) false ;; *) true ;; esac
-chk "  ...and professional is still not one of them" $?
+[ "$roots" = "memory knowledge projects work rules runtime config policies daily templates skills agents helpers schemas professional" ]
+chk "the resolver root list is exactly the fifteen declared roots" $?
+case " $roots " in *" schemas "*) true ;; *) false ;; esac
+chk "  ...including schemas" $?
+case " $roots " in *" professional "*) true ;; *) false ;; esac
+chk "  ...including professional" $?
 
 # =====================================================================================
 t "private path compatibility: an archived pointer layer is not a live root"
@@ -3237,10 +3244,10 @@ while IFS=: read -r root new old; do
   [ "$(AI_OS_HOME="$C_NEW" "$PA" layout "$root")" = "new" ] &&
     [ "$(AI_OS_HOME="$C_NEW" "$PA" get "$root")" = "$C_NEW/$new" ] || bad_new=1
 
-  # Nothing there yet resolves to the old path on purpose: that is still the layout
-  # `ai-os init` creates, and a fresh workspace must not change shape under it.
+  # Nothing there yet resolves to the new path on purpose: that is now the layout
+  # `ai-os init` creates, and a fresh workspace must not grow the shim layer back.
   [ "$(AI_OS_HOME="$C_NONE" "$PA" layout "$root")" = "none" ] &&
-    [ "$(AI_OS_HOME="$C_NONE" "$PA" get "$root")" = "$C_NONE/$old" ] || bad_none=1
+    [ "$(AI_OS_HOME="$C_NONE" "$PA" get "$root")" = "$C_NONE/$new" ] || bad_none=1
 
   # The live state of a migrated workspace: the real directory at the new name, the old
   # name still reaching it through a symlink. One directory, two names — compatibility,
@@ -3253,7 +3260,7 @@ done <<< "$SEVEN"
 [ "$bad_pair" -eq 0 ];  chk "each new root declares the move Slice 9 actually made" $?
 [ "$bad_old" -eq 0 ];   chk "old path only -> the old path, for all seven" $?
 [ "$bad_new" -eq 0 ];   chk "new path only -> the new path, for all seven" $?
-[ "$bad_none" -eq 0 ];  chk "neither -> the layout init still creates, for all seven" $?
+[ "$bad_none" -eq 0 ];  chk "neither -> the new layout init now creates, for all seven" $?
 [ "$bad_shim" -eq 0 ];  chk "a symlink shim resolves to the new path, for all seven" $?
 AI_OS_HOME="$C_SHIM" "$PA" check >/dev/null 2>&1
 [ $? -eq 0 ];           chk "  ...and a fully shimmed workspace reports no conflict" $?
@@ -3302,12 +3309,11 @@ done
 [ -z "$still_literal" ] || printf '        still literal:%s\n' "$still_literal"
 [ -z "$still_literal" ]
 chk "no live consumer still builds one of the seven paths by hand" $?
-# ai-os-doctor and ai-os-init keep the old names on purpose, in the two places that are
-# about the old layout rather than about reaching data: doctor's conflict report and
-# init's fallback for a workspace that has not moved.
-grep -q 'AI_OS_PATH_CONFIG:-\$AI_OS_HOME/system/config' "$CLI/ai-os-doctor"
-chk "doctor keeps the old path only as the pre-move fallback" $?
-grep -q 'for r in memory knowledge projects rules config daily templates skills agents helpers' "$CLI/ai-os-doctor"
+# ai-os-doctor and ai-os-init may still mention the old names on purpose, in the places
+# that describe the old side of a move rather than reaching live data.
+grep -q 'AI_OS_PATH_CONFIG:-\$AI_OS_HOME/internal/config' "$CLI/ai-os-doctor"
+chk "doctor falls back to the new config path when the resolver has no answer" $?
+grep -q 'for r in memory knowledge projects rules runtime config policies daily templates skills agents helpers schemas professional' "$CLI/ai-os-doctor"
 chk "  ...and checks all of them through the resolver's layout answer" $?
 
 # ai-os-hook is the one file that may not ask: the resolver lives in the repository, and
@@ -3334,7 +3340,8 @@ chk "  ...and names both when it finds neither" $?
 # report is what the shims were propping up.
 D_NEW="$TMP/doctor-new"
 mkdir -p "$D_NEW/personal/memory" "$D_NEW/personal/knowledge" "$D_NEW/projects" \
-         "$D_NEW/personal/daily" "$D_NEW/personal/templates" "$D_NEW/sessions" \
+         "$D_NEW/personal/professional" "$D_NEW/personal/daily" "$D_NEW/personal/templates" \
+         "$D_NEW/sessions" "$D_NEW/internal/schemas" "$D_NEW/internal/runtime" \
          "$D_NEW/internal/config" "$D_NEW/internal/governance/rules" \
          "$D_NEW/internal/governance/policies" "$D_NEW/internal/extensions/skills" \
          "$D_NEW/internal/extensions/agents" "$D_NEW/internal/helpers"
@@ -3350,6 +3357,9 @@ t "private path compatibility: rewrite maps an old-layout path onto the live one
 chk "a path under an unmoved root is unchanged" $?
 [ "$("$PA" rewrite user/02-personal/memory/MEMORY.md)" = "$PW/personal/memory/MEMORY.md" ]
 chk "a path under a moved root is rewritten onto the new one" $?
+WR_OLD="$TMP/rewrite-old"; mkdir -p "$WR_OLD/system/config"
+[ "$(AI_OS_HOME="$WR_OLD" "$PA" rewrite internal/config/settings.yaml)" = "$WR_OLD/system/config/settings.yaml" ]
+chk "a new-layout template path is rewritten onto an old workspace" $?
 [ "$("$PA" rewrite sessions/2026/x.md)" = "$PW/sessions/2026/x.md" ]
 chk "a path under no moving root is left alone" $?
 "$PA" rewrite runtime/state/state.json >/dev/null 2>&1
@@ -3387,7 +3397,10 @@ chk "  ...and raises on a conflict instead of choosing a side" $?
 
 # =====================================================================================
 t "private path compatibility: init never straddles two layouts"
-IW="$TMP/init-layout"; AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
+IW="$TMP/init-layout"
+mkdir -p "$IW/user/02-personal/memory"
+echo "old seed" > "$IW/user/02-personal/memory/MEMORY.md"
+AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
 mkdir -p "$IW/personal/memory" && mv "$IW/user/02-personal/memory/MEMORY.md" "$IW/personal/memory/"
 rm -rf "$IW/user/02-personal"
 AI_OS_HOME="$IW" "$CLI/ai-os-init" >/dev/null 2>&1
@@ -3431,9 +3444,9 @@ echo "$sp_out" | grep -Eq 'knowledge +[0-9]+ files'; chk "  ...and knowledge" $?
 echo "$sp_out" | grep -q "missing"
 [ $? -ne 0 ];                         chk "  ...and reports no root as missing" $?
 
-[ "$(AI_OS_HOME="$SPW" "$PA" layout memory)" = "old" ]
-chk "the resolver still reports the old layout for a fresh workspace" $?
-[ "$(AI_OS_HOME="$SPW" "$PA" get memory)" = "$SPW/user/02-personal/memory" ]
+[ "$(AI_OS_HOME="$SPW" "$PA" layout memory)" = "new" ]
+chk "the resolver reports the new layout for a fresh workspace" $?
+[ "$(AI_OS_HOME="$SPW" "$PA" get memory)" = "$SPW/personal/memory" ]
 chk "  ...and returns the path with its spaces intact" $?
 
 # `env` stays raw so a machine parser gets the literal path; `env --sh` is the form that
@@ -3442,12 +3455,12 @@ chk "  ...and returns the path with its spaces intact" $?
 # first match, so a piped resolver would be killed by SIGPIPE and read as a failure.
 raw_env=$(AI_OS_HOME="$SPW" "$PA" env)
 case "$raw_env" in
-  *"AI_OS_PATH_MEMORY=$SPW/user/02-personal/memory"*) true ;;
+  *"AI_OS_PATH_MEMORY=$SPW/personal/memory"*) true ;;
   *) false ;;
 esac
 chk "env keeps values raw for machine parsers" $?
 sh_path=$(eval "$(AI_OS_HOME="$SPW" "$PA" env --sh)"; printf '%s' "$AI_OS_PATH_MEMORY")
-[ "$sh_path" = "$SPW/user/02-personal/memory" ]
+[ "$sh_path" = "$SPW/personal/memory" ]
 chk "env --sh survives eval with the spaces intact" $?
 
 # The Python adapter reads the raw form; a shell-quoted one would have handed it a path

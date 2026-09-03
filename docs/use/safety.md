@@ -72,7 +72,7 @@ ai-os privacy-scan            # is this repository still publishable?
 ai-os privacy-scan docs       # the same check, scoped to docs/
 ```
 
-Fill in `~/.ai-os/system/policies/privacy-terms.txt` with your name, handles, emails,
+Fill in `~/.ai-os/internal/governance/policies/privacy-terms.txt` with your name, handles, emails,
 employers and private repository names once, early. Without it `privacy-scan` runs only
 generic patterns and cannot catch a name or a client repository — the file itself stays
 private and is never read by anything in the public repository.

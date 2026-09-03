@@ -29,7 +29,7 @@ Two layers, two owners:
   private  ~/.ai-os          your memory, knowledge, projects — never published
 
 The runtime layer at ~/.ai is retired: its engine is this cli/, its client integration is
-adapters/<client>/, and its transient state is \$AI_OS_HOME/runtime/.
+adapters/<client>/, and its transient state is \$AI_OS_HOME/internal/runtime/.
 
 See docs/design/public-private.md, schemas/adapter.schema.md,
 schemas/capability.schema.md, schemas/domain.schema.md and schemas/run.schema.md.

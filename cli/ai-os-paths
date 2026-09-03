@@ -10,7 +10,7 @@
 #   old exists, new absent    -> the old path
 #   both, one directory       -> the new name  (a symlink shim is compatibility, not a clash)
 #   both, two directories     -> CONFLICT. Report and stop.
-#   neither                   -> the old path — still the layout `ai-os init` creates
+#   neither                   -> the new path — the layout `ai-os init` creates now
 #
 # One exception, and it is declared rather than inferred: a *pilot mirror* — content
 # written at a new address so the new shape can be judged, while the old root stays
@@ -40,7 +40,7 @@
 # ai-os-onboard, ai-os-hook, ai-os-render, ai-os-privacy-scan, ai-os-doctor and
 # ai-os-status named them literally. Giving them a resolver root is what makes those
 # shims removable later — see roadmap.md "What Slice 10 has to remove".
-AIOS_PATH_ROOTS="memory knowledge projects work rules runtime config policies daily templates skills agents helpers"
+AIOS_PATH_ROOTS="memory knowledge projects work rules runtime config policies daily templates skills agents helpers schemas professional"
 
 _aios_pair() {  # <root> -> "<new-rel> <old-rel>"
   case "$1" in
@@ -57,6 +57,8 @@ _aios_pair() {  # <root> -> "<new-rel> <old-rel>"
     skills)    echo "internal/extensions/skills      skills" ;;
     agents)    echo "internal/extensions/agents      agents" ;;
     helpers)   echo "internal/helpers                scripts" ;;
+    schemas)   echo "internal/schemas                system/schemas" ;;
+    professional) echo "personal/professional          user/03-professional" ;;
     *) return 1 ;;
   esac
 }
@@ -252,26 +254,41 @@ aios_path() {  # <root> -> the absolute path, on stdout
           return 4 ;;
       esac
       printf '%s\n' "$home/$new_rel" ;;
-    # "none" resolves to the old path on purpose: nothing exists yet, and the old layout
-    # is still the one `ai-os init` creates. This keeps a fresh workspace unchanged.
-    old|none) printf '%s\n' "$home/$old_rel" ;;
+    old) printf '%s\n' "$home/$old_rel" ;;
+    none)
+      case "$new_rel" in
+        *'*'*) printf '%s\n' "$home/$old_rel" ;;
+        *)     printf '%s\n' "$home/$new_rel" ;;
+      esac ;;
     *) return 2 ;;
   esac
 }
 
 aios_path_rewrite() {  # <workspace-relative path> -> the absolute path in the live layout
-  # The compatibility primitive: a path written against the old layout comes back pointing
-  # at whichever layout this workspace is actually in. Anything under no moving root is
-  # returned unchanged. A conflicting root propagates its exit code rather than a guess.
-  local rel="$1" home root pair old_rel base
+  # The compatibility primitive: a path written against either side of the move comes back
+  # pointing at whichever layout this workspace is actually in. Anything under no moving
+  # root is returned unchanged. A conflicting root propagates its exit code rather than a
+  # guess.
+  local rel="$1" home root pair new_rel old_rel base suffix
   home="$(aios_paths_home)"
   for root in $AIOS_PATH_ROOTS; do
-    pair="$(_aios_pair "$root")"; old_rel="${pair##* }"
+    pair="$(_aios_pair "$root")"; new_rel="${pair%% *}"; old_rel="${pair##* }"
     case "$rel" in
       "$old_rel"|"$old_rel"/*)
         base="$(aios_path "$root")" || return $?
         printf '%s%s\n' "$base" "${rel#"$old_rel"}"
         return 0 ;;
+    esac
+    case "$new_rel" in
+      *'*'*) ;;
+      *)
+        case "$rel" in
+          "$new_rel"|"$new_rel"/*)
+            base="$(aios_path "$root")" || return $?
+            suffix="${rel#"$new_rel"}"
+            printf '%s%s\n' "$base" "$suffix"
+            return 0 ;;
+        esac ;;
     esac
   done
   printf '%s/%s\n' "$home" "$rel"

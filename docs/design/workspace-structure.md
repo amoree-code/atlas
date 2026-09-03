@@ -4,28 +4,23 @@ The layout itself is in `docs/use/workspace.md`. This is the reasoning behind it
 
 ## Two halves, not one flat tree
 
-A user should be able to hold the whole workspace in their head with two ideas: `user/` is
-everything they own — memory, knowledge, daily records, projects — and `system/` is
-configuration and governance. Everything else in the workspace hangs off one of those two,
-or is transient (`runtime/`, `sessions/`). They should not need to understand an
+A user should be able to hold the whole workspace in their head with three ideas:
+`personal/` is long-lived personal material, `projects/` is work state, and `internal/`
+is AI-OS machinery. `sessions/` remains top-level for now and is planned to move under
+`internal/` after the heavy migration settles. They should not need to understand an
 orchestrator, an event bus, or an adapter's internals to use the system. That is the
 "simple for the user, not simple internally" principle in `docs/design/decisions.md`:
 internal machinery is allowed to be intricate; the thing the user has to hold in their head
 is not.
 
-`mcp/` and `plugins/` sit at the workspace root rather than under `user/` or `system/`
-because neither is data you own or configuration you set — both are reserved namespaces
-with ownership rules, waiting for something to exist in them. Putting a reserved,
-currently-empty namespace inside `user/` would make it look like personal data; inside
-`system/` would make it look like config. It is neither yet, so it gets its own place.
+`mcp/` and private capability material sit under `internal/extensions/` because they are
+AI-OS extension points, not daily personal material and not project-owned work.
 
 ## Why numbered sections
 
-`user/00-inbox/` through `user/06-templates/` are numbered so a directory listing sorts in
-reading order — inbox before daily before personal before professional before projects
-before knowledge before templates — rather than alphabetically, which would put `daily`
-before `inbox` and scramble the intended flow from unprocessed input to durable record.
-The numbers are a sort key, not a version or a priority ranking.
+The old numbered `user/` sections were retired by the private layout move. The current
+daily-use roots are readable names: `personal/`, `projects/`, `sessions/` and
+`internal/`.
 
 ## Memory's eight sections, knowledge's seven kinds
 

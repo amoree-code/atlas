@@ -70,7 +70,9 @@ fi
 root_of() {
   case "$1" in
     system/rules)      echo rules ;;
+    system/schemas)    echo schemas ;;
     user/02-personal)  echo memory ;;
+    user/03-professional) echo professional ;;
     user/04-projects)  echo projects ;;
     user/05-knowledge) echo knowledge ;;
     runtime)           echo runtime ;;
@@ -92,8 +94,16 @@ for section in system/config system/rules system/policies system/schemas \
                user/04-projects user/05-knowledge user/06-templates \
                skills agents scripts sessions runtime; do
   root="$(root_of "$section")"
-  if [ -n "$root" ] && [ "$(aios_path_layout "$root")" = "new" ]; then
-    say "${D}moved    $section/ -> $(aios_path "$root" | sed "s|^$AI_OS_HOME/||")/${X}"; existed=$((existed+1)); continue
+  if [ -n "$root" ]; then
+    dir="$(aios_path "$root")" || exit $?
+    at="${dir#"$AI_OS_HOME"/}"
+    if [ -d "$dir" ]; then
+      say "exists   $at/"; existed=$((existed+1))
+    else
+      act && mkdir -p "$dir"
+      say "created  $at/"; created=$((created+1))
+    fi
+    continue
   fi
   dir="$AI_OS_HOME/$section"
   if [ -d "$dir" ]; then
@@ -150,7 +160,7 @@ fi
 # with where init is running from, that is reported and left alone: silently rewriting it
 # would break a deliberate override, and guessing which one is right is not init's call.
 printf '\n%srepository location%s\n' "$B" "$X"
-cfg="$AI_OS_HOME/system/config/settings.yaml"
+cfg="$(aios_path config)/settings.yaml"
 if [ -f "$cfg" ]; then
   cur="$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$cfg" | head -n 1 | sed \
         -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/" \
@@ -174,14 +184,14 @@ if [ -f "$cfg" ]; then
     say "${D}         ${X}  If the repository moved, update it or clear it and re-run init."
   fi
 else
-  say "${Y}no system/config/settings.yaml — cannot record the repository location${X}"
+  say "${Y}no ${cfg#"$AI_OS_HOME"/} — cannot record the repository location${X}"
 fi
 
 # --- what init deliberately does NOT do ---------------------------------------------
 printf '\n%snot copied, deliberately%s\n' "$B" "$X"
 say "${D}public skills${X}   stay in $REPO/skills — copying them here would turn"
 say "${D}             ${X}   software into your files and make them un-updatable."
-say "${D}             ${X}   Your own skills go in $(aios_path skills 2>/dev/null || echo "$AI_OS_HOME/skills") and win on name."
+say "${D}             ${X}   Your own skills go in $(aios_path skills 2>/dev/null || echo "$AI_OS_HOME/internal/extensions/skills") and win on name."
 say "${D}runtime scripts${X} belong to the runtime layer, not your data."
 say "${D}profile.yaml${X}    seeded blank. Fill it in: it is what makes the canonical"
 say "${D}            ${X}    skills yours, and it never leaves this workspace."

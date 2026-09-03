@@ -139,7 +139,7 @@ skills:
     On a name collision the user's skill wins. Public skills are never copied into the
     private workspace at init — copying would turn public software into user files and
     make it un-updatable. They stay in the public repository and are resolved by name.
-  user_store: $AI_OS_HOME/skills
+  user_store: $AI_OS_HOME/internal/extensions/skills
   public_store: <ai-os>/skills
   never: overwrite, delete or modify a user skill
 

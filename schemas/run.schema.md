@@ -40,7 +40,7 @@ effective authority  =  capability authority  ∩  user grant  ∩  run scope
 
 Run scope can shrink what a step may attempt. It cannot grant anything invoke itself
 would refuse, and there is no code path in `ai-os-run` that writes to
-`system/config/authority.yaml` or otherwise elevates a grant.
+`internal/config/authority.yaml` or otherwise elevates a grant.
 
 **Approval is never manufactured.** Every invocation a Run makes runs with stdin closed
 (`subprocess.DEVNULL`), regardless of how `ai-os run` itself was invoked. An

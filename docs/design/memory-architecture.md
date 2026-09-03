@@ -4,11 +4,11 @@
 
 | Layer | Answers | Lives | Lifespan |
 |---|---|---|---|
-| **Memory** | *what is true about you and your world?* | `~/.ai-os/user/02-personal/memory/<section>/` | years |
-| **Knowledge** | *what did work teach us that saves effort next time?* | `~/.ai-os/user/05-knowledge/<kind>/` | until superseded |
+| **Memory** | *what is true about you and your world?* | `~/.ai-os/personal/memory/<section>/` | years |
+| **Knowledge** | *what did work teach us that saves effort next time?* | `~/.ai-os/personal/knowledge/<kind>/` | until superseded |
 | **Session** | *what are we doing right now?* | `~/.ai-os/sessions/` | one session |
-| **Daily** | *what happened today?* | `~/.ai-os/user/01-daily/YYYY/MM/YYYY-MM-DD/` | one day |
-| **Project memory** | *what is true about ONE project?* | `~/.ai-os/user/04-projects/<project>/memory/` | life of the project |
+| **Daily** | *what happened today?* | `~/.ai-os/personal/daily/YYYY/MM/YYYY-MM-DD/` | one day |
+| **Project memory** | *what is true about ONE project?* | `~/.ai-os/projects/<project>/memory/` | life of the project |
 
 Global memory is client-independent and project-independent: one store, every client
 reaches it through its adapter's mounts. Project memory is scoped to its project and

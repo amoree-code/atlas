@@ -23,7 +23,7 @@ not a layer with an owner of its own.
 
 **Access is not ownership.**
 
-The CLI reaches into `$AI_OS_HOME/user/02-personal/memory` constantly — that is its job.
+The CLI reaches into `$AI_OS_HOME/personal/memory` constantly — that is its job.
 A symlink, an environment variable, or a hook that grants it that reach does not
 reclassify the data it reaches. Memory read through a client's own per-project memory
 directory is still private-workspace data, owned by you, and still may not be copied into
@@ -48,7 +48,7 @@ this, and `ai-os doctor` runs it for you.
 AI OS grew up in a runtime directory at `~/.ai`, which held the live hooks, the scripts
 and the client integration. That layer is retired. Its engine became this repository's
 `cli/`, its client integration became `adapters/<client>/`, the user's own data moved into
-the private workspace, and its transient state became `$AI_OS_HOME/runtime/`.
+the private workspace, and its transient state became `$AI_OS_HOME/internal/runtime/`.
 
 `ai-os doctor` now treats `~/.ai` as a **legacy** location rather than a live layer. It
 passes when the directory is absent or inert, and **fails** when it still holds active

@@ -28,6 +28,6 @@ step_language: pending
 step_profile: pending
 
 # Where the real data lives. Pointers, not copies.
-canonical_identity: user/02-personal/memory/identity/
-canonical_preferences: user/02-personal/memory/preferences/
-canonical_profile: system/config/profile.yaml
+canonical_identity: personal/memory/identity/
+canonical_preferences: personal/memory/preferences/
+canonical_profile: internal/config/profile.yaml

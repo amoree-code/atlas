@@ -3,12 +3,8 @@
 set -uo pipefail
 W="${AI_OS_HOME:-$HOME/.ai-os}"
 D=$(date +%Y-%m-%d)
-# Both roots are mid-migration, and this script cannot call cli/ai-os-paths: that resolver
-# lives in the public repository and this script knows only its own workspace. So it
-# repeats the resolver's rule in the smallest form — the new name when it exists, else the
-# old one, which is still what `ai-os init` creates.
-if [ -d "$W/personal/daily" ]; then DAILY="$W/personal/daily"; else DAILY="$W/user/01-daily"; fi
-if [ -d "$W/projects" ];       then PROJECTS="$W/projects";    else PROJECTS="$W/user/04-projects"; fi
+DAILY="$W/personal/daily"
+PROJECTS="$W/projects"
 DIR="$DAILY/$(date +%Y)/$(date +%m)/$D"
 
 echo "=== today: $D ==="

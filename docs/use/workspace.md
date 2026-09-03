@@ -5,31 +5,34 @@ never owns it, never publishes it, and never overwrites what you have put there.
 
 ```
 ~/.ai-os/
-├── user/                 your information
-│   ├── 00-inbox/            unprocessed, waiting for triage
-│   ├── 01-daily/            daily logs
-│   ├── 02-personal/         personal information — memory/ is the 8-section store
-│   ├── 03-professional/     professional material outside the memory store
-│   ├── 04-projects/         registry · tasks · per-project context (on demand)
-│   ├── 05-knowledge/        what work taught the system — 7 kinds
-│   └── 06-templates/        reusable document templates
-├── system/               AI-OS configuration and governance
-│   ├── rules/               canonical behavioral rules
-│   ├── policies/            private policy inputs (privacy terms)
+├── personal/             your long-lived information
+│   ├── daily/               daily logs
+│   ├── memory/              the 8-section memory store
+│   ├── professional/        professional material outside the memory store
+│   ├── knowledge/           what work taught the system — 7 kinds
+│   └── templates/           reusable document templates
+├── projects/             registry · backlog · project-owned work and context
+├── internal/             AI-OS machinery and governance
+│   ├── config/              settings, model routing, profile
+│   ├── governance/
+│   │   ├── rules/           canonical behavioral rules
+│   │   └── policies/        private policy inputs (privacy terms)
 │   ├── schemas/             private data schemas — reserved
-│   └── config/              settings, model routing, profile
+│   ├── extensions/
+│   │   ├── skills/          your own skills
+│   │   └── agents/          canonical agent definitions
+│   ├── helpers/             operational helper scripts
+│   └── runtime/             transient generated state
+├── user/
+│   └── 00-inbox/            unprocessed, waiting for triage
 ├── mcp/                  reserved — global MCP namespace, not created by init
 ├── plugins/              reserved — your capability configuration, not created by init
-├── skills/               your own skills
-├── agents/               canonical agent definitions
-├── scripts/              operational helper scripts
-├── sessions/             session records and the live task checkpoint
-└── runtime/              transient generated state
+└── sessions/             session records (planned to move under internal/ later)
 ```
 
-`user/` is the human-facing half; `system/` is the machine-facing half. Set `AI_OS_HOME`
-to put the workspace somewhere else. Why the shape is two halves, not one flat tree or
-several, is in `docs/design/workspace-structure.md`.
+`personal/` is the human-facing durable layer, `projects/` is project-owned work, and
+`internal/` is the machine-facing layer. Set `AI_OS_HOME` to put the workspace somewhere
+else. Why the shape is split this way is in `docs/design/workspace-structure.md`.
 
 `mcp/` and `plugins/` are reserved names with ownership rules rather than directories that
 exist on a fresh workspace: `ai-os init` creates everything above them and neither of
@@ -42,7 +45,7 @@ those two, because there is nothing yet to put in either.
 
 ## What's true about you, and what a project taught the system
 
-`user/02-personal/memory/` and `user/05-knowledge/` are different things that are easy to
+`personal/memory/` and `personal/knowledge/` are different things that are easy to
 conflate. The short version: memory is what's true about *you*, knowledge is what a task
 *taught* the system, and they are never merged. Practical detail — global vs. project
 memory, resolution order, how your client reaches the store — is in `docs/use/memory.md`.
@@ -52,7 +55,7 @@ The conceptual model and the test that settles ambiguous cases is in
 ## Project state
 
 A project that accumulates its own persistent state gets a directory under
-`user/04-projects/<project>/`, created on demand. What lives there, isolation rules, and
+`projects/<project>/`, created on demand. What lives there, isolation rules, and
 how the active project is determined are in `docs/use/projects.md`.
 
 ## MCP, adapters, capabilities and domains
@@ -95,7 +98,7 @@ workspace — `init` only walks `templates/workspace/`.
 ## Skills: yours win
 
 ```
-resolution order:  ~/.ai-os/skills   →   <ai-os>/skills
+resolution order:  ~/.ai-os/internal/extensions/skills   →   <ai-os>/skills
 ```
 
 Public skills stay in the public repository and are **not** copied into your workspace at

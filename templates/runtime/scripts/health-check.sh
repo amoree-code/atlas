@@ -7,34 +7,26 @@ ok()   { printf '  \033[32mok\033[0m    %s\n' "$1"; }
 warn() { printf '  \033[33mwarn\033[0m  %s\n' "$1"; }
 bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=1; }
 
-# Several workspace roots are mid-migration, so this script asks which layout it is in
-# rather than assuming one. It cannot call cli/ai-os-paths — that resolver lives in the
-# public repository and this script only knows its own workspace — so it repeats the same
-# rule in the smallest possible form: the new name when it exists, else the old one, which
-# is still what `ai-os init` creates. Deliberate duplication, not an oversight.
-wrel() {  # <new-rel> <old-rel> -> whichever of the two this workspace actually has
-  if [ -e "$W/$1" ]; then printf '%s' "$1"; else printf '%s' "$2"; fi
-}
-MEMORY=$(wrel personal/memory              user/02-personal/memory)
-KNOWLEDGE=$(wrel personal/knowledge        user/05-knowledge)
-PROJECTS=$(wrel projects                   user/04-projects)
-DAILY=$(wrel personal/daily                user/01-daily)
-PROFESSIONAL=$(wrel personal/professional  user/03-professional)
-TEMPLATES=$(wrel personal/templates        user/06-templates)
-RULES=$(wrel internal/governance/rules     system/rules)
-POLICIES=$(wrel internal/governance/policies system/policies)
-SCHEMAS=$(wrel internal/schemas            system/schemas)
-SKILLS=$(wrel internal/extensions/skills   skills)
-AGENTS=$(wrel internal/extensions/agents   agents)
-HELPERS=$(wrel internal/helpers            scripts)
-RUNTIME=$(wrel internal/runtime            runtime)
+MEMORY=personal/memory
+KNOWLEDGE=personal/knowledge
+PROJECTS=projects
+DAILY=personal/daily
+PROFESSIONAL=personal/professional
+TEMPLATES=personal/templates
+RULES=internal/governance/rules
+POLICIES=internal/governance/policies
+SCHEMAS=internal/schemas
+SKILLS=internal/extensions/skills
+AGENTS=internal/extensions/agents
+HELPERS=internal/helpers
+RUNTIME=internal/runtime
 
 echo "== structure =="
 for f in "$MEMORY/MEMORY.md" "$MEMORY/README.md" "$KNOWLEDGE/README.md" \
          "$PROJECTS/registry.md" "$PROJECTS/tasks.md"; do
   [ -f "$W/$f" ] && ok "$f" || bad "missing $W/$f"
 done
-# user/00-inbox and sessions/ have not moved; everything else is asked for above.
+# user/00-inbox and sessions/ have not moved yet.
 for d in user/00-inbox "$DAILY" "$PROFESSIONAL" "$TEMPLATES" \
          "$RULES" "$POLICIES" "$SCHEMAS" \
          sessions "$SKILLS" "$AGENTS" "$HELPERS" "$RUNTIME"; do

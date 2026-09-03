@@ -212,7 +212,7 @@ def _identical(a, b):
 def migrate_runtime():
     """Relocate persistent sync data out of the runtime layer, once.
 
-    ~/.ai/sync/{state,backups} -> $AI_OS_HOME/runtime/{state,backups}
+    ~/.ai/sync/{state,backups} -> $AI_OS_HOME/internal/runtime/{state,backups}
 
     Idempotent: with nothing at the legacy paths this returns immediately, which is the
     steady state after the first run. It moves rather than copies, so the old location

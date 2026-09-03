@@ -76,11 +76,11 @@ each answer is written to the one canonical owner for that fact and nowhere else
 
 | Answer | Canonical owner |
 |---|---|
-| name, languages | `user/02-personal/memory/identity/` |
-| reply language | `user/02-personal/memory/preferences/` |
-| what you work on | `user/02-personal/memory/career/` |
-| code root, VCS account | `system/config/profile.yaml` |
-| *whether onboarding is done* | `system/config/workspace.yaml` |
+| name, languages | `personal/memory/identity/` |
+| reply language | `personal/memory/preferences/` |
+| what you work on | `personal/memory/career/` |
+| code root, VCS account | `internal/config/profile.yaml` |
+| *whether onboarding is done* | `internal/config/workspace.yaml` |
 
 `workspace.yaml` holds state and pointers. It never holds a copy of a fact that lives
 somewhere else.
@@ -122,7 +122,7 @@ ai-os workspace status        # local versioning of your private data
 
 Two things worth doing once:
 
-1. **Fill in `~/.ai-os/system/policies/privacy-terms.txt`** — your name, handles, emails,
+1. **Fill in `~/.ai-os/internal/governance/policies/privacy-terms.txt`** — your name, handles, emails,
    employers, private repository names. Without it `privacy-scan` runs generic patterns
    only and cannot catch a name or a client repo. The file stays private.
 

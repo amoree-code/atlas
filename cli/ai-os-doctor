@@ -105,7 +105,7 @@ done
 # path with a space in it stays one path instead of becoming a command and its arguments.
 . "$SELF_DIR/ai-os-paths"
 aios_paths_export
-for r in memory knowledge projects rules config daily templates skills agents helpers; do
+for r in memory knowledge projects rules runtime config policies daily templates skills agents helpers schemas professional; do
   u="$(printf '%s' "$r" | tr 'a-z' 'A-Z')"; pv="AI_OS_PATH_$u"; lv="AI_OS_LAYOUT_$u"
   case "${!lv:-none}" in
     conflict) fail "private root '$r' exists in both layouts, as different directories"
@@ -208,7 +208,7 @@ head "memory access"
 # single canonical store and nowhere else.
 # ====================================================================================
 # Whichever layout it is in — the canonical store is one directory, not one path.
-CANON="${AI_OS_PATH_MEMORY:-$AI_OS_HOME/user/02-personal/memory}"
+CANON="${AI_OS_PATH_MEMORY:-$AI_OS_HOME/personal/memory}"
 STALE="$AI_OS_LEGACY/workspace/memory"
 
 if [ -L "$CANON" ]; then
@@ -308,7 +308,7 @@ else
   fi
   if [ -d "$AI_OS_LEGACY/workspace" ]; then
     ok "frozen archive present: $AI_OS_LEGACY/workspace  ${D}(rollback copy, read-only)${X}"
-    if grep -rqlF "$AI_OS_LEGACY/workspace" "${AI_OS_PATH_CONFIG:-$AI_OS_HOME/system/config}" 2>/dev/null; then
+    if grep -rqlF "$AI_OS_LEGACY/workspace" "${AI_OS_PATH_CONFIG:-$AI_OS_HOME/internal/config}" 2>/dev/null; then
       fail "private configuration still resolves into the frozen archive"
       note "the archive is a rollback copy; live configuration must not depend on it"
     else
@@ -363,9 +363,9 @@ head "configuration"
 # Defaults < user < project. An update may add a missing key; it must never change one
 # the user has set. Doctor reports what an update WOULD add; it adds nothing.
 # ====================================================================================
-CFG="${AI_OS_PATH_CONFIG:-$AI_OS_HOME/system/config}/settings.yaml"
+CFG="${AI_OS_PATH_CONFIG:-$AI_OS_HOME/internal/config}/settings.yaml"
 CFG_REL="${CFG#"$AI_OS_HOME"/}"
-TPL="$REPO/templates/workspace/system/config/settings.yaml"
+TPL="$REPO/templates/workspace/internal/config/settings.yaml"
 if [ -f "$CFG" ]; then
   if grep -qP '^\t' "$CFG" 2>/dev/null; then
     fail "$CFG_REL contains tab indentation — not valid YAML"
@@ -387,7 +387,7 @@ if [ -f "$CFG" ]; then
 else
   warn "$CFG_REL missing"
 fi
-TERMS="${AI_OS_PATH_POLICIES:-$AI_OS_HOME/system/policies}/privacy-terms.txt"
+TERMS="${AI_OS_PATH_POLICIES:-$AI_OS_HOME/internal/governance/policies}/privacy-terms.txt"
 TERMS_REL="${TERMS#"$AI_OS_HOME"/}"
 [ -f "$TERMS" ] \
   && ok "$TERMS_REL present  ${D}(private — used by privacy-scan)${X}" \
@@ -397,7 +397,7 @@ TERMS_REL="${TERMS#"$AI_OS_HOME"/}"
 head "skills"
 # ====================================================================================
 if [ -d "$REPO/skills" ]; then
-  USR_SKILLS="${AI_OS_PATH_SKILLS:-$AI_OS_HOME/skills}"
+  USR_SKILLS="${AI_OS_PATH_SKILLS:-$AI_OS_HOME/internal/extensions/skills}"
   pub=$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ')
   usr=$(find "$USR_SKILLS" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
   ok "$pub public skill(s), $usr user skill(s)"

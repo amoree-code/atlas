@@ -52,7 +52,7 @@ VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
 # pair leaves MEM empty and every write below refuses; CONFIG keeps the layout `ai-os init`
 # still creates, which is what the resolver itself returns when neither side exists.
 CONFIG="$("$SELF_DIR/ai-os-paths" get config 2>/dev/null)"
-CONFIG="${CONFIG:-$AI_OS_HOME/system/config}"
+CONFIG="${CONFIG:-$AI_OS_HOME/internal/config}"
 STATE="$CONFIG/workspace.yaml"
 MEM="$("$SELF_DIR/ai-os-paths" get memory 2>/dev/null)"
 IDENTITY_DIR="$MEM/identity"
@@ -195,7 +195,7 @@ metadata:
 Recorded at first-run onboarding. Correct or extend it directly — this file is yours, and
 onboarding never rewrites it.
 EOF
-  say "${G}wrote${X}    user/02-personal/memory/identity/profile.md"
+  say "${G}wrote${X}    ${IDENTITY_DIR#"$AI_OS_HOME"/}/profile.md"
 }
 
 write_language_pref() { # language
@@ -222,7 +222,7 @@ metadata:
 
 Recorded at first-run onboarding. This file is yours; onboarding never rewrites it.
 EOF
-  say "${G}wrote${X}    user/02-personal/memory/preferences/communication.md"
+  say "${G}wrote${X}    ${PREFS_DIR#"$AI_OS_HOME"/}/communication.md"
 }
 
 write_work() { # description
@@ -249,7 +249,7 @@ $1
 
 Recorded at first-run onboarding, and deliberately thin. Depth belongs here over time.
 EOF
-  say "${G}wrote${X}    user/02-personal/memory/career/background.md"
+  say "${G}wrote${X}    ${CAREER_DIR#"$AI_OS_HOME"/}/background.md"
 }
 
 profile_blank() { # key -> true when the profile has no value for it yet

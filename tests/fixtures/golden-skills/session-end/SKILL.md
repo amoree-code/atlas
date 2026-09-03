@@ -23,16 +23,16 @@ skip it and say so.
 
 1. **Session record.** Write to
    `~/.ai-os/sessions/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d-%H%M)-<project>-<topic>.md`
-   using `~/.ai-os/templates/session.md`. `<topic>` is 1–3
+   using `~/.ai-os/personal/templates/session.md`. `<topic>` is 1–3
    kebab-case words. Create the month folder if needed. Fill **Files changed** from
    `git status --short` and `git log` for this session — not from memory. Omit any
    template section with nothing real in it. **Next step** must be concrete enough to
    start from cold.
 
 2. **Daily log.** Append the meaningful events to today's
-   `~/.ai-os/user/01-daily/$(date +%Y/%m/%Y-%m-%d)/log.md`. Decisions, completions, problems and
+   `~/.ai-os/personal/daily/$(date +%Y/%m/%Y-%m-%d)/log.md`. Decisions, completions, problems and
    their fixes, discoveries. Not a narration of the session. Run
-   `~/.ai-os/scripts/day-start.sh` first if today's folder doesn't exist.
+   `~/.ai-os/internal/helpers/day-start.sh` first if today's folder doesn't exist.
 
 3. **Project memory** — only if something durable changed:
    - a decision → `<repo>/.claude/memory/decisions.md` (template: `templates/decision.md`)
@@ -43,11 +43,11 @@ skip it and say so.
 
    Nothing durable changed? Skip this step. Say you skipped it.
 
-4. **Tasks.** Update `~/.ai-os/user/04-projects/tasks.md` — close what's done, add
+4. **Tasks.** Update `~/.ai-os/projects/tasks.md` — close what's done, add
    what surfaced, restate next actions. Keep the format.
 
 5. **Registry.** Update this project's **Last** and **Next action** cells in
-   `~/.ai-os/user/04-projects/registry.md`. Nothing else.
+   `~/.ai-os/projects/registry.md`. Nothing else.
 
 6. **Global memory** — only if it passes §5 of the workspace `CLAUDE.md`: stable, true
    across projects, not already recorded. This is rare. When in doubt, don't.

@@ -30,7 +30,7 @@ skip it and say so.
    start from cold.
 
 2. **Daily log.** Append the meaningful events to today's
-   `~/.ai-os/user/01-daily/$(date +%Y/%m/%Y-%m-%d)/log.md`. Decisions, completions, problems and
+   `~/.ai-os/personal/daily/$(date +%Y/%m/%Y-%m-%d)/log.md`. Decisions, completions, problems and
    their fixes, discoveries. Not a narration of the session. Run
    `{{profile.scripts_dir}}/day-start.sh` first if today's folder doesn't exist.
 
@@ -43,11 +43,11 @@ skip it and say so.
 
    Nothing durable changed? Skip this step. Say you skipped it.
 
-4. **Tasks.** Update `~/.ai-os/user/04-projects/tasks.md` — close what's done, add
+4. **Tasks.** Update `~/.ai-os/projects/tasks.md` — close what's done, add
    what surfaced, restate next actions. Keep the format.
 
 5. **Registry.** Update this project's **Last** and **Next action** cells in
-   `~/.ai-os/user/04-projects/registry.md`. Nothing else.
+   `~/.ai-os/projects/registry.md`. Nothing else.
 
 6. **Global memory** — only if it passes §5 of the workspace `{{client.project_context}}`: stable, true
    across projects, not already recorded. This is rare. When in doubt, don't.

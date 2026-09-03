@@ -1,12 +1,12 @@
 # Memory and knowledge
 
 **Memory** is what is true about *you* — who you are, what you are working toward, how you
-like to work. It changes slowly. `user/02-personal/memory/` has eight sections:
+like to work. It changes slowly. `personal/memory/` has eight sections:
 `identity`, `education`, `career`, `projects`, `goals`, `travel`, `preferences`,
 `interests`.
 
 **Knowledge** is what a *task* taught the system — a solved problem, a decision and its
-alternatives, an approach that failed. It changes with every project. `user/05-knowledge/`
+alternatives, an approach that failed. It changes with every project. `personal/knowledge/`
 has seven kinds: `task-results`, `technical-solutions`, `decisions`, `architecture`,
 `research`, `discoveries`, `failures`.
 
@@ -16,12 +16,12 @@ examples, is in `docs/design/memory-architecture.md`.
 
 ## Global memory and project memory
 
-`user/02-personal/memory/` is the **single global memory store** — what is true about you,
+`personal/memory/` is the **single global memory store** — what is true about you,
 independent of any project and of any AI client. There is exactly one, and every client
 reaches that one store through its adapter's mounts. It is never duplicated per client.
 
 A project that accumulates its own persistent state gets a directory under
-`user/04-projects/<project>/` instead — see `docs/use/projects.md`. Movement between the
+`projects/<project>/` instead — see `docs/use/projects.md`. Movement between the
 two layers is always an explicit act: a project fact is *promoted* to global memory
 deliberately, and global facts are *referenced* from a project rather than copied into it.
 
@@ -35,7 +35,7 @@ system rules → global memory → project rules → project memory
 
 ## How your client reaches your memory
 
-One canonical store, `~/.ai-os/user/02-personal/memory`, and every client points at it.
+One canonical store, `~/.ai-os/personal/memory`, and every client points at it.
 
 Some AI clients scope their own native memory tool to the current working directory —
 Claude Code does, at `~/.claude/projects/<cwd-slug>/memory/` — which means memory written

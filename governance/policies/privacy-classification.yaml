@@ -85,7 +85,7 @@ term_sources:
     where: built into the scanner
     contains: shapes only — no name, no email, no path, no repository, belonging to anyone
   user_terms:
-    where: $AI_OS_HOME/system/policies/privacy-terms.txt
+    where: $AI_OS_HOME/internal/governance/policies/privacy-terms.txt
     contains: the user's own identifying strings, one per line, '#' comments allowed
     classification: private   # never copied to, referenced by, or committed in the public repo
     optional: true            # absent means generic-only scanning, with a warning

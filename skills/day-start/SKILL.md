@@ -23,7 +23,7 @@ not invented priorities.
    {{profile.scripts_dir}}/context.sh
    ```
 
-3. Read `~/.ai-os/user/04-projects/registry.md` (the `active` rows only) and, if the
+3. Read `~/.ai-os/projects/registry.md` (the `active` rows only) and, if the
    last session record names a project, that project's `{{client.project_memory}}context.md`.
 
 4. Write `brief.md`. Sections: **Focus today** · **Active projects** · **Unfinished from

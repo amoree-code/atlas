@@ -2,7 +2,7 @@
 """Persistent sync data belongs to the private workspace, not the runtime layer.
 
 V0.1.5 moved ai-sync's state record and its pre-overwrite backups out of
-~/.ai/sync/{state,backups} and into $AI_OS_HOME/runtime/{state,backups}. These tests
+~/.ai/sync/{state,backups} and into $AI_OS_HOME/internal/runtime/{state,backups}. These tests
 exercise that relocation against a throwaway HOME — nothing here reads or writes the
 real workspace, the real runtime, or any real client configuration.
 
@@ -67,10 +67,10 @@ def scratch(tmp, label, legacy_state=None, legacy_backups=None, new_state=None,
         for n, c in files.items():
             (d / n).write_text(c)
     if new_state is not None:
-        d = ws / "runtime" / "state"; d.mkdir(parents=True, exist_ok=True)
+        d = ws / "internal" / "runtime" / "state"; d.mkdir(parents=True, exist_ok=True)
         (d / "state.json").write_text(new_state)
     for tag, files in (new_backups or {}).items():
-        d = ws / "runtime" / "backups" / tag; d.mkdir(parents=True, exist_ok=True)
+        d = ws / "internal" / "runtime" / "backups" / tag; d.mkdir(parents=True, exist_ok=True)
         for n, c in files.items():
             (d / n).write_text(c)
     return load_sync(home, ws), home, ws
@@ -83,10 +83,10 @@ def main():
         # --- 1, 2, 11: a fresh installation writes only to the new canonical location ---
         print(f"\n{D}— fresh installation uses the private workspace{X}")
         m, home, ws = scratch(tmp, "fresh")
-        chk("state resolves under AI_OS_HOME/runtime",
-            m.STATE == ws / "runtime" / "state" / "state.json")
-        chk("backups resolve under AI_OS_HOME/runtime",
-            m.BACKUPS == ws / "runtime" / "backups")
+        chk("state resolves under AI_OS_HOME/internal/runtime",
+            m.STATE == ws / "internal" / "runtime" / "state" / "state.json")
+        chk("backups resolve under AI_OS_HOME/internal/runtime",
+            m.BACKUPS == ws / "internal" / "runtime" / "backups")
         chk("a custom AI_OS_HOME is honoured, not $HOME/.ai-os",
             str(ws) in str(m.STATE) and ".ai-os" not in str(m.STATE))
         m.migrate_runtime()

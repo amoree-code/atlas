@@ -40,7 +40,7 @@ else
   row "onboarding" "${Y}unknown${X} — ai-os-onboard not found"
 fi
 
-# Three of these roots are mid-migration and may sit in either layout. Sourcing the
+# Private roots may sit in either layout while compatibility remains. Sourcing the
 # resolver sets AI_OS_PATH_*/AI_OS_LAYOUT_* directly — the answers never become text, so
 # a workspace path containing a space cannot come back as a command to run. A root with
 # no single answer comes back with a layout and no path.
@@ -65,7 +65,7 @@ done
 # layout is the normal case today and does not need a line about it.
 moved=""
 for r in memory knowledge projects work rules runtime \
-         config policies daily templates skills agents helpers; do
+         config policies daily templates skills agents helpers schemas professional; do
   v="AI_OS_LAYOUT_$(printf '%s' "$r" | tr 'a-z' 'A-Z')"; l="${!v:-old}"
   [ "$l" = "old" ] || moved="${moved}${moved:+ }$r=$l"
 done
@@ -100,10 +100,10 @@ row "knowledge" "$(find "${AI_OS_PATH_KNOWLEDGE:-/nonexistent}" -name '*.md' 2>/
 
 printf '\n%sskills%s\n' "$B" "$X"
 row "public" "$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
-row "yours" "$(find "${AI_OS_PATH_SKILLS:-$AI_OS_HOME/skills}" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')  ${D}(yours win on a name collision)${X}"
+row "yours" "$(find "${AI_OS_PATH_SKILLS:-$AI_OS_HOME/internal/extensions/skills}" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')  ${D}(yours win on a name collision)${X}"
 
 printf '\n%sadapter%s\n' "$B" "$X"
-adapter=$(grep -m1 '^active_adapter:' "${AI_OS_PATH_CONFIG:-$AI_OS_HOME/system/config}/settings.yaml" 2>/dev/null | cut -d: -f2 | tr -d ' ')
+adapter=$(grep -m1 '^active_adapter:' "${AI_OS_PATH_CONFIG:-$AI_OS_HOME/internal/config}/settings.yaml" 2>/dev/null | cut -d: -f2 | tr -d ' ')
 row "active" "${adapter:-claude-code ${D}(default)${X}}"
 
 printf '\n%shealth%s\n' "$B" "$X"

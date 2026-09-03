@@ -30,5 +30,5 @@ agents:
   curator: curator
   scribe: scribe
 
-scripts_dir: ~/.ai-os/scripts
-templates_dir: ~/.ai-os/templates
+scripts_dir: ~/.ai-os/internal/helpers
+templates_dir: ~/.ai-os/personal/templates

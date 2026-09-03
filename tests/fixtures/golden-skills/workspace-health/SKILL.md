@@ -10,7 +10,7 @@ Read-only. Diagnose; never fix without being asked.
 ## Steps
 
 1. ```bash
-   ~/.ai-os/scripts/health-check.sh
+   ~/.ai-os/internal/helpers/health-check.sh
    ```
    (script — unmoved; it checks the live data workspace at `~/.ai-os` internally)
    Covers structure, Claude Code config, skill validity, script syntax, today's folder,
@@ -38,7 +38,7 @@ Read-only. Diagnose; never fix without being asked.
    - **Knowledge quality** — a `knowledge/` entry that is long, narrative, or transcript-like
      has failed its purpose. Flag it for compression.
 
-3. **Registry drift** — checked against `~/.ai-os/user/04-projects/registry.md`; the script can't judge this:
+3. **Registry drift** — checked against `~/.ai-os/projects/registry.md`; the script can't judge this:
    ```bash
    find ~/Documents -maxdepth 6 -type d -name .git -not -path "*/node_modules/*" | sed 's|/.git$||'
    ```

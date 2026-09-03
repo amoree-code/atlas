@@ -1,7 +1,7 @@
 # Projects
 
 A project that accumulates its own persistent state gets a directory under
-`user/04-projects/<project>/`, holding any of:
+`projects/<project>/`, holding any of:
 
 ```
 memory/      decisions, history, lessons that belong to this project only
@@ -12,7 +12,7 @@ context/     current milestone, blockers, active work
 
 These directories are created **when there is something to put in them** — never
 scaffolded in advance, so a registry of twenty projects does not imply twenty
-directories. `registry.md` and `tasks.md` stay at the `04-projects/` level as the
+directories. `registry.md` and `tasks.md` stay directly under `projects/` as the
 cross-project views: the full project list, and the cross-project task list.
 
 ## Isolation
@@ -37,6 +37,6 @@ because anything enforces it mechanically. Documenting a workflow ahead of the t
 that would enforce it is deliberate here — see `docs/design/decisions.md` for why AI OS
 stays small on purpose rather than building the enforcement first.
 
-Project-local **work tracking** — turning `user/04-projects/tasks.md` into something a
+Project-local **work tracking** — turning `projects/tasks.md` into something a
 project owns end to end — is designed but not implemented, so it is not documented as a
 user workflow yet.

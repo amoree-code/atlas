@@ -56,7 +56,7 @@ name*, with the reason:
 
 | Key | Refused because |
 |---|---|
-| `authority` | a domain grants nothing — authority is declared by a capability and granted in `system/config/authority.yaml` |
+| `authority` | a domain grants nothing — authority is declared by a capability and granted in `internal/config/authority.yaml` |
 | `verify` | a domain defines no verifiers — verification is a capability operation's own `verify:`, and `executed` never implies `verified` |
 | `command` · `provider` | a domain is inert; it has no executable of its own |
 | `detect` | availability is a capability property — a domain is not installed |

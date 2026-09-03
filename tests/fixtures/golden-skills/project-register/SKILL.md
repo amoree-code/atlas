@@ -27,7 +27,7 @@ For env: list **key names only**, from `.env.example` or by `grep -oE` on variab
 
 ## 2. Write the context pack
 
-- `<repo>/AGENTS.md` from `~/.ai-os/templates/project-claude.md` (template —
+- `<repo>/AGENTS.md` from `~/.ai-os/personal/templates/project-claude.md` (template —
   unmoved). **Use `AGENTS.md`, not `CLAUDE.md`** — it is the AAIF standard read by Claude
   Code, Codex, Cursor, Gemini, and opencode alike, so the project needs one file rather
   than one per tool. Then `ln -s AGENTS.md CLAUDE.md` so Claude's native name resolves to
@@ -65,12 +65,12 @@ exists and must be rebuilt after significant changes (`graphify ./src --code-onl
 
 ## 5. Register
 
-Add or update the row in `~/.ai-os/user/04-projects/registry.md`: path, stack, repo,
+Add or update the row in `~/.ai-os/projects/registry.md`: path, stack, repo,
 status, last commit date, real next action. Add any obvious follow-ups to
-`~/.ai-os/user/04-projects/tasks.md`.
+`~/.ai-os/projects/tasks.md`.
 
 If the analysis produced project-local state worth keeping — standing decisions,
-domain knowledge, operating rules — create `~/.ai-os/user/04-projects/<project>/` with
+domain knowledge, operating rules — create `~/.ai-os/projects/<project>/` with
 only the parts that have content (`memory/`, `rules/`, `knowledge/`, `context/`, per
 its README). Do not scaffold empty directories, and never copy global memory into it.
 
