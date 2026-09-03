@@ -3,7 +3,7 @@
 A **domain** is an area of work. It names the outcome kinds that area recognizes, and the
 capabilities that delivering them needs. It answers *"what result are we trying to
 accomplish, and what would that need?"* — never *"what can AI-OS do?"*, which is a
-**capability** (`schemas/plugin.schema.md`), and never *"how does a client reach AI-OS?"*,
+**capability** (`schemas/capability.schema.md`), and never *"how does a client reach AI-OS?"*,
 which is an **adapter** (`schemas/adapter.schema.md`).
 
 ```

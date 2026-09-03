@@ -17,6 +17,6 @@ users.noreply.github.com
 
 # The scanner and the policies that define the patterns describe them in prose;
 # their own text must not count as a finding.
-policies/privacy-classification.yaml
-policies/privacy-allowlist.txt
+governance/policies/privacy-classification.yaml
+governance/policies/privacy-allowlist.txt
 cli/ai-os-privacy-scan

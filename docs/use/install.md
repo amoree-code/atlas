@@ -5,15 +5,17 @@ against one machine. Treat it as a working sketch.
 
 ## What you are installing
 
-Three things live in three places, and only one of them is this repository.
+Two things live in two places, and only one of them is this repository.
 
 | | Where | Created by |
 |---|---|---|
 | **Public** — the software | wherever you clone it | `git clone` |
-| **Private** — your data | `~/.ai-os` | `ai-os init` |
-| **Runtime** — execution | `~/.ai` | set up per client; see `adapters/` |
+| **Private** — your data | `$AI_OS_HOME`, default `~/.ai-os` | `ai-os init` |
 
-`docs/public-private-contract.md` explains why they are separate. It is worth reading
+Client integration is not a third place: each client reaches AI OS through its adapter in
+`adapters/<client>/`, which is public software like the rest of the repository.
+
+`docs/design/public-private.md` explains why the two are separate. It is worth reading
 before you run anything, because the separation is the product.
 
 ## Install
@@ -41,9 +43,9 @@ knowledge kinds, and seeds a few starter files where nothing exists.
 hundredth are the same as the first. If a file it would seed already exists and differs
 from the template, it says so and leaves yours alone.
 
-It does **not** create a git repository, does **not** create a remote, does **not** copy
-public skills into your workspace, and does **not** touch `~/.ai`. It also asks you
-nothing — that is `ai-os onboard`, below.
+It does **not** create a git repository, does **not** create a remote, and does **not**
+copy public skills into your workspace. It also asks you nothing — that is `ai-os
+onboard`, below.
 
 Put the workspace somewhere else with `AI_OS_HOME`:
 
@@ -51,7 +53,8 @@ Put the workspace somewhere else with `AI_OS_HOME`:
 AI_OS_HOME=~/work/ai-os-data ai-os init
 ```
 
-`init` refuses to initialize into the public repository or the runtime directory.
+`init` refuses to initialize into the public repository, or into the retired `~/.ai`
+location.
 
 ## Set yourself up
 
@@ -111,7 +114,7 @@ reports `inconsistent` and exits 12 rather than assuming either side is right.
 ## Then
 
 ```bash
-ai-os status                  # the three layers, and whether the contract holds
+ai-os status                  # where each layer is, and whether the contract holds
 ai-os doctor                  # full check — reports, never repairs
 ai-os privacy-scan            # is the public repo still publishable?
 ai-os workspace status        # local versioning of your private data

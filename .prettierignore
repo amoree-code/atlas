@@ -1,7 +1,7 @@
 # Nothing in this repository is Prettier's to reformat.
 #
 # AI-OS is zero-dependency by design: every YAML file here is read by a hand-written
-# parser (cli/ai-os-adapter, borrowed by cli/ai-os-plugin), or by line-oriented shell
+# parser (cli/ai-os-adapter, borrowed by cli/ai-os-capability), or by line-oriented shell
 # (grep '^key:' in cli/ai-os-status, the tab-indentation check in cli/ai-os-doctor).
 # Those parsers are deliberately strict — they reject what they do not understand rather
 # than guessing — so a purely cosmetic reflow is a breaking change.
@@ -22,13 +22,17 @@
 # Adapter manifests — read by the strict subset parser in cli/ai-os-adapter.
 adapters/
 
-# Capability manifests — read by the same parser, via cli/ai-os-plugin.
+# Capability manifests — read by the same parser, via cli/ai-os-capability.
+capabilities/
+# Compatibility window: the pre-rename directory name, still ignored if one exists.
 plugins/
 
 # Domain manifests — read by the same parser, via cli/ai-os-domain.
 domains/
 
-# Policies — read by the same parser and by line-oriented shell.
+# Governance policies — read by the same parser and by line-oriented shell.
+governance/
+# Compatibility window: the pre-move policy root, still ignored if one exists.
 policies/
 
 # Templates seeded into the private workspace; settings.yaml is grepped, not parsed.

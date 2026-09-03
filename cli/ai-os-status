@@ -41,10 +41,11 @@ else
 fi
 
 printf '\n%sworkspace%s\n' "$B" "$X"
-for s in memory knowledge projects sessions daily skills; do
-  d="$AI_OS_HOME/$s"
-  [ -d "$d" ] && printf '  %-12s %s files\n' "$s" "$(find "$d" -type f -not -path '*/.git/*' | wc -l | tr -d ' ')" \
-              || printf '  %-12s %smissing%s\n' "$s" "$R" "$X"
+for s in "memory:user/02-personal/memory" "knowledge:user/05-knowledge" "projects:user/04-projects" \
+         "sessions:sessions" "daily:user/01-daily" "skills:skills"; do
+  label="${s%%:*}"; d="$AI_OS_HOME/${s#*:}"
+  [ -d "$d" ] && printf '  %-12s %s files\n' "$label" "$(find "$d" -type f -not -path '*/.git/*' | wc -l | tr -d ' ')" \
+              || printf '  %-12s %smissing%s\n' "$label" "$R" "$X"
 done
 
 printf '\n%sgit safety%s\n' "$B" "$X"

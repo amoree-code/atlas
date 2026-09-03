@@ -27,7 +27,7 @@ each is a genuinely different axis, and conflating two makes both harder to reas
 **Modular.** Optional functionality is a module or adapter, not baked into the core.
 
 **Safe autonomy.** The agent can act on its own, but sensitive operations — a remote
-push, a merge, a delete — require explicit approval. See `../policies/`.
+push, a merge, a delete — require explicit approval. See `../governance/policies/`.
 
 **Context-efficient.** Retrieve only what's relevant. Never load the whole workspace for
 a request that needs three files.
@@ -41,16 +41,27 @@ transcript to re-read later.
 
 **Recoverable.** An operation can be rolled back or reasoned about after the fact.
 
-**Simple for the user, not simple internally.** A user should understand seven folders:
-`config/ memory/ knowledge/ projects/ sessions/ daily/ skills/`. They should not need to
-understand an orchestrator, an event bus, or an adapter's internals to use the system.
+**Simple for the user, not simple internally.** A user should be able to hold the whole
+workspace in their head with two ideas: `user/` is everything they own — memory,
+knowledge, daily records, projects — and `system/` is configuration and governance.
+Everything else in the workspace hangs off one of those two or is transient. They should
+not need to understand an orchestrator, an event bus, or an adapter's internals to use the
+system. The current shape is in `docs/use/workspace.md`; the reasoning behind that shape
+is in `docs/design/workspace-structure.md`.
 
-## Why V0.1 is this small
+## Why this is still small
 
 It's tempting to build toward the full picture — an autonomous task engine, multi-agent
 orchestration, a model router, a policy engine covering every action — in the first pass.
 That produces abstractions with no working code behind them, which is worse than not
-having the abstraction yet. V0.1's job is a foundation that's actually exercised: one
+having the abstraction yet. V0.1's job was a foundation that was actually exercised: one
 policy that already had a real implementation to migrate (git push approval), one working
 adapter (Claude Code), and a workspace shape simple enough that a person can read it in
-one sitting. Everything else is a later, deliberate version — not an oversight.
+one sitting.
+
+What has landed since followed the same rule rather than relaxing it: four more adapters
+because real clients needed reaching, the adapter/capability split because one word was
+doing two jobs, one real capability (browser control) with its own verifier, and domain
+declarations that deliberately execute nothing. Nothing here is an abstraction waiting for
+an implementation. Everything still missing is a later, deliberate version — not an
+oversight.

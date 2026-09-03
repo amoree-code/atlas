@@ -1,29 +1,51 @@
-# Capability (plugin) contract — version 1
+# Capability contract — version 1
 
-An AI-OS **plugin** is a capability: something AI-OS can *do*. It answers
-*"what can AI-OS do?"* — never *"how does this client reach AI-OS?"*, which is an
-**adapter** (`schemas/adapter.schema.md`).
+An AI-OS **capability** is something AI-OS can *do*. It answers *"what can AI-OS do?"* —
+never *"how does this client reach AI-OS?"*, which is an **adapter**
+(`schemas/adapter.schema.md`).
 
 > Until 2026-08-31 this filename described client adapters. The two meanings had inverted;
 > the inversion was recorded as deferred in `AIOS-001/checkpoint.md` §13.1 and resolved by
-> task AIOS-005. `plugins/` now holds capabilities, `adapters/` holds client integrations.
+> task AIOS-005. `capabilities/` holds capabilities, `adapters/` holds client integrations.
 
 **Core owns the mechanism; the capability owns the domain.** Core understands
 `capability · availability · authority · invocation · result · verification · persistence`
 and nothing else. It must never learn what a PRD is, what a browser engine is, or what a
 deployment provider is. Those belong inside a capability and stay there.
 
+## Naming, and the compatibility window
+
+This surface was called `plugin` until 2026-09-03. The current name is `capability`
+everywhere except the manifest key, and every old spelling still works for one version:
+
+| | Current | Compatibility |
+|---|---|---|
+| directory | `capabilities/` | `plugins/`, still read if pointed at |
+| manifest file | `capability.yaml` | `plugin.yaml`, still accepted |
+| CLI | `ai-os capability` | `ai-os plugin`, an alias |
+| env var | `AI_OS_CAPABILITIES` | `AI_OS_PLUGINS`, honoured as a fallback |
+| **manifest key** | **`plugin:`** | **unchanged — see below** |
+
+**The manifest key stays `plugin:` under contract 1.** Renaming it to `capability:` would
+collide with the existing `capability:` block, which is the authority declaration — one
+document cannot have that word mean both the id and the authority map. Changing it is a
+contract 2 decision, and contract 2 does not exist. A manifest written for contract 1
+needs no edit.
+
+Both manifest filenames present in one directory with **differing content** is a conflict:
+it is reported, and nothing is merged. Identical content resolves to `capability.yaml`.
+
 ## Status
 
-**No capability ships today, and `plugins/` is empty by design.** This contract exists so
-the first one has a shape to satisfy — not as a promise that one is coming. Discovery and
-validation are implemented (`ai-os plugin list|doctor`). **Invocation is deliberately not
-wired**: an invoke path with no capability to invoke would be machinery nothing consumes,
-which is the defect this repository has already refused once (`ai-os adapter enable`).
+**One capability ships today:** `browser`, in `capabilities/browser/`. Discovery and
+validation are implemented (`ai-os capability list|doctor`). **Invocation exists but is
+deliberately narrow** — `ai-os capability invoke` runs one declared operation through
+`available -> allowed -> invocable -> executed -> verified`, and nothing in this repository
+chains those calls into a plan, a workflow or an agent loop.
 
 ## File
 
-One manifest per capability: `plugins/<id>/plugin.yaml`.
+One manifest per capability: `capabilities/<id>/capability.yaml`.
 
 ```yaml
 plugin: github                 # stable id — MUST equal the directory name
@@ -39,7 +61,7 @@ requires: [browser, filesystem]  # other capabilities this one needs. Optional.
 operations:
   pull_request:
     summary: open a pull request
-    command: run-pull-request  # a bare filename inside plugins/<id>/ — never a path
+    command: run-pull-request  # a bare filename inside capabilities/<id>/ — never a path
     authority: propose         # may not exceed capability.authority
     idempotent: false          # may a failed run be retried automatically? Default false.
     verify: check-pull-request # a bare filename; exit 0 = verified. Optional.
@@ -154,7 +176,7 @@ verification and must never be recorded as one.
 - **Name a client.** No capability may contain `claude`, `codex`, `cursor`, `gemini` or
   `opencode`. Client integration is an adapter's job. This is mechanically checked.
 - **Reach into `$AI_OS_HOME`.** A `command:` is a bare filename inside its own
-  `plugins/<id>/` directory — never a path, never an escape. Also checked.
+  `capabilities/<id>/` directory — never a path, never an escape. Also checked.
 - **Invent an authority rung.** The five above are the whole ladder.
 - **Declare itself verified.** Only a `verify:` command's exit status does that.
 

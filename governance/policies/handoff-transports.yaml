@@ -1,0 +1,77 @@
+# Handoff transports — how an approved packet actually reaches a destination client.
+#
+# `ai-os handoff send` never invents a transport. It reads this file, and if the entry for
+# the destination client is missing, unverified, or its binary is absent, the send is
+# REFUSED and a blocker is written into the handoff record. There is no flag, environment
+# variable or argument that raises a transport's privileges or bypasses `verified`.
+#
+# ## Why `verified` starts false
+#
+# This registry follows the same rule as adapters/: documentation is not evidence.
+# `--help` proving a flag exists is not proof that handing that client a real packet works,
+# is safe, and returns something a human wants. Only a real, owner-run trial is — and that
+# trial is V6 of AIOS-011. Until then every transport here is declared and disabled, and
+# `ai-os handoff send` records a blocker rather than pretending.
+#
+# ## What a transport may be
+#
+# A transport is ONE local, visible, foreground, one-shot invocation of a client the owner
+# already has installed. It is not a connector, not a daemon, not a background job, not a
+# retry loop, not MCP, and not a network call this repository makes itself.
+#
+#   least privilege   every argv below pins the client's own read-only mode. A transport
+#                     that cannot be run read-only does not belong in this file.
+#   packet on stdin   never in argv — argv is world-readable in `ps`, and a long packet
+#                     would hit the argument-length limit.
+#   no shell          argv is a list, executed directly. Nothing is ever interpolated
+#                     into a shell string.
+#   one call          no retry, no poll, no backoff. A failure is recorded, not retried.
+#
+# ## Enabling one
+#
+# 1. Run the client's one-shot mode by hand with a real packet and watch what happens.
+# 2. If it is safe and it works, set `verified: true` here and replace `evidence:` with
+#    what was actually observed — the command, the date, and the outcome.
+# 3. That edit is the owner's decision and lives in git history where it can be reviewed.
+
+contract: 1
+
+transports:
+
+  codex:
+    name: OpenAI Codex CLI, non-interactive one-shot
+    binary: codex
+    argv: [exec, --sandbox, read-only, --skip-git-repo-check, -]
+    stdin: packet
+    timeout: 300
+    verified: true
+    evidence: >
+      Owner-run trial on 2026-09-02 against the PATH binary, `codex-cli 0.147.0`, using
+      `codex exec --sandbox read-only --skip-git-repo-check -` with the V6 packet on stdin.
+      Codex started in read-only sandbox mode, printed the received packet, did not touch
+      files, did not run commands, did not send anything onward, and returned a bounded
+      refusal because the packet itself said "run no command" while asking for a repo
+      readiness review. This proves the transport path delivers stdin to Codex in the
+      intended foreground read-only mode. It does not prove the V6 review is complete; a
+      second packet must allow read-only inspection of the scoped files.
+
+  claude-code:
+    name: Claude Code CLI, non-interactive print mode
+    binary: claude
+    argv: [-p, --tools, "", --permission-mode, manual, --]
+    stdin: packet
+    timeout: 300
+    verified: true
+    evidence: >
+      Owner-run trial on 2026-09-02 against Claude Code using
+      `claude -p --tools "" --permission-mode manual --` with the
+      `handoff-v6-trial-claude-code` packet on stdin. Claude replied that the packet
+      arrived intact and complete, both `packet:begin` and `packet:end` markers were
+      present, header fields and body sections were parsed, and the delivery was a single
+      stdin delivery. Claude reported that it read no files, wrote no files, ran no
+      commands, gave no approval, forwarded nothing, and created no remote or push. This
+      proves the corrected one-shot transport path for safe arrival checks; execution with
+      tools remains a separate approval and transport design.
+
+  # cursor, gemini and opencode have no entry on purpose. An absent transport is a clean
+  # refusal; a guessed one is a command run against a client nobody checked.

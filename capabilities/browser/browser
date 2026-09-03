@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """browser — the Browser Control capability entry point.
 
-Contract with Core (schemas/plugin.schema.md): argv[1] is the operation, JSON arguments
+Contract with Core (schemas/capability.schema.md): argv[1] is the operation, JSON arguments
 arrive on stdin, a JSON result goes to stdout, exit 0 means the operation ran.
 
 It ran is NOT it worked. Whether the result is true is decided by `browser-verify`, which
@@ -44,7 +44,7 @@ def fail(msg, code=1):
 
 def read_session():
     if not SESSION.exists():
-        fail("no browser session — run: ai-os plugin invoke browser.open")
+        fail("no browser session — run: ai-os capability invoke browser.open")
     return json.loads(SESSION.read_text())
 
 

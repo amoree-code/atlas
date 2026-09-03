@@ -7,8 +7,9 @@
   ai-os adapter disable <id>     not wired yet — see below
 
 An ADAPTER connects one AI client to AI-OS. A CAPABILITY is what AI-OS can do and lives in
-plugins/ — see cli/ai-os-plugin. Until 2026-08-31 those two meanings were inverted; this
-file was cli/ai-os-plugin and read plugins/. Task AIOS-005 resolved it.
+capabilities/ — see cli/ai-os-capability. Until 2026-08-31 those two meanings were
+inverted; this file was named cli/ai-os-plugin and read plugins/. Task AIOS-005 resolved
+the inversion, and the capability surface was renamed plugin -> capability on 2026-09-03.
 
 Core resolves, adapters integrate: an adapter declares paths only inside its OWN client's
 config domain, and never inside $AI_OS_HOME. That rule is mechanically checkable, so it is

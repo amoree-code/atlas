@@ -1,4 +1,4 @@
-# Claude Code adapter. Transcribed from observed configuration — see schemas/plugin.schema.md.
+# Claude Code adapter. Transcribed from observed configuration — see schemas/adapter.schema.md.
 adapter: claude-code
 name: Claude Code
 contract: 1
@@ -29,7 +29,7 @@ integrates:
   # learns this client exists; this command tells it only WHERE this client's mounts are.
   memory.mounts: { command: ai-memory-mounts, format: newline-paths, verified: true }
 
-enforces: [git]             # policies/git.yaml, via ai-guard-push (PreToolUse)
+enforces: [git]             # governance/policies/git.yaml, via ai-guard-push (PreToolUse)
 
 conventions:
   # Client-specific filesystem names. Skills reference these as {{client.*}} so one

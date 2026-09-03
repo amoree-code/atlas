@@ -302,10 +302,10 @@ chk "a credential on the copyright line is still a finding" $?
 # — the first draft of this test did exactly that, and the repo scan caught it.
 grep -q 'COPYRIGHT_LINE = re.compile' "$CLI/ai-os-privacy-scan"
 chk "licence attribution is a pattern in the scanner, not a literal name" $?
-n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/policies/privacy-allowlist.txt")
+n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/governance/policies/privacy-allowlist.txt")
 [ "$n" -eq 12 ]
 chk "the allowlist gained no entry — every one is a hole in the scan ($n)" $?
-grep -q "^exceptions:" "$REPO/policies/privacy-classification.yaml"
+grep -q "^exceptions:" "$REPO/governance/policies/privacy-classification.yaml"
 chk "both exemptions are documented as policy" $?
 # And the scan of this very repository is the real guard: if a name, a home path or an
 # email ever lands in a tracked file, the cleanliness test below fails. That is what
@@ -487,7 +487,7 @@ chk "both skill backup sites namespace their copy ($n)" $?
 # A format-on-save pass once reflowed the manifests and took the suite from 3 failures to
 # 13. Prettier puts a flow collection on the line AFTER its key when the line would be
 # long. The document is identical; only the layout changed. The parser — which now lives
-# in cli/ai-os-adapter and is borrowed by cli/ai-os-plugin, so ONE parser serves both
+# in cli/ai-os-adapter and is borrowed by cli/ai-os-capability, so ONE parser serves both
 # registries — must read both layouts, and must still reject a collection that genuinely
 # does not close.
 t "manifest layout: a formatter's reflow is read, not rejected"
@@ -503,7 +503,9 @@ for src in "$REPO"/adapters/*/adapter.yaml; do
   aid=$(basename "$(dirname "$src")"); mkdir -p "$FMT/adapters/$aid"
   reflow "$src" "$FMT/adapters/$aid/adapter.yaml"
 done
-for src in "$REPO"/plugins/*/plugin.yaml; do
+# The fixture deliberately keeps the OLD directory and manifest names: reading it back
+# through AI_OS_PLUGINS below is also the compatibility-window proof.
+for src in "$REPO"/capabilities/*/capability.yaml; do
   cid=$(basename "$(dirname "$src")"); mkdir -p "$FMT/plugins/$cid"
   reflow "$src" "$FMT/plugins/$cid/plugin.yaml"
 done
@@ -523,10 +525,10 @@ split=$(AI_OS_ADAPTERS="$FMT/adapters" "$CLI/ai-os-adapter" list 2>&1 | grep -v 
 [ "$inline" = "$split" ];                            chk "inline and split forms parse identically" $?
 
 # The capability registry borrows this parser, so the same reflow must be safe there too.
-out=$(AI_OS_PLUGINS="$FMT/plugins" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+out=$(AI_OS_PLUGINS="$FMT/plugins" "$CLI/ai-os-capability" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "reflowed capability manifests still validate" $?
-inline=$(AI_OS_PLUGINS="$REPO/plugins" "$CLI/ai-os-plugin" list 2>&1 | grep -v 'capabilities  ')
-split=$(AI_OS_PLUGINS="$FMT/plugins" "$CLI/ai-os-plugin" list 2>&1 | grep -v 'capabilities  ')
+inline=$(AI_OS_PLUGINS="$REPO/capabilities" "$CLI/ai-os-capability" list 2>&1 | grep -v 'capabilities  ')
+split=$(AI_OS_PLUGINS="$FMT/plugins" "$CLI/ai-os-capability" list 2>&1 | grep -v 'capabilities  ')
 [ "$inline" = "$split" ];                            chk "  ...to the same document as the shipped layout" $?
 
 # A capability manifest written in the wrapped form from the start, since the shipped one
@@ -546,7 +548,7 @@ operations:
     idempotent: true
     verify: wrapped-verify
 EOF
-out=$(AI_OS_PLUGINS="$F4" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+out=$(AI_OS_PLUGINS="$F4" "$CLI/ai-os-capability" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "a capability manifest in the wrapped form is read" $?
 
 # Wrapped across several lines, the way a formatter breaks a collection that is too long.
@@ -603,8 +605,8 @@ rm -rf "$F3" "$F4"
 t "the formatter that broke the registry is fenced off"
 [ -f "$REPO/.prettierignore" ];                      chk ".prettierignore ships with the repo" $?
 grep -q '^adapters/' "$REPO/.prettierignore";        chk "  ...covering adapters/" $?
-grep -q '^plugins/' "$REPO/.prettierignore";         chk "  ...covering plugins/" $?
-grep -q '^policies/' "$REPO/.prettierignore";        chk "  ...covering policies/" $?
+grep -q '^capabilities/' "$REPO/.prettierignore";     chk "  ...covering capabilities/" $?
+grep -q '^governance/' "$REPO/.prettierignore";      chk "  ...covering governance/" $?
 grep -q '^schemas/' "$REPO/.prettierignore";         chk "  ...covering the yaml fences in schemas/" $?
 [ -f "$REPO/.vscode/settings.json" ];                chk "repo-level editor settings disable format-on-save" $?
 grep -q '"editor.formatOnSave": false' "$REPO/.vscode/settings.json"
@@ -1135,15 +1137,15 @@ t "namespace: adapters and capabilities are separate directories"
 for c in claude-code codex cursor gemini opencode; do
   [ -f "$REPO/adapters/$c/adapter.yaml" ]; chk "adapters/$c/adapter.yaml exists" $?
 done
-[ ! -e "$REPO/plugins/claude-code" ];    chk "no client manifest left in plugins/" $?
+[ ! -e "$REPO/capabilities/claude-code" ];    chk "no client manifest left in capabilities/" $?
 # Exactly one canonical location — a copy in both would be two sources of truth.
-dup=$(find "$REPO/plugins" -name 'plugin.yaml' -path '*claude*' 2>/dev/null | wc -l | tr -d ' ')
+dup=$(find "$REPO/capabilities" \( -name 'capability.yaml' -o -name 'plugin.yaml' \) -path '*claude*' 2>/dev/null | wc -l | tr -d ' ')
 [ "$dup" -eq 0 ];                        chk "no compatibility duplicate was left behind" $?
 [ -f "$REPO/schemas/adapter.schema.md" ]; chk "adapter contract has its own schema" $?
-[ -f "$REPO/schemas/plugin.schema.md" ];  chk "capability contract has its own schema" $?
+[ -f "$REPO/schemas/capability.schema.md" ];  chk "capability contract has its own schema" $?
 grep -q 'adapter.*connects.*one AI client' "$REPO/schemas/adapter.schema.md"
 chk "the adapter schema describes clients" $?
-grep -qi 'capability' "$REPO/schemas/plugin.schema.md"
+grep -qi 'capability' "$REPO/schemas/capability.schema.md"
 chk "the plugin schema describes capabilities" $?
 
 # =====================================================================================
@@ -1153,18 +1155,18 @@ chk "ai-os adapter lists client adapters" $?
 "$CLI/ai-os-adapter" list 2>&1 | grep -q "adapters"
 chk "  ...from the adapters root" $?
 # Superseded by AIOS-007: plugins/ is no longer empty — the browser capability ships.
-"$CLI/ai-os-plugin" list 2>&1 | grep -q 'browser'
-chk "ai-os plugin lists the shipped capabilities" $?
-"$CLI/ai-os-plugin" doctor >/dev/null 2>&1
+"$CLI/ai-os-capability" list 2>&1 | grep -q 'browser'
+chk "ai-os capability lists the shipped capabilities" $?
+"$CLI/ai-os-capability" doctor >/dev/null 2>&1
 chk "the capability registry validates" $?
 # An EMPTY registry must still be valid, not an error — the property the old test held.
 EMPTYREG="$TMP/empty-registry"; mkdir -p "$EMPTYREG"
-AI_OS_PLUGINS="$EMPTYREG" "$CLI/ai-os-plugin" list 2>&1 | grep -q 'no capabilities'
+AI_OS_PLUGINS="$EMPTYREG" "$CLI/ai-os-capability" list 2>&1 | grep -q 'no capabilities'
 chk "an empty registry still reports itself as empty" $?
-AI_OS_PLUGINS="$EMPTYREG" "$CLI/ai-os-plugin" doctor >/dev/null 2>&1
+AI_OS_PLUGINS="$EMPTYREG" "$CLI/ai-os-capability" doctor >/dev/null 2>&1
 chk "  ...and is valid, not an error" $?
 # The client registry must never answer capability questions, or the split is cosmetic.
-"$CLI/ai-os-plugin" list 2>&1 | grep -q 'claude-code'
+"$CLI/ai-os-capability" list 2>&1 | grep -q 'claude-code'
 [ $? -ne 0 ];                            chk "the capability registry lists no client" $?
 
 # =====================================================================================
@@ -1184,12 +1186,12 @@ operations:
     authority: propose
     verify: check-build
 EOF
-out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                         chk "a well-formed capability validates" $?
 echo "$out" | grep -q 'demo: manifest valid'; chk "  ...and is reported valid" $?
-AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" list 2>&1 | grep -q 'demo'
+AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" list 2>&1 | grep -q 'demo'
 chk "capability discovery finds it" $?
-AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" list 2>&1 | grep -q 'build'
+AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" list 2>&1 | grep -q 'build'
 chk "  ...and lists its operations" $?
 
 # =====================================================================================
@@ -1202,7 +1204,7 @@ name: Autonomous
 contract: 1
 capability: { domain: d, authority: autonomous }
 EOF
-out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" doctor 2>&1); rc=$?
 echo "$out" | grep -q 'cannot be granted'; chk "authority: autonomous is refused, not downgraded" $?
 [ "$rc" -gt 0 ];                         chk "  ...as a hard failure" $?
 
@@ -1214,7 +1216,7 @@ capability: { domain: d, authority: propose }
 operations:
   go: { summary: s, command: c, authority: execute }
 EOF
-out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" doctor 2>&1)
+out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" doctor 2>&1)
 echo "$out" | grep -q 'exceeds capability.authority'
 chk "an operation may not exceed its capability's authority" $?
 
@@ -1226,7 +1228,7 @@ capability: { domain: d, authority: observe }
 operations:
   go: { summary: s, command: ../../../bin/sh }
 EOF
-out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" doctor 2>&1)
+out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" doctor 2>&1)
 echo "$out" | grep -q 'must be a bare filename'
 chk "a command that escapes its own directory is rejected" $?
 
@@ -1236,7 +1238,7 @@ name: From The Future
 contract: 2
 capability: { domain: d, authority: observe }
 EOF
-out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" doctor 2>&1)
+out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" doctor 2>&1)
 echo "$out" | grep -q 'DISABLED'
 chk "contract 2 on a contract-1 core is disabled with a reason" $?
 
@@ -1246,7 +1248,7 @@ name: No Authority
 contract: 1
 capability: { domain: d }
 EOF
-out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" doctor 2>&1)
+out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" doctor 2>&1)
 echo "$out" | grep -q 'authority is required'
 chk "an unstated authority rung is refused, not defaulted" $?
 
@@ -1256,7 +1258,7 @@ name: Mismatched
 contract: 1
 capability: { domain: d, authority: observe }
 EOF
-out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" doctor 2>&1)
+out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" doctor 2>&1)
 echo "$out" | grep -q '!= directory name'
 chk "a capability id must equal its directory name" $?
 
@@ -1279,11 +1281,11 @@ capability: { domain: demo, authority: propose }
 requires: [beta]
 operations: { go: { summary: s, command: c, verify: v } }
 EOF
-out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-capability" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "a satisfied dependency validates" $?
 echo "$out" | grep -q 'WARN'
 [ $? -ne 0 ];                             chk "  ...with no warning" $?
-AI_OS_PLUGINS="$DF" "$CLI/ai-os-plugin" list 2>&1 | grep -q 'beta'
+AI_OS_PLUGINS="$DF" "$CLI/ai-os-capability" list 2>&1 | grep -q 'beta'
 chk "list shows the declared dependency" $?
 
 # Declared before its dependency exists is legitimate — visible, never fatal.
@@ -1295,7 +1297,7 @@ capability: { domain: demo, authority: propose }
 requires: [nowhere]
 operations: { go: { summary: s, command: c, verify: v } }
 EOF
-out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-capability" doctor 2>&1); rc=$?
 echo "$out" | grep -q 'not in the registry';  chk "an unsatisfied dependency is reported" $?
 [ "$rc" -eq 0 ];                          chk "  ...as a warning, not a failure" $?
 
@@ -1310,7 +1312,7 @@ capability: { domain: demo, authority: propose }
 requires: [$bad]
 operations: { go: { summary: s, command: c, verify: v } }
 EOF
-  out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+  out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-capability" doctor 2>&1); rc=$?
   echo "$out" | grep -q 'looks like a path'; chk "path-shaped dependency $bad is rejected" $?
   [ "$rc" -gt 0 ];                        chk "  ...as a hard failure" $?
 done
@@ -1323,7 +1325,7 @@ capability: { domain: demo, authority: propose }
 requires: [Not_An_Id]
 operations: { go: { summary: s, command: c, verify: v } }
 EOF
-out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-plugin" doctor 2>&1)
+out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-capability" doctor 2>&1)
 echo "$out" | grep -q 'not a valid capability id';  chk "a malformed id is rejected" $?
 
 dep <<'EOF'
@@ -1334,7 +1336,7 @@ capability: { domain: demo, authority: propose }
 requires: [alpha]
 operations: { go: { summary: s, command: c, verify: v } }
 EOF
-out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-plugin" doctor 2>&1)
+out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-capability" doctor 2>&1)
 echo "$out" | grep -q 'is itself';        chk "a self-dependency is rejected" $?
 
 dep <<'EOF'
@@ -1345,18 +1347,18 @@ capability: { domain: demo, authority: propose }
 requires: beta
 operations: { go: { summary: s, command: c, verify: v } }
 EOF
-out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-plugin" doctor 2>&1)
+out=$(AI_OS_PLUGINS="$DF" "$CLI/ai-os-capability" doctor 2>&1)
 echo "$out" | grep -q 'must be a list';   chk "a non-list requires: is rejected" $?
 
 # No resolver was built, and none should appear by accident.
-grep -qi 'transitive\|topological\|resolve_deps' "$CLI/ai-os-plugin"
+grep -qi 'transitive\|topological\|resolve_deps' "$CLI/ai-os-capability"
 [ $? -ne 0 ];                             chk "no dependency resolver was introduced" $?
 
 # =====================================================================================
 t "core stays domain-agnostic"
 # The architectural test: Core must never branch on what a domain means. Asserted against
 # both registries — the capability one, and the domain one that now owns the concept.
-grep -Eq 'domain *== *"(software|sales|marketing|design|research|finance)"' "$CLI/ai-os-plugin"
+grep -Eq 'domain *== *"(software|sales|marketing|design|research|finance)"' "$CLI/ai-os-capability"
 [ $? -ne 0 ];                             chk "the capability registry has no domain branching" $?
 grep -Eq '(domain|outcome) *== *"' "$CLI/ai-os-domain"
 [ $? -ne 0 ];                             chk "the domain registry branches on no id or outcome name" $?
@@ -1368,9 +1370,9 @@ grep -Eqi '\b(software|customer-support|mobile-app|resolved-ticket|web-applicati
 # The capability contract no longer carries a `domain:` field at all. It was removed rather
 # than renamed when Domain became a real concept: core never read it, nothing validated it,
 # and one manifest set it — so one word now has exactly one meaning.
-grep -Eq '^\s*domain:' "$REPO/plugins/browser/plugin.yaml"
+grep -Eq '^\s*domain:' "$REPO/capabilities/browser/capability.yaml"
 [ $? -ne 0 ];                             chk "the browser capability declares no domain field" $?
-grep -Eq '^\s+domain: ' "$REPO/schemas/plugin.schema.md"
+grep -Eq '^\s+domain: ' "$REPO/schemas/capability.schema.md"
 [ $? -ne 0 ];                             chk "the capability contract's example declares no domain field" $?
 
 # =====================================================================================
@@ -1562,7 +1564,7 @@ capability: { domain: d, authority: observe }
 operations:
   go: { summary: write the claude rules file, command: c }
 EOF
-out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+out=$(AI_OS_PLUGINS="$CF" "$CLI/ai-os-capability" doctor 2>&1); rc=$?
 echo "$out" | grep -q 'names an AI client'
 chk "a capability naming an AI client is rejected" $?
 echo "$out" | grep -q 'belongs in adapters/'
@@ -1572,54 +1574,54 @@ rm -rf "$CF/x"
 
 # =====================================================================================
 t "boundary: executed is not verified, and invoke is not wired"
-grep -q 'executed' "$REPO/schemas/plugin.schema.md" && grep -q 'verified' "$REPO/schemas/plugin.schema.md"
+grep -q 'executed' "$REPO/schemas/capability.schema.md" && grep -q 'verified' "$REPO/schemas/capability.schema.md"
 chk "the contract distinguishes executed from verified" $?
-grep -q 'never implies' "$REPO/schemas/plugin.schema.md"
+grep -q 'never implies' "$REPO/schemas/capability.schema.md"
 chk "  ...explicitly, as a stated rule" $?
 # Superseded by AIOS-007: invoke is wired. What must still hold is that it refuses
 # cleanly for anything it cannot actually run, and writes no state while doing so.
-out=$("$CLI/ai-os-plugin" invoke nosuchcap.build 2>&1); rc=$?
+out=$("$CLI/ai-os-capability" invoke nosuchcap.build 2>&1); rc=$?
 [ "$rc" -eq 4 ];                         chk "invoke refuses an unknown capability" $?
 echo "$out" | grep -q 'unavailable';     chk "  ...as unavailable, before any authority check" $?
-out=$("$CLI/ai-os-plugin" invoke browser.nosuchop 2>&1); rc=$?
+out=$("$CLI/ai-os-capability" invoke browser.nosuchop 2>&1); rc=$?
 [ "$rc" -eq 4 ];                         chk "invoke refuses an undeclared operation" $?
 [ ! -e "$AI_OS_HOME/system/config/capabilities.yaml" ]
 chk "  ...and wrote no state nothing consumes" $?
 
 # =====================================================================================
 t "boundary: no client name leaked into the capability path of Core"
-for f in ai-os-plugin; do
+for f in ai-os-capability; do
   grep -Eio 'playwright|chromium' "$CLI/$f" >/dev/null 2>&1
   [ $? -ne 0 ];                          chk "$f names no browser vendor" $?
 done
-# ai-os-plugin may name clients ONLY inside the rejection pattern that forbids them.
-n=$(grep -c 'CLIENT_NAMES' "$CLI/ai-os-plugin")
+# ai-os-capability may name clients ONLY inside the rejection pattern that forbids them.
+n=$(grep -c 'CLIENT_NAMES' "$CLI/ai-os-capability")
 [ "$n" -ge 2 ];                          chk "the client-name ban is a mechanical check, not prose" $?
-hits=$(grep -Eio '\bclaude\b|\bcodex\b|\bgemini\b' "$CLI/ai-os-plugin" | wc -l | tr -d ' ')
-inpat=$(grep -Eo 'claude\|claude-code\|codex\|cursor\|gemini\|opencode\|chatgpt' "$CLI/ai-os-plugin" | wc -l | tr -d ' ')
+hits=$(grep -Eio '\bclaude\b|\bcodex\b|\bgemini\b' "$CLI/ai-os-capability" | wc -l | tr -d ' ')
+inpat=$(grep -Eo 'claude\|claude-code\|codex\|cursor\|gemini\|opencode\|chatgpt' "$CLI/ai-os-capability" | wc -l | tr -d ' ')
 [ "$inpat" -ge 1 ];                      chk "  ...and the ban lists the client names it rejects" $?
 
 # =====================================================================================
 t "browser capability: manifest, dependencies and authority declarations"
-BR="$REPO/plugins/browser"
-[ -f "$BR/plugin.yaml" ];                 chk "the browser capability ships a manifest" $?
-out=$("$CLI/ai-os-plugin" doctor 2>&1); rc=$?
+BR="$REPO/capabilities/browser"
+[ -f "$BR/capability.yaml" ];                 chk "the browser capability ships a manifest" $?
+out=$("$CLI/ai-os-capability" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "it validates against the capability contract" $?
 echo "$out" | grep -q 'browser: manifest valid'; chk "  ...and is reported valid" $?
-"$CLI/ai-os-plugin" list 2>&1 | grep -q 'browser'; chk "capability discovery finds it" $?
+"$CLI/ai-os-capability" list 2>&1 | grep -q 'browser'; chk "capability discovery finds it" $?
 # Authority is per operation, not one blanket rung.
-grep -q 'authority: observe'   "$BR/plugin.yaml"; chk "read-only operations declare observe" $?
-grep -q 'authority: execute$'  "$BR/plugin.yaml"; chk "interaction operations declare execute" $?
-grep -q 'authority: execute-with-approval' "$BR/plugin.yaml"; chk "irreversible operations require approval" $?
-grep -q 'autonomous' "$BR/plugin.yaml"
+grep -q 'authority: observe'   "$BR/capability.yaml"; chk "read-only operations declare observe" $?
+grep -q 'authority: execute$'  "$BR/capability.yaml"; chk "interaction operations declare execute" $?
+grep -q 'authority: execute-with-approval' "$BR/capability.yaml"; chk "irreversible operations require approval" $?
+grep -q 'autonomous' "$BR/capability.yaml"
 [ $? -ne 0 ];                             chk "no operation claims autonomous authority" $?
 # Idempotency is declared, and the dangerous ones are declared false.
 for op in submit click type upload download; do
-  awk -v o="  $op:" '$0==o{f=1} f&&/idempotent:/{print;exit}' "$BR/plugin.yaml" | grep -q 'false'
+  awk -v o="  $op:" '$0==o{f=1} f&&/idempotent:/{print;exit}' "$BR/capability.yaml" | grep -q 'false'
   chk "$op is declared non-idempotent" $?
 done
 for op in navigate read observe; do
-  awk -v o="  $op:" '$0==o{f=1} f&&/idempotent:/{print;exit}' "$BR/plugin.yaml" | grep -q 'true'
+  awk -v o="  $op:" '$0==o{f=1} f&&/idempotent:/{print;exit}' "$BR/capability.yaml" | grep -q 'true'
   chk "$op is declared idempotent" $?
 done
 
@@ -1628,7 +1630,7 @@ t "browser capability: the provider boundary is real"
 [ -f "$BR/providers/playwright_provider.py" ]; chk "a provider implementation exists" $?
 [ -f "$BR/providers/interface.py" ];      chk "the provider boundary is documented" $?
 # The engine may be named ONLY inside providers/. That is the replaceability guarantee.
-grep -Eil 'playwright|chromium|chrome|webkit|firefox' "$BR/browser" "$BR/browser-verify" "$BR/plugin.yaml" \
+grep -Eil 'playwright|chromium|chrome|webkit|firefox' "$BR/browser" "$BR/browser-verify" "$BR/capability.yaml" \
   | grep -v 'providers/' | grep -q .
 [ $? -ne 0 ];                             chk "no browser engine is named outside providers/" $?
 grep -q 'BROWSER_PROVIDER' "$BR/browser";  chk "the provider is selected, not hardcoded" $?
@@ -1639,20 +1641,20 @@ chk "an unknown provider is refused by name, not by crash" $?
 
 # =====================================================================================
 t "architecture: Core never learns the browser engine"
-for f in ai-os ai-os-plugin ai-os-adapter ai-sync ai-os-memory ai-os-doctor ai-os-init ai-os-onboard; do
+for f in ai-os ai-os-capability ai-os-adapter ai-sync ai-os-memory ai-os-doctor ai-os-init ai-os-onboard; do
   grep -Eqi 'playwright|chromium|webkit|querySelector|page\.goto' "$CLI/$f"
   [ $? -ne 0 ];                           chk "Core tool $f names no browser technology" $?
 done
-grep -Eqi 'playwright|chromium' "$REPO/schemas/plugin.schema.md"
+grep -Eqi 'playwright|chromium' "$REPO/schemas/capability.schema.md"
 [ $? -ne 0 ];                             chk "the capability contract names no engine" $?
 # And the capability never learns a client.
-grep -Eqi '\bclaude\b|\bcodex\b|\bgemini\b|\bcursor\b|opencode' "$BR/browser" "$BR/browser-verify" "$BR/plugin.yaml" "$BR/providers/playwright_provider.py"
+grep -Eqi '\bclaude\b|\bcodex\b|\bgemini\b|\bcursor\b|opencode' "$BR/browser" "$BR/browser-verify" "$BR/capability.yaml" "$BR/providers/playwright_provider.py"
 [ $? -ne 0 ];                             chk "the browser capability names no AI client" $?
 # Nor a domain — the same browser serves sales, software, education alike.
-grep -Eqi '\bsales\b|\bmarketing\b|\bsoftware-delivery\b' "$BR/browser" "$BR/plugin.yaml"
+grep -Eqi '\bsales\b|\bmarketing\b|\bsoftware-delivery\b' "$BR/browser" "$BR/capability.yaml"
 [ $? -ne 0 ];                             chk "the browser capability names no domain" $?
 # Nor a website.
-grep -Eqi 'github\.com|google\.com|facebook' "$BR/browser" "$BR/plugin.yaml"
+grep -Eqi 'github\.com|google\.com|facebook' "$BR/browser" "$BR/capability.yaml"
 [ $? -ne 0 ];                             chk "no website is hardcoded into the capability" $?
 
 # =====================================================================================
@@ -1660,12 +1662,12 @@ t "authority: Core enforces the ladder, and there is no bypass"
 AW="$TMP/authws"; AI_OS_HOME="$AW" "$CLI/ai-os-init" >/dev/null 2>&1
 grep -q '^default: observe' "$AW/system/config/authority.yaml"
 chk "a fresh workspace grants only observe" $?
-out=$(AI_OS_HOME="$AW" "$CLI/ai-os-plugin" invoke browser.read --dry-run 2>&1); rc=$?
+out=$(AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.read --dry-run 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "an observe operation is allowed by default" $?
-out=$(AI_OS_HOME="$AW" "$CLI/ai-os-plugin" invoke browser.click --dry-run 2>&1); rc=$?
+out=$(AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.click --dry-run 2>&1); rc=$?
 [ "$rc" -eq 5 ];                          chk "an execute operation is denied by default" $?
 echo "$out" | grep -q 'never with a flag';chk "  ...and points at the grant file, not a flag" $?
-out=$(AI_OS_HOME="$AW" "$CLI/ai-os-plugin" invoke browser.submit --dry-run </dev/null 2>&1); rc=$?
+out=$(AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.submit --dry-run </dev/null 2>&1); rc=$?
 [ "$rc" -eq 5 ];                          chk "an approval operation is denied with no terminal" $?
 # Grant execute; click becomes allowed, submit still does not.
 python3 - "$AW" <<'PYEOF'
@@ -1673,12 +1675,12 @@ import sys,pathlib
 f=pathlib.Path(sys.argv[1])/"system/config/authority.yaml"
 f.write_text(f.read_text().replace("capabilities: {}","capabilities:\n  browser: execute"))
 PYEOF
-AI_OS_HOME="$AW" "$CLI/ai-os-plugin" invoke browser.click --dry-run >/dev/null 2>&1
+AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.click --dry-run >/dev/null 2>&1
 chk "an explicit grant allows the operation" $?
-AI_OS_HOME="$AW" "$CLI/ai-os-plugin" invoke browser.submit --dry-run </dev/null >/dev/null 2>&1
+AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.submit --dry-run </dev/null >/dev/null 2>&1
 [ $? -eq 5 ];                             chk "  ...and does not leak into the rung above it" $?
 # No bypass flags anywhere in Core.
-grep -Eq '\-\-force|\-\-unsafe|\-\-god-mode|\-\-bypass|allowEverything' "$CLI/ai-os-plugin"
+grep -Eq '\-\-force|\-\-unsafe|\-\-god-mode|\-\-bypass|allowEverything' "$CLI/ai-os-capability"
 [ $? -ne 0 ];                             chk "Core offers no force/unsafe/bypass flag" $?
 # autonomous is refused, never granted.
 python3 - "$AW" <<'PYEOF'
@@ -1686,13 +1688,13 @@ import sys,pathlib
 f=pathlib.Path(sys.argv[1])/"system/config/authority.yaml"
 f.write_text(f.read_text().replace("  browser: execute","  browser: autonomous"))
 PYEOF
-out=$(AI_OS_HOME="$AW" "$CLI/ai-os-plugin" invoke browser.click --dry-run 2>&1)
+out=$(AI_OS_HOME="$AW" "$CLI/ai-os-capability" invoke browser.click --dry-run 2>&1)
 echo "$out" | grep -q "granted 'observe'"
 chk "an autonomous grant is not honoured — it falls back to the floor" $?
 
 # =====================================================================================
 t "verification: executed is never verified by assertion"
-VB="$REPO/plugins/browser"
+VB="$REPO/capabilities/browser"
 # A result that simply claims success must not verify.
 out=$(cd "$VB" && echo '{"ok":true,"operation":"submit","verified":true,"note":"I submitted it"}' \
       | AI_OS_BROWSER_RUNTIME="$TMP/novr" ./browser-verify submit 2>&1); rc=$?
@@ -1708,18 +1710,18 @@ grep -q 'prov.connect' "$VB/browser-verify";  chk "the verifier reconnects to li
 grep -Eq 'if .*model|self_report|claim\["verified"\]' "$VB/browser-verify"
 [ $? -ne 0 ];                             chk "the verifier never reads a 'verified' claim" $?
 # Every operation in the manifest declares a verify command.
-n_ops=$(grep -cE '^  [a-z]+:$' "$VB/plugin.yaml")
-n_ver=$(grep -c 'verify: browser-verify' "$VB/plugin.yaml")
+n_ops=$(grep -cE '^  [a-z]+:$' "$VB/capability.yaml")
+n_ver=$(grep -c 'verify: browser-verify' "$VB/capability.yaml")
 [ "$n_ops" -eq "$n_ver" ];                chk "every operation declares deterministic verification" $?
 
 # =====================================================================================
 t "browser capability: security boundaries"
-grep -Eq 'password|token|secret|cookie:|api[_-]?key' "$VB/plugin.yaml"
+grep -Eq 'password|token|secret|cookie:|api[_-]?key' "$VB/capability.yaml"
 [ $? -ne 0 ];                             chk "no secrets in the manifest" $?
 # The capability may only be invoked through its declared command, which Core resolves
 # inside the capability directory — the escape check already tested for requires:.
-grep -q 'cwd=str(d)' "$CLI/ai-os-plugin";  chk "Core runs a capability inside its own directory" $?
-grep -q 'shell=True' "$CLI/ai-os-plugin"
+grep -q 'cwd=str(d)' "$CLI/ai-os-capability";  chk "Core runs a capability inside its own directory" $?
+grep -q 'shell=True' "$CLI/ai-os-capability"
 [ $? -ne 0 ];                             chk "Core never invokes through a shell" $?
 # Session state is runtime, not durable truth.
 grep -q 'runtime' "$VB/browser";           chk "browser session state lives under runtime/" $?
@@ -1872,7 +1874,7 @@ grep -Eiq '\bnext_action\b|\bplan\(|\bdecide_capability\b|\bchoose_operation\b' 
 [ $? -ne 0 ];                             chk "ai-os-run contains no planning/decision logic" $?
 
 # =====================================================================================
-if (cd "$REPO/plugins/browser" && echo '{}' | ./browser detect >/dev/null 2>&1); then
+if (cd "$REPO/capabilities/browser" && echo '{}' | ./browser detect >/dev/null 2>&1); then
 t "run: no-progress — an identical unverified step repeated 3x blocks the run"
 NW="$TMP/noprogws"; AI_OS_HOME="$NW" "$CLI/ai-os-init" >/dev/null 2>&1
 python3 - "$NW" <<'PYEOF'
@@ -1898,7 +1900,7 @@ grep -q '"status": "blocked"' "$NW/runtime/runs/$RUN_N.json"
 chk "  ...recorded in the run itself" $?
 out=$(AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.click --json '{"selector":"#b"}' 2>&1); rc=$?
 [ "$rc" -ne 0 ];                          chk "  ...and a 4th attempt is refused, not retried" $?
-AI_OS_HOME="$NW" AI_OS_PLUGINS="$REPO/plugins" "$CLI/ai-os-plugin" invoke browser.close --json '{}' >/dev/null 2>&1
+AI_OS_HOME="$NW" AI_OS_PLUGINS="$REPO/capabilities" "$CLI/ai-os-capability" invoke browser.close --json '{}' >/dev/null 2>&1
 rm -f /tmp/aios-run-noprog.out
 else
   printf '  %sSKIP%s run: no-progress test needs a working browser provider\n' "$D" "$X"
@@ -1911,6 +1913,904 @@ grep -q '|run|' "$CLI/ai-os";              chk "  ...and dispatches to ai-os-run
 [ -f "$REPO/schemas/run.schema.md" ];      chk "schemas/run.schema.md exists" $?
 grep -q 'not an agent' "$REPO/schemas/run.schema.md"
 chk "  ...and states the boundary: not an agent/orchestrator/planner" $?
+
+# =====================================================================================
+t "handoff: dispatcher exposes ai-os handoff"
+grep -q 'ai-os handoff' "$CLI/ai-os";      chk "ai-os handoff is a documented subcommand" $?
+grep -q '|handoff)' "$CLI/ai-os";          chk "  ...and dispatches to ai-os-handoff" $?
+[ -x "$CLI/ai-os-handoff" ];               chk "cli/ai-os-handoff exists and is executable" $?
+
+# =====================================================================================
+t "handoff: prepare writes one task-local Markdown record"
+HW="$TMP/handoff-ws"; AI_OS_HOME="$HW" "$CLI/ai-os-init" >/dev/null 2>&1
+mkdir -p "$HW/tasks/AIOS-TEST"
+cat > "$HW/tasks/AIOS-TEST/task.md" <<'TASKEOF'
+---
+id: AIOS-TEST
+title: A durable task the handoff is bound to
+project: ai-os
+---
+TASKEOF
+# Everything outside tasks/ is fingerprinted first: a record engine that writes one file
+# beside one task must leave the rest of the workspace byte-identical.
+hw_outside() { (cd "$HW" && find . -path ./tasks -prune -o -type f -exec shasum {} \; | sort | shasum); }
+before=$(hw_outside)
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --gate review \
+        --scope 'cli/ai-os-handoff, tests/test-contract.sh' \
+        --summary 'V2 record engine only' 2>&1); rc=$?
+[ "$rc" -eq 0 ];                           chk "prepare exits 0" $?
+HID=$(printf '%s\n' "$out" | grep -oE '[0-9]{8}-[0-9]{3}' | head -1)
+HREC="$HW/tasks/AIOS-TEST/handoff-$HID.md"
+[ -n "$HID" ];                             chk "reports the handoff id it created" $?
+[ -f "$HREC" ];                            chk "wrote tasks/<ID>/handoff-<handoff_id>.md, beside the task" $?
+[ "$(find "$HW/tasks/AIOS-TEST" -name 'handoff-*.md' | wc -l | tr -d ' ')" = "1" ]
+chk "  ...exactly one record and nothing else" $?
+[ "$before" = "$(hw_outside)" ];           chk "  ...and nothing at all outside tasks/ changed" $?
+[ ! -d "$HW/handoffs" ];                   chk "no global handoffs/ directory was created" $?
+[ ! -e "$HW/tasks/AIOS-TEST/index.md" ] && [ ! -e "$HW/tasks/index.md" ]
+chk "no hidden index, queue or bus was written" $?
+
+# =====================================================================================
+t "handoff: the record is readable and carries every required field"
+grep -q "^handoff_id: $HID\$" "$HREC";     chk "handoff id" $?
+grep -q '^task_id: AIOS-TEST$' "$HREC";    chk "task id" $?
+grep -Eq '^status: (draft|waiting-owner)$' "$HREC"
+chk "status, and only draft or waiting-owner" $?
+grep -Eq '^created: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$' "$HREC"
+chk "created time" $?
+grep -q '^to: codex$' "$HREC";             chk "destination client" $?
+grep -q '^gate: review$' "$HREC";          chk "gate" $?
+grep -q '^scope: ' "$HREC";                chk "scope" $?
+grep -q '^current_holder: owner$' "$HREC"; chk "current holder" $?
+grep -q '^next_holder: codex$' "$HREC";    chk "next holder" $?
+grep -q 'packet:begin' "$HREC" && grep -q 'packet:end' "$HREC"
+chk "outgoing packet text, delimited" $?
+grep -q 'V2 record engine only' "$HREC";   chk "  ...carrying the summary it was given" $?
+grep -q 'A durable task the handoff is bound to' "$HREC"
+chk "  ...and the task context read from task.md" $?
+grep -q '^## 6. Audit' "$HREC";            chk "audit section" $?
+
+# =====================================================================================
+t "handoff: prepare creates no approval, no send and no returned block"
+grep -q '^## 3. Owner approval' "$HREC";   chk "an owner approval section exists" $?
+grep -q 'No approval recorded' "$HREC";    chk "  ...and it is empty" $?
+grep -q '^approval: none$' "$HREC";        chk "  ...stated in the frontmatter too" $?
+grep -Eiq 'owner_words|approved: yes|approved_at|approved_by' "$HREC"
+[ $? -ne 0 ];                              chk "  ...with no approval field of any kind filled in" $?
+grep -q '^## 4. Send' "$HREC";             chk "a send section exists" $?
+grep -q 'Nothing sent' "$HREC";            chk "  ...and it is empty" $?
+grep -q '^sent: no$' "$HREC";              chk "  ...stated in the frontmatter too" $?
+grep -Eiq 'sent_at|transport: (clipboard|mcp|http|api)|payload_hash: [0-9a-f]{8}' "$HREC"
+[ $? -ne 0 ];                              chk "  ...with no send field populated" $?
+grep -q '^## 5. Returned block' "$HREC";   chk "a returned-block section exists" $?
+grep -q 'Nothing returned' "$HREC";        chk "  ...and it is empty" $?
+grep -q '^returned: none$' "$HREC";        chk "  ...stated in the frontmatter too" $?
+grep -q 'approved:         no' "$HREC";    chk "the audit says V2 did not approve" $?
+grep -q 'sent:             no' "$HREC";    chk "the audit says V2 did not send" $?
+grep -q 'clients_contacted: none' "$HREC"; chk "the audit says no client was contacted" $?
+
+# =====================================================================================
+t "handoff: show prints the record, list finds it"
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff show AIOS-TEST "$HID" 2>&1); rc=$?
+[ "$rc" -eq 0 ];                           chk "show exits 0" $?
+[ "$out" = "$(cat "$HREC")" ];             chk "  ...and prints the record verbatim" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff list AIOS-TEST 2>&1); rc=$?
+[ "$rc" -eq 0 ];                           chk "list exits 0" $?
+echo "$out" | grep -q "$HID";              chk "  ...and finds the record it just wrote" $?
+echo "$out" | grep -q 'codex';             chk "  ...with its destination" $?
+[ "$before" = "$(hw_outside)" ];           chk "show and list wrote nothing" $?
+
+# =====================================================================================
+t "handoff: draft records cannot be approved or sent"
+SEED="$TMP/seed-reply.md"; echo "a reply that is never attached" > "$SEED"
+rec_before=$(shasum < "$HREC"); ws_before=$(cd "$HW" && find . -type f | sort | shasum)
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff approve AIOS-TEST "$HID" --gate review --to codex \
+  --scope 'cli/ai-os-handoff, tests/test-contract.sh' --owner-words 'Owner approves this fixture' 2>&1); rc=$?
+[ "$rc" -ne 0 ];                         chk "approve refuses a draft record" $?
+echo "$out" | grep -q 'waiting-owner';    chk "  ...and says only waiting-owner can be approved" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff send AIOS-TEST "$HID" 2>&1); rc=$?
+[ "$rc" -ne 0 ];                         chk "send refuses a record with no matching approval" $?
+echo "$out" | grep -q "not 'approved'"; chk "  ...naming the status it refused on" $?
+echo "$out" | grep -q 'nothing was sent';  chk "  ...and saying nothing was sent" $?
+echo "$out" | grep -Eiq 'transport|handoff-transports'
+[ $? -ne 0 ];                            chk "  ...refused before any transport was consulted" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff receive AIOS-TEST "$HID" \
+        --from codex --file "$SEED" 2>&1); rc=$?
+[ "$rc" -ne 0 ];                           chk "handoff receive exits non-zero on a draft" $?
+echo "$out" | grep -q "not 'sent'";        chk "  ...because nothing was ever sent to reply to" $?
+[ "$rec_before" = "$(shasum < "$HREC")" ]; chk "the record is byte-identical after all three refusals" $?
+[ "$ws_before" = "$(cd "$HW" && find . -type f | sort | shasum)" ]
+chk "no receive side effect — no file created, moved or removed" $?
+[ ! -d "$HW/handoffs" ];                   chk "still no global handoffs/ directory" $?
+
+# =====================================================================================
+t "handoff: refusals write nothing"
+n_before=$(find "$HW/tasks/AIOS-TEST" -name 'handoff-*.md' | wc -l | tr -d ' ')
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "missing task id refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare ../escape --to codex --gate review --scope x >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "invalid task id refused (no path escape)" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare NO-SUCH --to codex --gate review --scope x >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "missing task directory refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --gate review --scope x >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "missing --to refused" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to nobody --gate review --scope x 2>&1)
+[ $? -ne 0 ];                              chk "unknown destination client refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to 'codex,claude-code' --gate review --scope x >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "more than one destination refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --to gemini --gate review --scope x >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "  ...including a repeated --to" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --scope x >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "missing --gate refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --gate anything --scope x >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "a gate outside the template vocabulary refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --gate review >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "missing --scope refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --gate review --scope '   ' >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "empty --scope refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --gate review --scope x --status approved >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "a status V2 may not write refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --gate review --scope x --id "$HID" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "a duplicate handoff id refused" $?
+[ "$rec_before" = "$(shasum < "$HREC")" ]; chk "  ...and the existing record untouched" $?
+# Assembled from two adjacent quoted halves on purpose: a token-shaped literal sitting in
+# a public test file would be a real finding, and ai-os-privacy-scan would be right to
+# flag it. The shell joins them; the scanner reading the file text never sees `ghp_`.
+FAKE_TOKEN="gh"'p_0123456789abcdefghijklmnop'
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to codex --gate review --scope x \
+  --summary "credential $FAKE_TOKEN" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "a credential-shaped value in the packet refused" $?
+[ "$(find "$HW/tasks/AIOS-TEST" -name 'handoff-*.md' | wc -l | tr -d ' ')" = "$n_before" ]
+chk "fourteen refusals, zero records written" $?
+
+# =====================================================================================
+t "handoff: a second record is additive, not an overwrite"
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff prepare AIOS-TEST --to claude-code --gate next-step \
+  --scope 'V3 approval gate' --status waiting-owner --id trial-a >/dev/null 2>&1
+[ $? -eq 0 ];                              chk "a second prepare exits 0" $?
+[ -f "$HW/tasks/AIOS-TEST/handoff-trial-a.md" ]; chk "  ...and writes its own file" $?
+[ "$rec_before" = "$(shasum < "$HREC")" ]; chk "  ...leaving the first record byte-identical" $?
+grep -q '^status: waiting-owner$' "$HW/tasks/AIOS-TEST/handoff-trial-a.md"
+chk "  ...with waiting-owner as the other status V2 may write" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff list AIOS-TEST 2>&1)
+echo "$out" | grep -q trial-a && echo "$out" | grep -q "$HID"
+chk "list shows both, found by globbing the task directory" $?
+
+# =====================================================================================
+t "handoff: approve records explicit owner words and exact tuple only"
+AREC="$HW/tasks/AIOS-TEST/handoff-trial-a.md"
+approval_before=$(shasum < "$AREC"); ws_before=$(cd "$HW" && find . -type f | sort | shasum)
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff approve AIOS-TEST trial-a --gate review \
+  --to claude-code --scope 'V3 approval gate' --owner-words 'Owner approves V3 fixture' 2>&1); rc=$?
+[ "$rc" -ne 0 ];                           chk "approval with mismatched gate refused" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff approve AIOS-TEST trial-a --gate next-step \
+  --to codex --scope 'V3 approval gate' --owner-words 'Owner approves V3 fixture' 2>&1); rc=$?
+[ "$rc" -ne 0 ];                           chk "approval with mismatched destination refused" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff approve AIOS-TEST trial-a --gate next-step \
+  --to claude-code --scope 'other scope' --owner-words 'Owner approves V3 fixture' 2>&1); rc=$?
+[ "$rc" -ne 0 ];                           chk "approval with mismatched scope refused" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff approve AIOS-TEST trial-a --gate next-step \
+  --to claude-code --scope 'V3 approval gate' 2>&1); rc=$?
+[ "$rc" -ne 0 ];                           chk "approval without owner words refused" $?
+AI_OS_HOME="$HW" "$CLI/ai-os" handoff approve AIOS-TEST trial-a --gate next-step \
+  --to claude-code --scope 'V3 approval gate' --owner-words "$FAKE_TOKEN" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "credential-shaped owner words refused" $?
+[ "$approval_before" = "$(shasum < "$AREC")" ]; chk "all bad approvals leave the record byte-identical" $?
+[ "$ws_before" = "$(cd "$HW" && find . -type f | sort | shasum)" ]
+chk "  ...and write no side files" $?
+
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff approve AIOS-TEST trial-a --gate next-step \
+  --to claude-code --scope 'V3 approval gate' --owner-words 'Owner approves V3 fixture' 2>&1); rc=$?
+[ "$rc" -eq 0 ];                           chk "exact approval exits 0" $?
+grep -q '^status: approved$' "$AREC";      chk "  ...moves waiting-owner to approved" $?
+grep -q '^approval: recorded$' "$AREC";    chk "  ...marks approval recorded" $?
+grep -q '^approved_gate: next-step$' "$AREC"; chk "  ...records approved gate" $?
+grep -q '^approved_to: claude-code$' "$AREC"; chk "  ...records approved destination" $?
+grep -q '^approved_scope: V3 approval gate$' "$AREC"; chk "  ...records approved scope" $?
+grep -q '^owner_words: Owner approves V3 fixture$' "$AREC"; chk "  ...stores owner words verbatim" $?
+grep -q '^approved_at: ' "$AREC";          chk "  ...records approval time" $?
+grep -q 'This approval is valid only for the exact tuple above' "$AREC"
+chk "  ...and states the approval boundary in the record" $?
+grep -q 'sent:             no' "$AREC";    chk "approval still does not send" $?
+[ ! -d "$HW/handoffs" ];                   chk "approval creates no global handoffs/ directory" $?
+
+approved_before=$(shasum < "$AREC")
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff approve AIOS-TEST trial-a --gate next-step \
+  --to claude-code --scope 'V3 approval gate' --owner-words 'Owner approves V3 fixture again' 2>&1); rc=$?
+[ "$rc" -ne 0 ];                           chk "a second approval is refused, not overwritten" $?
+[ "$approved_before" = "$(shasum < "$AREC")" ]; chk "  ...leaving owner words byte-identical" $?
+out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff send AIOS-TEST trial-a --dry-run 2>&1); rc=$?
+[ "$rc" -eq 0 ];                           chk "send --dry-run exits 0 once the approval matches" $?
+echo "$out" | grep -q 'dry run';           chk "  ...and says it is a dry run" $?
+[ "$approved_before" = "$(shasum < "$AREC")" ]; chk "  ...and still writes nothing" $?
+
+# =====================================================================================
+t "handoff: the sender has exactly one way out, and it is fenced"
+# V2 and V3 asserted this file could not spawn anything at all. V4 gives it one call, so
+# the invariant moves: not "no subprocess" but "one subprocess, no shell, no retry".
+grep -Eq '^[[:space:]]*(import|from)[[:space:]]+[A-Za-z0-9_, ]*\b(socket|http|urllib|smtplib|ftplib|telnetlib|asyncio|requests|ssl)\b' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "imports nothing that could open a network connection" $?
+grep -Eq 'os\.(system|popen|exec[lv]|spawn)|urlopen|pbcopy|pbpaste|osascript|xdg-open|webbrowser' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "no shell-out, clipboard or app-open call" $?
+grep -Eq 'shell[[:space:]]*=[[:space:]]*True' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "never shell=True — the packet can never be a command" $?
+[ "$(grep -c 'subprocess\.run(' "$CLI/ai-os-handoff")" = "1" ]
+chk "exactly one subprocess.run call site in the whole file" $?
+grep -q 'subprocess.run(argv, input=packet' "$CLI/ai-os-handoff"
+chk "  ...taking a list argv and the packet on stdin" $?
+grep -Eq 'timeout=timeout' "$CLI/ai-os-handoff"; chk "  ...under a timeout" $?
+grep -Eq 'os\.fork|threading\.|multiprocessing\.|Thread\(|Timer\(|nohup|setsid' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "no thread, fork, timer or background worker" $?
+grep -Eiq 'mcp__|mcp_servers|claude\.ai|api\.anthropic|api\.openai|https?://|wss?://' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "no MCP server, connector or AI endpoint" $?
+grep -Eq 'handoffs/|"handoffs"' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "no path to a global handoffs/ directory" $?
+grep -Eq 'def cmd_receive' "$CLI/ai-os-handoff"
+chk "receive is implemented" $?
+grep -Eq 'while True|time\.sleep\(|\.retry|backoff[[:space:]]*=' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "no sleep, backoff or polling primitive" $?
+# "Not retried" is structural, not textual: no call out of this file may sit inside any
+# loop. A grep for the word "retry" would only find the comment promising there isn't one.
+python3 - "$CLI/ai-os-handoff" <<'PYEOF'
+import ast, pathlib, sys
+CALLS = {"run", "Popen", "call", "check_call", "check_output"}
+class V(ast.NodeVisitor):
+    def __init__(self): self.depth, self.bad = 0, []
+    def _loop(self, node):
+        self.depth += 1; self.generic_visit(node); self.depth -= 1
+    visit_For = visit_AsyncFor = visit_While = _loop
+    def visit_Call(self, node):
+        f = node.func
+        if (isinstance(f, ast.Attribute) and f.attr in CALLS
+                and isinstance(f.value, ast.Name) and f.value.id == "subprocess"
+                and self.depth):
+            self.bad.append(node.lineno)
+        self.generic_visit(node)
+v = V(); v.visit(ast.parse(pathlib.Path(sys.argv[1]).read_text()))
+sys.exit(1 if v.bad else 0)
+PYEOF
+chk "no subprocess call sits inside any loop — one attempt, never retried" $?
+grep -q 'TRANSPORTS = Path(os.environ.get("AI_OS_HANDOFF_TRANSPORTS"' "$CLI/ai-os-handoff"
+chk "the transport is read from a declared registry, never synthesised" $?
+grep -Eiq '\bnext_action\b|def (plan|decide|orchestrat|dispatch|route)' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "no planning, orchestration or dispatch logic" $?
+grep -q 'TASKS = AI_OS_HOME / "tasks"' "$CLI/ai-os-handoff"
+chk "records are bound to \$AI_OS_HOME/tasks/<ID>/ and nowhere else" $?
+
+# =====================================================================================
+t "handoff send: fixtures"
+SW="$TMP/send-ws"; AI_OS_HOME="$SW" "$CLI/ai-os-init" >/dev/null 2>&1
+mkdir -p "$SW/tasks/AIOS-SEND"
+cat > "$SW/tasks/AIOS-SEND/task.md" <<'TASKEOF'
+---
+id: AIOS-SEND
+title: The send fixture task
+project: ai-os
+---
+TASKEOF
+# Two stand-in destination clients. Nothing here is an AI: the point is to exercise the
+# real transport code path — argv, stdin, exit code — without contacting anything.
+FB="$TMP/send-bin"; mkdir -p "$FB"
+cat > "$FB/fakeclient" <<'FCEOF'
+#!/usr/bin/env bash
+packet=$(cat)
+printf '%s' "$packet" > "$FAKE_CLIENT_SINK"
+printf 'fake-client received %s bytes on stdin\n' "${#packet}"
+FCEOF
+cat > "$FB/failclient" <<'FCEOF'
+#!/usr/bin/env bash
+cat >/dev/null
+echo call >> "$FAKE_CLIENT_SINK.count"
+echo "the destination refused it" >&2
+exit 3
+FCEOF
+chmod +x "$FB/fakeclient" "$FB/failclient"
+mk_registry() { # <file> <binary> <verified>
+  cat > "$1" <<REOF
+contract: 1
+transports:
+  codex:
+    name: contract-test stand-in for a destination client
+    binary: $2
+    argv: [--one-shot]
+    stdin: packet
+    timeout: 30
+    verified: $3
+REOF
+}
+mk_registry "$TMP/tr-ok.yaml"        fakeclient            true
+mk_registry "$TMP/tr-fail.yaml"      failclient            true
+mk_registry "$TMP/tr-unverified.yaml" fakeclient           false
+mk_registry "$TMP/tr-nobinary.yaml"  no-such-client-binary true
+hsend() { # <registry> <args...>  — one send, with the fixture bin dir in front of PATH
+  local reg="$1"; shift
+  AI_OS_HOME="$SW" PATH="$FB:$PATH" AI_OS_HANDOFF_TRANSPORTS="$reg" \
+    FAKE_CLIENT_SINK="$TMP/sink.txt" "$CLI/ai-os" handoff send AIOS-SEND "$@" 2>&1
+}
+mkh() { AI_OS_HOME="$SW" "$CLI/ai-os" handoff prepare AIOS-SEND --to "$2" --gate "$3" \
+          --scope "$4" --status waiting-owner --id "$1" >/dev/null 2>&1; }
+apr() { AI_OS_HOME="$SW" "$CLI/ai-os" handoff approve AIOS-SEND "$1" --gate "$3" --to "$2" \
+          --scope "$4" --owner-words "$5" >/dev/null 2>&1; }
+ws_fp() { (cd "$SW" && find . -type f -exec shasum {} \; | sort | shasum); }
+ws_fp_but() { (cd "$SW" && find . -type f ! -name "handoff-$1.md" -exec shasum {} \; | sort | shasum); }
+mkh unapproved codex review 'scope A'
+mkh tuple      codex review 'scope B'; apr tuple      codex review 'scope B' 'Owner approves B'
+mkh blank      codex review 'scope C'; apr blank      codex review 'scope C' 'Owner approves C'
+mkh dry        codex review 'scope D'; apr dry        codex review 'scope D' 'Owner approves D'
+mkh blocked    codex review 'scope E'; apr blocked    codex review 'scope E' 'Owner approves E'
+mkh good       codex review 'scope F'; apr good       codex review 'scope F' 'Owner approves F'
+mkh failing    codex review 'scope G'; apr failing    codex review 'scope G' 'Owner approves G'
+mkh nobinary   codex review 'scope H'; apr nobinary   codex review 'scope H' 'Owner approves H'
+[ "$(find "$SW/tasks/AIOS-SEND" -name 'handoff-*.md' | wc -l | tr -d ' ')" = "8" ]
+chk "eight fixture records, one approved chain each" $?
+
+# =====================================================================================
+t "handoff send: no approval, no send"
+before=$(ws_fp)
+out=$(hsend "$TMP/tr-ok.yaml" unapproved); rc=$?
+[ "$rc" -ne 0 ];                           chk "send refuses a record with no approval" $?
+echo "$out" | grep -q "not 'approved'";    chk "  ...naming the status it refused on" $?
+[ "$before" = "$(ws_fp)" ];                chk "  ...and writes nothing at all" $?
+[ ! -f "$TMP/sink.txt" ];                  chk "  ...the destination received nothing" $?
+sed -i.bak 's/^approval: recorded$/approval: none/' "$SW/tasks/AIOS-SEND/handoff-tuple.md"
+rm -f "$SW/tasks/AIOS-SEND/handoff-tuple.md.bak"
+before=$(ws_fp)
+out=$(hsend "$TMP/tr-ok.yaml" tuple); rc=$?
+[ "$rc" -ne 0 ];                           chk "send refuses when approval is not 'recorded'" $?
+[ "$before" = "$(ws_fp)" ];                chk "  ...and writes nothing" $?
+sed -i.bak 's/^approval: none$/approval: recorded/' "$SW/tasks/AIOS-SEND/handoff-tuple.md"
+rm -f "$SW/tasks/AIOS-SEND/handoff-tuple.md.bak"
+
+# =====================================================================================
+t "handoff send: a mismatched approval tuple is not an approval"
+for pair in "approved_gate:execute" "approved_to:claude-code" "approved_scope:something else"; do
+  key="${pair%%:*}"; val="${pair#*:}"
+  cp "$SW/tasks/AIOS-SEND/handoff-tuple.md" "$TMP/tuple.orig"
+  sed -i.bak "s/^$key: .*/$key: $val/" "$SW/tasks/AIOS-SEND/handoff-tuple.md"
+  rm -f "$SW/tasks/AIOS-SEND/handoff-tuple.md.bak"
+  before=$(ws_fp)
+  out=$(hsend "$TMP/tr-ok.yaml" tuple); rc=$?
+  [ "$rc" -ne 0 ];                         chk "send refuses when $key differs from the record" $?
+  echo "$out" | grep -q 'mismatch';        chk "  ...and says the tuple mismatched" $?
+  [ "$before" = "$(ws_fp)" ];              chk "  ...writing nothing" $?
+  [ ! -f "$TMP/sink.txt" ];                chk "  ...and sending nothing" $?
+  cp "$TMP/tuple.orig" "$SW/tasks/AIOS-SEND/handoff-tuple.md"
+done
+
+# =====================================================================================
+t "handoff send: an incomplete approval is not an approval"
+for key in approved_at approved_gate approved_to approved_scope owner_words; do
+  cp "$SW/tasks/AIOS-SEND/handoff-blank.md" "$TMP/blank.orig"
+  sed -i.bak "s/^$key: .*/$key: /" "$SW/tasks/AIOS-SEND/handoff-blank.md"
+  rm -f "$SW/tasks/AIOS-SEND/handoff-blank.md.bak"
+  before=$(ws_fp)
+  out=$(hsend "$TMP/tr-ok.yaml" blank); rc=$?
+  [ "$rc" -ne 0 ];                         chk "send refuses when $key is empty" $?
+  echo "$out" | grep -q "$key";            chk "  ...naming the missing field" $?
+  [ "$before" = "$(ws_fp)" ];              chk "  ...and writes nothing" $?
+  cp "$TMP/blank.orig" "$SW/tasks/AIOS-SEND/handoff-blank.md"
+done
+[ ! -f "$TMP/sink.txt" ];                  chk "no refusal so far reached the destination" $?
+
+# =====================================================================================
+t "handoff send: --dry-run shows everything and writes nothing"
+before=$(ws_fp)
+out=$(hsend "$TMP/tr-ok.yaml" dry --dry-run); rc=$?
+[ "$rc" -eq 0 ];                           chk "dry run exits 0" $?
+[ "$before" = "$(ws_fp)" ];                chk "dry run writes nothing anywhere in the workspace" $?
+[ ! -f "$TMP/sink.txt" ];                  chk "dry run sends nothing to the destination" $?
+echo "$out" | grep -q 'nothing is sent and nothing is written'; chk "  ...and says so" $?
+echo "$out" | grep -Eq 'payload_sha256: [0-9a-f]{64}'; chk "shows the payload hash" $?
+echo "$out" | grep -q 'one-shot';          chk "shows the exact command it would run" $?
+echo "$out" | grep -q 'packet on stdin';   chk "  ...and that the packet goes on stdin, not argv" $?
+echo "$out" | grep -q 'Handoff dry — AIOS-SEND'; chk "shows the packet itself, in full" $?
+grep -q '^status: approved$' "$SW/tasks/AIOS-SEND/handoff-dry.md"
+chk "the record is still 'approved', not 'sent'" $?
+
+# =====================================================================================
+t "handoff send: no verified transport is a recorded blocker, never a fake send"
+before_other=$(ws_fp_but blocked)
+out=$(hsend "$TMP/tr-unverified.yaml" blocked); rc=$?
+[ "$rc" -ne 0 ];                           chk "an unverified transport refuses the send" $?
+echo "$out" | grep -q 'blocked';           chk "  ...and calls it blocked" $?
+[ ! -f "$TMP/sink.txt" ];                  chk "  ...the destination received nothing" $?
+BREC="$SW/tasks/AIOS-SEND/handoff-blocked.md"
+grep -q 'Not sent — \*\*blocked\*\*' "$BREC";  chk "the blocker is written into the record" $?
+grep -q 'verified: false' "$BREC";         chk "  ...with the reason it was blocked" $?
+grep -q 'unblocks_when:' "$BREC";          chk "  ...and what would unblock it" $?
+grep -Eq '^payload_sha256:    [0-9a-f]{64}$' "$BREC"
+chk "  ...and the hash of what would have gone" $?
+grep -q '^status: approved$' "$BREC";      chk "the approval survives — status stays 'approved'" $?
+grep -q '^sent: no$' "$BREC";              chk "  ...and sent stays no" $?
+[ "$before_other" = "$(ws_fp_but blocked)" ]; chk "only that one record changed" $?
+[ ! -d "$SW/handoffs" ];                   chk "no global handoffs/ directory" $?
+out=$(hsend "$TMP/tr-nobinary.yaml" nobinary); rc=$?
+[ "$rc" -ne 0 ];                           chk "a verified transport whose binary is absent also blocks" $?
+echo "$out" | grep -q 'not on PATH';       chk "  ...saying the binary is missing" $?
+grep -q '^status: approved$' "$SW/tasks/AIOS-SEND/handoff-nobinary.md"
+chk "  ...and leaves the approval intact" $?
+
+# =====================================================================================
+t "handoff send: an approved send delivers the packet and records it"
+GREC="$SW/tasks/AIOS-SEND/handoff-good.md"
+python3 - "$GREC" "$TMP/expected-packet.txt" <<'PYEOF'
+import sys, pathlib
+t = pathlib.Path(sys.argv[1]).read_text()
+b, e = t.index("<!-- packet:begin -->"), t.index("<!-- packet:end -->")
+pathlib.Path(sys.argv[2]).write_text(t[b + len("<!-- packet:begin -->"):e].strip())
+PYEOF
+before_other=$(ws_fp_but good)
+out=$(hsend "$TMP/tr-ok.yaml" good); rc=$?
+[ "$rc" -eq 0 ];                           chk "an approved send over a verified transport exits 0" $?
+echo "$out" | grep -q 'fake-client received'; chk "the destination client actually ran" $?
+[ -f "$TMP/sink.txt" ];                    chk "  ...and received something" $?
+cmp -s "$TMP/sink.txt" "$TMP/expected-packet.txt"
+chk "  ...byte-for-byte the packet from section 2, and nothing else" $?
+grep -q '^status: sent$' "$GREC";          chk "status becomes 'sent'" $?
+grep -q '^sent: yes$' "$GREC";             chk "  ...and sent becomes yes" $?
+grep -Eq '^sent_at: [0-9]{4}-[0-9]{2}-[0-9]{2} ' "$GREC"; chk "sent time is recorded" $?
+grep -q '^sent_to: codex$' "$GREC";        chk "destination is recorded" $?
+grep -q '^sent_transport: ' "$GREC";       chk "transport is recorded" $?
+HASH=$(shasum -a 256 "$TMP/expected-packet.txt" | cut -d' ' -f1)
+grep -q "^payload_sha256: $HASH\$" "$GREC"
+chk "payload hash is recorded, and is the hash of what was actually sent" $?
+grep -q 'sent_command:' "$GREC";           chk "the command that sent it is recorded" $?
+grep -q 'approval_ref:' "$GREC";           chk "the approval tuple is referenced" $?
+grep -q 'owner_words_ref:' "$GREC";        chk "the owner words are referenced, not re-copied" $?
+grep -q 'return_expected:' "$GREC";        chk "the return expectation is recorded" $?
+grep -q '^current_holder: codex$' "$GREC"; chk "the handoff now sits with the destination" $?
+grep -q '^next_holder: owner$' "$GREC";    chk "  ...and comes back to the owner" $?
+grep -q 'status:                sent' "$GREC"
+chk "the human-readable metadata block agrees with the frontmatter" $?
+grep -q 'Nothing returned' "$GREC";        chk "the returned block is still empty — send never receives" $?
+[ "$before_other" = "$(ws_fp_but good)" ]; chk "an approved send writes ONLY the handoff record" $?
+[ ! -d "$SW/handoffs" ];                   chk "  ...and still no global handoffs/ directory" $?
+pgrep -f 'fakeclient --one-shot' >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "no process is left running after send returns" $?
+
+# =====================================================================================
+t "handoff send: a packet is never sent twice"
+rm -f "$TMP/sink.txt"
+before=$(ws_fp)
+out=$(hsend "$TMP/tr-ok.yaml" good); rc=$?
+[ "$rc" -ne 0 ];                           chk "sending an already-sent record is refused" $?
+echo "$out" | grep -q 'never sent twice';  chk "  ...and says why" $?
+[ "$before" = "$(ws_fp)" ];                chk "  ...writing nothing" $?
+[ ! -f "$TMP/sink.txt" ];                  chk "  ...and sending nothing" $?
+
+# =====================================================================================
+t "handoff send: a failed transport is recorded, not retried"
+FREC="$SW/tasks/AIOS-SEND/handoff-failing.md"
+rm -f "$TMP/sink.txt.count"
+before_other=$(ws_fp_but failing)
+out=$(hsend "$TMP/tr-fail.yaml" failing); rc=$?
+[ "$rc" -ne 0 ];                           chk "a transport that exits non-zero fails the send" $?
+grep -q 'the transport \*\*failed\*\*' "$FREC"; chk "  ...recorded in the record" $?
+grep -q 'exited 3' "$FREC";                chk "  ...with the exit code" $?
+grep -q '^status: approved$' "$FREC";      chk "status stays 'approved' — it was not sent" $?
+grep -q '^sent: no$' "$FREC";              chk "  ...and sent stays no" $?
+grep -Eq 'attempted_at:|failed_at:' "$FREC"; chk "  ...and when it was attempted" $?
+[ "$before_other" = "$(ws_fp_but failing)" ]; chk "only that one record changed" $?
+[ "$(wc -l < "$TMP/sink.txt.count" | tr -d ' ')" = "1" ]
+chk "the destination was invoked exactly once — nothing was retried" $?
+
+# =====================================================================================
+t "handoff send: the shipped transport registry is evidence-gated"
+[ -f "$REPO/governance/policies/handoff-transports.yaml" ]; chk "governance/policies/handoff-transports.yaml exists" $?
+# Asserted through the repo's own manifest parser, not by grepping: the file explains in
+# prose what `verified: true` would mean, and a text search cannot tell that apart from a
+# transport actually being enabled.
+python3 - "$REPO" <<'PYEOF'
+import importlib.machinery, importlib.util, pathlib, sys
+repo = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_loader("_a", importlib.machinery.SourceFileLoader(
+    "_a", str(repo / "cli" / "ai-os-adapter")))
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+doc = mod.parse((repo / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
+transports = doc.get("transports") or {}
+bad = []
+codex = transports.get("codex") or {}
+claude = transports.get("claude-code") or {}
+if codex.get("verified") is not True:
+    bad.append("codex transport should be verified only after the owner-run V6 trial")
+evidence = str(codex.get("evidence") or "")
+for phrase in ("Owner-run trial", "codex-cli 0.147.0", "stdin", "read-only"):
+    if phrase not in evidence:
+        bad.append(f"codex verified evidence is missing {phrase!r}")
+if claude.get("verified") is not True:
+    bad.append("claude-code transport should be verified only after the owner-run V6 trial")
+evidence = str(claude.get("evidence") or "")
+for phrase in ("Owner-run trial", "Claude Code", "stdin", "read no files", "ran no commands"):
+    if phrase not in evidence:
+        bad.append(f"claude-code verified evidence is missing {phrase!r}")
+if bad:
+    print("\n".join(bad), file=sys.stderr)
+    sys.exit(1)
+PYEOF
+chk "codex and claude-code are verified by owner-run evidence" $?
+grep -q 'read-only' "$REPO/governance/policies/handoff-transports.yaml"
+chk "  ...and the declared argv pin the client's read-only mode" $?
+grep -q 'stdin: packet' "$REPO/governance/policies/handoff-transports.yaml"
+chk "  ...and take the packet on stdin, never in argv" $?
+grep -q 'documentation is not evidence' "$REPO/governance/policies/handoff-transports.yaml"
+chk "  ...under the same evidence rule adapters/ uses" $?
+# A restriction flag has to actually restrict. `--allowed-tools ""` reads like a lockdown
+# and is not one: it is an ALLOW-list, so an empty value pre-approves nothing and removes
+# nothing. Claude Code's documented disable is `--tools ""`. This shipped wrong once; the
+# check exists so it cannot ship wrong again under a flag that merely looks safe.
+python3 - "$REPO" <<'PYEOF2'
+import importlib.machinery, importlib.util, pathlib, sys
+repo = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_loader("_a", importlib.machinery.SourceFileLoader(
+    "_a", str(repo / "cli" / "ai-os-adapter")))
+mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+doc = mod.parse((repo / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
+bad = []
+for name, entry in (doc.get("transports") or {}).items():
+    argv = entry.get("argv") or []
+    if "--allowed-tools" in argv or "--allowedTools" in argv:
+        bad.append(f"{name} pins tools with an allow-list flag, which restricts nothing")
+    if entry.get("binary") == "claude" and "--tools" not in argv:
+        bad.append(f"{name} runs claude without --tools, so the built-in tools stay live")
+for b in bad:
+    print(b, file=sys.stderr)
+sys.exit(1 if bad else 0)
+PYEOF2
+chk "  ...and no transport fakes a restriction with an allow-list flag" $?
+out=$(AI_OS_HOME="$SW" "$CLI/ai-os" handoff send AIOS-SEND blocked --dry-run 2>&1); rc=$?
+[ "$rc" -eq 0 ];                           chk "against the shipped registry, dry run still works" $?
+if command -v codex >/dev/null 2>&1; then
+  echo "$out" | grep -q 'command:';         chk "  ...and shows the verified transport command when codex is installed" $?
+  echo "$out" | grep -q 'packet on stdin';  chk "  ...with the packet on stdin" $?
+else
+  echo "$out" | grep -q 'unavailable';      chk "  ...and reports unavailable when codex is not installed" $?
+fi
+
+# =====================================================================================
+t "handoff receive: fixtures"
+RW="$TMP/recv-ws"; AI_OS_HOME="$RW" "$CLI/ai-os-init" >/dev/null 2>&1
+mkdir -p "$RW/tasks/AIOS-RECV"
+cat > "$RW/tasks/AIOS-RECV/task.md" <<'TASKEOF'
+---
+id: AIOS-RECV
+title: The receive fixture task
+project: ai-os
+---
+TASKEOF
+RB="$TMP/recv-bin"; mkdir -p "$RB"
+cat > "$RB/recvclient" <<'FCEOF'
+#!/usr/bin/env bash
+cat >/dev/null; echo "stand-in destination ran"
+FCEOF
+chmod +x "$RB/recvclient"
+cat > "$TMP/tr-recv.yaml" <<'REOF'
+contract: 1
+transports:
+  codex:
+    name: contract-test stand-in for a destination client
+    binary: recvclient
+    argv: [--one-shot]
+    stdin: packet
+    timeout: 30
+    verified: true
+REOF
+cat > "$TMP/reply.md" <<'RPEOF'
+reviewer_verdict: approved with findings
+reviewer_findings: the preflight holds; two comments are stale.
+recommended_next_step: delete the stale comments, then re-run the suite.
+RPEOF
+rsend() { # <id> — prepare, approve and send one fixture handoff
+  AI_OS_HOME="$RW" "$CLI/ai-os" handoff prepare AIOS-RECV --to codex --gate review \
+    --scope "scope $1" --status waiting-owner --id "$1" >/dev/null 2>&1
+  AI_OS_HOME="$RW" "$CLI/ai-os" handoff approve AIOS-RECV "$1" --gate review --to codex \
+    --scope "scope $1" --owner-words "Owner approves $1" >/dev/null 2>&1
+  AI_OS_HOME="$RW" PATH="$RB:$PATH" AI_OS_HANDOFF_TRANSPORTS="$TMP/tr-recv.yaml" \
+    "$CLI/ai-os" handoff send AIOS-RECV "$1" >/dev/null 2>&1
+}
+hrecv() { AI_OS_HOME="$RW" "$CLI/ai-os" handoff receive AIOS-RECV "$@" 2>&1; }
+rw_fp() { (cd "$RW" && find . -type f -exec shasum {} \; | sort | shasum); }
+rw_fp_but() { (cd "$RW" && find . -type f ! -name "handoff-$1.md" -exec shasum {} \; | sort | shasum); }
+for id in good twice wrongfrom badfile reviewed status; do rsend "$id"; done
+AI_OS_HOME="$RW" "$CLI/ai-os" handoff prepare AIOS-RECV --to codex --gate review \
+  --scope 'never sent' --status waiting-owner --id notsent >/dev/null 2>&1
+[ "$(grep -l '^status: sent$' "$RW"/tasks/AIOS-RECV/handoff-*.md 2>/dev/null | wc -l | tr -d ' ')" = "6" ]
+chk "six sent fixtures and one that was never sent" $?
+
+# =====================================================================================
+t "handoff receive: a reply is attached verbatim and nothing else moves"
+GR="$RW/tasks/AIOS-RECV/handoff-good.md"
+sec3_before=$(sed -n '/^## 3. Owner approval/,/^## 4/p' "$GR" | shasum)
+sec4_before=$(sed -n '/^## 4. Send/,/^## 5/p' "$GR" | shasum)
+before_other=$(rw_fp_but good)
+out=$(hrecv good --from codex --file "$TMP/reply.md"); rc=$?
+[ "$rc" -eq 0 ];                           chk "receive exits 0" $?
+grep -q '^status: returned$' "$GR";        chk "status moves sent -> returned" $?
+grep -q '^returned: attached$' "$GR";      chk "returned becomes attached" $?
+grep -Eq '^received_at: [0-9]{4}-' "$GR";  chk "receive time is recorded" $?
+grep -q '^received_from: codex$' "$GR";    chk "the client it came from is recorded" $?
+grep -q '^received_file: ' "$GR";          chk "the source file is recorded" $?
+grep -Eq '^returned_sha256: [0-9a-f]{64}$' "$GR"; chk "the reply is hashed" $?
+python3 - "$GR" <<'PYEOF'
+import hashlib, pathlib, re, sys
+t = pathlib.Path(sys.argv[1]).read_text()
+b, e = t.index("<!-- returned:begin -->"), t.index("<!-- returned:end -->")
+block = t[b + len("<!-- returned:begin -->"):e].strip("\n")
+want = re.search(r"^returned_sha256: ([0-9a-f]{64})$", t, re.M).group(1)
+sys.exit(0 if hashlib.sha256(block.encode()).hexdigest() == want else 1)
+PYEOF
+chk "  ...and the hash is of the attached block, verifiable from the record alone" $?
+grep -q 'returned:begin' "$GR" && grep -q 'returned:end' "$GR"
+chk "the reply is delimited by its own markers" $?
+python3 - "$GR" "$TMP/reply.md" <<'PYEOF'
+import pathlib, sys
+t = pathlib.Path(sys.argv[1]).read_text()
+b, e = t.index("<!-- returned:begin -->"), t.index("<!-- returned:end -->")
+got = t[b + len("<!-- returned:begin -->"):e].strip()
+sys.exit(0 if got == pathlib.Path(sys.argv[2]).read_text().strip() else 1)
+PYEOF
+chk "  ...and holds the file byte-for-byte, unsummarised" $?
+[ "$sec3_before" = "$(sed -n '/^## 3. Owner approval/,/^## 4/p' "$GR" | shasum)" ]
+chk "the owner approval section is untouched" $?
+[ "$sec4_before" = "$(sed -n '/^## 4. Send/,/^## 5/p' "$GR" | shasum)" ]
+chk "the send section is untouched" $?
+[ "$before_other" = "$(rw_fp_but good)" ]; chk "receive writes ONLY the handoff record" $?
+[ ! -d "$RW/handoffs" ];                   chk "no global handoffs/ directory" $?
+
+# =====================================================================================
+t "handoff receive: it never approves, never closes, never picks the next hop"
+grep -q '^approval: recorded$' "$GR";      chk "the approval is still exactly 'recorded'" $?
+grep -q '^approved_gate: review$' "$GR";   chk "  ...with its gate unchanged" $?
+grep -q '^approved_to: codex$' "$GR";      chk "  ...its destination unchanged" $?
+grep -q '^owner_words: Owner approves good$' "$GR"; chk "  ...and the owner's words unchanged" $?
+grep -Eq '^status: (approved|closed|sent)$' "$GR"
+[ $? -ne 0 ];                              chk "status is never approved, closed or sent again" $?
+grep -q '^next_holder: undecided$' "$GR";  chk "the next hop is left undecided" $?
+grep -Eq '^next_holder: (codex|claude-code|cursor|gemini|opencode)$' "$GR"
+[ $? -ne 0 ];                              chk "  ...no client was picked to carry it on" $?
+grep -q '^current_holder: owner$' "$GR";   chk "the handoff comes back to the owner" $?
+grep -q '^owner_action_required: resume$' "$GR"; chk "  ...and stops at an owner decision" $?
+grep -q 'next_hop:          not chosen' "$GR"; chk "the record says no next hop was chosen" $?
+grep -q 'next_hop:' "$GR";                 chk "  ...and the audit records that too" $?
+grep -q 'status:                returned' "$GR"
+chk "the human-readable metadata block agrees with the frontmatter" $?
+for bad in approved closed sent draft waiting-owner blocked stopped; do
+  before=$(rw_fp)
+  out=$(hrecv status --from codex --file "$TMP/reply.md" --status "$bad"); rc=$?
+  [ "$rc" -ne 0 ];                         chk "--status $bad is refused" $?
+  [ "$before" = "$(rw_fp)" ];              chk "  ...and writes nothing" $?
+done
+out=$(hrecv reviewed --from codex --file "$TMP/reply.md" --status reviewed); rc=$?
+[ "$rc" -eq 0 ];                           chk "--status reviewed is the owner's other legal move" $?
+grep -q '^status: reviewed$' "$RW/tasks/AIOS-RECV/handoff-reviewed.md"
+chk "  ...and is written" $?
+
+# =====================================================================================
+t "handoff receive: refusals write nothing"
+before=$(rw_fp)
+hrecv notsent --from codex --file "$TMP/reply.md" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "a handoff that was never sent cannot receive" $?
+out=$(hrecv notsent --from codex --file "$TMP/reply.md"); echo "$out" | grep -q "not 'sent'"
+chk "  ...and says why" $?
+out=$(hrecv good --from codex --file "$TMP/reply.md"); rc=$?
+[ "$rc" -ne 0 ];                           chk "a second returned block is refused" $?
+echo "$out" | grep -q 'never overwritten';  chk "  ...and never overwrites the first" $?
+out=$(hrecv wrongfrom --from claude-code --file "$TMP/reply.md"); rc=$?
+[ "$rc" -ne 0 ];                           chk "a reply from a client it was not sent to is refused" $?
+echo "$out" | grep -q 'not its reply';     chk "  ...saying it is not this handoff's reply" $?
+hrecv wrongfrom --file "$TMP/reply.md" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "missing --from refused" $?
+hrecv wrongfrom --from 'codex,claude-code' --file "$TMP/reply.md" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "more than one --from refused" $?
+hrecv wrongfrom --from nobody --file "$TMP/reply.md" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "an unknown client refused" $?
+hrecv wrongfrom --from codex >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "missing --file refused" $?
+hrecv wrongfrom --from codex --file "$TMP/no-such-reply.md" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "a --file that does not exist refused" $?
+: > "$TMP/empty.md"
+hrecv wrongfrom --from codex --file "$TMP/empty.md" >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "an empty reply refused" $?
+python3 -c "import sys;sys.stdout.write('x'*300000)" > "$TMP/huge.md"
+out=$(hrecv wrongfrom --from codex --file "$TMP/huge.md"); rc=$?
+[ "$rc" -ne 0 ];                           chk "a reply past the size cap refused" $?
+echo "$out" | grep -q 'cap';               chk "  ...naming the cap" $?
+printf 'before\n<!-- returned:end -->\nafter\n' > "$TMP/forged.md"
+out=$(hrecv wrongfrom --from codex --file "$TMP/forged.md"); rc=$?
+[ "$rc" -ne 0 ];                           chk "a reply carrying the block markers refused" $?
+FAKE_TOKEN="gh"'p_0123456789abcdefghijklmnop'
+printf 'here is the key %s\n' "$FAKE_TOKEN" > "$TMP/leaky.md"
+out=$(hrecv wrongfrom --from codex --file "$TMP/leaky.md"); rc=$?
+[ "$rc" -ne 0 ];                           chk "a reply carrying a credential refused" $?
+hrecv wrongfrom --from codex --file "$TMP/reply.md" --status returned --status reviewed >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "a repeated --status refused" $?
+hrecv wrongfrom --from codex --file "$TMP/reply.md" --nope x >/dev/null 2>&1
+[ $? -ne 0 ];                              chk "an unknown argument refused" $?
+[ "$before" = "$(rw_fp)" ];                chk "fifteen refusals, not one byte written" $?
+
+# =====================================================================================
+t "handoff receive: the owner's own words survive the round trip"
+AW="$RW/tasks/AIOS-RECV/handoff-arabic.md"
+AI_OS_HOME="$RW" "$CLI/ai-os" handoff prepare AIOS-RECV --to codex --gate review \
+  --scope 'نطاق عربي' --status waiting-owner --id arabic >/dev/null 2>&1
+AI_OS_HOME="$RW" "$CLI/ai-os" handoff approve AIOS-RECV arabic --gate review --to codex \
+  --scope 'نطاق عربي' --owner-words 'وافقت، أرسلها إلى Codex.' >/dev/null 2>&1
+grep -q 'owner_words: "وافقت، أرسلها إلى Codex."' "$AW"
+chk "non-ASCII owner words are stored readable, not as \\uXXXX escapes" $?
+grep -q 'scope: "نطاق عربي"' "$AW";        chk "  ...and so is a non-ASCII scope" $?
+grep -Eq '\\\\u0648|\\\\u06' "$AW"
+[ $? -ne 0 ];                              chk "  ...with no escape sequence anywhere in the record" $?
+AI_OS_HOME="$RW" PATH="$RB:$PATH" AI_OS_HANDOFF_TRANSPORTS="$TMP/tr-recv.yaml" \
+  "$CLI/ai-os" handoff send AIOS-RECV arabic >/dev/null 2>&1
+[ $? -eq 0 ];                              chk "and the record still parses back for send" $?
+printf 'المراجعة تمت. لا ملاحظات.\n' > "$TMP/reply-ar.md"
+hrecv arabic --from codex --file "$TMP/reply-ar.md" >/dev/null 2>&1
+[ $? -eq 0 ];                              chk "  ...and for receive" $?
+grep -q 'المراجعة تمت. لا ملاحظات.' "$AW"; chk "an Arabic reply is attached readable" $?
+
+# =====================================================================================
+t "handoff receive: it has no way to act on what it received"
+python3 - "$CLI/ai-os-handoff" <<'PYEOF'
+import ast, pathlib, sys
+tree = ast.parse(pathlib.Path(sys.argv[1]).read_text())
+fn = next((n for n in tree.body
+           if isinstance(n, ast.FunctionDef) and n.name == "cmd_receive"), None)
+if fn is None:
+    sys.exit(1)
+problems = []
+for node in ast.walk(fn):
+    # no call out of the process, of any kind
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if isinstance(node.func.value, ast.Name) and node.func.value.id in ("subprocess", "os"):
+            if node.func.attr in ("run", "Popen", "call", "system", "popen", "spawnv"):
+                problems.append(f"call out at line {node.lineno}")
+        # the status written to the frontmatter must be the validated variable, never a
+        # literal — a literal is how "receive quietly approved it" would look.
+        if node.func.attr == "write_text":
+            pass
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+            and node.func.id == "replace_frontmatter":
+        for arg in node.args:
+            if isinstance(arg, ast.Dict):
+                for k, v in zip(arg.keys, arg.values):
+                    if isinstance(k, ast.Constant) and k.value == "status":
+                        if not (isinstance(v, ast.Name) and v.id == "new_status"):
+                            problems.append("status is written from something other than "
+                                            "the validated --status value")
+sys.exit(1 if problems else 0)
+PYEOF
+chk "cmd_receive makes no call out and writes only the validated status" $?
+python3 - "$CLI/ai-os-handoff" <<'PYEOF'
+import ast, pathlib, sys
+src = pathlib.Path(sys.argv[1]).read_text()
+tree = ast.parse(src)
+node = next((n for n in tree.body if isinstance(n, ast.Assign)
+             and any(getattr(t, "id", "") == "RECEIVE_STATUSES" for t in n.targets)), None)
+if node is None or not isinstance(node.value, ast.Tuple):
+    sys.exit(1)
+vals = [e.value for e in node.value.elts if isinstance(e, ast.Constant)]
+sys.exit(0 if vals == ["returned", "reviewed"] else 1)
+PYEOF
+chk "the only statuses receive can write are returned and reviewed" $?
+grep -q 'def cmd_receive' "$CLI/ai-os-handoff"; chk "receive is implemented, not reserved" $?
+grep -Eq 'RESERVED|cmd_reserved' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "  ...and the reserved-command scaffolding is gone" $?
+grep -q 'handoff .*receive' "$CLI/ai-os"; chk "receive is a documented subcommand" $?
+
+# =====================================================================================
+t "the plugin -> capability rename keeps its compatibility window open"
+# The surface was renamed on 2026-09-03. Every old spelling must keep working for one
+# version, and each of these is a promise made in schemas/capability.schema.md. When the
+# owner decides to close the window, these are the tests that must be deleted on purpose.
+
+# --- the current names ----------------------------------------------------------------
+"$CLI/ai-os" capability list >/dev/null 2>&1
+chk "ai-os capability list works" $?
+"$CLI/ai-os" capability doctor >/dev/null 2>&1
+chk "ai-os capability doctor works" $?
+[ -d "$REPO/capabilities" ];               chk "the capability registry is capabilities/" $?
+[ -f "$REPO/capabilities/browser/capability.yaml" ]
+chk "  ...and the shipped manifest is capability.yaml" $?
+[ -f "$REPO/schemas/capability.schema.md" ]
+chk "the capability contract is schemas/capability.schema.md" $?
+[ -x "$CLI/ai-os-capability" ];            chk "cli/ai-os-capability is the real command" $?
+
+# --- the compatibility names ----------------------------------------------------------
+"$CLI/ai-os" plugin list >/dev/null 2>&1
+chk "ai-os plugin list still works (alias)" $?
+"$CLI/ai-os" plugin doctor >/dev/null 2>&1
+chk "ai-os plugin doctor still works (alias)" $?
+[ -x "$CLI/ai-os-plugin" ];                chk "cli/ai-os-plugin still exists as a shim" $?
+newout=$("$CLI/ai-os" capability list 2>&1)
+oldout=$("$CLI/ai-os" plugin list 2>&1)
+[ "$newout" = "$oldout" ];                 chk "  ...and the alias produces identical output" $?
+[ ! -e "$REPO/plugins" ];                  chk "plugins/ is not required for a new install" $?
+
+# --- both env vars ----------------------------------------------------------------------
+AI_OS_CAPABILITIES="$REPO/capabilities" "$CLI/ai-os" capability doctor >/dev/null 2>&1
+chk "AI_OS_CAPABILITIES points the registry" $?
+AI_OS_PLUGINS="$REPO/capabilities" "$CLI/ai-os" capability doctor >/dev/null 2>&1
+chk "AI_OS_PLUGINS is still honoured as a fallback" $?
+# The new name wins when both are set, so a stale old value cannot quietly take over.
+EMPTYREG2="$TMP/emptyreg2"; mkdir -p "$EMPTYREG2"
+out=$(AI_OS_CAPABILITIES="$REPO/capabilities" AI_OS_PLUGINS="$EMPTYREG2" \
+      "$CLI/ai-os" capability list 2>&1)
+echo "$out" | grep -q 'browser';           chk "  ...and AI_OS_CAPABILITIES wins when both are set" $?
+
+# --- both manifest filenames ------------------------------------------------------------
+MF="$TMP/manifest-compat"; mkdir -p "$MF/newname" "$MF/oldname"
+manifest() { cat <<EOF
+plugin: $1
+name: Compat $1
+contract: 1
+capability: { authority: observe }
+operations:
+  look:
+    summary: look at something
+    command: look
+    authority: observe
+EOF
+}
+manifest newname > "$MF/newname/capability.yaml"
+manifest oldname > "$MF/oldname/plugin.yaml"
+out=$(AI_OS_CAPABILITIES="$MF" "$CLI/ai-os" capability list 2>&1)
+echo "$out" | grep -q 'newname';           chk "capability.yaml is read" $?
+echo "$out" | grep -q 'oldname';           chk "plugin.yaml is still read" $?
+# The manifest KEY stays `plugin:` under contract 1 — renaming it is a contract 2 change.
+grep -q '^plugin: browser' "$REPO/capabilities/browser/capability.yaml"
+chk "the manifest key is still plugin: under contract 1" $?
+out=$(AI_OS_CAPABILITIES="$MF" "$CLI/ai-os" capability doctor 2>&1); rc=$?
+[ "$rc" -eq 0 ];                           chk "  ...and both manifests validate" $?
+
+# --- both filenames at once -------------------------------------------------------------
+# Identical content is the harmless state a migration passes through: the new name wins.
+BOTH="$TMP/manifest-both"; mkdir -p "$BOTH/twin"
+manifest twin > "$BOTH/twin/capability.yaml"
+cp "$BOTH/twin/capability.yaml" "$BOTH/twin/plugin.yaml"
+out=$(AI_OS_CAPABILITIES="$BOTH" "$CLI/ai-os" capability doctor 2>&1); rc=$?
+[ "$rc" -eq 0 ];                           chk "identical capability.yaml and plugin.yaml resolve to one manifest" $?
+# Differing content has no correct guess, so it is reported and nothing is merged.
+printf 'plugin: twin\nname: DIFFERENT\ncontract: 1\ncapability: { authority: observe }\n' \
+  > "$BOTH/twin/plugin.yaml"
+out=$(AI_OS_CAPABILITIES="$BOTH" "$CLI/ai-os" capability doctor 2>&1); rc=$?
+[ "$rc" -ne 0 ];                           chk "differing capability.yaml and plugin.yaml is a failure" $?
+echo "$out" | grep -qi 'differ';           chk "  ...naming the conflict" $?
+echo "$out" | grep -qi 'merge';            chk "  ...and saying nothing is merged" $?
+
+# --- the rename moved nothing else --------------------------------------------------------
+for c in claude-code codex cursor gemini opencode; do
+  [ -f "$REPO/adapters/$c/adapter.yaml" ] || { false; break; }
+done
+chk "no adapter manifest moved" $?
+[ -f "$REPO/domains/software.yaml" ] && [ -f "$REPO/domains/customer-support.yaml" ]
+chk "no domain declaration moved" $?
+"$CLI/ai-os" domain doctor >/dev/null 2>&1
+chk "domain declarations still validate against the renamed registry" $?
+# domains/customer-support.yaml requires browser: it must still RESOLVE, not just parse.
+out=$("$CLI/ai-os" domain doctor 2>&1)
+echo "$out" | grep -q "requires 'browser'"; [ $? -ne 0 ]
+chk "  ...and requires: [browser] still resolves to the capability" $?
+
+# =====================================================================================
+t "the governance move kept every policy reachable"
+[ -d "$REPO/governance/policies" ];        chk "policies live under governance/" $?
+[ ! -e "$REPO/policies" ];                 chk "  ...and the old policies/ root is gone" $?
+for f in git.yaml privacy-classification.yaml public-private-contract.yaml \
+         workspace-privacy.yaml handoff-transports.yaml privacy-allowlist.txt; do
+  [ -f "$REPO/governance/policies/$f" ] || { false; break; }
+done
+chk "  ...with every policy file present" $?
+[ -f "$REPO/governance/README.md" ];       chk "governance/ has its own index" $?
+[ ! -d "$REPO/governance/rules" ];         chk "no empty governance/rules/ namespace was invented" $?
+# The scanner's own allowlist has to be found at the new path, or the scan silently widens.
+"$CLI/ai-os-privacy-scan" --quiet "$REPO" >/dev/null 2>&1
+chk "privacy-scan finds its allowlist under governance/" $?
+grep -q 'governance/policies/privacy-allowlist.txt' "$CLI/ai-os-privacy-scan"
+chk "  ...by the new path, not the old one" $?
+# The three-layer model is retired; the policy file must not still describe it as live.
+grep -qi 'Public / Private / Runtime contract' "$REPO/governance/policies/public-private-contract.yaml"
+[ $? -ne 0 ];                              chk "the contract policy no longer claims three layers" $?
+grep -q 'legacy_runtime:' "$REPO/governance/policies/public-private-contract.yaml"
+chk "  ...and records the retired runtime layer as history" $?
 
 # =====================================================================================
 t "inherited suites still pass"

@@ -9,7 +9,7 @@
 #   ai-os-doctor            full check
 #   ai-os-doctor --quiet    findings only
 #
-# Exit: number of problems (0 = clean). See policies/public-private-contract.yaml.
+# Exit: number of problems (0 = clean). See governance/policies/public-private-contract.yaml.
 
 set -uo pipefail
 
@@ -410,12 +410,12 @@ if [ -x "$SELF_DIR/ai-os-adapter" ]; then
 else
   warn "ai-os-adapter not found — adapter contract not checked"
 fi
-if [ -x "$SELF_DIR/ai-os-plugin" ]; then
-  cout=$("$SELF_DIR/ai-os-plugin" doctor 2>&1); crc=$?
+if [ -x "$SELF_DIR/ai-os-capability" ]; then
+  cout=$("$SELF_DIR/ai-os-capability" doctor 2>&1); crc=$?
   cn=$(printf '%s' "$cout" | grep -c '^  ok ' || true)
   if [ "$crc" -eq 0 ]; then
     if [ "$cn" -eq 0 ]; then
-      ok "no capabilities declared  ${D}(plugins/ is empty by design)${X}"
+      ok "no capabilities declared  ${D}(none found in capabilities/)${X}"
     else
       ok "$cn capability manifest(s) valid"
       printf '%s' "$cout" | grep 'WARN' | sed "s|^  WARN  |        ${D}|;s|\$|${X}|"
@@ -426,7 +426,7 @@ if [ -x "$SELF_DIR/ai-os-plugin" ]; then
     note "a capability is client-agnostic; naming a client belongs in adapters/"
   fi
 else
-  warn "ai-os-plugin not found — capability contract not checked"
+  warn "ai-os-capability not found — capability contract not checked"
 fi
 
 # ====================================================================================
@@ -449,7 +449,7 @@ fi
 # ====================================================================================
 [ "$QUIET" -eq 1 ] || printf '\n'
 if [ "$fails" -eq 0 ] && [ "$warns" -eq 0 ]; then
-  printf '%sclean%s — the public/private/runtime contract holds\n\n' "$G" "$X"
+  printf '%sclean%s — the public/private contract holds\n\n' "$G" "$X"
 elif [ "$fails" -eq 0 ]; then
   printf '%s%d warning(s)%s, no failures — the contract holds\n\n' "$Y" "$warns" "$X"
 else

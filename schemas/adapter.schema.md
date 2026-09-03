@@ -7,10 +7,12 @@ user's data. The contract exists to keep those two facts from blurring.
 > An adapter never owns, never declares, and never reaches into `$AI_OS_HOME` on its own.
 
 **An adapter is not a capability.** An adapter answers *"how does this client reach
-AI-OS?"*; a capability answers *"what can AI-OS do?"*. Capabilities live in `plugins/`
-and are described by `schemas/plugin.schema.md`. Until 2026-08-31 this file was named
-`plugin.schema.md` and `adapters/` manifests lived in `plugins/` — the inversion recorded
-as deferred in `AIOS-001/checkpoint.md` §13.1, resolved by task AIOS-005.
+AI-OS?"*; a capability answers *"what can AI-OS do?"*. Capabilities live in
+`capabilities/` and are described by `schemas/capability.schema.md`. Until 2026-08-31 this
+file was named `plugin.schema.md` and `adapters/` manifests lived in `plugins/` — the
+inversion recorded as deferred in `AIOS-001/checkpoint.md` §13.1, resolved by task
+AIOS-005. The capability surface was then renamed `plugin` -> `capability` on 2026-09-03;
+that rename changed no adapter semantics.
 
 This schema describes what five already-installed clients do today. It was derived from
 observed configuration, not designed in advance — `~/.ai/capabilities.yaml` had been
@@ -40,7 +42,7 @@ enforces: [ ... ]          # core policies this adapter implements
 
 `cli/ai-os-adapter` reads this subset with a hand-written parser, not pyyaml — AI-OS has
 no dependencies. It rejects what it cannot read rather than guessing, because a silently
-mis-parsed manifest is worse than an unreadable one. `cli/ai-os-plugin` and
+mis-parsed manifest is worse than an unreadable one. `cli/ai-os-capability` and
 `cli/ai-os-domain` borrow the same parser, so this holds for every manifest in the repo.
 
 A flow collection may sit on its key's line or on the line(s) below it. These are the same
@@ -179,11 +181,11 @@ and belongs to V0.2.
 ## Enforcement
 
 ```yaml
-enforces: [git]     # implements policies/git.yaml in this client's mechanism
+enforces: [git]     # implements governance/policies/git.yaml in this client's mechanism
 ```
 
 An adapter *implements* a policy. It never restates one, never relaxes one, and never
-defines its own. The policy lives in `policies/`, client-agnostic; the adapter is one
+defines its own. The policy lives in `governance/policies/`, client-agnostic; the adapter is one
 enforcement of it.
 
 ## Compatibility

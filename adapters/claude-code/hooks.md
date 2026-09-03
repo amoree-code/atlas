@@ -7,11 +7,11 @@ does not modify anyone's actual settings.
 | Event | Runs | Enforces / implements |
 |---|---|---|
 | `SessionStart` | memory-symlink repair | keeps a per-directory memory store pointed at the single global one (a Claude Code quirk — its native memory tool is scoped by working directory) |
-| `PreToolUse` (matcher: `Bash`) | `ai-guard-push` | `policies/git.yaml` — inspects every Bash command for a remote-write pattern |
+| `PreToolUse` (matcher: `Bash`) | `ai-guard-push` | `governance/policies/git.yaml` — inspects every Bash command for a remote-write pattern |
 | `SessionEnd` | rules/skills sync | propagates canonical rules and skills to every configured client |
 
 Only `PreToolUse` → `ai-guard-push` is a **policy enforcement** in the AI OS sense — it's
-the Claude Code implementation of `policies/git.yaml`. The other two are this adapter's
+the Claude Code implementation of `governance/policies/git.yaml`. The other two are this adapter's
 own bookkeeping and aren't policies other adapters would need to replicate identically.
 
 ## How the hooks reach the repository

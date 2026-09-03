@@ -1,13 +1,13 @@
 # Memory architecture
 
-## Four kinds of context, never merged
+## Five kinds of context, never merged
 
 | Layer | Answers | Lives | Lifespan |
 |---|---|---|---|
 | **Memory** | *what is true about you and your world?* | `~/.ai-os/user/02-personal/memory/<section>/` | years |
 | **Knowledge** | *what did work teach us that saves effort next time?* | `~/.ai-os/user/05-knowledge/<kind>/` | until superseded |
 | **Session** | *what are we doing right now?* | `~/.ai-os/sessions/` | one session |
-| **Daily** | *what happened today?* | `~/.ai-os/user/01-daily/YYYY/MM/DD/` | one day |
+| **Daily** | *what happened today?* | `~/.ai-os/user/01-daily/YYYY/MM/YYYY-MM-DD/` | one day |
 | **Project memory** | *what is true about ONE project?* | `~/.ai-os/user/04-projects/<project>/memory/` | life of the project |
 
 Global memory is client-independent and project-independent: one store, every client

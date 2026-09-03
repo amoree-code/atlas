@@ -10,13 +10,13 @@ A Run is NOT an agent runtime, a workflow engine, an orchestrator or a planner. 
 decides which capability to use or what to do next — the caller (model/agent) decides;
 Run only checks, bounds, records, verifies and refuses. See schemas/run.schema.md.
 
-It wraps `ai-os plugin invoke` as a subprocess and never reimplements authority or
+It wraps `ai-os capability invoke` as a subprocess and never reimplements authority or
 verification — every enforcement decision Run makes is either (a) a Run-local check
 (scope, budget, no-progress) that can only ever REFUSE a call before invoke ever runs, or
 (b) a direct read of invoke's own exit code and fixed stdout text. Run cannot elevate
 authority: it has no code path that grants anything invoke itself would not have granted.
 
-The approval prompt in `ai-os plugin invoke` is bypassed on purpose: every invocation Run
+The approval prompt in `ai-os capability invoke` is bypassed on purpose: every invocation Run
 makes has its stdin explicitly closed (subprocess.DEVNULL), so `execute-with-approval`
 always resolves to "no terminal" and the Run transitions to needs-approval. Run — being
 unattended-execution machinery — must never become a way to slip past that prompt.
@@ -229,8 +229,8 @@ def cmd_step(args):
         return 5
 
     # --- The one and only place authority/verification is decided: invoke itself. ------
-    plugin_cli = CLI_DIR / "ai-os-plugin"
-    cmdline = [sys.executable, str(plugin_cli), "invoke", capop, "--json", payload]
+    capability_cli = CLI_DIR / "ai-os-capability"
+    cmdline = [sys.executable, str(capability_cli), "invoke", capop, "--json", payload]
     if dry:
         cmdline.append("--dry-run")
     try:

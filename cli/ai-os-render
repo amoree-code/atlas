@@ -30,9 +30,9 @@ if not sys.stdout.isatty():
 
 # The manifest parser already exists and is already tested; reuse it rather than
 # writing a second one that can disagree with the first.
-_pl = {"__file__": str(REPO / "cli" / "ai-os-plugin")}
-exec(compile((REPO / "cli" / "ai-os-plugin").read_text().split("if __name__")[0],
-             "ai-os-plugin", "exec"), _pl)
+_pl = {"__file__": str(REPO / "cli" / "ai-os-capability")}
+exec(compile((REPO / "cli" / "ai-os-capability").read_text().split("if __name__")[0],
+             "ai-os-capability", "exec"), _pl)
 parse = _pl["parse"]
 
 TOKEN = re.compile(r"\{\{\s*(profile|client)\.([a-z0-9_.]+)\s*\}\}", re.I)

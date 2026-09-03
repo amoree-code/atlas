@@ -6,8 +6,8 @@
 
 A DOMAIN is an area of work. It names the outcome kinds that area recognizes and the
 capabilities delivering them needs. A CAPABILITY is something AI-OS can do and lives in
-plugins/ (cli/ai-os-plugin). The arrow runs Domain -> requires -> Capability and never the
-reverse: a domain uses capabilities; it never owns, contains or reimplements one.
+capabilities/ (cli/ai-os-capability). The arrow runs Domain -> requires -> Capability and
+never the reverse: a domain uses capabilities; it never owns, contains or reimplements one.
 
 A DOMAIN IS INERT. No command, no verifier, no provider, no authority rung, no ordering.
 Nothing here executes anything, and there is deliberately no verb that could — list and
@@ -28,7 +28,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 # Overridable so the test suite can point at fixtures instead of the real registry.
 DOMAINS = Path(os.environ.get("AI_OS_DOMAINS", REPO / "domains"))
-PLUGINS = Path(os.environ.get("AI_OS_PLUGINS", REPO / "plugins"))
+# AI_OS_CAPABILITIES is the current name; AI_OS_PLUGINS is honoured for one version.
+CAPS = Path(os.environ.get("AI_OS_CAPABILITIES")
+            or os.environ.get("AI_OS_PLUGINS")
+            or REPO / "capabilities")
+# capability.yaml is the current manifest name; plugin.yaml is accepted for one version.
+MANIFEST_NAMES = ("capability.yaml", "plugin.yaml")
 CORE_CONTRACT_RANGE = (1, 1)
 
 # A declaration is exactly these five keys. Anything else is refused — the allowlist is
@@ -88,9 +93,10 @@ parse, ManifestError = _load_parser()
 
 def known_capabilities():
     """Capability ids present in the registry. Directory names only — nothing is parsed."""
-    if not PLUGINS.is_dir():
+    if not CAPS.is_dir():
         return set()
-    return {d.name for d in PLUGINS.iterdir() if d.is_dir() and (d / "plugin.yaml").exists()}
+    return {d.name for d in CAPS.iterdir()
+            if d.is_dir() and any((d / n).exists() for n in MANIFEST_NAMES)}
 
 
 def validate(did, m, raw="", known=None):
