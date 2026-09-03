@@ -2138,10 +2138,15 @@ grep -Eq 'os\.(system|popen|exec[lv]|spawn)|urlopen|pbcopy|pbpaste|osascript|xdg
 [ $? -ne 0 ];                              chk "no shell-out, clipboard or app-open call" $?
 grep -Eq 'shell[[:space:]]*=[[:space:]]*True' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "never shell=True — the packet can never be a command" $?
-[ "$(grep -c 'subprocess\.run(' "$CLI/ai-os-handoff")" = "1" ]
-chk "exactly one subprocess.run call site in the whole file" $?
+# Two call sites now, and the invariant is about what they can reach, not how many there
+# are: exactly one may leave this machine, and the other is the local read-only resolver
+# that says where a work item lives. Anything beyond those two is a new way out.
+[ "$(grep -c 'subprocess\.run(' "$CLI/ai-os-handoff")" = "2" ]
+chk "exactly two subprocess.run call sites, and no more" $?
 grep -q 'subprocess.run(argv, input=packet' "$CLI/ai-os-handoff"
-chk "  ...taking a list argv and the packet on stdin" $?
+chk "  ...one is the transport, taking a list argv and the packet on stdin" $?
+grep -q 'subprocess.run(\[str(RESOLVER), "work-item", task_id\]' "$CLI/ai-os-handoff"
+chk "  ...the other is the local path resolver, and it only reads" $?
 grep -Eq 'timeout=timeout' "$CLI/ai-os-handoff"; chk "  ...under a timeout" $?
 grep -Eq 'os\.fork|threading\.|multiprocessing\.|Thread\(|Timer\(|nohup|setsid' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "no thread, fork, timer or background worker" $?
@@ -2178,8 +2183,14 @@ grep -q 'TRANSPORTS = Path(os.environ.get("AI_OS_HANDOFF_TRANSPORTS"' "$CLI/ai-o
 chk "the transport is read from a declared registry, never synthesised" $?
 grep -Eiq '\bnext_action\b|def (plan|decide|orchestrat|dispatch|route)' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "no planning, orchestration or dispatch logic" $?
-grep -q 'TASKS = private_path_or_die("work")' "$CLI/ai-os-handoff"
-chk "records are bound to the resolved work root and nowhere else" $?
+# `work` has no single root once records live per project, so a handoff may not join a path
+# onto one. It asks the resolver for the item, by id, and builds no task path of its own.
+grep -q 'RESOLVER = REPO / "cli" / "ai-os-paths"' "$CLI/ai-os-handoff"
+chk "records are bound to the resolver's answer for the item id" $?
+grep -Eq '(AI_OS_HOME|HOME)[^\n]*/[[:space:]]*"tasks"|AI_OS_HOME[^\n]*tasks/' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "  ...and no tasks/ path is constructed anywhere in the file" $?
+grep -q 'TASKS = ' "$CLI/ai-os-handoff"
+[ $? -ne 0 ];                              chk "  ...and no single work root is cached at import time" $?
 
 # =====================================================================================
 t "handoff send: fixtures"
@@ -3082,6 +3093,109 @@ chk "projects, rules and runtime keep the new sides they already had" $?
 roots=$(. "$PA"; printf '%s' "$AIOS_PATH_ROOTS")
 [ "$roots" = "memory knowledge projects work rules runtime" ]
 chk "no new resolver root was invented for daily, professional or templates" $?
+
+# =====================================================================================
+t "private path compatibility: an archived pointer layer is not a live root"
+# Slice 9 is the mirror image of the pilot. Once every tasks/<ID>/ record has moved into
+# per-project work, what is left behind is a compatibility layer of pointers — and by shape
+# alone that is again a half-done move: real content on the new side of `work` while the old
+# side still exists. So the archive declares itself the same way the pilot did, in the two
+# lines the pointer template writes, and the resolver reads the declaration rather than
+# guessing. The test is "does any authoritative record still live here?", not "is every
+# directory a pointer".
+mk_ptr() {   # <dir> <moved-to> — a pointer that renounces authority and names its successor
+  mkdir -p "$1"
+  printf -- '---\nid: X\nstate: done\nproject: p\nmoved_to: %s\nauthoritative: false\n---\n' "$2" > "$1/task.md"
+  printf -- 'moved_to: %s\nstatus: archived-pointer\nauthoritative: false\n' "$2" > "$1/README.md"
+}
+mk_item() {  # <dir> — a real, authoritative work item record
+  mkdir -p "$1"; printf -- '---\nid: X\nstate: active\nproject: p\n---\n' > "$1/task.md"
+}
+
+AR="$TMP/archived"; AI_OS_HOME="$AR" "$CLI/ai-os-init" >/dev/null 2>&1
+# A workspace that has finished the projects move, so the only root still under test is
+# `work`. Leaving user/04-projects/ behind would be a second half-done move and would make
+# `projects` conflict for reasons that have nothing to do with the archive layer.
+rm -rf "$AR/user/04-projects"
+mk_item "$AR/projects/ai-os/work/items/AIOS-014"
+mk_ptr  "$AR/tasks/AIOS-014" "projects/ai-os/work/items/AIOS-014/task.md"
+mkdir -p "$AR/tasks/archive"                       # holds no record at all
+printf 'a pointer index\n' > "$AR/tasks/index.md"  # a file, not a record
+
+[ "$(AI_OS_HOME="$AR" "$PA" layout work)" = "new" ]
+chk "a fully archived tasks/ no longer holds the work root" $?
+AI_OS_HOME="$AR" "$PA" check >/dev/null 2>&1
+[ $? -eq 0 ];                            chk "  ...so check reports no conflicting root" $?
+AI_OS_HOME="$AR" "$PA" get work >/dev/null 2>&1
+[ $? -eq 4 ];                            chk "  ...and work still refuses to name one root" $?
+[ -f "$AR/tasks/AIOS-014/task.md" ] && [ -d "$AR/tasks/archive" ]
+chk "  ...having deleted nothing it read" $?
+
+# One record that has not renounced authority is enough to make the old side live again.
+mk_item "$AR/tasks/AIOS-012"
+[ "$(AI_OS_HOME="$AR" "$PA" layout work)" = "conflict" ]
+chk "one unarchived record makes tasks/ a live root, and a conflict" $?
+AI_OS_HOME="$AR" "$PA" check >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "  ...which check reports" $?
+rm -rf "$AR/tasks/AIOS-012"
+
+# Half a declaration is not a declaration: a pointer must both renounce authority and say
+# where the record went, or it is still a record.
+mkdir -p "$AR/tasks/AIOS-013"
+printf -- '---\nid: X\nauthoritative: false\n---\n' > "$AR/tasks/AIOS-013/task.md"
+[ "$(AI_OS_HOME="$AR" "$PA" layout work)" = "conflict" ]
+chk "authoritative: false without moved_to is not a pointer" $?
+printf -- '---\nid: X\nmoved_to: projects/ai-os/work/items/AIOS-013/task.md\n---\n' > "$AR/tasks/AIOS-013/task.md"
+[ "$(AI_OS_HOME="$AR" "$PA" layout work)" = "conflict" ]
+chk "  ...and moved_to without authoritative: false is not either" $?
+rm -rf "$AR/tasks/AIOS-013"
+
+# Scoped to `work` alone, exactly as the pilot marker is scoped to `projects` and `work`.
+AS="$TMP/archived-scope"; AI_OS_HOME="$AS" "$CLI/ai-os-init" >/dev/null 2>&1
+mkdir -p "$AS/personal/memory"; mk_ptr "$AS/user/02-personal/memory/whatever" "elsewhere/task.md"
+[ "$(AI_OS_HOME="$AS" "$PA" layout memory)" = "conflict" ]
+chk "a pointer under memory exempts nothing" $?
+mkdir -p "$AS/internal/governance/rules"; mk_ptr "$AS/system/rules/whatever" "elsewhere/task.md"
+[ "$(AI_OS_HOME="$AS" "$PA" layout rules)" = "conflict" ]
+chk "  ...and one under rules exempts nothing" $?
+
+# =====================================================================================
+t "private path compatibility: one work item, by id"
+# `work` has no single root once records live per project, so the useful question is not
+# "where is the work root" but "where is this item". The lookup prefers the authoritative
+# record, falls back to a record still sitting in the old layout, and otherwise follows the
+# pointer the archive layer leaves behind. It never merges and never picks between two.
+[ "$(AI_OS_HOME="$AR" "$PA" work-item AIOS-014)" = "$AR/projects/ai-os/work/items/AIOS-014" ]
+chk "an id resolves to its authoritative work item" $?
+
+# A record the glob cannot see is still reachable, because the pointer names where it went.
+mkdir -p "$AR/elsewhere/AIOS-020"; printf -- '---\nid: X\n---\n' > "$AR/elsewhere/AIOS-020/task.md"
+mk_ptr "$AR/tasks/AIOS-020" "elsewhere/AIOS-020/task.md"
+[ "$(AI_OS_HOME="$AR" "$PA" work-item AIOS-020)" = "$AR/elsewhere/AIOS-020" ]
+chk "  ...or through the pointer, when it moved somewhere the glob does not cover" $?
+
+# A record still living in the old layout answers for itself.
+mk_item "$AR/tasks/AIOS-021"
+[ "$(AI_OS_HOME="$AR" "$PA" work-item AIOS-021)" = "$AR/tasks/AIOS-021" ]
+chk "  ...and a record still in tasks/ answers for itself" $?
+rm -rf "$AR/tasks/AIOS-021"
+
+AI_OS_HOME="$AR" "$PA" work-item AIOS-999 >/dev/null 2>&1
+[ $? -eq 4 ];                            chk "an id that exists nowhere is not found, not guessed" $?
+AI_OS_HOME="$AR" "$PA" work-item 'a/b' >/dev/null 2>&1
+[ $? -eq 2 ];                            chk "an id with a path separator is refused" $?
+AI_OS_HOME="$AR" "$PA" work-item '' >/dev/null 2>&1
+[ $? -eq 2 ];                            chk "  ...and so is an empty one" $?
+
+# Two projects claiming one id is a fact about the workspace, not a choice for the resolver.
+mk_item "$AR/projects/other/work/items/AIOS-014"
+out=$(AI_OS_HOME="$AR" "$PA" work-item AIOS-014 2>&1); rc=$?
+[ "$rc" -eq 3 ];                         chk "one id under two projects is a conflict" $?
+echo "$out" | grep -q "more than one project"
+chk "  ...named in the report, with both paths" $?
+[ -d "$AR/projects/ai-os/work/items/AIOS-014" ] && [ -d "$AR/projects/other/work/items/AIOS-014" ]
+chk "  ...and neither side was touched" $?
+rm -rf "$AR/projects/other"
 
 # =====================================================================================
 t "private path compatibility: rewrite maps an old-layout path onto the live one"

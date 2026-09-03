@@ -20,13 +20,14 @@ consistent and the record lands beside the task it belongs to. It is:
   not an agent runtime                  it runs, schedules and dispatches nothing
   not orchestration                     it assigns and triggers no agent
 
-Records are flat Markdown files beside the durable task:
+Records are flat Markdown files beside the durable task record, wherever it lives:
 
-  $AI_OS_HOME/tasks/<ID>/handoff-<handoff_id>.md
+  <the work item for <ID>>/handoff-<handoff_id>.md
 
-There is no global handoff directory, no index, no queue, no bus, no daemon state and no
-background worker. `list` finds records by globbing that one directory, so what you can
-see in the task folder is the whole of what exists.
+`ai-os-paths work-item <ID>` is what says where that is. There is no global handoff
+directory, no index, no queue, no bus, no daemon state and no background worker. `list`
+finds records by globbing that one directory, so what you can see in the item folder is
+the whole of what exists.
 
 ## Sending
 
@@ -65,7 +66,7 @@ valid, so enabling a transport later needs no second approval.
 ## Refusals — each writes nothing and exits non-zero
 
   task id missing or not a safe single path segment
-  task directory does not exist under $AI_OS_HOME/tasks/
+  task id resolves to no work item, or to more than one project
   --to missing, unknown, or naming more than one destination
   --gate missing or outside the template's gate vocabulary
   --scope missing or empty
@@ -92,11 +93,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
 sys.path.insert(0, str(REPO / "cli"))
-from aios_paths import private_path_or_die  # noqa: E402
 
-# Task records are moving into per-project work, where there is no single root any more.
-# Until a handoff learns that lookup it refuses rather than writing to a stale tasks/.
-TASKS = private_path_or_die("work")
+# Task records live in per-project work, where there is no single root to join a path onto.
+# So a handoff never builds a task path: it asks the one resolver where a given id actually
+# is, and takes the same answer every other tool takes. The resolver looks in the new layout
+# first, then at a record still sitting in the old one, then follows the pointer the archive
+# layer leaves behind — and reports rather than guesses when an id is claimed twice.
+RESOLVER = REPO / "cli" / "ai-os-paths"
 ADAPTERS = Path(os.environ.get("AI_OS_ADAPTERS", REPO / "adapters"))
 # Declared transports, exactly as adapters/ and capabilities/ are declared: a registry
 # file in the public repo, overridable for tests, never synthesised at runtime.
@@ -188,7 +191,14 @@ def task_dir(task_id):
         die("a task id is required: ai-os handoff prepare <task-id> ...")
     if not SAFE.fullmatch(task_id):
         die(f"not a task id: {task_id!r} — one path segment of [A-Za-z0-9._-], nothing else")
-    d = TASKS / task_id
+    r = subprocess.run([str(RESOLVER), "work-item", task_id],
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout.strip():
+        for line in r.stderr.splitlines():
+            print(line, file=sys.stderr)
+        die(f"no work item {task_id} — a handoff is bound to a task that already exists",
+            code=4)
+    d = Path(r.stdout.strip())
     if not d.is_dir():
         die(f"no task directory at {d} — a handoff is bound to a task that already exists", code=4)
     return d

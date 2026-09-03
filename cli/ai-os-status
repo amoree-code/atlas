@@ -52,6 +52,10 @@ for s in "memory:${AI_OS_PATH_MEMORY:-}" "knowledge:${AI_OS_PATH_KNOWLEDGE:-}" \
          "projects:${AI_OS_PATH_PROJECTS:-}" "sessions:$AI_OS_HOME/sessions" \
          "daily:$AI_OS_HOME/user/01-daily" "skills:$AI_OS_HOME/skills"; do
   label="${s%%:*}"; d="${s#*:}"
+  # Count through the directory, not at it. Some sections are reachable by a compatibility
+  # symlink while a move settles, and `find` stops at a symlink instead of descending —
+  # which would report an empty section as 0 files rather than as where it actually is.
+  [ -d "$d" ] && d="$(cd "$d" && pwd -P)"
   if [ -z "$d" ]; then printf '  %-12s %sconflict%s — ai-os-paths check\n' "$label" "$R" "$X"
   elif [ -d "$d" ]; then printf '  %-12s %s files\n' "$label" "$(find "$d" -type f -not -path '*/.git/*' | wc -l | tr -d ' ')"
   else printf '  %-12s %smissing%s\n' "$label" "$R" "$X"

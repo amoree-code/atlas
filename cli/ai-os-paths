@@ -24,7 +24,7 @@
 # the user can resolve, and merging them would destroy the evidence of which is current.
 #
 # As a library:  . "$SELF_DIR/ai-os-paths" && d=$(aios_path memory) || handle-the-conflict
-# As a command:  ai-os-paths get|layout|list|env [--sh]|check|rewrite [<root>|<path>]
+# As a command:  ai-os-paths get|layout|list|env [--sh]|check|rewrite|work-item [<arg>]
 #
 # `env` prints raw values for machine parsers — never eval it; `env --sh` is the
 # shell-quoted form, and bash callers should source this file and call aios_paths_export.
@@ -94,6 +94,62 @@ _aios_projects_all_pilot() {  # <projects-dir> -> 0 when every project under it 
   [ "$n" -gt 0 ] && [ "$all" -eq 1 ]
 }
 
+# --- the archived pointer layer --------------------------------------------------------
+# The mirror image, on the old side. Once `tasks/<ID>/` records move into per-project work,
+# the directory they came from is kept for one release as a compatibility layer: each entry
+# is a pointer naming where its record went. That layer is shaped exactly like a root that
+# has not moved yet, so — like a pilot mirror — it declares itself rather than being guessed
+# at, in the two lines the pointer template already writes:
+#
+#   moved_to: projects/<project>/work/items/<ID>/task.md
+#   authoritative: false
+#
+# The test is "does any authoritative record still live here?", not "is every directory a
+# pointer": a directory holding no `task.md` holds no record and cannot make the layer
+# authoritative, which is how an empty `archive/` stays irrelevant. One record that does not
+# renounce authority is enough to make the old side live again, and a conflict.
+# Deliberately narrow: only `work` can be exempt this way, and only the two files a pointer
+# is written into are read, and only their first lines.
+AIOS_ARCHIVE_MOVED='^moved_to:[[:space:]]*[^[:space:]]+'
+AIOS_ARCHIVE_FLAG='^authoritative:[[:space:]]*false[[:space:]]*$'
+
+_aios_is_archived_item() {  # <item-dir> -> 0 when it renounces authority and names its successor
+  local dir="$1" f line i moved flag
+  for f in "$dir/task.md" "$dir/README.md"; do
+    [ -f "$f" ] || continue
+    moved=1; flag=1; i=0
+    while [ "$i" -lt 40 ] && IFS= read -r line; do
+      i=$((i+1))
+      if [[ $line =~ $AIOS_ARCHIVE_MOVED ]]; then moved=0; fi
+      if [[ $line =~ $AIOS_ARCHIVE_FLAG ]];  then flag=0; fi
+    done < "$f"
+    [ "$moved" -eq 0 ] && [ "$flag" -eq 0 ] && return 0
+  done
+  return 1
+}
+
+_aios_tasks_all_archived() {  # <tasks-dir> -> 0 when no authoritative record remains under it
+  local dir="$1" p n=0 restore=1 rc=0
+  shopt -q nullglob && restore=0
+  shopt -s nullglob
+  for p in "$dir"/*/; do
+    [ -f "${p}task.md" ] || continue
+    n=$((n+1))
+    if ! _aios_is_archived_item "${p%/}"; then rc=1; break; fi
+  done
+  [ "$restore" -eq 0 ] || shopt -u nullglob
+  [ "$rc" -eq 0 ] && [ "$n" -gt 0 ]
+}
+
+# Whether the old side of <root> still holds authority. Only `work` can renounce it.
+_aios_old_is_live() {  # <root> <old-side dir>
+  [ -d "$2" ] || return 1
+  case "$1" in
+    work) _aios_tasks_all_archived "$2" && return 1 ;;
+  esac
+  return 0
+}
+
 _aios_is_pilot() {  # <root> <new-side dir> -> 0 when that directory is a marked pilot
   case "$1" in
     work)     _aios_is_pilot_work "$2" ;;
@@ -139,7 +195,7 @@ aios_path_layout() {  # <root> -> new | old | conflict | none   (2 = unknown roo
   new_dirs="$(_aios_new_dirs "$home" "$root")"
   old_dir="$home/$old_rel"
 
-  if [ -n "$new_dirs" ] && [ -d "$old_dir" ]; then
+  if [ -n "$new_dirs" ] && _aios_old_is_live "$root" "$old_dir"; then
     # One directory reachable under both names is a deliberate shim, not a conflict.
     if [ "$(printf '%s\n' "$new_dirs" | wc -l | tr -d ' ')" = "1" ] &&
        [ "$(_aios_rp "$new_dirs")" = "$(_aios_rp "$old_dir")" ]; then
@@ -148,7 +204,7 @@ aios_path_layout() {  # <root> -> new | old | conflict | none   (2 = unknown roo
       printf 'conflict\n'
     fi
   elif [ -n "$new_dirs" ]; then printf 'new\n'
-  elif [ -d "$old_dir" ];  then printf 'old\n'
+  elif _aios_old_is_live "$root" "$old_dir"; then printf 'old\n'
   else                          printf 'none\n'
   fi
 }
@@ -208,6 +264,75 @@ aios_path_rewrite() {  # <workspace-relative path> -> the absolute path in the l
   printf '%s/%s\n' "$home" "$rel"
 }
 
+# --- one work item, by id -------------------------------------------------------------
+# `work` has no single root once records live per project, so the honest primitive is not
+# "where is the work root" but "where is this item". Three places are consulted, in the
+# order that prefers the authoritative record over the compatibility layer:
+#
+#   1. the new layout   projects/*/work/items/<ID>     — authoritative
+#   2. the old layout   tasks/<ID>                     — only while it still holds a record
+#   3. the pointer      tasks/<ID> -> moved_to:        — the bridge the archive layer writes
+#
+# Two projects claiming one id is a conflict, reported rather than resolved: an id is
+# supposed to be unique across the workspace, and picking one would hide that it is not.
+# This is a lookup, not a registry — nothing is indexed, cached or written.
+_aios_moved_to() {  # <item-dir> -> the workspace-relative path its pointer names
+  local dir="$1" f line i
+  for f in "$dir/task.md" "$dir/README.md"; do
+    [ -f "$f" ] || continue
+    i=0
+    while [ "$i" -lt 40 ] && IFS= read -r line; do
+      i=$((i+1))
+      case "$line" in
+        moved_to:*) line="${line#moved_to:}"
+                    printf '%s\n' "${line#"${line%%[![:space:]]*}"}"; return 0 ;;
+      esac
+    done < "$f"
+  done
+  return 1
+}
+
+aios_work_item() {  # <id> -> the absolute directory holding that item's record
+  local id="${1:-}" home hits n p rel target restore=1
+  home="$(aios_paths_home)"
+  case "$id" in
+    ''|*/*|.|..) printf 'ai-os-paths: not a work item id: %s\n' "${id:-<empty>}" >&2; return 2 ;;
+  esac
+
+  shopt -q nullglob && restore=0
+  shopt -s nullglob
+  hits=""
+  for p in "$home"/projects/*/work/items/"$id"; do
+    [ -d "$p" ] && hits="$hits$p"$'\n'
+  done
+  [ "$restore" -eq 0 ] || shopt -u nullglob
+
+  n=$(printf '%s' "$hits" | grep -c . || true)
+  if [ "$n" -gt 1 ]; then
+    printf 'CONFLICT: work item "%s" exists under more than one project\n' "$id" >&2
+    printf '%s' "$hits" | sed 's/^/  /' >&2
+    printf '  An item id is unique across the workspace. Resolve it by hand, then re-run.\n' >&2
+    return 3
+  fi
+  if [ "$n" -eq 1 ]; then printf '%s\n' "${hits%$'\n'}"; return 0; fi
+
+  # Nothing in the new layout. The old directory answers only while it still holds a
+  # record of its own; once it is a pointer, it answers by naming its successor.
+  if [ -d "$home/tasks/$id" ]; then
+    if ! _aios_is_archived_item "$home/tasks/$id"; then
+      printf '%s\n' "$home/tasks/$id"; return 0
+    fi
+    if rel="$(_aios_moved_to "$home/tasks/$id")"; then
+      target="$home/${rel%/task.md}"
+      if [ -d "$target" ]; then printf '%s\n' "$target"; return 0; fi
+      printf 'ai-os-paths: work item "%s" points at %s, which does not exist\n' "$id" "$rel" >&2
+      return 4
+    fi
+  fi
+  printf 'ai-os-paths: no work item "%s" — looked in projects/*/work/items/ and tasks/\n' "$id" >&2
+  return 4
+}
+
 aios_paths_check() {  # report every conflicting root; exit = how many
   local root n=0
   for root in $AIOS_PATH_ROOTS; do
@@ -241,6 +366,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   _aios_need_root() { [ -n "${1:-}" ] || { echo "ai-os-paths: $2 needs a root name" >&2; exit 2; }; }
   case "${1:-list}" in
     get)    _aios_need_root "${2:-}" get;    aios_path "$2" ;;
+    work-item) aios_work_item "${2:-}" ;;
     layout) _aios_need_root "${2:-}" layout; aios_path_layout "$2" ;;
     list)
       for r in $AIOS_PATH_ROOTS; do
