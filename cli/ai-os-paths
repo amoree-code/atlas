@@ -12,6 +12,13 @@
 #   both, two directories     -> CONFLICT. Report and stop.
 #   neither                   -> the old path — still the layout `ai-os init` creates
 #
+# One exception, and it is declared rather than inferred: a *pilot mirror* — content
+# written at a new address so the new shape can be judged, while the old root stays
+# authoritative — says so in its own front matter, pointing back at the record that still
+# owns it:  `migrated_from: tasks/<ID>/task.md`. A marked mirror is not a move, so it never
+# occupies the new side of `projects` or `work` and never makes either root conflict.
+# Nothing else is exempt, and an unmarked directory is still a conflict.
+#
 # It resolves. It never creates, moves, copies, merges or deletes anything, and it never
 # picks a winner when both layouts hold real data: two stores that disagree is a fact only
 # the user can resolve, and merging them would destroy the evidence of which is current.
@@ -46,30 +53,90 @@ aios_paths_home() { printf '%s' "${AI_OS_HOME:-$HOME/.ai-os}"; }
 # Physical path when it exists, the literal otherwise — so a report can still name it.
 _aios_rp() { (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
 
+# --- the pilot exemption --------------------------------------------------------------
+# A pilot mirror is shaped exactly like a half-finished move: real content on the new side
+# of a root whose old side is still live. The only honest way to tell them apart is to let
+# the mirror declare itself, which is what its front matter already does:
+#
+#   migrated_from: tasks/AIOS-014/task.md
+#
+# That line names the record that remains authoritative, in the root that has not moved —
+# evidence the mirror is a copy for review, not the new home of anything. Deliberately
+# narrow: only `projects` and `work` can be exempt, only the three files a work surface is
+# known to index are consulted, and only their front matter. Nothing here reads a ticket
+# tree, and nothing here reads memory or knowledge.
+AIOS_PILOT_MARKER='^migrated_from:[[:space:]]*tasks/[A-Za-z0-9._-]+/task\.md[[:space:]]*$'
+
+_aios_is_pilot_work() {  # <work-dir> -> 0 when it declares itself a mirror of a task record
+  local dir="$1" f line i
+  for f in "$dir/index.md" "$dir/context/current.md" "$dir/context/checkpoint.md"; do
+    [ -f "$f" ] || continue
+    i=0
+    while [ "$i" -lt 40 ] && IFS= read -r line; do
+      i=$((i+1))
+      if [[ $line =~ $AIOS_PILOT_MARKER ]]; then return 0; fi
+    done < "$f"
+  done
+  return 1
+}
+
+_aios_projects_all_pilot() {  # <projects-dir> -> 0 when every project under it is a mirror
+  # One unmarked project is enough to make this a real projects root. The exemption covers
+  # a directory that is nothing but pilot, never one that merely contains a pilot.
+  local dir="$1" p n=0 all=1 restore=1
+  shopt -q nullglob && restore=0
+  shopt -s nullglob
+  for p in "$dir"/*/; do
+    n=$((n+1))
+    _aios_is_pilot_work "${p%/}/work" || { all=0; break; }
+  done
+  [ "$restore" -eq 0 ] || shopt -u nullglob
+  [ "$n" -gt 0 ] && [ "$all" -eq 1 ]
+}
+
+_aios_is_pilot() {  # <root> <new-side dir> -> 0 when that directory is a marked pilot
+  case "$1" in
+    work)     _aios_is_pilot_work "$2" ;;
+    projects) _aios_projects_all_pilot "$2" ;;
+    *) return 1 ;;
+  esac
+}
+
 # Every directory the new side of <root> currently occupies, one per line. Empty = absent.
-_aios_new_dirs() {  # <home> <new-rel>
-  local home="$1" rel="$2" p
+# A marked pilot mirror is skipped: it is content at a new address, not a root that has
+# moved there, so it must neither put the old root out of play nor make it conflict.
+_aios_new_dirs() {  # <home> <root>
+  local home="$1" root="$2" pair rel p
+  pair="$(_aios_pair "$root")" || return 1
+  rel="${pair%% *}"
   case "$rel" in
     *'*'*)
       # A wildcard root has as many homes as there are projects. Nullglob so an unmatched
       # pattern reads as "the new layout is not here yet", never as a literal path.
       local restore=1; shopt -q nullglob && restore=0
       shopt -s nullglob
-      for p in "$home"/$rel; do [ -d "$p" ] && printf '%s\n' "$p"; done
+      for p in "$home"/$rel; do
+        [ -d "$p" ] || continue
+        if _aios_is_pilot "$root" "$p"; then continue; fi
+        printf '%s\n' "$p"
+      done
       [ "$restore" -eq 0 ] || shopt -u nullglob
       ;;
-    *) [ -d "$home/$rel" ] && printf '%s\n' "$home/$rel" ;;
+    *)
+      if [ -d "$home/$rel" ] && ! _aios_is_pilot "$root" "$home/$rel"; then
+        printf '%s\n' "$home/$rel"
+      fi ;;
   esac
   return 0
 }
 
 # --- the answer ---------------------------------------------------------------------
 aios_path_layout() {  # <root> -> new | old | conflict | none   (2 = unknown root)
-  local root="$1" home pair new_rel old_rel new_dirs old_dir
+  local root="$1" home pair old_rel new_dirs old_dir
   home="$(aios_paths_home)"
   pair="$(_aios_pair "$root")" || { printf 'unknown\n'; return 2; }
-  new_rel="${pair%% *}"; old_rel="${pair##* }"
-  new_dirs="$(_aios_new_dirs "$home" "$new_rel")"
+  old_rel="${pair##* }"
+  new_dirs="$(_aios_new_dirs "$home" "$root")"
   old_dir="$home/$old_rel"
 
   if [ -n "$new_dirs" ] && [ -d "$old_dir" ]; then
@@ -87,13 +154,13 @@ aios_path_layout() {  # <root> -> new | old | conflict | none   (2 = unknown roo
 }
 
 aios_path_conflict() {  # <root> -> the report, on stdout
-  local root="$1" home pair new_rel old_rel
+  local root="$1" home pair old_rel
   home="$(aios_paths_home)"
   pair="$(_aios_pair "$root")" || return 2
-  new_rel="${pair%% *}"; old_rel="${pair##* }"
+  old_rel="${pair##* }"
   printf 'CONFLICT: private root "%s" exists in both layouts, as different directories\n' "$root"
   printf '  old  %s\n' "$home/$old_rel"
-  _aios_new_dirs "$home" "$new_rel" | sed 's/^/  new  /'
+  _aios_new_dirs "$home" "$root" | sed 's/^/  new  /'
   printf '  AI-OS will not merge, copy or pick between them. Resolve it by hand, then re-run.\n'
 }
 
@@ -208,7 +275,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     rewrite) [ -n "${2:-}" ] || { echo "ai-os-paths: rewrite needs a workspace-relative path" >&2; exit 2; }
              aios_path_rewrite "$2" ;;
     check)  aios_paths_check; exit $? ;;
-    help|--help|-h) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;
+    help|--help|-h) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) echo "ai-os-paths: unknown command '${1:-}'" >&2
        echo "usage: ai-os-paths get|layout|list|env [--sh]|check|rewrite [<root>|<path>]" >&2
        echo "roots: $AIOS_PATH_ROOTS" >&2; exit 2 ;;

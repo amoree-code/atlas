@@ -2882,6 +2882,102 @@ echo "$out" | grep -q "no single root";      chk "  ...and says why" $?
 chk "  ...while still reporting the layout it found" $?
 
 # =====================================================================================
+t "private path compatibility: a marked pilot mirror is not a move"
+# Slice 8 wrote a project-local pilot at projects/ai-os/work/ so the new work shape could
+# be judged while tasks/AIOS-014/ stayed authoritative. By shape alone that is exactly a
+# half-done move — real content on the new side of two roots whose old sides are still
+# live — so the resolver called `projects` and `work` conflicts and doctor, init and
+# handoff all refused. A mirror declares itself in its own front matter; the resolver reads
+# that declaration instead of guessing.
+mk_pilot() {  # <file> — front matter pointing back at the record that still owns this
+  printf -- '---\nproject: ai-os\nmigrated_from: tasks/AIOS-014/task.md\nrole: pilot mirror\n---\n' > "$1"
+}
+
+PP="$TMP/pilot"; AI_OS_HOME="$PP" "$CLI/ai-os-init" >/dev/null 2>&1
+mkdir -p "$PP/tasks/AIOS-014"
+echo "the authoritative record" > "$PP/tasks/AIOS-014/task.md"
+echo "the real projects root"   > "$PP/user/04-projects/registry.md"
+# What doctor says about this workspace before the pilot exists, so the pilot's own effect
+# on it can be isolated from whatever else a bare fixture workspace fails.
+doc_before=$(AI_OS_HOME="$PP" "$CLI/ai-os-doctor" --quiet 2>&1); doc_rc_before=$?
+
+mkdir -p "$PP/projects/ai-os/work/context"
+mk_pilot "$PP/projects/ai-os/work/index.md"
+mk_pilot "$PP/projects/ai-os/work/context/current.md"
+
+[ "$(AI_OS_HOME="$PP" "$PA" layout projects)" = "old" ]
+chk "a marked pilot does not make the projects root conflict" $?
+[ "$(AI_OS_HOME="$PP" "$PA" layout work)" = "old" ]
+chk "  ...nor the work root" $?
+[ "$(AI_OS_HOME="$PP" "$PA" get projects)" = "$PP/user/04-projects" ]
+chk "projects still resolves to the root that is still authoritative" $?
+[ "$(AI_OS_HOME="$PP" "$PA" get work)" = "$PP/tasks" ]
+chk "  ...and work to tasks/, not to the mirror" $?
+AI_OS_HOME="$PP" "$PA" check >/dev/null 2>&1
+[ $? -eq 0 ];                            chk "check reports no conflicting root" $?
+
+doc_after=$(AI_OS_HOME="$PP" "$CLI/ai-os-doctor" --quiet 2>&1); doc_rc_after=$?
+echo "$doc_after" | grep -q "exists in both layouts"
+[ $? -ne 0 ];                            chk "doctor no longer fails on the pilot" $?
+[ "$doc_rc_after" -eq "$doc_rc_before" ] && [ "$doc_after" = "$doc_before" ]
+chk "  ...and the pilot changes nothing else it reports" $?
+AI_OS_HOME="$PP" "$CLI/ai-os-handoff" list AIOS-014 >/dev/null 2>&1
+chk "handoff starts up instead of dying on an unresolvable work root" $?
+
+before=$(find "$PP" | sort | shasum)
+out=$(AI_OS_HOME="$PP" "$CLI/ai-os-init" 2>&1); rc=$?
+[ "$rc" -eq 0 ];                         chk "init runs instead of refusing" $?
+echo "$out" | grep -q "REFUSED"
+[ $? -ne 0 ];                            chk "  ...without a layout refusal" $?
+[ "$(find "$PP" | sort | shasum)" = "$before" ]
+chk "  ...having created, moved and deleted nothing" $?
+grep -q "the authoritative record" "$PP/tasks/AIOS-014/task.md"
+chk "  ...and left the old task record alone" $?
+
+# The exemption is evidence, not a hole. Without the declaration the same tree is a
+# half-done move again, and is reported as one.
+PU="$TMP/pilot-unmarked"
+mkdir -p "$PU/user/04-projects" "$PU/tasks" "$PU/projects/ai-os/work/context"
+echo "work, with nothing said about where it came from" > "$PU/projects/ai-os/work/index.md"
+[ "$(AI_OS_HOME="$PU" "$PA" layout work)" = "conflict" ]
+chk "an unmarked project-local work directory still conflicts" $?
+[ "$(AI_OS_HOME="$PU" "$PA" layout projects)" = "conflict" ]
+chk "  ...and so does the projects root holding it" $?
+# A marker has to point back into the root that has not moved. Anything else is prose.
+printf -- '---\nmigrated_from: user/04-projects/ai-os\n---\n' > "$PU/projects/ai-os/work/index.md"
+[ "$(AI_OS_HOME="$PU" "$PA" layout work)" = "conflict" ]
+chk "  ...and a migrated_from that names no task record exempts nothing" $?
+
+# A pilot beside a real project is a real projects root: the exemption covers a directory
+# that is nothing but pilot, never one that merely contains a pilot.
+PM="$TMP/pilot-mixed"
+mkdir -p "$PM/user/04-projects" "$PM/tasks" "$PM/projects/ai-os/work" "$PM/projects/rccm"
+mk_pilot "$PM/projects/ai-os/work/index.md"
+echo "a real project record" > "$PM/projects/rccm/project.md"
+[ "$(AI_OS_HOME="$PM" "$PA" layout projects)" = "conflict" ]
+chk "a new projects/ carrying real data still conflicts" $?
+[ "$(AI_OS_HOME="$PM" "$PA" layout work)" = "old" ]
+chk "  ...while the marked mirror inside it stays exempt" $?
+
+# Scoped to the two roots a project-local pilot can occupy. Elsewhere the line is text.
+PO="$TMP/pilot-other-roots"
+mkdir -p "$PO/user/memory" "$PO/user/02-personal/memory" \
+         "$PO/user/knowledge" "$PO/user/05-knowledge" \
+         "$PO/internal/governance/rules" "$PO/system/rules" \
+         "$PO/internal/runtime" "$PO/runtime"
+mk_pilot "$PO/user/memory/index.md";               echo old > "$PO/user/02-personal/memory/i.md"
+mk_pilot "$PO/user/knowledge/index.md";            echo old > "$PO/user/05-knowledge/i.md"
+mk_pilot "$PO/internal/governance/rules/index.md"; echo old > "$PO/system/rules/i.md"
+mk_pilot "$PO/internal/runtime/index.md";          echo old > "$PO/runtime/i.md"
+n=0
+for r in memory knowledge rules runtime; do
+  [ "$(AI_OS_HOME="$PO" "$PA" layout "$r")" = "conflict" ] || n=$((n+1))
+done
+[ "$n" -eq 0 ];  chk "a marker cannot exempt memory, knowledge, rules or runtime" $?
+AI_OS_HOME="$PO" "$PA" check >/dev/null 2>&1
+[ $? -eq 4 ];    chk "  ...and all four are still reported" $?
+
+# =====================================================================================
 t "private path compatibility: rewrite maps an old-layout path onto the live one"
 [ "$("$PA" rewrite user/05-knowledge/README.md)" = "$PW/user/05-knowledge/README.md" ]
 chk "a path under an unmoved root is unchanged" $?
