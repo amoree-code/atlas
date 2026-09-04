@@ -6,7 +6,7 @@
 |---|---|---|---|
 | **Memory** | *what is true about you and your world?* | `~/.ai-os/personal/memory/<section>/` | years |
 | **Knowledge** | *what did work teach us that saves effort next time?* | `~/.ai-os/personal/knowledge/<kind>/` | until superseded |
-| **Session** | *what are we doing right now?* | `~/.ai-os/sessions/` | one session |
+| **Session** | *what are we doing right now?* | `~/.ai-os/internal/sessions/` | one session |
 | **Daily** | *what happened today?* | `~/.ai-os/personal/daily/YYYY/MM/YYYY-MM-DD/` | one day |
 | **Project memory** | *what is true about ONE project?* | `~/.ai-os/projects/<project>/memory/` | life of the project |
 

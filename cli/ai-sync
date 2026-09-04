@@ -2,7 +2,7 @@
 """ai-sync — propagate the canonical AI environment to installed AI clients.
 
 Sources of truth:
-  rules   $AI_OS_HOME/system/rules/*.md
+  rules   <private workspace>/rules/*.md   resolved by cli/ai-os-paths, never hardcoded
   skills  <ai-os>/skills/*/SKILL.md   canonical bodies, with {{profile.*}}/{{client.*}}
   clients <ai-os>/adapters/*/adapter.yaml  the registry — no client is hardcoded here
 
@@ -36,6 +36,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from aios_paths import private_path_or_die  # noqa: E402
 
 RULES = private_path_or_die("rules")
+# The rules root as it is shown to a human: in the generated block that every client
+# reads, and in `status`. Derived from RULES so a moved workspace cannot leave the
+# instruction "edit <path>" pointing at a directory that no longer exists.
+RULES_DISP = str(RULES).replace(str(HOME), "~")
 RUNTIME = private_path_or_die("runtime")
 STATE = RUNTIME / "state" / "state.json"
 BACKUPS = RUNTIME / "backups"
@@ -51,7 +55,7 @@ LEGACY_DISABLED = AI / "sync" / "DISABLED"
 MARK_BEGIN = "<!-- ai-sync:generated -->"
 MARK_END = "<!-- ai-sync:end -->"
 
-PROFILE = AI_OS_HOME / "system" / "config" / "profile.yaml"
+PROFILE = private_path_or_die("config") / "profile.yaml"
 
 
 def _find_repo():
@@ -158,8 +162,8 @@ def canonical_skills():
 
 def header(client, src_hash):
     return (f"{MARK_BEGIN}\n"
-            f"<!-- source: $AI_OS_HOME/system/rules/  |  hash: {src_hash}  |  client: {client} -->\n"
-            f"<!-- DO NOT EDIT INSIDE THE MARKERS. Edit $AI_OS_HOME/system/rules/*.md and run: ai-sync sync -->\n"
+            f"<!-- source: {RULES_DISP}/  |  hash: {src_hash}  |  client: {client} -->\n"
+            f"<!-- DO NOT EDIT INSIDE THE MARKERS. Edit {RULES_DISP}/*.md and run: ai-sync sync -->\n"
             f"<!-- Anything you write OUTSIDE the markers is yours and is preserved. -->\n")
 
 def render(client, rules, cfg=None):
@@ -174,7 +178,7 @@ def render(client, rules, cfg=None):
     conv = cfg.get("conv") or {}
     title = conv.get("rules_title") or "# Global rules (AGENTS.md)"
     body = [header(client, h), title, "",
-            "Canonical source: `$AI_OS_HOME/system/rules/`. Shared by every AI client on this machine.",
+            f"Canonical source: `{RULES_DISP}/`. Shared by every AI client on this machine.",
             "", rules, ""]
     frag = conv.get("rules_fragment")
     if frag and cfg.get("dir"):
@@ -318,7 +322,7 @@ def cmd_status(_):
     rules = canonical_rules(); rh = sha(rules); skills = canonical_skills()
     st = load_state()
     mode = (C["r"] + "AUTO-SYNC DISABLED" + C["x"]) if DISABLED.exists() else "auto-sync on"
-    src = str(RULES).replace(str(HOME), "~")
+    src = RULES_DISP
     print("\n  canonical  {}   rules-hash {}   {} skills   {}\n"
           .format(src, rh, len(skills), mode))
     print(f"  {'CLIENT':<10} {'RULES':<12} {'SKILLS':<10} LAST SYNC")

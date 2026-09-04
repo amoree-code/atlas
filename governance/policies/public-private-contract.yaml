@@ -40,7 +40,7 @@ layers:
     must_never_contain:
       - personal memory
       - personal knowledge
-      - personal projects, sessions or daily records
+      - personal projects, session records or daily records
       - identity, names, emails, phone numbers
       - credentials, tokens, API keys
       - private repository names
@@ -54,7 +54,7 @@ layers:
       - memory
       - knowledge
       - projects
-      - sessions
+      - internal/sessions
       - daily records
       - personal configuration
       - personal skills

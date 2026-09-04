@@ -22,7 +22,7 @@ skip it and say so.
 ## Steps
 
 1. **Session record.** Write to
-   `~/.ai-os/sessions/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d-%H%M)-<project>-<topic>.md`
+   `~/.ai-os/internal/sessions/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d-%H%M)-<project>-<topic>.md`
    using `{{profile.templates_dir}}/session.md`. `<topic>` is 1–3
    kebab-case words. Create the month folder if needed. Fill **Files changed** from
    `git status --short` and `git log` for this session — not from memory. Omit any

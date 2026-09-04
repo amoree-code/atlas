@@ -83,6 +83,8 @@ root_of() {
     skills)             echo skills ;;
     agents)             echo agents ;;
     scripts)            echo helpers ;;
+    user/00-inbox)      echo inbox ;;
+    sessions)           echo sessions ;;
   esac
 }
 

@@ -31,6 +31,6 @@ merged.
 ## What this means in practice
 
 Nothing under `runtime/` should be treated as a record worth keeping. If something there
-turns out to matter beyond one execution, that is a sign it belongs in `sessions/`,
+turns out to matter beyond one execution, that is a sign it belongs in `internal/sessions/`,
 `personal/knowledge/`, or a task record instead — not a reason to stop discarding
 `runtime/` freely.

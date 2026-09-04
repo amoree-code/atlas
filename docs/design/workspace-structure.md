@@ -6,7 +6,7 @@ The layout itself is in `docs/use/workspace.md`. This is the reasoning behind it
 
 A user should be able to hold the whole workspace in their head with three ideas:
 `personal/` is long-lived personal material, `projects/` is work state, and `internal/`
-is AI-OS machinery. `sessions/` remains top-level for now and is planned to move under
+is AI-OS machinery, and that now includes `sessions/`, which moved under
 `internal/` after the heavy migration settles. They should not need to understand an
 orchestrator, an event bus, or an adapter's internals to use the system. That is the
 "simple for the user, not simple internally" principle in `docs/design/decisions.md`:
@@ -19,8 +19,8 @@ AI-OS extension points, not daily personal material and not project-owned work.
 ## Why numbered sections
 
 The old numbered `user/` sections were retired by the private layout move. The current
-daily-use roots are readable names: `personal/`, `projects/`, `sessions/` and
-`internal/`.
+daily-use roots are readable names: `personal/` and `projects/`, with everything the
+system owns — session records included — under `internal/`.
 
 ## Memory's eight sections, knowledge's seven kinds
 

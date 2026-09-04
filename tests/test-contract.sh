@@ -33,9 +33,9 @@ out=$("$CLI/ai-os-init" 2>&1); rc=$?
 chk "exits 0" $rc
 for s in internal/config internal/governance/rules internal/governance/policies \
          internal/schemas internal/extensions/skills internal/extensions/agents \
-         internal/helpers internal/runtime user/00-inbox personal/daily \
+         internal/helpers internal/runtime personal/inbox personal/daily \
          personal/memory personal/professional personal/knowledge personal/templates \
-         projects sessions; do
+         projects internal/sessions; do
   [ -d "$W/$s" ]; chk "created $s/" $?
 done
 [ -d "$W/personal/memory/education" ];  chk "created the 8 memory sections" $?
@@ -2141,12 +2141,12 @@ grep -Eq 'shell[[:space:]]*=[[:space:]]*True' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "never shell=True — the packet can never be a command" $?
 # Two call sites now, and the invariant is about what they can reach, not how many there
 # are: exactly one may leave this machine, and the other is the local read-only resolver
-# that says where a work item lives. Anything beyond those two is a new way out.
+# that says where a ticket lives. Anything beyond those two is a new way out.
 [ "$(grep -c 'subprocess\.run(' "$CLI/ai-os-handoff")" = "2" ]
 chk "exactly two subprocess.run call sites, and no more" $?
 grep -q 'subprocess.run(argv, input=packet' "$CLI/ai-os-handoff"
 chk "  ...one is the transport, taking a list argv and the packet on stdin" $?
-grep -q 'subprocess.run(\[str(RESOLVER), "work-item", task_id\]' "$CLI/ai-os-handoff"
+grep -q 'subprocess.run(\[str(RESOLVER), "ticket", task_id\]' "$CLI/ai-os-handoff"
 chk "  ...the other is the local path resolver, and it only reads" $?
 grep -Eq 'timeout=timeout' "$CLI/ai-os-handoff"; chk "  ...under a timeout" $?
 grep -Eq 'os\.fork|threading\.|multiprocessing\.|Thread\(|Timer\(|nohup|setsid' "$CLI/ai-os-handoff"
@@ -2184,14 +2184,14 @@ grep -q 'TRANSPORTS = Path(os.environ.get("AI_OS_HANDOFF_TRANSPORTS"' "$CLI/ai-o
 chk "the transport is read from a declared registry, never synthesised" $?
 grep -Eiq '\bnext_action\b|def (plan|decide|orchestrat|dispatch|route)' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "no planning, orchestration or dispatch logic" $?
-# `work` has no single root once records live per project, so a handoff may not join a path
+# `tickets` has no single root once records live per project, so a handoff may not join a path
 # onto one. It asks the resolver for the item, by id, and builds no task path of its own.
 grep -q 'RESOLVER = REPO / "cli" / "ai-os-paths"' "$CLI/ai-os-handoff"
 chk "records are bound to the resolver's answer for the item id" $?
 grep -Eq '(AI_OS_HOME|HOME)[^\n]*/[[:space:]]*"tasks"|AI_OS_HOME[^\n]*tasks/' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "  ...and no tasks/ path is constructed anywhere in the file" $?
 grep -q 'TASKS = ' "$CLI/ai-os-handoff"
-[ $? -ne 0 ];                              chk "  ...and no single work root is cached at import time" $?
+[ $? -ne 0 ];                              chk "  ...and no single ticket root is cached at import time" $?
 
 # =====================================================================================
 t "handoff send: fixtures"
@@ -2835,7 +2835,7 @@ t "private path compatibility: the resolver answers for every moving root"
 # that must never be resolved by guessing. See cli/ai-os-paths.
 PA="$CLI/ai-os-paths"
 [ -x "$PA" ];                             chk "cli/ai-os-paths exists and is executable" $?
-for r in memory knowledge projects work rules runtime \
+for r in memory knowledge projects tickets rules runtime \
          config policies daily templates skills agents helpers schemas professional; do
   "$PA" layout "$r" >/dev/null 2>&1;      chk "  declares the '$r' root" $?
 done
@@ -2885,21 +2885,21 @@ mkdir -p "$PW/system/rules"
 
 # =====================================================================================
 t "private path compatibility: a root with no single home refuses rather than guesses"
-# tasks/ does not survive as one directory — it becomes per-project work/. Handing a
+# tasks/ does not survive as one directory — it becomes per-project tickets/. Handing a
 # caller the first match would be a guess dressed as an answer.
-PW2="$TMP/paths-work"; mkdir -p "$PW2/projects/ai-os/work" "$PW2/projects/rccm/work"
-out=$(AI_OS_HOME="$PW2" "$PA" get work 2>&1); rc=$?
-[ "$rc" -eq 4 ];                             chk "the new layout has no single work root -> exit 4" $?
+PW2="$TMP/paths-work"; mkdir -p "$PW2/projects/ai-os/tickets" "$PW2/projects/rccm/tickets"
+out=$(AI_OS_HOME="$PW2" "$PA" get tickets 2>&1); rc=$?
+[ "$rc" -eq 4 ];                             chk "the new layout has no single ticket root -> exit 4" $?
 echo "$out" | grep -q "no single root";      chk "  ...and says why" $?
-[ "$(AI_OS_HOME="$PW2" "$PA" layout work)" = "new" ]
+[ "$(AI_OS_HOME="$PW2" "$PA" layout tickets)" = "new" ]
 chk "  ...while still reporting the layout it found" $?
 
 # =====================================================================================
 t "private path compatibility: a marked pilot mirror is not a move"
-# Slice 8 wrote a project-local pilot at projects/ai-os/work/ so the new work shape could
-# be judged while tasks/AIOS-014/ stayed authoritative. By shape alone that is exactly a
-# half-done move — real content on the new side of two roots whose old sides are still
-# live — so the resolver called `projects` and `work` conflicts and doctor, init and
+# Slice 8 wrote a project-local pilot at projects/ai-os/tickets/ so the new ticket shape
+# could be judged while tasks/AIOS-014/ stayed authoritative. By shape alone that is exactly
+# a half-done move — real content on the new side of two roots whose old sides are still
+# live — so the resolver called `projects` and `tickets` conflicts and doctor, init and
 # handoff all refused. A mirror declares itself in its own front matter; the resolver reads
 # that declaration instead of guessing.
 mk_pilot() {  # <file> — front matter pointing back at the record that still owns this
@@ -2916,18 +2916,18 @@ echo "the real projects root"   > "$PP/user/04-projects/registry.md"
 # on it can be isolated from whatever else a bare fixture workspace fails.
 doc_before=$(AI_OS_HOME="$PP" "$CLI/ai-os-doctor" --quiet 2>&1); doc_rc_before=$?
 
-mkdir -p "$PP/projects/ai-os/work/context"
-mk_pilot "$PP/projects/ai-os/work/index.md"
-mk_pilot "$PP/projects/ai-os/work/context/current.md"
+mkdir -p "$PP/projects/ai-os/tickets" "$PP/projects/ai-os/context"
+mk_pilot "$PP/projects/ai-os/index.md"
+mk_pilot "$PP/projects/ai-os/context/current.md"
 
 [ "$(AI_OS_HOME="$PP" "$PA" layout projects)" = "old" ]
 chk "a marked pilot does not make the projects root conflict" $?
-[ "$(AI_OS_HOME="$PP" "$PA" layout work)" = "old" ]
-chk "  ...nor the work root" $?
+[ "$(AI_OS_HOME="$PP" "$PA" layout tickets)" = "old" ]
+chk "  ...nor the ticket root" $?
 [ "$(AI_OS_HOME="$PP" "$PA" get projects)" = "$PP/user/04-projects" ]
 chk "projects still resolves to the root that is still authoritative" $?
-[ "$(AI_OS_HOME="$PP" "$PA" get work)" = "$PP/tasks" ]
-chk "  ...and work to tasks/, not to the mirror" $?
+[ "$(AI_OS_HOME="$PP" "$PA" get tickets)" = "$PP/tasks" ]
+chk "  ...and tickets to tasks/, not to the mirror" $?
 AI_OS_HOME="$PP" "$PA" check >/dev/null 2>&1
 [ $? -eq 0 ];                            chk "check reports no conflicting root" $?
 
@@ -2937,16 +2937,16 @@ echo "$doc_after" | grep -q "exists in both layouts"
 [ "$doc_rc_after" -eq "$doc_rc_before" ] && [ "$doc_after" = "$doc_before" ]
 chk "  ...and the pilot changes nothing else it reports" $?
 AI_OS_HOME="$PP" "$CLI/ai-os-handoff" list AIOS-014 >/dev/null 2>&1
-chk "handoff starts up instead of dying on an unresolvable work root" $?
+chk "handoff starts up instead of dying on an unresolvable ticket root" $?
 
 task_before=$(shasum "$PP/tasks/AIOS-014/task.md")
-pilot_before=$(shasum "$PP/projects/ai-os/work/index.md" "$PP/projects/ai-os/work/context/current.md")
+pilot_before=$(shasum "$PP/projects/ai-os/index.md" "$PP/projects/ai-os/context/current.md")
 out=$(AI_OS_HOME="$PP" "$CLI/ai-os-init" 2>&1); rc=$?
 [ "$rc" -eq 0 ];                         chk "init runs instead of refusing" $?
 echo "$out" | grep -q "REFUSED"
 [ $? -ne 0 ];                            chk "  ...without a layout refusal" $?
 [ "$task_before" = "$(shasum "$PP/tasks/AIOS-014/task.md")" ] &&
-  [ "$pilot_before" = "$(shasum "$PP/projects/ai-os/work/index.md" "$PP/projects/ai-os/work/context/current.md")" ]
+  [ "$pilot_before" = "$(shasum "$PP/projects/ai-os/index.md" "$PP/projects/ai-os/context/current.md")" ]
 chk "  ...without touching the old record or pilot marker" $?
 grep -q "the authoritative record" "$PP/tasks/AIOS-014/task.md"
 chk "  ...and left the old task record alone" $?
@@ -2954,26 +2954,26 @@ chk "  ...and left the old task record alone" $?
 # The exemption is evidence, not a hole. Without the declaration the same tree is a
 # half-done move again, and is reported as one.
 PU="$TMP/pilot-unmarked"
-mkdir -p "$PU/user/04-projects" "$PU/tasks" "$PU/projects/ai-os/work/context"
-echo "work, with nothing said about where it came from" > "$PU/projects/ai-os/work/index.md"
-[ "$(AI_OS_HOME="$PU" "$PA" layout work)" = "conflict" ]
-chk "an unmarked project-local work directory still conflicts" $?
+mkdir -p "$PU/user/04-projects" "$PU/tasks" "$PU/projects/ai-os/tickets"
+echo "work, with nothing said about where it came from" > "$PU/projects/ai-os/index.md"
+[ "$(AI_OS_HOME="$PU" "$PA" layout tickets)" = "conflict" ]
+chk "an unmarked project-local ticket directory still conflicts" $?
 [ "$(AI_OS_HOME="$PU" "$PA" layout projects)" = "conflict" ]
 chk "  ...and so does the projects root holding it" $?
 # A marker has to point back into the root that has not moved. Anything else is prose.
-printf -- '---\nmigrated_from: user/04-projects/ai-os\n---\n' > "$PU/projects/ai-os/work/index.md"
-[ "$(AI_OS_HOME="$PU" "$PA" layout work)" = "conflict" ]
+printf -- '---\nmigrated_from: user/04-projects/ai-os\n---\n' > "$PU/projects/ai-os/index.md"
+[ "$(AI_OS_HOME="$PU" "$PA" layout tickets)" = "conflict" ]
 chk "  ...and a migrated_from that names no task record exempts nothing" $?
 
 # A pilot beside a real project is a real projects root: the exemption covers a directory
 # that is nothing but pilot, never one that merely contains a pilot.
 PM="$TMP/pilot-mixed"
-mkdir -p "$PM/user/04-projects" "$PM/tasks" "$PM/projects/ai-os/work" "$PM/projects/rccm"
-mk_pilot "$PM/projects/ai-os/work/index.md"
+mkdir -p "$PM/user/04-projects" "$PM/tasks" "$PM/projects/ai-os/tickets" "$PM/projects/rccm"
+mk_pilot "$PM/projects/ai-os/index.md"
 echo "a real project record" > "$PM/projects/rccm/project.md"
 [ "$(AI_OS_HOME="$PM" "$PA" layout projects)" = "conflict" ]
 chk "a new projects/ carrying real data still conflicts" $?
-[ "$(AI_OS_HOME="$PM" "$PA" layout work)" = "old" ]
+[ "$(AI_OS_HOME="$PM" "$PA" layout tickets)" = "old" ]
 chk "  ...while the marked mirror inside it stays exempt" $?
 
 # Scoped to the two roots a project-local pilot can occupy. Elsewhere the line is text.
@@ -3071,18 +3071,18 @@ chk "  ...refused, naming the new side by its personal/ path" $?
 
 # --- the retarget changed the two paths and nothing else ----------------------------------
 # The pilot exemption is the one narrow hole in conflict detection, and it stayed exactly
-# as narrow: still only `projects` and `work`, still nothing under the personal/ roots.
+# as narrow: still only `projects` and `tickets`, still nothing under the personal/ roots.
 RP="$TMP/retarget-pilot"
-mkdir -p "$RP/user/04-projects" "$RP/tasks" "$RP/projects/ai-os/work/context"
-mk_pilot "$RP/projects/ai-os/work/index.md"
-[ "$(AI_OS_HOME="$RP" "$PA" layout work)" = "old" ] &&
+mkdir -p "$RP/user/04-projects" "$RP/tasks" "$RP/projects/ai-os/tickets"
+mk_pilot "$RP/projects/ai-os/index.md"
+[ "$(AI_OS_HOME="$RP" "$PA" layout tickets)" = "old" ] &&
   [ "$(AI_OS_HOME="$RP" "$PA" layout projects)" = "old" ]
 chk "a marked project-local pilot still does not conflict after the retarget" $?
-echo "unmarked work" > "$RP/projects/ai-os/work/index.md"
-[ "$(AI_OS_HOME="$RP" "$PA" layout work)" = "conflict" ] &&
+echo "unmarked work" > "$RP/projects/ai-os/index.md"
+[ "$(AI_OS_HOME="$RP" "$PA" layout tickets)" = "conflict" ] &&
   [ "$(AI_OS_HOME="$RP" "$PA" layout projects)" = "conflict" ]
 chk "  ...and an unmarked one still does" $?
-mk_pilot "$RP/projects/ai-os/work/index.md"
+mk_pilot "$RP/projects/ai-os/index.md"
 mkdir -p "$RP/user/02-personal/memory" "$RP/personal/memory"
 mk_pilot "$RP/personal/memory/index.md"
 [ "$(AI_OS_HOME="$RP" "$PA" layout memory)" = "conflict" ]
@@ -3100,21 +3100,63 @@ chk "projects, rules and runtime keep the new sides they already had" $?
 # Slice 10A added them, with config, policies, skills, agents and helpers, because those
 # are exactly the seven the live CLI tools still named literally. Slice 10B adds schemas
 # and professional so init can create the final private layout without spelling the old
-# section names downstream. See cli/ai-os-paths.
+# section names downstream. `inbox` came when 00-inbox moved to personal/, because
+# ai-os-memory quarantines rescued data into it; `sessions` came last, when session
+# records moved under internal/ — the owner's recorded reason being that they are AI-OS
+# operational records, not daily-use personal material. See cli/ai-os-paths.
 roots=$(. "$PA"; printf '%s' "$AIOS_PATH_ROOTS")
-[ "$roots" = "memory knowledge projects work rules runtime config policies daily templates skills agents helpers schemas professional" ]
-chk "the resolver root list is exactly the fifteen declared roots" $?
+[ "$roots" = "memory knowledge projects tickets rules runtime config policies daily templates skills agents helpers schemas professional inbox sessions" ]
+chk "the resolver root list is exactly the seventeen declared roots" $?
 case " $roots " in *" schemas "*) true ;; *) false ;; esac
 chk "  ...including schemas" $?
 case " $roots " in *" professional "*) true ;; *) false ;; esac
 chk "  ...including professional" $?
 
 # =====================================================================================
+t "private path compatibility: inbox and the handoff template"
+# The last two sections Slice 9 was not asked to move. `inbox` earns a resolver root
+# because `ai-os-memory` quarantines rescued data into it; the handoff template does not,
+# because nothing reads it — `ai-os-handoff` names it in prose for a human and never opens
+# it, and a root with no caller would widen conflict detection for nobody.
+IB="$TMP/inbox-root"; AI_OS_HOME="$IB" "$CLI/ai-os-init" >/dev/null 2>&1
+[ "$(AI_OS_HOME="$IB" "$PA" get inbox)" = "$IB/personal/inbox" ]
+chk "init seeds inbox at its new address" $?
+[ "$(AI_OS_HOME="$IB" "$PA" layout inbox)" = "new" ]
+chk "  ...and the resolver reports it as the new layout" $?
+IO="$TMP/inbox-old"; mkdir -p "$IO/user/00-inbox"
+[ "$(AI_OS_HOME="$IO" "$PA" get inbox)" = "$IO/user/00-inbox" ]
+chk "an old-layout workspace still resolves inbox to user/00-inbox" $?
+mkdir -p "$IO/personal/inbox"
+[ "$(AI_OS_HOME="$IO" "$PA" layout inbox)" = "conflict" ]
+chk "  ...and both at once is a conflict, not a merge" $?
+grep -q 'private_path_or_die("inbox")' "$CLI/ai-os-memory"
+chk "memory quarantines through the resolver, not a literal path" $?
+grep -Eq 'AI_OS_HOME[^\n]*(user|00-inbox)' "$CLI/ai-os-memory"
+[ $? -ne 0 ];                            chk "  ...and names no old inbox path at all" $?
+grep -q 'TEMPLATE_REF = "\$AI_OS_HOME/internal/templates/agent-handoff.md"' "$CLI/ai-os-handoff"
+chk "the handoff template reference names its real location" $?
+python3 - "$CLI/ai-os-handoff" <<'PYEOF'
+import ast, pathlib, sys
+# TEMPLATE_REF must stay a bare string: the moment something opens it, it needs a root.
+src = pathlib.Path(sys.argv[1]).read_text()
+tree = ast.parse(src)
+used = [n for n in ast.walk(tree)
+        if isinstance(n, ast.Name) and n.id == "TEMPLATE_REF"
+        and not isinstance(getattr(n, "ctx", None), ast.Store)]
+sys.exit(1 if any(
+    isinstance(p, ast.Call) and any(u is a for a in getattr(p, "args", []))
+    for p in ast.walk(tree) for u in used
+    if isinstance(p, ast.Call) and isinstance(p.func, ast.Attribute)
+    and p.func.attr in {"open", "read_text", "read_bytes"}) else 0)
+PYEOF
+chk "  ...and is never opened, so it needs no resolver root" $?
+
+# =====================================================================================
 t "private path compatibility: an archived pointer layer is not a live root"
 # Slice 9 is the mirror image of the pilot. Once every tasks/<ID>/ record has moved into
-# per-project work, what is left behind is a compatibility layer of pointers — and by shape
-# alone that is again a half-done move: real content on the new side of `work` while the old
-# side still exists. So the archive declares itself the same way the pilot did, in the two
+# per-project tickets, what is left behind is a compatibility layer of pointers — and by
+# shape alone that is again a half-done move: real content on the new side of `tickets`
+# while the old side still exists. So the archive declares itself the same way the pilot did, in the two
 # lines the pointer template writes, and the resolver reads the declaration rather than
 # guessing. The test is "does any authoritative record still live here?", not "is every
 # directory a pointer".
@@ -3123,32 +3165,32 @@ mk_ptr() {   # <dir> <moved-to> — a pointer that renounces authority and names
   printf -- '---\nid: X\nstate: done\nproject: p\nmoved_to: %s\nauthoritative: false\n---\n' "$2" > "$1/task.md"
   printf -- 'moved_to: %s\nstatus: archived-pointer\nauthoritative: false\n' "$2" > "$1/README.md"
 }
-mk_item() {  # <dir> — a real, authoritative work item record
+mk_item() {  # <dir> — a real, authoritative ticket record
   mkdir -p "$1"; printf -- '---\nid: X\nstate: active\nproject: p\n---\n' > "$1/task.md"
 }
 
 AR="$TMP/archived"; AI_OS_HOME="$AR" "$CLI/ai-os-init" >/dev/null 2>&1
 # A workspace that has finished the projects move, so the only root still under test is
-# `work`. Leaving user/04-projects/ behind would be a second half-done move and would make
+# `tickets`. Leaving user/04-projects/ behind would be a second half-done move and would make
 # `projects` conflict for reasons that have nothing to do with the archive layer.
 rm -rf "$AR/user/04-projects"
-mk_item "$AR/projects/ai-os/work/items/AIOS-014"
-mk_ptr  "$AR/tasks/AIOS-014" "projects/ai-os/work/items/AIOS-014/task.md"
+mk_item "$AR/projects/ai-os/tickets/AIOS-014"
+mk_ptr  "$AR/tasks/AIOS-014" "projects/ai-os/tickets/AIOS-014/task.md"
 mkdir -p "$AR/tasks/archive"                       # holds no record at all
 printf 'a pointer index\n' > "$AR/tasks/index.md"  # a file, not a record
 
-[ "$(AI_OS_HOME="$AR" "$PA" layout work)" = "new" ]
-chk "a fully archived tasks/ no longer holds the work root" $?
+[ "$(AI_OS_HOME="$AR" "$PA" layout tickets)" = "new" ]
+chk "a fully archived tasks/ no longer holds the ticket root" $?
 AI_OS_HOME="$AR" "$PA" check >/dev/null 2>&1
 [ $? -eq 0 ];                            chk "  ...so check reports no conflicting root" $?
-AI_OS_HOME="$AR" "$PA" get work >/dev/null 2>&1
-[ $? -eq 4 ];                            chk "  ...and work still refuses to name one root" $?
+AI_OS_HOME="$AR" "$PA" get tickets >/dev/null 2>&1
+[ $? -eq 4 ];                            chk "  ...and tickets still refuses to name one root" $?
 [ -f "$AR/tasks/AIOS-014/task.md" ] && [ -d "$AR/tasks/archive" ]
 chk "  ...having deleted nothing it read" $?
 
 # One record that has not renounced authority is enough to make the old side live again.
 mk_item "$AR/tasks/AIOS-012"
-[ "$(AI_OS_HOME="$AR" "$PA" layout work)" = "conflict" ]
+[ "$(AI_OS_HOME="$AR" "$PA" layout tickets)" = "conflict" ]
 chk "one unarchived record makes tasks/ a live root, and a conflict" $?
 AI_OS_HOME="$AR" "$PA" check >/dev/null 2>&1
 [ $? -ne 0 ];                            chk "  ...which check reports" $?
@@ -3158,14 +3200,14 @@ rm -rf "$AR/tasks/AIOS-012"
 # where the record went, or it is still a record.
 mkdir -p "$AR/tasks/AIOS-013"
 printf -- '---\nid: X\nauthoritative: false\n---\n' > "$AR/tasks/AIOS-013/task.md"
-[ "$(AI_OS_HOME="$AR" "$PA" layout work)" = "conflict" ]
+[ "$(AI_OS_HOME="$AR" "$PA" layout tickets)" = "conflict" ]
 chk "authoritative: false without moved_to is not a pointer" $?
-printf -- '---\nid: X\nmoved_to: projects/ai-os/work/items/AIOS-013/task.md\n---\n' > "$AR/tasks/AIOS-013/task.md"
-[ "$(AI_OS_HOME="$AR" "$PA" layout work)" = "conflict" ]
+printf -- '---\nid: X\nmoved_to: projects/ai-os/tickets/AIOS-013/task.md\n---\n' > "$AR/tasks/AIOS-013/task.md"
+[ "$(AI_OS_HOME="$AR" "$PA" layout tickets)" = "conflict" ]
 chk "  ...and moved_to without authoritative: false is not either" $?
 rm -rf "$AR/tasks/AIOS-013"
 
-# Scoped to `work` alone, exactly as the pilot marker is scoped to `projects` and `work`.
+# Scoped to `tickets` alone, exactly as the pilot marker is scoped to `projects` and `tickets`.
 AS="$TMP/archived-scope"; AI_OS_HOME="$AS" "$CLI/ai-os-init" >/dev/null 2>&1
 mkdir -p "$AS/personal/memory"; mk_ptr "$AS/user/02-personal/memory/whatever" "elsewhere/task.md"
 [ "$(AI_OS_HOME="$AS" "$PA" layout memory)" = "conflict" ]
@@ -3175,40 +3217,40 @@ mkdir -p "$AS/internal/governance/rules"; mk_ptr "$AS/system/rules/whatever" "el
 chk "  ...and one under rules exempts nothing" $?
 
 # =====================================================================================
-t "private path compatibility: one work item, by id"
-# `work` has no single root once records live per project, so the useful question is not
-# "where is the work root" but "where is this item". The lookup prefers the authoritative
+t "private path compatibility: one ticket, by id"
+# `tickets` has no single root once records live per project, so the useful question is not
+# "where is the ticket root" but "where is this ticket". The lookup prefers the authoritative
 # record, falls back to a record still sitting in the old layout, and otherwise follows the
 # pointer the archive layer leaves behind. It never merges and never picks between two.
-[ "$(AI_OS_HOME="$AR" "$PA" work-item AIOS-014)" = "$AR/projects/ai-os/work/items/AIOS-014" ]
-chk "an id resolves to its authoritative work item" $?
+[ "$(AI_OS_HOME="$AR" "$PA" ticket AIOS-014)" = "$AR/projects/ai-os/tickets/AIOS-014" ]
+chk "an id resolves to its authoritative ticket" $?
 
 # A record the glob cannot see is still reachable, because the pointer names where it went.
 mkdir -p "$AR/elsewhere/AIOS-020"; printf -- '---\nid: X\n---\n' > "$AR/elsewhere/AIOS-020/task.md"
 mk_ptr "$AR/tasks/AIOS-020" "elsewhere/AIOS-020/task.md"
-[ "$(AI_OS_HOME="$AR" "$PA" work-item AIOS-020)" = "$AR/elsewhere/AIOS-020" ]
+[ "$(AI_OS_HOME="$AR" "$PA" ticket AIOS-020)" = "$AR/elsewhere/AIOS-020" ]
 chk "  ...or through the pointer, when it moved somewhere the glob does not cover" $?
 
 # A record still living in the old layout answers for itself.
 mk_item "$AR/tasks/AIOS-021"
-[ "$(AI_OS_HOME="$AR" "$PA" work-item AIOS-021)" = "$AR/tasks/AIOS-021" ]
+[ "$(AI_OS_HOME="$AR" "$PA" ticket AIOS-021)" = "$AR/tasks/AIOS-021" ]
 chk "  ...and a record still in tasks/ answers for itself" $?
 rm -rf "$AR/tasks/AIOS-021"
 
-AI_OS_HOME="$AR" "$PA" work-item AIOS-999 >/dev/null 2>&1
+AI_OS_HOME="$AR" "$PA" ticket AIOS-999 >/dev/null 2>&1
 [ $? -eq 4 ];                            chk "an id that exists nowhere is not found, not guessed" $?
-AI_OS_HOME="$AR" "$PA" work-item 'a/b' >/dev/null 2>&1
+AI_OS_HOME="$AR" "$PA" ticket 'a/b' >/dev/null 2>&1
 [ $? -eq 2 ];                            chk "an id with a path separator is refused" $?
-AI_OS_HOME="$AR" "$PA" work-item '' >/dev/null 2>&1
+AI_OS_HOME="$AR" "$PA" ticket '' >/dev/null 2>&1
 [ $? -eq 2 ];                            chk "  ...and so is an empty one" $?
 
 # Two projects claiming one id is a fact about the workspace, not a choice for the resolver.
-mk_item "$AR/projects/other/work/items/AIOS-014"
-out=$(AI_OS_HOME="$AR" "$PA" work-item AIOS-014 2>&1); rc=$?
+mk_item "$AR/projects/other/tickets/AIOS-014"
+out=$(AI_OS_HOME="$AR" "$PA" ticket AIOS-014 2>&1); rc=$?
 [ "$rc" -eq 3 ];                         chk "one id under two projects is a conflict" $?
 echo "$out" | grep -q "more than one project"
 chk "  ...named in the report, with both paths" $?
-[ -d "$AR/projects/ai-os/work/items/AIOS-014" ] && [ -d "$AR/projects/other/work/items/AIOS-014" ]
+[ -d "$AR/projects/ai-os/tickets/AIOS-014" ] && [ -d "$AR/projects/other/tickets/AIOS-014" ]
 chk "  ...and neither side was touched" $?
 rm -rf "$AR/projects/other"
 
@@ -3341,10 +3383,11 @@ chk "  ...and names both when it finds neither" $?
 D_NEW="$TMP/doctor-new"
 mkdir -p "$D_NEW/personal/memory" "$D_NEW/personal/knowledge" "$D_NEW/projects" \
          "$D_NEW/personal/professional" "$D_NEW/personal/daily" "$D_NEW/personal/templates" \
-         "$D_NEW/sessions" "$D_NEW/internal/schemas" "$D_NEW/internal/runtime" \
+         "$D_NEW/internal/sessions" "$D_NEW/internal/schemas" "$D_NEW/internal/runtime" \
          "$D_NEW/internal/config" "$D_NEW/internal/governance/rules" \
          "$D_NEW/internal/governance/policies" "$D_NEW/internal/extensions/skills" \
-         "$D_NEW/internal/extensions/agents" "$D_NEW/internal/helpers"
+         "$D_NEW/internal/extensions/agents" "$D_NEW/internal/helpers" \
+         "$D_NEW/personal/inbox"
 dout=$(AI_OS_HOME="$D_NEW" "$CLI/ai-os-doctor" --quiet 2>&1)
 printf '%s' "$dout" | grep -q "missing section"
 [ $? -ne 0 ];           chk "doctor reports no missing section on a fully moved workspace" $?
@@ -3360,8 +3403,12 @@ chk "a path under a moved root is rewritten onto the new one" $?
 WR_OLD="$TMP/rewrite-old"; mkdir -p "$WR_OLD/system/config"
 [ "$(AI_OS_HOME="$WR_OLD" "$PA" rewrite internal/config/settings.yaml)" = "$WR_OLD/system/config/settings.yaml" ]
 chk "a new-layout template path is rewritten onto an old workspace" $?
-[ "$("$PA" rewrite sessions/2026/x.md)" = "$PW/sessions/2026/x.md" ]
+[ "$("$PA" rewrite graphify-out/graph.json)" = "$PW/graphify-out/graph.json" ]
 chk "a path under no moving root is left alone" $?
+# sessions used to be that example. It became a root when session records moved under
+# internal/, so the same call now has to come back rewritten rather than untouched.
+[ "$("$PA" rewrite sessions/2026/x.md)" = "$PW/internal/sessions/2026/x.md" ]
+chk "  ...and a path under sessions is rewritten now that it is one" $?
 "$PA" rewrite runtime/state/state.json >/dev/null 2>&1
 [ $? -eq 3 ];                                chk "a conflicting root propagates the refusal" $?
 

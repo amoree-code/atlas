@@ -13,7 +13,7 @@ never leaves your machine.
 | | Lives | Owns |
 |---|---|---|
 | **Public** (this repo) | wherever you clone it | code, CLI, adapters, capabilities, domain declarations, policies, schemas, public skills, templates, docs, tests |
-| **Private** (your workspace) | `$AI_OS_HOME`, default `~/.ai-os` | your memory, projects, knowledge, sessions, daily records, system config, and `runtime/` for transient generated state |
+| **Private** (your workspace) | `$AI_OS_HOME`, default `~/.ai-os` | your memory, projects, knowledge, daily records, and `internal/` for system config, session records and transient generated state |
 
 **Access is not ownership.** The CLI reads and writes your workspace constantly — that is
 its job. It does not follow that this repository owns, tracks, or may publish any of it.
@@ -31,7 +31,7 @@ flowchart TB
     subgraph PRIV["PRIVATE — $AI_OS_HOME"]
         direction TB
         R1["memory · knowledge"]
-        R2["projects · sessions"]
+        R2["projects · internal"]
         R3["never published"]
     end
     PUB -->|"seeds once, at init"| PRIV

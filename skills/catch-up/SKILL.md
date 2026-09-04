@@ -11,13 +11,13 @@ Rebuild context so the user never has to re-explain. Answer in the chat; write n
 
 1. **Identify the project.** In order:
    - `pwd` — inside a repo under `~/Documents/`? That's it.
-   - Otherwise the most recent session record: `ls -t ~/.ai-os/sessions/*/*/*.md | head -1`
+   - Otherwise the most recent session record: `ls -t ~/.ai-os/internal/sessions/*/*/*.md | head -1`
    - Otherwise ask, offering the `active` rows from the registry.
 
 2. **Read, in this order, stopping when you can answer:**
    - the repo's `{{client.project_context}}` (its **Status** section)
    - the newest session record for that project:
-     `ls -t ~/.ai-os/sessions/*/*/*-<project>-*.md | head -1`
+     `ls -t ~/.ai-os/internal/sessions/*/*/*-<project>-*.md | head -1`
    - that project's rows in `~/.ai-os/projects/tasks.md`
    - `git -C <repo> log --oneline -5` and `git -C <repo> status --short`
 

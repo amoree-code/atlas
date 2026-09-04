@@ -11,9 +11,10 @@ keeping them apart, so the boundary is written down here and checked by `ai-os d
         │  reads and writes your data forever after.  Access, not ownership.
         ▼
   PRIVATE — $AI_OS_HOME, default ~/.ai-os
-  memory · knowledge · projects · sessions · daily · config · skills
+  personal/ memory · knowledge · daily      projects/ registry · work
         │
-        └─ runtime/   transient generated state — gitignored
+        └─ internal/  config · governance · schemas · extensions · sessions
+                      helpers · runtime (transient, gitignored)
 ```
 
 `runtime/` is a directory *inside* the private workspace, owned by the workspace. It is
@@ -36,7 +37,7 @@ Every confusion this contract prevents is a version of forgetting that sentence.
 | | Root | Owns |
 |---|---|---|
 | **Public** | the `ai-os` repo, wherever you clone it | code · CLI · adapters · capabilities · domain declarations · policies · schemas · public skills · templates · docs · tests |
-| **Private** | `$AI_OS_HOME`, default `~/.ai-os` | memory · knowledge · projects · sessions · daily records · personal config · personal skills · identity · preferences · transient runtime state |
+| **Private** | `$AI_OS_HOME`, default `~/.ai-os` | memory · knowledge · projects and their work · daily records · session records · personal config · personal skills · identity · preferences · transient runtime state |
 
 The public repository must never contain personal memory or knowledge, project or session
 history, identity, names, emails, phone numbers, credentials, private repository names,

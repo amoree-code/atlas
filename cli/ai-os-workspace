@@ -97,7 +97,7 @@ cmd_snapshot() {
 
   # Which areas did this task touch? Keeps the log readable at a glance.
   local areas="" a
-  for a in config memory knowledge projects sessions daily skills; do
+  for a in personal projects internal; do
     git -C "$W" diff --cached --name-only | grep -q "^$a/" && areas="${areas}${areas:+, }$a"
   done
 

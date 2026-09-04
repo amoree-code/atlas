@@ -39,5 +39,5 @@ one that would otherwise be repeated.
 ## Not knowledge
 - Facts about you → `../memory/`
 - What happened today → `../daily/`
-- What happened in one session → `../sessions/`
+- What happened in one session → `../../internal/sessions/`
 - Where every project lives → `../projects/registry.md`

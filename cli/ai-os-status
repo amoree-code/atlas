@@ -49,7 +49,7 @@ aios_paths_export
 
 printf '\n%sworkspace%s\n' "$B" "$X"
 for s in "memory:${AI_OS_PATH_MEMORY:-}" "knowledge:${AI_OS_PATH_KNOWLEDGE:-}" \
-         "projects:${AI_OS_PATH_PROJECTS:-}" "sessions:$AI_OS_HOME/sessions" \
+         "projects:${AI_OS_PATH_PROJECTS:-}" "sessions:${AI_OS_PATH_SESSIONS:-}" \
          "daily:${AI_OS_PATH_DAILY:-}" "skills:${AI_OS_PATH_SKILLS:-}"; do
   label="${s%%:*}"; d="${s#*:}"
   # Count through the directory, not at it. Some sections are reachable by a compatibility
@@ -65,7 +65,7 @@ done
 # layout is the normal case today and does not need a line about it.
 moved=""
 for r in memory knowledge projects work rules runtime \
-         config policies daily templates skills agents helpers schemas professional; do
+         config policies daily templates skills agents helpers schemas professional inbox sessions; do
   v="AI_OS_LAYOUT_$(printf '%s' "$r" | tr 'a-z' 'A-Z')"; l="${!v:-old}"
   [ "$l" = "old" ] || moved="${moved}${moved:+ }$r=$l"
 done

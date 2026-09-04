@@ -95,9 +95,6 @@ fi
 head "workspace"
 # ====================================================================================
 missing=""
-for s in sessions; do
-  [ -d "$AI_OS_HOME/$s" ] || missing="$missing $s"
-done
 # The roots that are mid-migration are asked for, not assumed. A root present in both
 # layouts as two different directories is a FAIL, never a silent choice between them:
 # two stores that disagree is exactly the state a doctor exists to surface.
@@ -105,7 +102,7 @@ done
 # path with a space in it stays one path instead of becoming a command and its arguments.
 . "$SELF_DIR/ai-os-paths"
 aios_paths_export
-for r in memory knowledge projects rules runtime config policies daily templates skills agents helpers schemas professional; do
+for r in memory knowledge projects rules runtime config policies daily templates skills agents helpers schemas professional inbox sessions; do
   u="$(printf '%s' "$r" | tr 'a-z' 'A-Z')"; pv="AI_OS_PATH_$u"; lv="AI_OS_LAYOUT_$u"
   case "${!lv:-none}" in
     conflict) fail "private root '$r' exists in both layouts, as different directories"

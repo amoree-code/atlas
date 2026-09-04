@@ -22,11 +22,11 @@ consistent and the record lands beside the task it belongs to. It is:
 
 Records are flat Markdown files beside the durable task record, wherever it lives:
 
-  <the work item for <ID>>/handoff-<handoff_id>.md
+  <the ticket for <ID>>/handoff-<handoff_id>.md
 
-`ai-os-paths work-item <ID>` is what says where that is. There is no global handoff
+`ai-os-paths ticket <ID>` is what says where that is. There is no global handoff
 directory, no index, no queue, no bus, no daemon state and no background worker. `list`
-finds records by globbing that one directory, so what you can see in the item folder is
+finds records by globbing that one directory, so what you can see in the ticket folder is
 the whole of what exists.
 
 ## Sending
@@ -108,7 +108,7 @@ TRANSPORTS = Path(os.environ.get("AI_OS_HANDOFF_TRANSPORTS",
 
 # The canonical written form. Read for reference by a human, never parsed by this file —
 # the packet below mirrors its sections, and the private copy is where the full rules live.
-TEMPLATE_REF = "$AI_OS_HOME/system/templates/agent-handoff.md"
+TEMPLATE_REF = "$AI_OS_HOME/internal/templates/agent-handoff.md"
 
 # The template's gate vocabulary, verbatim. A gate has to be a closed set: a later approval
 # is valid only for one exact gate, and "exact" means nothing against free text.
@@ -191,12 +191,12 @@ def task_dir(task_id):
         die("a task id is required: ai-os handoff prepare <task-id> ...")
     if not SAFE.fullmatch(task_id):
         die(f"not a task id: {task_id!r} — one path segment of [A-Za-z0-9._-], nothing else")
-    r = subprocess.run([str(RESOLVER), "work-item", task_id],
+    r = subprocess.run([str(RESOLVER), "ticket", task_id],
                        capture_output=True, text=True)
     if r.returncode != 0 or not r.stdout.strip():
         for line in r.stderr.splitlines():
             print(line, file=sys.stderr)
-        die(f"no work item {task_id} — a handoff is bound to a task that already exists",
+        die(f"no ticket {task_id} — a handoff is bound to a task that already exists",
             code=4)
     d = Path(r.stdout.strip())
     if not d.is_dir():

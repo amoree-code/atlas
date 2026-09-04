@@ -27,7 +27,7 @@ never owns it, never publishes it, and never overwrites what you have put there.
 │   └── 00-inbox/            unprocessed, waiting for triage
 ├── mcp/                  reserved — global MCP namespace, not created by init
 ├── plugins/              reserved — your capability configuration, not created by init
-└── sessions/             session records (planned to move under internal/ later)
+└── internal/sessions/    session records — one per sitting, immutable once written
 ```
 
 `personal/` is the human-facing durable layer, `projects/` is project-owned work, and

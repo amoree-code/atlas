@@ -55,7 +55,7 @@ KNOW_ROOT = private_path_or_die("knowledge")
 # layer is retired; the default is inside the private workspace, which is where a
 # user's rescued data belongs.
 QUARANTINE = Path(os.environ.get(
-    "AI_OS_MEMORY_QUARANTINE", AI_OS_HOME / "user" / "00-inbox" / "quarantined-memory"))
+    "AI_OS_MEMORY_QUARANTINE", private_path_or_die("inbox") / "quarantined-memory"))
 
 SECTIONS = ["identity", "education", "career", "projects", "goals",
             "travel", "preferences", "interests"]

@@ -11,5 +11,6 @@
   "[python]": { "editor.formatOnSave": false },
   "yaml.format.enable": false,
   "files.trimTrailingWhitespace": false,
-  "files.insertFinalNewline": false
+  "files.insertFinalNewline": false,
+  "liveServer.settings.port": 5501
 }

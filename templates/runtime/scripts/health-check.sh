@@ -26,10 +26,10 @@ for f in "$MEMORY/MEMORY.md" "$MEMORY/README.md" "$KNOWLEDGE/README.md" \
          "$PROJECTS/registry.md" "$PROJECTS/tasks.md"; do
   [ -f "$W/$f" ] && ok "$f" || bad "missing $W/$f"
 done
-# user/00-inbox and sessions/ have not moved yet.
+# Every private root has moved; these are the post-migration locations.
 for d in user/00-inbox "$DAILY" "$PROFESSIONAL" "$TEMPLATES" \
          "$RULES" "$POLICIES" "$SCHEMAS" \
-         sessions "$SKILLS" "$AGENTS" "$HELPERS" "$RUNTIME"; do
+         internal/sessions "$SKILLS" "$AGENTS" "$HELPERS" "$RUNTIME"; do
   [ -d "$W/$d" ] && ok "$d/" || bad "missing $W/$d/"
 done
 for d in identity education career projects goals travel preferences interests; do

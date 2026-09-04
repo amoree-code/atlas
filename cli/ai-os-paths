@@ -16,7 +16,7 @@
 # written at a new address so the new shape can be judged, while the old root stays
 # authoritative — says so in its own front matter, pointing back at the record that still
 # owns it:  `migrated_from: tasks/<ID>/task.md`. A marked mirror is not a move, so it never
-# occupies the new side of `projects` or `work` and never makes either root conflict.
+# occupies the new side of `projects` or `tickets` and never makes either root conflict.
 # Nothing else is exempt, and an unmarked directory is still a conflict.
 #
 # It resolves. It never creates, moves, copies, merges or deletes anything, and it never
@@ -24,7 +24,7 @@
 # the user can resolve, and merging them would destroy the evidence of which is current.
 #
 # As a library:  . "$SELF_DIR/ai-os-paths" && d=$(aios_path memory) || handle-the-conflict
-# As a command:  ai-os-paths get|layout|list|env [--sh]|check|rewrite|work-item [<arg>]
+# As a command:  ai-os-paths get|layout|list|env [--sh]|check|rewrite|ticket [<arg>]
 #
 # `env` prints raw values for machine parsers — never eval it; `env --sh` is the
 # shell-quoted form, and bash callers should source this file and call aios_paths_export.
@@ -40,14 +40,14 @@
 # ai-os-onboard, ai-os-hook, ai-os-render, ai-os-privacy-scan, ai-os-doctor and
 # ai-os-status named them literally. Giving them a resolver root is what makes those
 # shims removable later — see roadmap.md "What Slice 10 has to remove".
-AIOS_PATH_ROOTS="memory knowledge projects work rules runtime config policies daily templates skills agents helpers schemas professional"
+AIOS_PATH_ROOTS="memory knowledge projects tickets rules runtime config policies daily templates skills agents helpers schemas professional inbox sessions"
 
 _aios_pair() {  # <root> -> "<new-rel> <old-rel>"
   case "$1" in
     memory)    echo "personal/memory                 user/02-personal/memory" ;;
     knowledge) echo "personal/knowledge              user/05-knowledge" ;;
     projects)  echo "projects                        user/04-projects" ;;
-    work)      echo "projects/*/work                 tasks" ;;
+    tickets)   echo "projects/*/tickets              tasks" ;;
     rules)     echo "internal/governance/rules       system/rules" ;;
     runtime)   echo "internal/runtime                runtime" ;;
     config)    echo "internal/config                 system/config" ;;
@@ -59,6 +59,8 @@ _aios_pair() {  # <root> -> "<new-rel> <old-rel>"
     helpers)   echo "internal/helpers                scripts" ;;
     schemas)   echo "internal/schemas                system/schemas" ;;
     professional) echo "personal/professional          user/03-professional" ;;
+    inbox)     echo "personal/inbox                  user/00-inbox" ;;
+    sessions)  echo "internal/sessions               sessions" ;;
     *) return 1 ;;
   esac
 }
@@ -77,14 +79,15 @@ _aios_rp() { (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
 #
 # That line names the record that remains authoritative, in the root that has not moved —
 # evidence the mirror is a copy for review, not the new home of anything. Deliberately
-# narrow: only `projects` and `work` can be exempt, only the three files a work surface is
-# known to index are consulted, and only their front matter. Nothing here reads a ticket
-# tree, and nothing here reads memory or knowledge.
+# narrow: only `projects` and `tickets` can be exempt, only the three files a project's
+# board is known to index are consulted, and only their front matter. Nothing here reads
+# memory or knowledge.
 AIOS_PILOT_MARKER='^migrated_from:[[:space:]]*tasks/[A-Za-z0-9._-]+/task\.md[[:space:]]*$'
 
-_aios_is_pilot_work() {  # <work-dir> -> 0 when it declares itself a mirror of a task record
-  local dir="$1" f line i
-  for f in "$dir/index.md" "$dir/context/current.md" "$dir/context/checkpoint.md"; do
+_aios_is_pilot_ticket() {  # <tickets-dir> -> 0 when the project declares itself a mirror of a task record
+  local dir="$1" project f line i
+  project="$(dirname "$dir")"
+  for f in "$project/index.md" "$project/context/current.md" "$project/context/checkpoint.md"; do
     [ -f "$f" ] || continue
     i=0
     while [ "$i" -lt 40 ] && IFS= read -r line; do
@@ -103,32 +106,32 @@ _aios_projects_all_pilot() {  # <projects-dir> -> 0 when every project under it 
   shopt -s nullglob
   for p in "$dir"/*/; do
     n=$((n+1))
-    _aios_is_pilot_work "${p%/}/work" || { all=0; break; }
+    _aios_is_pilot_ticket "${p%/}/tickets" || { all=0; break; }
   done
   [ "$restore" -eq 0 ] || shopt -u nullglob
   [ "$n" -gt 0 ] && [ "$all" -eq 1 ]
 }
 
 # --- the archived pointer layer --------------------------------------------------------
-# The mirror image, on the old side. Once `tasks/<ID>/` records move into per-project work,
+# The mirror image, on the old side. Once `tasks/<ID>/` records move into per-project tickets,
 # the directory they came from is kept for one release as a compatibility layer: each entry
 # is a pointer naming where its record went. That layer is shaped exactly like a root that
 # has not moved yet, so — like a pilot mirror — it declares itself rather than being guessed
 # at, in the two lines the pointer template already writes:
 #
-#   moved_to: projects/<project>/work/items/<ID>/task.md
+#   moved_to: projects/<project>/tickets/<ID>/task.md
 #   authoritative: false
 #
 # The test is "does any authoritative record still live here?", not "is every directory a
 # pointer": a directory holding no `task.md` holds no record and cannot make the layer
 # authoritative, which is how an empty `archive/` stays irrelevant. One record that does not
 # renounce authority is enough to make the old side live again, and a conflict.
-# Deliberately narrow: only `work` can be exempt this way, and only the two files a pointer
-# is written into are read, and only their first lines.
+# Deliberately narrow: only `tickets` can be exempt this way, and only the two files a
+# pointer is written into are read, and only their first lines.
 AIOS_ARCHIVE_MOVED='^moved_to:[[:space:]]*[^[:space:]]+'
 AIOS_ARCHIVE_FLAG='^authoritative:[[:space:]]*false[[:space:]]*$'
 
-_aios_is_archived_item() {  # <item-dir> -> 0 when it renounces authority and names its successor
+_aios_is_archived_ticket() {  # <ticket-dir> -> 0 when it renounces authority and names its successor
   local dir="$1" f line i moved flag
   for f in "$dir/task.md" "$dir/README.md"; do
     [ -f "$f" ] || continue
@@ -150,24 +153,24 @@ _aios_tasks_all_archived() {  # <tasks-dir> -> 0 when no authoritative record re
   for p in "$dir"/*/; do
     [ -f "${p}task.md" ] || continue
     n=$((n+1))
-    if ! _aios_is_archived_item "${p%/}"; then rc=1; break; fi
+    if ! _aios_is_archived_ticket "${p%/}"; then rc=1; break; fi
   done
   [ "$restore" -eq 0 ] || shopt -u nullglob
   [ "$rc" -eq 0 ] && [ "$n" -gt 0 ]
 }
 
-# Whether the old side of <root> still holds authority. Only `work` can renounce it.
+# Whether the old side of <root> still holds authority. Only `tickets` can renounce it.
 _aios_old_is_live() {  # <root> <old-side dir>
   [ -d "$2" ] || return 1
   case "$1" in
-    work) _aios_tasks_all_archived "$2" && return 1 ;;
+    tickets) _aios_tasks_all_archived "$2" && return 1 ;;
   esac
   return 0
 }
 
 _aios_is_pilot() {  # <root> <new-side dir> -> 0 when that directory is a marked pilot
   case "$1" in
-    work)     _aios_is_pilot_work "$2" ;;
+    tickets)  _aios_is_pilot_ticket "$2" ;;
     projects) _aios_projects_all_pilot "$2" ;;
     *) return 1 ;;
   esac
@@ -250,7 +253,7 @@ aios_path() {  # <root> -> the absolute path, on stdout
       case "$new_rel" in
         *'*'*)
           printf 'ai-os-paths: "%s" has no single root in the new layout (%s)\n' "$root" "$new_rel" >&2
-          printf '             its records moved into per-project work; teach the caller the new lookup\n' >&2
+          printf '             its records moved into per-project tickets; teach the caller the new lookup\n' >&2
           return 4 ;;
       esac
       printf '%s\n' "$home/$new_rel" ;;
@@ -294,19 +297,19 @@ aios_path_rewrite() {  # <workspace-relative path> -> the absolute path in the l
   printf '%s/%s\n' "$home" "$rel"
 }
 
-# --- one work item, by id -------------------------------------------------------------
-# `work` has no single root once records live per project, so the honest primitive is not
-# "where is the work root" but "where is this item". Three places are consulted, in the
-# order that prefers the authoritative record over the compatibility layer:
+# --- one ticket, by id ------------------------------------------------------------------
+# `tickets` has no single root once records live per project, so the honest primitive is
+# not "where is the tickets root" but "where is this ticket". Three places are consulted,
+# in the order that prefers the authoritative record over the compatibility layer:
 #
-#   1. the new layout   projects/*/work/items/<ID>     — authoritative
+#   1. the new layout   projects/*/tickets/<ID>        — authoritative
 #   2. the old layout   tasks/<ID>                     — only while it still holds a record
 #   3. the pointer      tasks/<ID> -> moved_to:        — the bridge the archive layer writes
 #
 # Two projects claiming one id is a conflict, reported rather than resolved: an id is
 # supposed to be unique across the workspace, and picking one would hide that it is not.
 # This is a lookup, not a registry — nothing is indexed, cached or written.
-_aios_moved_to() {  # <item-dir> -> the workspace-relative path its pointer names
+_aios_moved_to() {  # <ticket-dir> -> the workspace-relative path its pointer names
   local dir="$1" f line i
   for f in "$dir/task.md" "$dir/README.md"; do
     [ -f "$f" ] || continue
@@ -322,26 +325,26 @@ _aios_moved_to() {  # <item-dir> -> the workspace-relative path its pointer name
   return 1
 }
 
-aios_work_item() {  # <id> -> the absolute directory holding that item's record
+aios_ticket() {  # <id> -> the absolute directory holding that ticket's record
   local id="${1:-}" home hits n p rel target restore=1
   home="$(aios_paths_home)"
   case "$id" in
-    ''|*/*|.|..) printf 'ai-os-paths: not a work item id: %s\n' "${id:-<empty>}" >&2; return 2 ;;
+    ''|*/*|.|..) printf 'ai-os-paths: not a ticket id: %s\n' "${id:-<empty>}" >&2; return 2 ;;
   esac
 
   shopt -q nullglob && restore=0
   shopt -s nullglob
   hits=""
-  for p in "$home"/projects/*/work/items/"$id"; do
+  for p in "$home"/projects/*/tickets/"$id"; do
     [ -d "$p" ] && hits="$hits$p"$'\n'
   done
   [ "$restore" -eq 0 ] || shopt -u nullglob
 
   n=$(printf '%s' "$hits" | grep -c . || true)
   if [ "$n" -gt 1 ]; then
-    printf 'CONFLICT: work item "%s" exists under more than one project\n' "$id" >&2
+    printf 'CONFLICT: ticket "%s" exists under more than one project\n' "$id" >&2
     printf '%s' "$hits" | sed 's/^/  /' >&2
-    printf '  An item id is unique across the workspace. Resolve it by hand, then re-run.\n' >&2
+    printf '  A ticket id is unique across the workspace. Resolve it by hand, then re-run.\n' >&2
     return 3
   fi
   if [ "$n" -eq 1 ]; then printf '%s\n' "${hits%$'\n'}"; return 0; fi
@@ -349,17 +352,17 @@ aios_work_item() {  # <id> -> the absolute directory holding that item's record
   # Nothing in the new layout. The old directory answers only while it still holds a
   # record of its own; once it is a pointer, it answers by naming its successor.
   if [ -d "$home/tasks/$id" ]; then
-    if ! _aios_is_archived_item "$home/tasks/$id"; then
+    if ! _aios_is_archived_ticket "$home/tasks/$id"; then
       printf '%s\n' "$home/tasks/$id"; return 0
     fi
     if rel="$(_aios_moved_to "$home/tasks/$id")"; then
       target="$home/${rel%/task.md}"
       if [ -d "$target" ]; then printf '%s\n' "$target"; return 0; fi
-      printf 'ai-os-paths: work item "%s" points at %s, which does not exist\n' "$id" "$rel" >&2
+      printf 'ai-os-paths: ticket "%s" points at %s, which does not exist\n' "$id" "$rel" >&2
       return 4
     fi
   fi
-  printf 'ai-os-paths: no work item "%s" — looked in projects/*/work/items/ and tasks/\n' "$id" >&2
+  printf 'ai-os-paths: no ticket "%s" — looked in projects/*/tickets/ and tasks/\n' "$id" >&2
   return 4
 }
 
@@ -396,7 +399,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   _aios_need_root() { [ -n "${1:-}" ] || { echo "ai-os-paths: $2 needs a root name" >&2; exit 2; }; }
   case "${1:-list}" in
     get)    _aios_need_root "${2:-}" get;    aios_path "$2" ;;
-    work-item) aios_work_item "${2:-}" ;;
+    ticket) aios_ticket "${2:-}" ;;
     layout) _aios_need_root "${2:-}" layout; aios_path_layout "$2" ;;
     list)
       for r in $AIOS_PATH_ROOTS; do
@@ -433,7 +436,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     check)  aios_paths_check; exit $? ;;
     help|--help|-h) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) echo "ai-os-paths: unknown command '${1:-}'" >&2
-       echo "usage: ai-os-paths get|layout|list|env [--sh]|check|rewrite [<root>|<path>]" >&2
+       echo "usage: ai-os-paths get|layout|list|env [--sh]|check|rewrite|ticket [<root>|<path>|<id>]" >&2
        echo "roots: $AIOS_PATH_ROOTS" >&2; exit 2 ;;
   esac
 fi

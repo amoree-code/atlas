@@ -12,11 +12,11 @@ if [ -d "$DIR" ]; then echo "daily folder: $DIR"; else echo "daily folder: NOT C
 
 echo
 echo "=== last 3 session records ==="
-ls -t "$W"/sessions/*/*/*.md 2>/dev/null | head -3 | while read -r f; do
-  echo "--- ${f#$W/sessions/}"
+ls -t "$W"/internal/sessions/*/*/*.md 2>/dev/null | head -3 | while read -r f; do
+  echo "--- ${f#$W/internal/sessions/}"
   sed -n '1,12p' "$f" | sed 's/^/    /'
 done
-[ -z "$(ls -t "$W"/sessions/*/*/*.md 2>/dev/null)" ] && echo "(none yet)"
+[ -z "$(ls -t "$W"/internal/sessions/*/*/*.md 2>/dev/null)" ] && echo "(none yet)"
 
 echo
 echo "=== open tasks ==="
