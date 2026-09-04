@@ -21,10 +21,10 @@ the result was verified).
 
 ## Where Core actually lives today
 
-There is no separate, executable `core/` directory. Core is implemented across `cli/` —
+There is no separate, executable Core directory. Core is implemented across `cli/` —
 one entry point, `ai-os`, dispatching to `ai-os-adapter`, `ai-os-capability`, `ai-os-domain`,
 `ai-os-run`, `ai-os-memory`, `ai-os-doctor` and the rest — and specified by `schemas/`.
-`core/README.md` exists only as a pointer to this document, because the concept and the
+`internal/core/README.md` exists only as a pointer to this document, because the concept and the
 implementation are not yet in the same place, and pretending otherwise would be exactly
 the kind of stale claim `AGENTS.md` warns against.
 

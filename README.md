@@ -105,7 +105,6 @@ ai-os/                      the public repository — software only
 ├── cli/                    ai-os, one entry point: init · onboard · doctor · status ·
 │                           workspace · adapter · capability · domain · run · render ·
 │                           memory · privacy-scan — plus the hook launcher and ai-sync
-├── core/                   pointer to docs/design/core.md — no separate binary yet
 ├── adapters/<client>/      client integrations — manifest, hooks, policy enforcement
 ├── capabilities/<id>/      what AI OS can do — browser control ships today
 ├── domains/                areas of work, declared and inert — nothing executes one
@@ -115,10 +114,11 @@ ai-os/                      the public repository — software only
 ├── templates/
 │   ├── workspace/          seeds for a new ~/.ai-os — placeholder data only
 │   └── runtime/            operational scripts, kept public and never seeded
-├── examples/
 ├── docs/
+│   └── examples/           worked examples — placeholder until real ones land
 ├── tests/
-└── internal/               tooling-only — not part of the product surface
+└── internal/
+    └── core/               pointer to docs/design/core.md — no separate binary yet
 ```
 
 Agent definitions are not here: they live in your workspace, because an agent is

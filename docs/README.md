@@ -1,11 +1,13 @@
 # Docs
 
-Two kinds of document here, and they answer different questions.
+Three kinds of document here, and they answer different questions.
 
 - **`use/`** — *how do I do X?* Practical, task-shaped, written for someone running the
   CLI right now.
 - **`design/`** — *why does it work this way?* Rationale, contracts and the reasoning
   behind a choice, written for someone deciding whether to change something.
+- **`examples/`** — *show me one.* Worked examples to read and adapt. A placeholder
+  today; see [examples/README.md](examples/README.md) for what will land there.
 
 A `use/` page links to the `design/` page behind it when the "why" matters; it doesn't
 repeat it.
