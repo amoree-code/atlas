@@ -6,6 +6,31 @@
   ai-os tickets doctor [--project P]                      structural checks over the records
   ai-os tickets log <ID> "<text>"                         one dated entry, nothing else
   ai-os tickets checkpoint <ID> --note "…" [--next "…"]   durable state at a boundary
+  ai-os tickets archive [--project P] [--apply]           move done/cancelled tickets whole
+                                                           into tickets/archive/{AIOS,Atlas}/
+
+## Archiving (T-024)
+
+A ticket's `state` never changes because its directory moved — archiving is a physical
+relocation of a `done`/`cancelled` record from `tickets/<ID>/` to
+`tickets/archive/{AIOS,Atlas}/<ID>/`, nothing else. The id, its frontmatter, its history and
+every reference to it by id keep working: `ai-os tickets show/log/checkpoint <ID>`,
+`ai-os context <ID>` and `ai-os-paths ticket <ID>` all look in both places. What changes is
+only whether the record sits on the small hot working surface (`tickets/*`, one level) or
+in the historical one (`tickets/archive/*/*`, two levels) — a directory listing of
+`tickets/` gets smaller; nothing else does.
+
+Eligibility is `state` alone: `done` or `cancelled`, and not already archived. Nothing else
+— not age, not id, not a recency window. `archive` with no `--apply` only previews the
+plan; nothing moves until `--apply` is given, and a ticket already referenced by
+in-flight follow-up work is exactly as archivable as a much older one, by design (the
+resolver makes "still referenced" harmless: it is looked up by id either way).
+
+Archived records are **read-only through this CLI**: `log` and `checkpoint` refuse them by
+name rather than silently writing to a directory nobody browses any more. There is no
+`unarchive` command — nothing in this workspace's actual workflow has needed one yet, and
+one is not built ahead of that need; moving a directory back under `tickets/<ID>/` by hand
+and re-running `ai-os tickets index --write` is the whole of what it would take to look at.
 
 ## Why this exists
 
@@ -32,19 +57,60 @@ the region between the markers, and it refuses a file whose markers are missing.
 
 Zero non-stdlib dependencies.
 """
-import argparse, datetime, json, os, re, sys
+import argparse, datetime, hashlib, json, os, re, shutil, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from aios_paths import private_path_or_die
 from aios_tickets import (STATES, LIVE, REQUIRED, CLASSES, SCOPES, BEGIN, END,
                          SOFT_NEXT_ACTION_CHARS, SOFT_LOG_ENTRIES, SOFT_TASK_BYTES,
-                         parse_frontmatter, section, first_line, load, discover)
+                         ARCHIVE_DIRNAME, parse_frontmatter, section, first_line, load,
+                         discover, parse_ticket_id, id_sort_key, required_fields_for,
+                         atlas_metadata_issues)
+
+# T-024: what makes a ticket archivable, and where its generation's history lives.
+# Eligibility is state alone — never age, never id — and every id outside the two known
+# generations is left where it is, because this command does not invent a namespace for a
+# scheme it does not recognize (a project free to run its own id scheme, per
+# aios_tickets.py's own GENERATION_PATTERNS note, is free to archive its own way too).
+ARCHIVABLE_STATES = ("done", "cancelled")
+ARCHIVE_NAMESPACE = {"AIOS": "AIOS", "T": "Atlas"}
+
+
+def sha256_file(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def now_readable():
+    """Local wall-clock time, human readable: `YYYY-MM-DD h:mm AM/PM`.
+
+    No timezone is stored per ticket — the workspace's own local time is authoritative (see
+    internal/config/settings.yaml `timezone: auto`), so this is always `datetime.now()`,
+    never `utcnow()`.
+    """
+    now = datetime.datetime.now()
+    hour = now.strftime("%I").lstrip("0") or "12"
+    return f"{now.strftime('%Y-%m-%d')} {hour}:{now.strftime('%M %p')}"
+
+
+def bump_updated(text, day):
+    """Advance whichever timestamp field this ticket declares.
+
+    `updated_at:` (Atlas-native, full readable timestamp) or `updated:` (historical, date
+    only) — a ticket has exactly one of the two, never both, so this touches at most one
+    line. A ticket with neither is left byte-identical; that is a doctor-reported structural
+    problem, not something `log`/`checkpoint` should paper over.
+    """
+    if re.search(r"^updated_at:", text, re.M):
+        return re.sub(r"^updated_at: .*$", f"updated_at: {now_readable()}", text,
+                      count=1, flags=re.M)
+    return re.sub(r"^updated: .*$", f"updated: {day}", text, count=1, flags=re.M)
+
 
 def rank(t):
     order = {s: i for i, s in enumerate(("active", "blocked", "paused", "todo",
                                          "done", "cancelled"))}
-    return (order.get(t["state"], 9), t["id"] or "")
+    return (order.get(t["state"], 9), id_sort_key(t["id"]))
 
 
 def render_table(tickets, rel_from):
@@ -96,6 +162,9 @@ def cmd_list(a, tickets):
 
 
 def cmd_index(a, tickets, projects_root):
+    # T-024: the hot board is the working surface, so it carries only what is not archived
+    # — an archived ticket's status is `archive/index.md`'s business, not this one's.
+    live_tickets = [t for t in tickets if not t["is_archived"]]
     projects = sorted({t["project_dir"] for t in tickets})
     rc = 0
     for proj in projects:
@@ -105,7 +174,7 @@ def cmd_index(a, tickets, projects_root):
             rc = 1
             continue
         text = index_path.read_text()
-        block = index_block([t for t in tickets if t["project_dir"] == proj], index_path)
+        block = index_block([t for t in live_tickets if t["project_dir"] == proj], index_path)
         merged = splice(text, block)
         if merged is None:
             print(f"  ✗ {proj}/index.md has no {BEGIN} … {END} region — "
@@ -139,11 +208,14 @@ def cmd_doctor(a, tickets, projects_root):
 
     for t in tickets:
         where = f"{t['id'] or t['path']}"
-        for field in REQUIRED:
+        for field in required_fields_for(t["id"]):
             if not t["meta"].get(field):
                 errors.append(f"{where}: missing frontmatter '{field}'")
         if t["id"] and t["id"] != t["dir_name"]:
             errors.append(f"{where}: id does not match its directory '{t['dir_name']}'")
+        generation = parse_ticket_id(t["id"])
+        if generation and generation[0] == "T":
+            errors.extend(atlas_metadata_issues(Path(t["path"]).read_text(), t["meta"], t["id"]))
         if t["state"] and t["state"] not in STATES:
             errors.append(f"{where}: state '{t['state']}' is not one of {'/'.join(STATES)}")
         if t["klass"] and t["klass"] not in CLASSES:
@@ -170,12 +242,13 @@ def cmd_doctor(a, tickets, projects_root):
             warnings.append(f"{where}: task.md is {t['bytes']:,} bytes — "
                             f"large enough that reading it is itself a cost")
 
+    live_tickets = [t for t in tickets if not t["is_archived"]]
     for proj in sorted({t["project_dir"] for t in tickets}):
         index_path = projects_root / proj / "index.md"
         if not index_path.exists():
             continue
         text = index_path.read_text()
-        block = index_block([t for t in tickets if t["project_dir"] == proj], index_path)
+        block = index_block([t for t in live_tickets if t["project_dir"] == proj], index_path)
         merged = splice(text, block)
         if merged is None:
             warnings.append(f"{proj}/index.md: no generated ticket region — "
@@ -233,10 +306,16 @@ def cmd_log(a, tickets):
     t = find(tickets, a.id)
     if not t:
         return 1
+    if t["is_archived"]:
+        print(f"ai-os tickets: {t['id']} is archived ({t['path']}) — archived records are "
+              f"read-only through normal ticket operations. If it genuinely needs to "
+              f"become active again, move it back under tickets/ by hand and re-run "
+              f"'ai-os tickets index --write'.", file=sys.stderr)
+        return 1
     path = Path(t["path"])
     day = a.date or datetime.date.today().isoformat()
     text = append_log(path.read_text(), day, a.text)
-    text = re.sub(r"^updated: .*$", f"updated: {day}", text, count=1, flags=re.M)
+    text = bump_updated(text, day)
     path.write_text(text)
     print(f"  {t['id']}: logged, updated {day}")
 
@@ -259,7 +338,7 @@ def refresh_index(projects_root, project_dir):
     index_path = projects_root / project_dir / "index.md"
     if not index_path.exists():
         return None
-    fresh = discover(projects_root, project_dir)
+    fresh = [t for t in discover(projects_root, project_dir) if not t["is_archived"]]
     text = index_path.read_text()
     merged = splice(text, index_block(fresh, index_path))
     if merged is None or merged == text:
@@ -289,6 +368,12 @@ def cmd_checkpoint(a, tickets, projects_root):
     """
     t = find(tickets, a.id)
     if not t:
+        return 1
+    if t["is_archived"]:
+        print(f"ai-os tickets: {t['id']} is archived ({t['path']}) — archived records are "
+              f"read-only through normal ticket operations. If it genuinely needs to "
+              f"become active again, move it back under tickets/ by hand and re-run "
+              f"'ai-os tickets index --write'.", file=sys.stderr)
         return 1
     path = Path(t["path"])
     before = path.read_text()
@@ -327,7 +412,7 @@ def cmd_checkpoint(a, tickets, projects_root):
         text = re.sub(r"^state: .*$", f"state: {a.state}", text, count=1, flags=re.M)
         wrote.append(f"state -> {a.state}")
 
-    text = re.sub(r"^updated: .*$", f"updated: {day}", text, count=1, flags=re.M)
+    text = bump_updated(text, day)
     path.write_text(text)
     print(f"  {t['id']}: checkpointed {day} — {', '.join(wrote)}")
 
@@ -346,10 +431,126 @@ def cmd_checkpoint(a, tickets, projects_root):
     return 0
 
 
+def archive_index_block(archived, index_path):
+    """A compact, generated pointer table — id/title/state/completed/where. Never the
+    ticket body: reading a historical record means opening its own task.md, still, by id.
+    """
+    rows = ["| ID | State | Completed | Title | Record |",
+            "|---|---|---|---|---|"]
+    for t in sorted(archived, key=lambda t: id_sort_key(t["id"])):
+        title = (t["title"] or "").replace("|", "\\|")
+        rel = os.path.relpath(t["path"], index_path.parent)
+        rows.append(f"| {t['id']} | `{t['state']}` | {t['updated'] or '—'} | {title} | "
+                    f"[`task.md`]({rel}) |")
+    body = "\n".join(rows)
+    return (f"# Ticket archive\n\n"
+            f"Generated by `ai-os tickets archive`. Historical, done/cancelled records —\n"
+            f"the record itself is still the source of truth, this is only a pointer\n"
+            f"table so an id can be found without a directory listing. Resolve any id\n"
+            f"below the normal way: `ai-os tickets show <ID>`, `ai-os context <ID>`, or\n"
+            f"`ai-os-paths ticket <ID>` — none of them need this file to work.\n\n"
+            f"{body}\n")
+
+
+def cmd_archive(a, tickets, projects_root):
+    """Preview (default) or apply (`--apply`) moving eligible tickets into
+    tickets/archive/{AIOS,Atlas}/. Eligibility: state in ARCHIVABLE_STATES, not already
+    archived, id belongs to a recognized generation. Nothing else decides it.
+    """
+    # Duplicate-authority guard first, over everything this invocation can see — archiving
+    # on top of an unresolved conflict would make the conflict physically harder to see,
+    # not resolve it.
+    by_id = {}
+    for t in tickets:
+        by_id.setdefault(t["id"], []).append(t["path"])
+    dups = {tid: paths for tid, paths in by_id.items() if len(paths) > 1}
+    if dups:
+        for tid, paths in dups.items():
+            print(f"ai-os tickets archive: {tid} is declared by {len(paths)} records — "
+                  + ", ".join(paths), file=sys.stderr)
+        print("  refusing to archive anything until duplicate authority is resolved",
+              file=sys.stderr)
+        return 1
+
+    candidates = []
+    for t in tickets:
+        if t["is_archived"] or t["state"] not in ARCHIVABLE_STATES:
+            continue
+        gen = parse_ticket_id(t["id"])
+        if gen is None:
+            continue  # not an AIOS-###/T-### id — outside this command's namespace
+        candidates.append((t, ARCHIVE_NAMESPACE[gen[0]]))
+
+    if not candidates:
+        print("  no eligible tickets — nothing is state: done/cancelled outside the "
+              "archive already")
+        return 0
+
+    moves = []
+    for t, ns in candidates:
+        dest_dir = projects_root / t["project_dir"] / "tickets" / ARCHIVE_DIRNAME / ns / t["id"]
+        if dest_dir.exists():
+            print(f"ai-os tickets archive: destination already exists for {t['id']}: "
+                  f"{dest_dir}", file=sys.stderr)
+            return 1
+        moves.append((t, dest_dir))
+
+    for t, dest_dir in sorted(moves, key=lambda m: id_sort_key(m[0]["id"])):
+        rel_from = os.path.relpath(t["path"], projects_root)
+        rel_to = os.path.relpath(dest_dir / "task.md", projects_root)
+        print(f"  {t['id']:<10} {t['state']:<10} {rel_from}  ->  {rel_to}")
+
+    if not a.apply:
+        print(f"\n  {len(moves)} candidate(s) — preview only, nothing moved. Re-run with "
+              f"--apply to move them.")
+        return 0
+
+    moved = []
+    for t, dest_dir in moves:
+        src_dir = Path(t["dir"])
+        pre_hash = sha256_file(t["path"])
+        dest_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src_dir), str(dest_dir))
+        post_hash = sha256_file(dest_dir / "task.md")
+        if pre_hash != post_hash:
+            # Should be unreachable — a plain directory move touches no bytes — but this
+            # is exactly the invariant Part K of the ticket asked to be proven, not assumed.
+            print(f"ai-os tickets archive: {t['id']} task.md hash changed across the move "
+                  f"({pre_hash[:12]} -> {post_hash[:12]}) — investigate before trusting "
+                  f"this archive", file=sys.stderr)
+            return 1
+        moved.append((t, dest_dir))
+        print(f"  moved {t['id']} -> {os.path.relpath(dest_dir, projects_root)}  "
+              f"(task.md hash unchanged: {pre_hash[:12]})")
+
+    # Regenerate every touched project's hot board and archive index from a fresh read —
+    # not from the in-memory `tickets` list, which still describes the pre-move layout.
+    for proj in sorted({t["project_dir"] for t, _ in moved}):
+        fresh = discover(projects_root, proj)
+        index_path = projects_root / proj / "index.md"
+        if index_path.exists():
+            text = index_path.read_text()
+            merged = splice(text, index_block([t for t in fresh if not t["is_archived"]],
+                                              index_path))
+            if merged is not None and merged != text:
+                index_path.write_text(merged)
+                print(f"  {proj}/index.md regenerated — archived ticket(s) dropped from "
+                      f"the hot board")
+        archived_now = [t for t in fresh if t["is_archived"]]
+        if archived_now:
+            archive_index_path = projects_root / proj / "tickets" / ARCHIVE_DIRNAME / "index.md"
+            archive_index_path.write_text(archive_index_block(archived_now, archive_index_path))
+            print(f"  {proj}/tickets/{ARCHIVE_DIRNAME}/index.md written "
+                  f"({len(archived_now)} record(s))")
+
+    print(f"\n  {len(moved)} ticket(s) archived")
+    return 0
+
+
 def main(argv):
     ap = argparse.ArgumentParser(prog="ai-os tickets")
     sub = ap.add_subparsers(dest="cmd")
-    for name in ("list", "index", "doctor", "log", "checkpoint"):
+    for name in ("list", "index", "doctor", "log", "checkpoint", "archive"):
         p = sub.add_parser(name)
         p.add_argument("--project")
         if name == "list":
@@ -369,6 +570,9 @@ def main(argv):
             p.add_argument("--next", help="replace the one next action")
             p.add_argument("--state", choices=STATES, help="the ticket's new state")
             p.add_argument("--date")
+        if name == "archive":
+            p.add_argument("--apply", action="store_true",
+                           help="move the eligible tickets; without this, preview only")
     a = ap.parse_args(argv)
     if not a.cmd:
         ap.print_help()
@@ -383,7 +587,8 @@ def main(argv):
             "index": lambda: cmd_index(a, tickets, projects_root),
             "doctor": lambda: cmd_doctor(a, tickets, projects_root),
             "log": lambda: cmd_log(a, tickets),
-            "checkpoint": lambda: cmd_checkpoint(a, tickets, projects_root)}[a.cmd]()
+            "checkpoint": lambda: cmd_checkpoint(a, tickets, projects_root),
+            "archive": lambda: cmd_archive(a, tickets, projects_root)}[a.cmd]()
 
 
 if __name__ == "__main__":

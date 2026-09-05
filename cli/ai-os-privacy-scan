@@ -16,6 +16,12 @@ Reports. Never edits, never deletes, never rewrites history.
   ai-os-privacy-scan --history          also scan every blob in git history (slow)
   ai-os-privacy-scan --quiet            findings only, no progress
   ai-os-privacy-scan --include-ignored  do not exempt git-ignored files (see below)
+  ai-os-privacy-scan --atlas-classify PATH
+                                         path-based publication eligibility under
+                                         $ATLAS_HOME (~/atlas) — a gate BEFORE the content
+                                         scan above, not a replacement for it. See
+                                         internal/governance/policies/
+                                         atlas-path-classification.yaml and T-004.
 
 Two narrow exceptions, both about publishability rather than about secrecy:
 
@@ -41,10 +47,12 @@ if not sys.stdout.isatty():
 
 REPO = Path(__file__).resolve().parent.parent
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
+ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
 # policies/ is mid-migration. Reading the terms file from a path that merely used to be
 # right would silently check nothing — the user's real name and handles would go unchecked
 # while the scan still printed "clean". So the root is asked for, never assumed.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from aios_atlas_privacy import publication_eligibility  # noqa: E402
 from aios_paths import private_path_or_die  # noqa: E402
 
 TERMS_FILE = private_path_or_die("policies") / "privacy-terms.txt"
@@ -228,7 +236,28 @@ def redact(s, cls):
     return s if len(s) <= 72 else s[:72] + "…"
 
 
+def cmd_atlas_classify(path):
+    """Path-based publication eligibility under $ATLAS_HOME — a gate BEFORE the content
+    scan, never a replacement for it. Prints and exits 0 (eligible) or 1 (not)."""
+    cls, eligible, reason = publication_eligibility(path, ATLAS_HOME)
+    verdict = f"{G}ELIGIBLE{X}" if eligible else f"{Y}NOT ELIGIBLE{X}"
+    print(f"  {path}")
+    print(f"  class: {cls or 'unrecognized'}   {verdict}")
+    print(f"  {D}{reason}{X}")
+    if eligible:
+        print(f"\n  {D}still requires: content/credential scan, owner approval{X}")
+    return 0 if eligible else 1
+
+
 def main(argv):
+    if "--atlas-classify" in argv:
+        i = argv.index("--atlas-classify")
+        target = [a for a in argv[i + 1:] if not a.startswith("-")]
+        if not target:
+            print("ai-os-privacy-scan: --atlas-classify needs a PATH", file=sys.stderr)
+            return 2
+        return cmd_atlas_classify(target[0])
+
     args = [a for a in argv if not a.startswith("-")]
     flags = {a for a in argv if a.startswith("-")}
     if flags - {"--history", "--quiet", "-q", "--include-ignored"}:

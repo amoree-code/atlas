@@ -44,7 +44,36 @@ EOF
 
 cmd="${1:-status}"; shift || true
 case "$cmd" in
-  init|onboard|doctor|status|workspace|privacy-scan|adapter|capability|domain|run|render|memory|handoff|usage|tickets|context|observe|policy|lifecycle) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
+  # T-015: observe's canonical implementation and write destination are now Atlas-owned
+  # (~/atlas/context/ai-os-observe -> ~/atlas/runtime/observations/). This line is a thin
+  # compatibility handoff; ai-os-observe under cli/ is historical only, no longer invoked.
+  # No other command's dispatch changed.
+  observe) exec "${ATLAS_HOME:-$HOME/atlas}/context/ai-os-observe" "$@" ;;
+  # T-016: context's canonical implementation is now Atlas-owned
+  # (${ATLAS_HOME:-~/atlas}/context/ai-os-context); durable data authority
+  # (projects/personal/governance) is unchanged — this implementation still resolves
+  # those through the same legacy sources ai-os-context always has. cli/ai-os-context is
+  # historical only, no longer invoked. usage and lifecycle are untouched and remain
+  # legacy canonical.
+  context) exec "${ATLAS_HOME:-$HOME/atlas}/context/ai-os-context" "$@" ;;
+  # T-017: usage's canonical implementation is now Atlas-owned
+  # (${ATLAS_HOME:-~/atlas}/context/ai-os-usage). It reads client transcripts and, via
+  # --baseline, caller-provided files, exactly as before — no telemetry writer was added
+  # and no data authority changed. cli/ai-os-usage is historical only, no longer invoked.
+  # lifecycle remains untouched and legacy canonical; usage's import of aios_lifecycle.py
+  # is a pure-function library (no filesystem/subprocess), not the dispatched lifecycle
+  # command, so this does not cut lifecycle over.
+  usage) exec "${ATLAS_HOME:-$HOME/atlas}/context/ai-os-usage" "$@" ;;
+  # T-018: lifecycle's canonical implementation is now Atlas-owned
+  # (${ATLAS_HOME:-~/atlas}/context/ai-os-lifecycle). Its sibling() loader resolves
+  # "ai-os-context"/"ai-os-usage" relative to its own file location, so running from
+  # context/ makes it load the Atlas ai-os-context/ai-os-usage (already canonical since
+  # T-016/T-017) with no legacy fallback possible — verified by direct execution, not
+  # inferred. All four context mechanisms are now Atlas canonical; durable/runtime data
+  # authority (tickets, projects, transcripts) is unchanged. cli/ai-os-lifecycle is
+  # historical only, no longer invoked.
+  lifecycle) exec "${ATLAS_HOME:-$HOME/atlas}/context/ai-os-lifecycle" "$@" ;;
+  init|onboard|doctor|status|workspace|privacy-scan|adapter|capability|domain|run|render|memory|handoff|tickets|policy) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
   # Compatibility alias, kept for one version. `capability` is the current name.
   plugin) exec "$SELF_DIR/ai-os-plugin" "$@" ;;
   version|--version|-V) echo "$VERSION" ;;

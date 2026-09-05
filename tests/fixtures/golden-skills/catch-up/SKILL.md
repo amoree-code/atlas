@@ -9,12 +9,20 @@ Rebuild context so the user never has to re-explain. Answer in the chat; write n
 
 ## Steps
 
+0. **A pasted handoff packet?** If the user's message already contains a
+   `session-handoff` packet (or points at one), read that first — it is a purpose-built
+   reconstruction artifact and answers step 3 directly without steps 1-2. Otherwise
+   continue below.
+
 1. **Identify the project.** In order:
    - `pwd` — inside a repo under `~/Documents/`? That's it.
    - Otherwise the most recent session record: `ls -t ~/.ai-os/internal/sessions/*/*/*.md | head -1`
    - Otherwise ask, offering the `active` rows from the registry.
 
 2. **Read, in this order, stopping when you can answer:**
+   - if the project uses the ticket system: `ai-os context` (or `ai-os context <ID>` for
+     a named ticket) — it is derived from the live record every time, so it cannot be
+     stale, and it is cheaper than a session record
    - the repo's `CLAUDE.md` (its **Status** section)
    - the newest session record for that project:
      `ls -t ~/.ai-os/internal/sessions/*/*/*-<project>-*.md | head -1`

@@ -1,0 +1,95 @@
+# Atlas policy — path-based privacy classification and publication eligibility.
+#
+# The two-root boundary (workspace-privacy.yaml: "$AI_OS_HOME is private, the repo is
+# public") assumed the physical root already told you which side of the line a file was
+# on. That assumption breaks once $ATLAS_HOME holds private and publishable material in
+# one tree (personal/knowledge/decisions/atlas-one-project-architecture.md item 2). This
+# policy is the replacement principle: privacy is a property of the path/classification,
+# never of which physical root happens to contain it.
+#
+# Temporary ownership: this file lives at its CURRENT live governance location (this repo,
+# not $ATLAS_HOME/governance/) because Phase E has not moved governance yet
+# (AIOS-020/migration-plan.md). It already describes $ATLAS_HOME paths. Do not create a
+# second copy under $ATLAS_HOME/governance/ before Phase E promotes it — one authoritative
+# source only.
+
+policy: atlas-path-classification
+version: 1
+since: T-004
+atlas_home: ~/atlas   # AIOS-020 / atlas-one-project-architecture.md item 11
+
+# --- classes -------------------------------------------------------------------------
+classes:
+  private:
+    definition: must never be published, full stop
+    publication_eligible: false
+    examples: [personal/**, private project records, credentials/secrets, user-specific registries]
+
+  local:
+    definition: machine/runtime state — not source material for publication, distinct from `private` (which means durable-personal, not transient)
+    publication_eligible: false
+    examples: [runtime/**, temporary workspaces, telemetry, observations, locks, caches]
+
+  publishable:
+    definition: reusable Atlas source eligible to ENTER the publication pipeline — never means auto-published
+    publication_eligible: true
+    still_requires: [content/credential scan, owner approval]
+
+  mixed:
+    definition: contains both publishable and private/local material depending on the specific record
+    publication_eligible: false   # private by default; per-item promotion is a future mechanism, not built by this policy
+    rule: >
+      A mixed root is never publication-eligible at the root level. An individual path
+      inside it becomes eligible only through an explicit future promotion mechanism
+      (not built here) — never by defaulting the whole root open.
+
+# --- the fourteen frozen roots, classified -------------------------------------------
+# `evidence` names the AIOS-020/candidate-tree.md verdict this is grounded in — none of
+# this is a fresh guess. Three deviate from the informal starting point this ticket was
+# handed, because candidate-tree.md's own evidence was stronger: `projects/` and
+# `integration/` are classified `private`/`mixed` here, not the softer reading a first
+# pass might reach — see the `note` field on each.
+roots:
+  core:         { class: publishable, evidence: "candidate-tree.md core/: Durable software. Publishable." }
+  context:      { class: publishable, evidence: "candidate-tree.md context/: Publishable (mechanism is client-agnostic); nothing private lives here itself." }
+  personal:     { class: private,     evidence: "candidate-tree.md personal/: Private, never publishable, non-negotiable." }
+  projects:     { class: private,     evidence: "candidate-tree.md projects/: Project-name-level PII, never publishable.",
+                  note: "Not classified `mixed` despite containing some publishable-shaped content (e.g. this ticket's own contracts work) — candidate-tree.md already ruled the whole root never publishable; a future promotion mechanism, not this policy, is where a specific record could ever leave." }
+  adapters:     { class: mixed,       evidence: "candidate-tree.md adapters/: Publishable, except any client-specific private config a user adds." }
+  capabilities: { class: publishable, evidence: "candidate-tree.md capabilities/: Publishable at the contract level." }
+  domains:      { class: publishable, evidence: "candidate-tree.md domains/: Publishable." }
+  extensions:   { class: mixed,       evidence: "candidate-tree.md extensions/: Publishable for skill/agent bodies; MCP registrations may carry private connection detail — classify per-entry, not per-root." }
+  governance:   { class: mixed,       evidence: "candidate-tree.md governance/: client-agnostic rules/policies publishable, authority.yaml and workspace-specific policy text private." }
+  contracts:    { class: publishable, evidence: "candidate-tree.md contracts/: Publishable (contracts are not PII)." }
+  runtime:      { class: local,       evidence: "candidate-tree.md runtime/: Generated/transient. Private (may contain workspace content); never publishable as data." }
+  integration:  { class: mixed,       evidence: "candidate-tree.md integration/: Private (task content may pass through it); durable once reconciled, runtime while an attempt is in flight — never itself a publishable root.",
+                  note: "Not `local/publishable` — candidate-tree.md never calls it publishable. Runtime-in-flight state is `local`-shaped, reconciled output is `private`-shaped (task content); neither sub-case is `publishable`, so the root is `mixed` defaulting closed, not split toward publishable." }
+  docs:         { class: publishable, evidence: "candidate-tree.md docs/: Publishable." }
+  tests:        { class: publishable, evidence: "candidate-tree.md tests/: Publishable (suite)." }
+
+# --- publication model -----------------------------------------------------------------
+publication_model: >
+  candidate path -> path classification (this policy, default-deny) -> [if publishable]
+  content/credential scan (ai-os-privacy-scan) -> verification -> owner approval -> publish.
+  Path classification is a gate, not a pipeline: it only ever narrows what reaches the
+  scan. Nothing here performs a scan or a publish; both stay exactly where they are today.
+
+default: deny   # an unrecognized root, or any path not resolving under a known root, is never eligible
+
+# --- relationship to existing mechanisms (KEEP / ADAPT / SUPERSEDE LATER) --------------
+# Nothing below is deleted or weakened by this policy. The old two-root guarantees stay
+# fully in force for as long as ~/.ai-os and the public repo both still hold real content
+# (transition period — all three paths coexist: ~/.ai-os, ~/Documents/amir/ai-os, ~/atlas).
+relationship:
+  workspace-privacy.yaml:            { verdict: KEEP,             why: "still the live, enforced boundary for the two current physical roots; not superseded until they stop existing" }
+  privacy-classification.yaml:       { verdict: KEEP,             why: "credential/personal CONTENT classification is orthogonal to path classification — both layers stay" }
+  privacy-allowlist.txt:             { verdict: KEEP,             why: "content-level false-positive suppression; unrelated concern to path-level publication eligibility" }
+  public-private-contract.yaml:      { verdict: ADAPT-LATER,      why: "its principle (access is not ownership) survives; its two-physical-layers framing is what this policy starts replacing — adapting it is a later slice, not this one" }
+  ai-guard-push / owner approval:    { verdict: KEEP,             why: "remote/push/publish approval gates are unchanged; this policy adds a check BEFORE that gate, never removes it" }
+  ai-os-privacy-scan (content scan): { verdict: ADAPT,            why: "gained one additive path-classification entry point (--atlas-classify); its existing content-scan behavior for the two current roots is untouched" }
+
+# --- enforcement -------------------------------------------------------------------------
+enforcement:
+  module: cli/aios_atlas_privacy.py   # the enforced version of the `roots` table above
+  command: ai-os privacy-scan --atlas-classify <path>
+  destructive: false   # classifies; never scans content, never publishes, never edits

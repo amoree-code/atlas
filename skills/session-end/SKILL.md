@@ -21,6 +21,13 @@ skip it and say so.
 
 ## Steps
 
+0. **Lifecycle reading.** `ai-os lifecycle --ticket <ID>` if a ticket is live, else
+   `ai-os lifecycle`. This is the `SESSION_END_REQUEST` boundary — the deterministic
+   verdict decides what the rest of this skill should do, not the other way round:
+   `HANDOFF` → run the `session-handoff` skill instead of (or before) the steps below;
+   `FRESH` → checkpoint (step 5 covers durable state) and tell the owner a fresh session
+   is recommended; `CHECKPOINT`/`CONTINUE` → proceed with the steps below as normal.
+
 1. **Session record.** Write to
    `~/.ai-os/internal/sessions/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d-%H%M)-<project>-<topic>.md`
    using `{{profile.templates_dir}}/session.md`. `<topic>` is 1–3

@@ -33,10 +33,13 @@ from pathlib import Path
 CLI_DIR = Path(__file__).resolve().parent
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
 sys.path.insert(0, str(CLI_DIR))
-from aios_paths import private_path_or_die  # noqa: E402
 
 # Still runtime/runs — but which directory runtime/ is today is the resolver's answer.
-RUNS_DIR = private_path_or_die("runtime") / "runs"
+# T-021: Atlas-canonical, not the private-workspace runtime layer aios_paths resolves
+# (that resolver is untouched — 13+ other commands still use it as before).
+_ATLAS_HOME = Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
+    else Path.home() / "atlas"
+RUNS_DIR = _ATLAS_HOME / "runtime" / "runs"
 
 # The whole lifecycle. `continue` is the only non-terminal status; everything else stops
 # the Run from taking further steps until something outside Run changes — a human editing

@@ -299,16 +299,22 @@ aios_path_rewrite() {  # <workspace-relative path> -> the absolute path in the l
 
 # --- one ticket, by id ------------------------------------------------------------------
 # `tickets` has no single root once records live per project, so the honest primitive is
-# not "where is the tickets root" but "where is this ticket". Three places are consulted,
-# in the order that prefers the authoritative record over the compatibility layer:
+# not "where is the tickets root" but "where is this ticket". Four places are consulted,
+# in the order that prefers the authoritative record over a compatibility/historical layer:
 #
-#   1. the new layout   projects/*/tickets/<ID>        — authoritative
-#   2. the old layout   tasks/<ID>                     — only while it still holds a record
-#   3. the pointer      tasks/<ID> -> moved_to:        — the bridge the archive layer writes
+#   1. the live layout      projects/*/tickets/<ID>              — authoritative, current
+#   2. the in-project archive projects/*/tickets/archive/*/<ID>  — authoritative, historical
+#      (T-024: `tickets archive` moves a `done`/`cancelled` ticket's whole directory here —
+#      AIOS-### under archive/AIOS/, T-### under archive/Atlas/ — and nothing else ever
+#      writes under archive/, so a hit there is exactly as authoritative as a live one; it
+#      has simply stopped being on the hot browsing surface)
+#   3. the old layout        tasks/<ID>                          — only while it still holds a record
+#   4. the pointer           tasks/<ID> -> moved_to:              — the bridge the archive layer writes
 #
-# Two projects claiming one id is a conflict, reported rather than resolved: an id is
-# supposed to be unique across the workspace, and picking one would hide that it is not.
-# This is a lookup, not a registry — nothing is indexed, cached or written.
+# Two projects — or a live and an archived copy — claiming one id is a conflict, reported
+# rather than resolved: an id is supposed to be unique across the workspace, and picking
+# one would hide that it is not. This is a lookup, not a registry — nothing is indexed,
+# cached or written.
 _aios_moved_to() {  # <ticket-dir> -> the workspace-relative path its pointer names
   local dir="$1" f line i
   for f in "$dir/task.md" "$dir/README.md"; do
@@ -330,19 +336,24 @@ aios_ticket() {  # <id> -> the absolute directory holding that ticket's record
   home="$(aios_paths_home)"
   case "$id" in
     ''|*/*|.|..) printf 'ai-os-paths: not a ticket id: %s\n' "${id:-<empty>}" >&2; return 2 ;;
+    # The archive namespace directories are containers, never ticket ids — a directory
+    # literally named "archive" would otherwise satisfy the glob below and be mistaken
+    # for a ticket that happens to share its name.
+    archive) printf 'ai-os-paths: "archive" is a container directory, not a ticket id\n' >&2
+             return 2 ;;
   esac
 
   shopt -q nullglob && restore=0
   shopt -s nullglob
   hits=""
-  for p in "$home"/projects/*/tickets/"$id"; do
+  for p in "$home"/projects/*/tickets/"$id" "$home"/projects/*/tickets/archive/*/"$id"; do
     [ -d "$p" ] && hits="$hits$p"$'\n'
   done
   [ "$restore" -eq 0 ] || shopt -u nullglob
 
   n=$(printf '%s' "$hits" | grep -c . || true)
   if [ "$n" -gt 1 ]; then
-    printf 'CONFLICT: ticket "%s" exists under more than one project\n' "$id" >&2
+    printf 'CONFLICT: ticket "%s" exists under more than one project or archive location\n' "$id" >&2
     printf '%s' "$hits" | sed 's/^/  /' >&2
     printf '  A ticket id is unique across the workspace. Resolve it by hand, then re-run.\n' >&2
     return 3

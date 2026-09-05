@@ -14,9 +14,14 @@ import importlib.util, json, os, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
+# T-019: the workspace/profile this launches is Atlas-canonical (runtime/workspaces/
+# browser), not the legacy AI_OS_HOME-rooted default this used to compute — no other
+# runtime store's ownership changed. AI_OS_BROWSER_RUNTIME still overrides explicitly.
+ATLAS_HOME = Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
+    else Path.home() / "atlas"
 # Ephemeral by design: a browser session is runtime state, never durable task truth.
-RUNTIME = Path(os.environ.get("AI_OS_BROWSER_RUNTIME", AI_OS_HOME / "runtime" / "browser"))
+RUNTIME = Path(os.environ.get("AI_OS_BROWSER_RUNTIME",
+                               ATLAS_HOME / "runtime" / "workspaces" / "browser"))
 SESSION = RUNTIME / "session.json"
 # The default provider name lives in providers/default, so this file names no
 # browser technology at all. Swapping providers is a one-line change in that

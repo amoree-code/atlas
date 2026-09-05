@@ -654,21 +654,25 @@ b=$("$CLI/ai-os-render" catch-up --client codex 2>&1 | grep -c 'AGENTS.md')
 c=$("$CLI/ai-os-render" catch-up --client codex 2>&1 | grep -c 'CLAUDE.md')
 [ "$c" -eq 0 ];                                      chk "  ...and codex gets no Claude filename" $?
 
-t "THE SKILL GATE: 8 skills render equivalent to the committed goldens"
+t "THE SKILL GATE: 9 skills render equivalent to the committed goldens"
 # This gate began as a migration check: the canonical bodies had to render equivalent to
 # the hand-maintained copy in the runtime layer. That copy was rendered with the real
 # user's profile — it carried their org folders and VCS handle — so it could never live
 # here, and it retires with ~/.ai. The proof is preserved by rendering against a fictional
-# fixture profile and diffing the committed goldens instead: same eight skills, same
+# fixture profile and diffing the committed goldens instead: same skill set, same
 # renderer, same client conventions, no private data and no runtime dependency.
+# Skill count here tracks <ai-os repo>/skills/*; bump it and regenerate the goldens
+# (ai-os-render <skill> --client claude-code > tests/fixtures/golden-skills/<skill>/SKILL.md)
+# whenever a skill is added, removed, or its canonical body changes (T-023 added
+# session-handoff and edited catch-up/session-end — 8 -> 9).
 GW="$TMP/goldenws"; mkdir -p "$GW/internal/config"
 cp "$REPO/tests/fixtures/profile.yaml" "$GW/internal/config/profile.yaml"
 out=$(AI_OS_HOME="$GW" "$CLI/ai-os-render" --check "$REPO/tests/fixtures/golden-skills" \
         --client claude-code 2>&1); rc=$?
-[ "$rc" -eq 0 ];                                     chk "no semantic loss across all 8 skills" $?
+[ "$rc" -eq 0 ];                                     chk "no semantic loss across all 9 skills" $?
 # Count per-skill result lines only — the summary line says "equivalent" too.
 n=$(echo "$out" | grep -cE '^  (identical|equivalent) ')
-[ "$n" -eq 8 ];                                      chk "all 8 accounted for ($n)" $?
+[ "$n" -eq 9 ];                                      chk "all 9 accounted for ($n)" $?
 echo "$out" | grep -q "DIFFERS"; [ $? -ne 0 ];       chk "no skill differs semantically" $?
 # The goldens are public artefacts and must stay that way.
 AI_OS_HOME="$GW" "$CLI/ai-os-privacy-scan" "$REPO/tests/fixtures" >/dev/null 2>&1
