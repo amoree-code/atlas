@@ -2,7 +2,7 @@
 """ai-os-privacy-scan — keep the public repository publishable.
 
 Two classes of finding, because they are two different problems (see
-governance/policies/privacy-classification.yaml):
+internal/governance/policies/privacy-classification.yaml):
 
   credential   a value that grants access.      Generic shapes, built in.
   personal     a value that identifies someone. Generic shapes built in; the user's own
@@ -88,7 +88,7 @@ PERSONAL = [
 # --- publishability exceptions -----------------------------------------------------
 # A licence names its owner by design. Narrow by construction: only these filenames,
 # only a line that really is a copyright notice, and only the two shapes that constitute
-# attribution. See governance/policies/privacy-classification.yaml.
+# attribution. See internal/governance/policies/privacy-classification.yaml.
 LICENSE_FILES = {"LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "LICENCE.md",
                  "COPYING", "COPYING.md", "NOTICE"}
 COPYRIGHT_LINE = re.compile(r"^\s*(?:[#*/]{1,2}\s*)?Copyright\s*(?:\([cC]\)|©)?\s*\d{4}")
@@ -99,7 +99,7 @@ def license_attribution(rel, line):
     """Is this the copyright line of a licence file, where naming the owner is the point?
 
     Deliberately NOT an allowlist entry: putting the owner's real name in
-    governance/policies/privacy-allowlist.txt would ship that name in the public
+    internal/governance/policies/privacy-allowlist.txt would ship that name in the public
     repository, which is the exact failure this scanner exists to prevent. A context rule
     carries no name.
     """
@@ -120,15 +120,35 @@ def ignored_paths(root: Path):
     if not (root / ".git").exists():
         return set()
     r = subprocess.run(["git", "-C", str(root), "ls-files", "-o", "-i",
-                        "--exclude-standard", "-z"],
+                        "--exclude-standard", "--directory", "-z"],
                        capture_output=True, text=True)
     if r.returncode != 0:
         return set()
     return {n for n in r.stdout.split("\0") if n}
 
 
+def is_ignored(rel, ignored):
+    """True when `rel` is an ignored file, or sits under an ignored directory.
+
+    git names an ignored DIRECTORY rather than its contents whenever it will not descend
+    into it — an excluded directory listed with --directory, and always a nested
+    repository or worktree, whose files it cannot enumerate at all. Comparing whole file
+    paths against that set therefore misses everything inside one. A Claude Code worktree
+    under .claude/worktrees/ is exactly that case: excluded in .git/info/exclude, reported
+    as one directory entry, and every file beneath it was being treated as publishable —
+    which failed the scan, and the doctor and contract suites with it, on a path that can
+    never be published because it is not in the repository at all.
+
+    Credentials are still scanned inside ignored paths; only the personal-data exemption
+    follows from being unpublishable. That property is unchanged by this fix.
+    """
+    if rel in ignored:
+        return True
+    return any(rel.startswith(d) for d in ignored if d.endswith("/"))
+
+
 def load_allowlist():
-    f = REPO / "governance" / "policies" / "privacy-allowlist.txt"
+    f = REPO / "internal" / "governance" / "policies" / "privacy-allowlist.txt"
     if not f.exists():
         return []
     return [l.strip() for l in f.read_text().splitlines()
@@ -235,7 +255,7 @@ def main(argv):
     for p in walk(root):
         n_files += 1
         rel = str(p.relative_to(root))
-        publishable = rel not in ignored
+        publishable = not is_ignored(rel, ignored)
         if not publishable:
             n_ignored += 1
         try:

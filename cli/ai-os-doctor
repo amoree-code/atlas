@@ -9,7 +9,7 @@
 #   ai-os-doctor            full check
 #   ai-os-doctor --quiet    findings only
 #
-# Exit: number of problems (0 = clean). See governance/policies/public-private-contract.yaml.
+# Exit: number of problems (0 = clean). See internal/governance/policies/public-private-contract.yaml.
 
 set -uo pipefail
 
@@ -172,7 +172,28 @@ else
   warn "private workspace is not versioned — no history, no rollback"
 fi
 
-nested=$(find "$AI_OS_HOME" -mindepth 2 -maxdepth 6 -name .git 2>/dev/null)
+# A git WORKTREE of this same repository is not a nested repository. It is one more
+# checkout of the repo we are already standing in, registered in `git worktree list`, and
+# its `.git` is a file naming the parent's gitdir rather than a store of its own. Claude
+# Code creates one under .claude/worktrees/ for every isolated session, so treating it as
+# a foreign repository made this check fail on an ordinary working setup — and a check
+# that cries wolf on normal conditions is one people learn to ignore. Ask git which paths
+# are its own worktrees, and exclude exactly those. Any OTHER nested .git is still a
+# failure, which is the case this check exists for.
+_aios_drop_own_worktrees() {  # <repo> ; reads newline-separated .git paths on stdin
+  _repo="$1"
+  _wt=$(git -C "$_repo" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' \
+        | while IFS= read -r _w; do (cd "$_w" 2>/dev/null && pwd -P); done)
+  while IFS= read -r _p; do
+    [ -n "$_p" ] || continue
+    _dir=$(cd "${_p%/.git}" 2>/dev/null && pwd -P)
+    _keep=1
+    for _w in $_wt; do [ "$_dir" = "$_w" ] && { _keep=0; break; }; done
+    [ "$_keep" = 1 ] && printf '%s\n' "$_p"
+  done
+}
+
+nested=$(find "$AI_OS_HOME" -mindepth 2 -maxdepth 6 -name .git 2>/dev/null | _aios_drop_own_worktrees "$AI_OS_HOME")
 [ -n "$nested" ] && { fail "nested git repository inside the private workspace:"; echo "$nested" | sed 's/^/          /'; } \
                  || ok "private workspace: no nested repositories"
 
@@ -180,7 +201,7 @@ if [ -d "$REPO/.git" ]; then
   leaked=$(git -C "$REPO" ls-files | grep -E '(^|/)\.ai-os/' || true)
   [ -n "$leaked" ] && { fail "the public repo is tracking private workspace paths:"; echo "$leaked" | sed 's/^/          /'; } \
                    || ok "public repo: tracks no private workspace paths"
-  nested_pub=$(find "$REPO" -mindepth 2 -maxdepth 6 -name .git 2>/dev/null)
+  nested_pub=$(find "$REPO" -mindepth 2 -maxdepth 6 -name .git 2>/dev/null | _aios_drop_own_worktrees "$REPO")
   [ -n "$nested_pub" ] && { fail "nested git repository inside the public repo:"; echo "$nested_pub" | sed 's/^/          /'; } \
                        || ok "public repo: no nested repositories"
   # Identity is reported, never changed — not global, not local, not ever.
