@@ -1,0 +1,414 @@
+#!/usr/bin/env python3
+"""ai-os-lifecycle — should this session continue, checkpoint, compact, restart or hand off.
+
+  ai-os lifecycle                     the decision, from the records and the measured session
+  ai-os lifecycle --json              the same decision, machine-readable
+  ai-os lifecycle --ticket <ID>       which record this session is working
+  ai-os lifecycle effort              the reasoning effort a task class earns
+  ai-os lifecycle effort --doctor     does the client's configured effort match the policy
+
+## The problem this exists for
+
+Measured across 53 sessions: per-turn context grew roughly linearly and never fell, no
+session ever checkpointed and restarted, and cached re-reads were 57% of weighted spend.
+The always-loaded prompt was never the cost — session length was. Making governance and
+cold starts cheap does nothing about that, because the expensive thing is the tail of a
+conversation being re-read on every later turn.
+
+So the target flow is:
+
+    WORK -> PERSIST DURABLE STATE -> DETECT BOUNDARY -> CHECKPOINT
+         -> DISCARD LOW-VALUE WORKING CONTEXT -> RECONSTRUCT CHEAPLY -> CONTINUE
+
+Persistent intelligence without persistent context.
+
+## It decides, it does not write
+
+The decision comes from `aios_lifecycle.decide` — pure, deterministic, no model. This
+command's whole job is to collect the evidence from primitives that already exist
+(`ai-os context` for the records, `ai-os usage` for the measurement) and to print the
+verdict with the signals behind it. The single writer of a checkpoint is
+`ai-os tickets checkpoint`, and this command emits that command rather than running it:
+one writer, and a decision that can be read before anything changes on disk.
+
+## What it cannot know, it asks for
+
+Whether the reasoning in flight still needs this transcript, whether the next request
+starts a different workstream, whether the next step is heavy disposable investigation —
+no filesystem answers these. They are flags, and their defaults are conservative:
+without `--resolved` this command assumes the current context is still deciding the work
+and will not recommend discarding it. A large context is never thrown away for being
+large.
+
+## Restarting a session is the client's move, not this command's
+
+There is no supported way for a running agent to clear or restart its own Claude Code
+session: `/clear` and `/effort` are typed by a person, `--effort` and `--continue` start a
+new process, and hooks receive the effort as read-only input. So FRESH prints the boundary,
+the proof that state is saved, and the one command that rebuilds the context. Faking a
+restart, or claiming one happened, would be worse than saying plainly whose move it is.
+
+Zero non-stdlib dependencies.
+"""
+import argparse, importlib.machinery, importlib.util, json, os, re, statistics, sys
+from pathlib import Path
+
+SELF = Path(__file__).resolve().parent
+sys.path.insert(0, str(SELF))
+import aios_lifecycle as LC
+from aios_paths import private_path, PathConflict
+
+# Only scan this many recent transcripts looking for this session's. A lifecycle check
+# that walked every transcript on the machine would cost more than the context it saves.
+SCAN_LIMIT = 300
+
+
+def sibling(name, modname):
+    """Import a sibling command as a module. The commands have no .py extension."""
+    path = SELF / name
+    loader = importlib.machinery.SourceFileLoader(modname, str(path))
+    spec = importlib.util.spec_from_loader(modname, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+# ---------------------------------------------------------------------------- durable
+
+def handoff_state(ticket_dir):
+    """Is a handoff record open? Open means prepared/approved/sent and not yet closed."""
+    d = Path(ticket_dir)
+    if not d.is_dir():
+        return False
+    for rec in sorted(d.glob("handoff-*.md")):
+        status = ""
+        for line in rec.read_text(errors="replace").splitlines()[:40]:
+            m = re.match(r"^status:\s*(\S+)", line)
+            if m:
+                status = m.group(1).strip().strip('"')
+                break
+        if status and status not in ("received", "closed", "cancelled"):
+            return True
+    return False
+
+
+def durable(ctx, args):
+    """Evidence from the records: the ticket, its state, and whether it reconstructs."""
+    packet = ctx.build(os.getcwd(), args.ticket)
+    live = packet["tickets_live"]
+
+    note = None
+    if packet["focus"] is None:
+        if len(live) == 1:
+            # Exactly one live ticket in this project is not a guess; it is the only
+            # record the work can belong to.
+            packet = ctx.build(os.getcwd(), live[0]["id"])
+        elif live:
+            note = (f"{len(live)} tickets are live and none was named — pass --ticket <ID> "
+                    f"for a record-specific reading. Until then this reads as if there "
+                    f"were no record, which is the conservative direction.")
+    focus = packet["focus"]
+
+    ev = {"ticket": focus["id"] if focus else None,
+          "has_record": bool(focus),
+          "task_state": focus["state"] if focus else None,
+          "reconstructable": False,
+          "packet_chars": None,
+          "handoff_open": False}
+
+    if focus:
+        # `reconstructs` is decided inside the packet — an objective, one next action and
+        # a verification. Recomputing it here is how two readings of "is it safe to
+        # discard this context" would start to disagree.
+        ev["reconstructable"] = bool(focus.get("reconstructs"))
+        ev["packet_chars"] = len(ctx.render(packet))
+        ev["handoff_open"] = handoff_state(Path(focus["record"]).parent)
+    return ev, packet, note
+
+
+# ---------------------------------------------------------------------------- measured
+
+def session_report(usage, root, cwd, want=None):
+    """This session's own transcript, or None. Newest first, cheapest check first."""
+    if not root.is_dir():
+        return None
+    cands = [p for p in root.rglob("*.jsonl")
+             if not usage.is_subagent_transcript(p, root)]
+    cands.sort(key=lambda p: -p.stat().st_mtime)
+    cwd = str(Path(cwd).resolve())
+    for p in cands[:SCAN_LIMIT]:
+        head_cwd = head_sid = None
+        with open(p, errors="ignore") as fh:
+            for line in fh:
+                try:
+                    m = json.loads(line)
+                except ValueError:
+                    continue
+                head_cwd = head_cwd or m.get("cwd")
+                head_sid = head_sid or m.get("sessionId")
+                if head_cwd and head_sid:
+                    break
+        if want:
+            if want not in (head_sid, p.stem, str(p)):
+                continue
+        elif head_cwd != cwd:
+            continue
+        return usage.analyze(p, root)
+    return None
+
+
+def measured(usage, args, cwd):
+    root = usage.transcript_root(args.transcripts)
+    r = session_report(usage, root, cwd, args.session)
+    if r is None:
+        return {"measured": False}, None
+    c = r["cache_read_per_turn"]
+    ev = {"measured": True, "turns": r["turns"], "context_first": c["first"],
+          "context_last": c["last"], "context_median": c["median"],
+          "large_results": r["large_results"]["count"]}
+    if args.cohort:
+        # Only on request: the cohort median needs every transcript, which is exactly
+        # the kind of cost this whole ticket exists to stop paying by default.
+        others = [x for x in usage.collect(root)
+                  if not x["is_subagent"] and x["turns"] > 3]
+        med = statistics.median([x["cache_read_per_turn"]["median"] for x in others] or [0])
+        ev["cohort_median"] = int(med)
+    return ev, r
+
+
+# ---------------------------------------------------------------------------- effort
+
+def models_block(name):
+    """One flat `name:` block of `key: value` pairs from the private models.yaml.
+
+    A deliberately minimal parse rather than a YAML dependency: these blocks are flat
+    scalars, a comment may follow a value, and the engine's rule is zero non-stdlib
+    dependencies. Returns None when the workspace has no models.yaml, which is how a
+    throwaway test workspace falls back to the built-in table.
+    """
+    try:
+        cfg = private_path("config") / "models.yaml"
+    except (PathConflict, KeyError):
+        return None
+    if not cfg.exists():
+        return None
+    out, inside = {}, False
+    for line in cfg.read_text().splitlines():
+        if re.match(rf"^{re.escape(name)}:\s*$", line):
+            inside = True
+            continue
+        if inside:
+            m = re.match(r"^\s+([\w-]+):\s*([A-Za-z]+)", line)
+            if m:
+                out[m.group(1)] = m.group(2)
+                continue
+            if line.strip() and not line.startswith((" ", "\t", "#")):
+                break
+    return out or None
+
+
+def models_effort_table():
+    return models_block("effort_by_class")
+
+
+def client_effort():
+    """What the client is actually configured to do. Reported, never rewritten here.
+
+    Agent frontmatter is not scanned for an `effort:` field: confirmed 2026-09-05 that
+    the client ignores it and every subagent inherits the parent session's effort
+    regardless of what it declares. See models.yaml effort_mechanisms.observed_per_task.
+    """
+    p = os.environ.get("AI_OS_CLAUDE_SETTINGS") or str(Path.home() / ".claude/settings.json")
+    out = {"settings": p, "effortLevel": None, "env_override": os.environ.get(
+        "CLAUDE_CODE_EFFORT_LEVEL")}
+    try:
+        out["effortLevel"] = json.loads(Path(p).read_text()).get("effortLevel")
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+def cmd_effort(args):
+    table = models_effort_table() or LC.EFFORT_BY_CLASS
+    klass = args.klass
+
+    if args.ticket and not klass:
+        ctx = sibling("ai-os-context", "aios_context_mod")
+        p = ctx.build(os.getcwd(), args.ticket)
+        klass = (p["focus"] or {}).get("class")
+
+    if args.doctor:
+        cl = client_effort()
+        # (what, is, expected, ok). One flag drives both the marker and the count: they
+        # disagreed in the first version, so a row that was counted as a problem printed
+        # as if it were fine.
+        rows = []
+        want_global = table.get("medium", "medium")
+        rows.append(("client effortLevel", cl["effortLevel"] or "unset",
+                     f"policy default {want_global}",
+                     cl["effortLevel"] == want_global))
+        for k, v in sorted(table.items()):
+            legal = v in LC.EFFORT_LADDER
+            rows.append((f"class {k}", v,
+                         "legal" if legal else "NOT a client effort level", legal))
+        bad = sum(1 for *_, ok in rows if not ok)
+        if args.json:
+            print(json.dumps({"table": table, "client": cl,
+                              "checks": [{"what": w, "is": i, "expected": e, "ok": ok}
+                                         for w, i, e, ok in rows],
+                              "problems": bad}, indent=2))
+            return 1 if bad else 0
+        print("\n  effort — configured against policy\n")
+        for w, i, e, ok in rows:
+            print(f"  {' ' if ok else '!'} {w:<24} {str(i):<10} {e}")
+        if cl["env_override"]:
+            print(f"\n  CLAUDE_CODE_EFFORT_LEVEL={cl['env_override']} overrides both the "
+                  f"setting and --effort for this process")
+        print(f"\n  {bad} problem(s)\n")
+        return 1 if bad else 0
+
+    eff, why, allowed = LC.effort_for(klass, args.kind, args.want, args.reason, table)
+    if args.json:
+        print(json.dumps({"class": klass, "kind": args.kind, "requested": args.want,
+                          "reason": args.reason, "effort": eff, "why": why,
+                          "allowed": allowed, "table": table,
+                          "escalation_reasons": list(LC.ESCALATION_REASONS),
+                          "mechanisms": {
+                              "global": "effortLevel in settings.json",
+                              "session": "claude --effort <level>, or /effort in a session",
+                              "process": "CLAUDE_CODE_EFFORT_LEVEL (overrides both)"}},
+                         indent=2))
+        return 0 if allowed else 1
+    print(f"\n  effort   {eff}      {why}")
+    if not allowed:
+        print(f"  refused  the request was not applied; {eff} is the class default\n")
+        return 1
+    print(f"\n  how it is applied\n"
+          f"    per session  claude --effort {eff}   ·  /effort {eff} in a running one\n"
+          f"    per process  CLAUDE_CODE_EFFORT_LEVEL={eff}\n"
+          f"    A subagent cannot set its own effort: it always inherits the parent\n"
+          f"    session's level, whatever it declares in frontmatter.\n")
+    return 0
+
+
+# ---------------------------------------------------------------------------- decide
+
+def render(d, note, extra):
+    L = []
+    seq = " → ".join(d["sequence"]) if d["sequence"] else d["decision"]
+    L.append(f"\nlifecycle   {d['decision']}        {d['certainty']}")
+    L.append(f"do          {seq}")
+    L.append(f"why         {d['why']}")
+    if note:
+        L.append(f"\n  ! {note}")
+    L.append("\nsignals")
+    for s in d["signals"]:
+        L.append(f"  {s['code']:<30} {s['detail']}")
+    if d["also_consider"]:
+        L.append(f"\nalso consider   {', '.join(d['also_consider'])}")
+
+    if LC.CHECKPOINT in d["sequence"]:
+        tid = d["ticket"] or "<TICKET-ID>"
+        L.append("\ncheckpoint — durable state only, into the one authoritative record")
+        L.append(f"  ai-os tickets checkpoint {tid} \\")
+        L.append('      --note "what landed, the evidence, the verification state" \\')
+        L.append('      --next "the one next action"')
+        L.append(f"  carries: {', '.join(d['checkpoint_fields'])}")
+        L.append("  never:   conversation history, raw logs, superseded reasoning, "
+                 "large tool output")
+
+    if d["fresh_recommended"]:
+        L.append("\n" + "─" * 72)
+        L.append("  Context boundary reached.")
+        L.append("  Task state is safely checkpointed once the command above has run.")
+        L.append("  Recommended: start a fresh Claude session.")
+        L.append(f"  Resume with:")
+        L.append(f"      {d['resume_with']}")
+        L.append("─" * 72)
+        L.append("  No agent can clear or restart a Claude Code session from inside it —")
+        L.append("  /clear and /effort are typed by a person, --continue starts a new")
+        L.append("  process, and a hook only reads the effort. This is your move.")
+
+    if extra:
+        L.append(f"\nmeasured    {extra}")
+    L.append("")
+    return "\n".join(L)
+
+
+def cmd_decide(args):
+    ctx = sibling("ai-os-context", "aios_context_mod")
+    usage = sibling("ai-os-usage", "aios_usage_mod")
+
+    dur, packet, note = durable(ctx, args)
+    mea, report = measured(usage, args, os.getcwd())
+
+    ev = LC.evidence(
+        **dur, **mea,
+        task_complete=True if args.complete else None,
+        verification=args.verification,
+        milestone_done=True if args.milestone else None,
+        next_action_changed=True if args.next_action_changed else None,
+        transition_to=args.transition,
+        unresolved_reasoning=False if args.resolved else None,
+        disposable_exploration=True if args.exploration else None,
+    )
+    d = LC.decide(ev)
+
+    extra = None
+    if report:
+        c = report["cache_read_per_turn"]
+        extra = (f"{report['turns']} turns · first {c['first']:,} · median "
+                 f"{c['median']:,} · last {c['last']:,} tokens re-read per turn · "
+                 f"{report['large_results']['count']} large tool results")
+
+    if args.json:
+        print(json.dumps({"decision": d, "evidence": ev, "note": note,
+                          "session": {"file": report["file"], "turns": report["turns"],
+                                      "cache_read_per_turn": report["cache_read_per_turn"],
+                                      "large_results": report["large_results"]["count"]}
+                          if report else None}, indent=2))
+    else:
+        print(render(d, note, extra))
+    return 0
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="ai-os lifecycle", description=(
+        "what this session should do next: continue, checkpoint, compact, restart, hand off"))
+    sub = ap.add_subparsers(dest="cmd")
+
+    e = sub.add_parser("effort", help="the reasoning effort a task class earns")
+    e.add_argument("--class", dest="klass", choices=("small", "medium", "large"))
+    e.add_argument("--kind", help=f"mechanical work: {', '.join(LC.MECHANICAL_KINDS)}")
+    e.add_argument("--want", choices=LC.EFFORT_LADDER, help="request a level")
+    e.add_argument("--reason", choices=LC.ESCALATION_REASONS)
+    e.add_argument("--ticket", help="take the class from a ticket record")
+    e.add_argument("--doctor", action="store_true",
+                   help="check the client's configured effort against the policy")
+    e.add_argument("--json", action="store_true")
+
+    for p in (ap,):
+        p.add_argument("--ticket", help="the record this session is working")
+        p.add_argument("--session", help="measure a named session instead of this one")
+        p.add_argument("--transcripts", help="read transcripts from elsewhere")
+        p.add_argument("--cohort", action="store_true",
+                       help="also compare against every measured session (slower)")
+        p.add_argument("--complete", action="store_true", help="the task's work is done")
+        p.add_argument("--milestone", action="store_true", help="a milestone landed")
+        p.add_argument("--next-action-changed", dest="next_action_changed",
+                       action="store_true")
+        p.add_argument("--verification", choices=("passed", "failed", "unknown"))
+        p.add_argument("--transition", metavar="TICKET",
+                       help="the next request explicitly starts this other workstream")
+        p.add_argument("--resolved", action="store_true",
+                       help="nothing in flight depends on the current context")
+        p.add_argument("--exploration", action="store_true",
+                       help="the next step is heavy disposable investigation")
+        p.add_argument("--json", action="store_true")
+
+    a = ap.parse_args(argv)
+    return cmd_effort(a) if a.cmd == "effort" else cmd_decide(a)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

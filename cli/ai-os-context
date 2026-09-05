@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""ai-os-context — the cold-start packet: what a session needs to resume, and no more.
+
+  ai-os context                  the current project, its live tickets, and git state
+  ai-os context <TICKET-ID>      that ticket in full, plus the same surroundings
+  ai-os context --json           the same packet, machine-readable
+  ai-os context --boundary       just the task-boundary reading (see below)
+
+## Why a command rather than a document
+
+Resuming used to mean reading a project's `state.md`, `current.md` and `checkpoint.md` and
+then the ticket — tens of thousands of tokens, describing a moment that had passed. Three
+of those files disagreed with the filesystem the day this was written: the branch, the HEAD
+and the test baseline were all stale, because a fact copied into prose stops tracking the
+thing it describes.
+
+So the packet is DERIVED, every time, from the records and from git. It cannot be stale,
+and it is small enough that reading it is never the expensive part of a task.
+
+## What it deliberately does not include
+
+History. A ticket's log, its verification transcript, its design artifacts and the
+project's roadmap and charter are all reachable in one named step from the packet, and none
+is admitted into it. The packet says where to look; it does not pre-load the answer.
+
+## The boundary reading
+
+`--boundary` reports the deterministic signals that bear on whether the next request
+belongs to the session already running: the project the working directory resolves to, the
+tickets that are live, and whether uncommitted work is outstanding. It is deliberately NOT
+a verdict. Nothing here can tell from a filesystem whether the user's next sentence is the
+same task, and a keyword rule dressed up as semantic judgement would be worse than an
+honest gap: it would be trusted. What this gives a caller is the evidence; the reading of
+intent stays with whoever has the request in front of them.
+
+Zero non-stdlib dependencies.
+"""
+import argparse, json, os, re, subprocess, sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from aios_paths import private_path_or_die, private_path, PathConflict
+from aios_tickets import LIVE, discover, section, first_line
+
+MAX_LOG_LINES = 3
+
+
+def git(repo, *args):
+    r = subprocess.run(["git", "-C", str(repo), *args],
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def git_state(repo):
+    repo = Path(repo)
+    if not (repo / ".git").exists():
+        top = git(repo, "rev-parse", "--show-toplevel")
+        if not top:
+            return None
+        repo = Path(top)
+    dirty = git(repo, "status", "--porcelain")
+    return {
+        "path": str(repo),
+        "branch": git(repo, "rev-parse", "--abbrev-ref", "HEAD"),
+        "head": git(repo, "log", "-1", "--format=%h %s"),
+        "uncommitted": len([l for l in dirty.splitlines() if l.strip()]),
+        "remotes": len([l for l in git(repo, "remote").splitlines() if l.strip()]),
+    }
+
+
+def registry_projects(projects_root):
+    """name -> path, from the registry table. Deterministic, no model involved."""
+    reg = projects_root / "registry.md"
+    out = {}
+    if not reg.exists():
+        return out
+    for line in reg.read_text().splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip().strip("`*") for c in line.strip("|").split("|")]
+        if len(cells) < 2 or cells[0].lower().startswith(("project", "---")):
+            continue
+        name, path = cells[0], cells[1]
+        if path and path not in ("-", ""):
+            out[name] = path
+    return out
+
+
+def active_project(projects_root, cwd):
+    """Which project the working directory sits in. Longest matching path wins."""
+    cwd = str(Path(cwd).resolve())
+    best = None
+    for name, path in registry_projects(projects_root).items():
+        p = os.path.expanduser(path).rstrip("/")
+        if not p:
+            continue
+        tail = p.split("/")[-1]
+        for cand in (p, tail):
+            if cand and (f"/{cand}/" in cwd + "/" or cwd.endswith(f"/{cand}")):
+                if best is None or len(cand) > best[1]:
+                    best = (name, len(cand))
+    return best[0] if best else None
+
+
+def project_dir_for(projects_root, name):
+    if not name:
+        return None
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    for cand in (projects_root / slug,):
+        if cand.is_dir():
+            return cand
+    for d in sorted(projects_root.iterdir()):
+        if d.is_dir() and slug.startswith(d.name):
+            return d
+    return None
+
+
+def ticket_packet(t, full):
+    body = Path(t["path"]).read_text()
+    out = {
+        "id": t["id"], "state": t["state"], "title": t["title"],
+        "class": t["klass"], "expected_context": t["expected_context"],
+        "next_action": t["next_action_line"],
+        "record": t["path"],
+        # Whether a cold `ai-os context <ID>` would carry the work forward on its own.
+        # One definition, so `ai-os lifecycle` cannot disagree with this packet about
+        # whether discarding a context is safe.
+        "reconstructs": all(bool((section(body, h) or "").strip())
+                            for h in ("Objective", "Next action", "Verification")),
+    }
+    blockers = section(body, "Blockers")
+    if blockers:
+        head = first_line(blockers)
+        # "None", "None open.", "none — cleared 2026-09-02" all mean there is no blocker.
+        # Only a real one earns a line in the packet.
+        if head and not re.match(r"(?i)^none\b", head.strip()):
+            out["blockers"] = head
+    if full:
+        out["objective"] = (section(body, "Objective") or "").strip()
+        out["next_action"] = (section(body, "Next action") or "").strip()
+        ver = section(body, "Verification") or ""
+        out["verification"] = ver.strip()
+        log = section(body, "Log") or ""
+        entries = [l for l in log.splitlines() if l.startswith("- ")]
+        out["recent_log"] = entries[-MAX_LOG_LINES:]
+        out["artifacts"] = t["artifacts"]
+    return out
+
+
+def build(cwd, ticket_id=None):
+    projects_root = private_path_or_die("projects")
+    tickets = discover(projects_root)
+    proj = active_project(projects_root, cwd)
+    pdir = project_dir_for(projects_root, proj)
+
+    live = [t for t in tickets if t["state"] in LIVE]
+    if pdir:
+        scoped = [t for t in live if t["project_dir"] == pdir.name]
+        live = scoped or live
+
+    focus = None
+    if ticket_id:
+        hit = [t for t in tickets if (t["id"] or "").upper() == ticket_id.upper()]
+        if not hit:
+            raise SystemExit(f"ai-os context: no ticket '{ticket_id}'")
+        focus = ticket_packet(hit[0], full=True)
+
+    repos = []
+    seen = set()
+    for cand in (cwd, os.environ.get("AI_OS_REPO", "")):
+        if not cand:
+            continue
+        st = git_state(cand)
+        if st and st["path"] not in seen:
+            seen.add(st["path"])
+            repos.append(st)
+
+    packet = {
+        "project": proj,
+        "project_dir": str(pdir) if pdir else None,
+        "tickets_live": [ticket_packet(t, full=False) for t in live],
+        "focus": focus,
+        "repos": repos,
+        "read_next": {
+            "one ticket in full": "ai-os context <TICKET-ID>",
+            "every ticket": "ai-os tickets list",
+            "why it is built this way": (str(pdir / "context/state.md") if pdir else None),
+            "where it is going": (str(pdir / "context/roadmap.md") if pdir else None),
+        },
+    }
+    return packet
+
+
+def render(p):
+    lines = []
+    lines.append(f"project   {p['project'] or '(cwd is not inside a registered project)'}")
+    for r in p["repos"]:
+        warn = "  ⚠ has a remote" if r["remotes"] else ""
+        lines.append(f"git       {r['branch']}  {r['head'][:60]}"
+                     f"  ·  {r['uncommitted']} uncommitted{warn}")
+    if p["tickets_live"]:
+        lines.append("")
+        lines.append(f"live tickets ({len(p['tickets_live'])})")
+        for t in p["tickets_live"]:
+            mark = "→" if (p["focus"] and t["id"] == p["focus"]["id"]) else " "
+            lines.append(f"  {mark} {t['id']:<10} {t['state']:<8} {t['title']}")
+            if t.get("next_action"):
+                lines.append(f"    {'':<10} next: {t['next_action'][:100]}")
+            if t.get("blockers"):
+                lines.append(f"    {'':<10} BLOCKED: {t['blockers'][:100]}")
+    else:
+        lines.append("\nlive tickets  none")
+
+    f = p["focus"]
+    if f:
+        lines.append("")
+        lines.append(f"── {f['id']}  {f['state']}  ·  {f['title']}")
+        if f.get("class"):
+            lines.append(f"   class {f['class']}"
+                         + (f" · expected context {f['expected_context']}"
+                            if f.get("expected_context") else ""))
+        if f.get("objective"):
+            lines.append(f"\n   objective\n" + indent(f["objective"]))
+        lines.append(f"\n   next action\n" + indent(f["next_action"]))
+        if f.get("verification"):
+            lines.append(f"\n   verification\n" + indent(f["verification"]))
+        if f.get("blockers"):
+            lines.append(f"\n   blockers\n" + indent(f["blockers"]))
+        if f.get("recent_log"):
+            lines.append("\n   recent")
+            for e in f["recent_log"]:
+                lines.append(indent(e.split("\n")[0][:110]))
+        lines.append(f"\n   record   {f['record']}")
+        if f.get("artifacts"):
+            lines.append(f"   beside it   {', '.join(f['artifacts'])}")
+
+    lines.append("\nread next, only if the work needs it")
+    for k, v in p["read_next"].items():
+        if v:
+            lines.append(f"  {k:<26} {v}")
+    return "\n".join(lines)
+
+
+def indent(text, pad="     "):
+    return "\n".join(pad + l for l in str(text).strip().splitlines())
+
+
+def render_boundary(p):
+    lines = ["boundary signals — evidence, not a verdict", ""]
+    lines.append(f"  project resolved from cwd   {p['project'] or 'none'}")
+    lines.append(f"  live tickets in this project {len(p['tickets_live'])}"
+                 + (f"  ({', '.join(t['id'] for t in p['tickets_live'])})"
+                    if p["tickets_live"] else ""))
+    for r in p["repos"]:
+        lines.append(f"  uncommitted work            {r['uncommitted']} file(s) on "
+                     f"{r['branch']}")
+    # What it would cost to come back cold. A boundary is only cheap to cross when the
+    # record can rebuild the work without the transcript, so that is reported here
+    # rather than left to be assumed.
+    ready = [t["id"] for t in p["tickets_live"] if t.get("reconstructs")]
+    thin = [t["id"] for t in p["tickets_live"] if not t.get("reconstructs")]
+    lines.append(f"  reconstructs cold           {', '.join(ready) if ready else 'none'}")
+    if thin:
+        lines.append(f"  would re-derive             {', '.join(thin)}"
+                     f"  (missing an objective, a next action or verification)")
+    lines.append(f"  packet size                 {len(render(p)):,} chars")
+    lines.append("")
+    lines.append("  Whether the next request continues one of these tickets or starts")
+    lines.append("  something else is a reading of intent. This command does not make it,")
+    lines.append("  and no keyword rule here would be trustworthy enough to.")
+    lines.append("  `ai-os lifecycle` turns these signals into a decision, and takes the")
+    lines.append("  reading of intent as an explicit flag rather than guessing it.")
+    return "\n".join(lines)
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="ai-os context")
+    ap.add_argument("ticket", nargs="?")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--boundary", action="store_true")
+    a = ap.parse_args(argv)
+    p = build(os.getcwd(), a.ticket)
+    if a.json:
+        print(json.dumps(p, indent=2))
+    elif a.boundary:
+        print(render_boundary(p))
+    else:
+        print(render(p))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

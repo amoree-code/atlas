@@ -21,6 +21,12 @@ ai-os v$VERSION — a portable operating layer for AI coding agents.
   ai-os handoff <cmd>        prepare | approve | send | receive | show | list — handoffs
   ai-os render <skill>       resolve a canonical skill for one client
   ai-os memory <cmd>         status | doctor | attach — the memory engine
+  ai-os context [ticket]     the cold-start packet: project, live tickets, git state
+  ai-os observe -- <cmd>     run it, keep the output, return only what decides
+  ai-os policy <name>        list | doctor | <module> — governance, loaded on demand
+  ai-os tickets <cmd>        list | index | doctor | log | checkpoint — task records
+  ai-os usage [--json]       measured token spend per session, from client transcripts
+  ai-os lifecycle [effort]   continue, checkpoint, compact, restart or hand off
   ai-os privacy-scan [path]  check the public repo for credentials and personal data
   ai-os version
 
@@ -38,7 +44,7 @@ EOF
 
 cmd="${1:-status}"; shift || true
 case "$cmd" in
-  init|onboard|doctor|status|workspace|privacy-scan|adapter|capability|domain|run|render|memory|handoff) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
+  init|onboard|doctor|status|workspace|privacy-scan|adapter|capability|domain|run|render|memory|handoff|usage|tickets|context|observe|policy|lifecycle) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
   # Compatibility alias, kept for one version. `capability` is the current name.
   plugin) exec "$SELF_DIR/ai-os-plugin" "$@" ;;
   version|--version|-V) echo "$VERSION" ;;

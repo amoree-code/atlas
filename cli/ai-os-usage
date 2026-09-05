@@ -1,0 +1,693 @@
+#!/usr/bin/env python3
+"""ai-os-usage — measure what a session actually spent, from the client's own transcripts.
+
+  ai-os usage                      aggregate across every transcript found
+  ai-os usage --top N              the N most expensive sessions (default 10)
+  ai-os usage --session <id|path>  one session in detail
+  ai-os usage --since YYYY-MM-DD   only sessions whose last turn is on/after this date
+  ai-os usage --json               machine-readable, same numbers
+  ai-os usage --baseline <file>    write the JSON report to a file as a benchmark record
+  ai-os usage --compare <file>     that baseline against the cohort measured now
+  ai-os usage --guard              expensive patterns, each with its lifecycle reading
+  ai-os usage --transcripts <dir>  read from somewhere other than the default root
+
+This is the instrument every context optimisation is judged by. It measures; it never
+changes a task, a ticket, a session record or a config. Reading is its only side effect.
+
+## Why deduplication is the whole correctness story
+
+One assistant turn is written to the transcript as SEVERAL lines — one per content block —
+and every one of them repeats the same `usage` object. Counting lines therefore
+overcounts turns, output and cache writes by roughly the block-per-turn ratio (~1.8x on
+this machine's transcripts). A turn is identified by `message.id`, counted once, at its
+first occurrence. This was verified before the file was written: across a 433-line sample
+every repeated `message.id` carried a byte-identical usage object, so first-occurrence is
+lossless rather than a choice between differing values.
+
+## Where the numbers come from
+
+Nothing here is modelled or estimated. Every token figure is a field the client itself
+recorded in the transcript:
+
+  input_tokens                     uncached prompt
+  cache_read_input_tokens          prompt served from cache — the re-read cost
+  cache_creation_input_tokens      prompt written into cache (split 5m/1h when present)
+  output_tokens                    generated, including thinking
+  output_tokens_details.thinking_tokens   the thinking share of output
+
+Character counts for tool results are counted from the transcript text, and reported as
+characters. Where tokens are shown for them it is an explicit ~chars/4 estimate, labelled.
+
+## Weighted spend
+
+Absolute token counts hide where money goes: an output token costs far more than a cached
+read. WEIGHTS below are PRICE RATIOS relative to one uncached input token, matching the
+published Anthropic structure (cache read 0.1x, 5m write 1.25x, 1h write 2x, output 5x).
+They are ratios, not dollars, and this file never claims a currency amount. Override with
+--weights k=v,... when a different ratio applies.
+
+## The transcript root is one client's convention
+
+`~/.claude/projects/` is where Claude Code writes transcripts. That fact is the adapter's,
+not the engine's, and it is overridable by --transcripts and by $AI_OS_CLAUDE_PROJECTS —
+the same environment variable cli/ai-os-doctor already honours, so the contract suite can
+point every reader at a throwaway directory.
+
+Zero non-stdlib dependencies.
+"""
+import argparse, hashlib, json, os, statistics, sys
+from collections import Counter, defaultdict
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import aios_lifecycle as LC
+
+WEIGHTS = {"input": 1.0, "cache_read": 0.1, "cache_write_5m": 1.25,
+           "cache_write_1h": 2.0, "output": 5.0}
+
+# A tool result at or above this many characters is reported as a large-output event. It is
+# a REPORTING threshold for drawing attention, never a limit anything enforces.
+LARGE_RESULT_CHARS = 8000
+
+
+def transcript_root(override=None):
+    if override:
+        return Path(os.path.expanduser(override))
+    env = os.environ.get("AI_OS_CLAUDE_PROJECTS")
+    return Path(env) if env else Path.home() / ".claude" / "projects"
+
+
+def result_text(block):
+    """The text of a tool_result exactly as it entered the model's context."""
+    c = block.get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        return "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in c)
+    return "" if c is None else json.dumps(c)
+
+
+def observation_key(name, inp):
+    """A stable identity for 'the same observation', or None when it has none.
+
+    Only tools whose result is a pure function of named inputs get a key. A key plus an
+    identical result hash is what proves a re-read returned content that had not changed.
+    """
+    if not isinstance(inp, dict):
+        return None
+    if name == "Read":
+        return f"Read:{inp.get('file_path')}:{inp.get('offset')}:{inp.get('limit')}"
+    if name == "Bash":
+        return f"Bash:{inp.get('command')}"
+    if name in ("Grep", "Glob"):
+        return f"{name}:{json.dumps(inp, sort_keys=True)}"
+    return None
+
+
+def is_subagent_transcript(path, root):
+    """True when this transcript is an isolated worker's, not a main session's.
+
+    A worker's transcript lives under a `subagents/` directory — and NOT only directly
+    under one: workflow workers nest another two levels down
+    (`subagents/workflows/wf_<id>/agent-<id>.jsonl`). Checking only the immediate parent
+    counted 62 of this machine's worker transcripts as main sessions, which inflated the
+    session count and buried the real per-session cost. Any `subagents` segment settles it.
+    """
+    try:
+        parts = path.relative_to(root).parts
+    except ValueError:
+        parts = path.parts
+    return "subagents" in parts
+
+
+def analyze(path, root=None):
+    """One transcript file → one report dict. Returns None if it holds no usage at all."""
+    turns = []                      # deduped, in order
+    seen_msg = set()
+    seen_effort = set()             # message ids whose effort has been counted
+    models = Counter()
+    tool_calls = Counter()
+    tool_chars = Counter()
+    large = []                      # (tool, chars)
+    pending = {}                    # tool_use_id -> (name, observation key)
+    observations = defaultdict(list)  # key -> [content hash]
+    obs_chars = {}                  # key -> chars of one occurrence
+    first_ts = last_ts = None
+    session_id = None
+    cwds = Counter()
+    efforts = Counter()
+
+    with open(path, errors="ignore") as fh:
+        for line in fh:
+            try:
+                m = json.loads(line)
+            except ValueError:
+                continue
+            if m.get("sessionId") and session_id is None:
+                session_id = m["sessionId"]
+            if m.get("cwd"):
+                cwds[m["cwd"]] += 1
+            ts = m.get("timestamp")
+            if ts:
+                first_ts = first_ts or ts
+                last_ts = ts
+            kind = m.get("type")
+            msg = m.get("message") or {}
+
+            # Effort is deduplicated by message.id for the same reason turns are: one
+            # turn is several lines, and every one of them repeats the effort. Counted
+            # per line it read 196 where there were 114 turns on this machine — a 1.7x
+            # inflation in exactly the number that effort routing is judged by. Verified
+            # before dedup: across those 114 ids, not one carried two different efforts,
+            # so first-occurrence loses nothing.
+            if kind == "assistant" and m.get("effort"):
+                eid = msg.get("id")
+                if eid is None or eid not in seen_effort:
+                    efforts[m["effort"]] += 1
+                    if eid is not None:
+                        seen_effort.add(eid)
+
+            if kind == "assistant":
+                usage, mid = msg.get("usage"), msg.get("id")
+                if usage and mid not in seen_msg:
+                    seen_msg.add(mid)
+                    cc = usage.get("cache_creation") or {}
+                    turns.append({
+                        "input": usage.get("input_tokens", 0),
+                        "cache_read": usage.get("cache_read_input_tokens", 0),
+                        "cache_write": usage.get("cache_creation_input_tokens", 0),
+                        "cache_write_5m": cc.get("ephemeral_5m_input_tokens", 0),
+                        "cache_write_1h": cc.get("ephemeral_1h_input_tokens", 0),
+                        "output": usage.get("output_tokens", 0),
+                        "thinking": (usage.get("output_tokens_details") or {})
+                                    .get("thinking_tokens", 0),
+                        "model": msg.get("model"),
+                    })
+                    if msg.get("model"):
+                        models[msg["model"]] += 1
+                # Tool calls are counted from every line: one turn's blocks are split
+                # across lines, and each block appears exactly once.
+                for b in msg.get("content") or []:
+                    if isinstance(b, dict) and b.get("type") == "tool_use":
+                        name = b.get("name") or "?"
+                        tool_calls[name] += 1
+                        pending[b.get("id")] = (name, observation_key(name, b.get("input")))
+
+            elif kind == "user":
+                for b in msg.get("content") or []:
+                    if not (isinstance(b, dict) and b.get("type") == "tool_result"):
+                        continue
+                    text = result_text(b)
+                    name, key = pending.get(b.get("tool_use_id"), ("?", None))
+                    tool_chars[name] += len(text)
+                    if len(text) >= LARGE_RESULT_CHARS:
+                        large.append((name, len(text)))
+                    if key:
+                        observations[key].append(
+                            hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:16])
+                        obs_chars[key] = len(text)
+
+    if not turns:
+        return None
+
+    reads = [t["cache_read"] for t in turns]
+    tot = {k: sum(t[k] for t in turns)
+           for k in ("input", "cache_read", "cache_write", "cache_write_5m",
+                     "cache_write_1h", "output", "thinking")}
+    weighted = {
+        "input": tot["input"] * WEIGHTS["input"],
+        "cache_read": tot["cache_read"] * WEIGHTS["cache_read"],
+        "cache_write": (tot["cache_write_5m"] * WEIGHTS["cache_write_5m"]
+                        + tot["cache_write_1h"] * WEIGHTS["cache_write_1h"]
+                        # writes with no TTL split recorded: price at the 5m ratio
+                        + max(0, tot["cache_write"] - tot["cache_write_5m"]
+                              - tot["cache_write_1h"]) * WEIGHTS["cache_write_5m"]),
+        "output": tot["output"] * WEIGHTS["output"],
+    }
+
+    # A repeat is the SAME observation returning content that had not changed.
+    repeated = []
+    for key, hashes in observations.items():
+        if len(hashes) < 2:
+            continue
+        dup = len(hashes) - len(set(hashes)) if len(set(hashes)) < len(hashes) else 0
+        # count re-reads whose hash equals an earlier hash for the same key
+        seen, redundant = set(), 0
+        for h in hashes:
+            if h in seen:
+                redundant += 1
+            seen.add(h)
+        repeated.append({"observation": key, "times": len(hashes),
+                         "redundant": redundant, "chars_each": obs_chars.get(key, 0),
+                         "wasted_chars": redundant * obs_chars.get(key, 0)})
+    repeated.sort(key=lambda r: -r["wasted_chars"])
+
+    return {
+        "file": str(path),
+        "session_id": session_id,
+        "cwd": cwds.most_common(1)[0][0] if cwds else None,
+        "is_subagent": is_subagent_transcript(path, root or path.parent),
+        "superseded_by": None,
+        "first_timestamp": first_ts,
+        "last_timestamp": last_ts,
+        "turns": len(turns),
+        "totals": tot,
+        "weighted": weighted,
+        "weighted_total": sum(weighted.values()),
+        "cache_read_per_turn": {
+            "first": reads[0], "last": reads[-1],
+            "mean": round(statistics.fmean(reads), 1),
+            "median": int(statistics.median(reads)), "max": max(reads),
+        },
+        "models": dict(models),
+        "effort": dict(efforts),
+        "tool_calls": dict(tool_calls.most_common()),
+        "tool_result_chars": dict(tool_chars.most_common()),
+        "large_results": {
+            "threshold_chars": LARGE_RESULT_CHARS,
+            "count": len(large),
+            "total_chars": sum(c for _, c in large),
+            "top": [{"tool": n, "chars": c}
+                    for n, c in sorted(large, key=lambda x: -x[1])[:5]],
+        },
+        "repeated_reads": {
+            # repeated: the same observation was requested again, for any reason.
+            # redundant: it came back byte-identical, so the re-read bought nothing.
+            # Only the second is waste; the first is the weaker signal worth watching.
+            "observations_repeated": len(repeated),
+            "repeat_calls": sum(r["times"] - 1 for r in repeated),
+            "redundant_calls": sum(r["redundant"] for r in repeated),
+            "wasted_chars": sum(r["wasted_chars"] for r in repeated),
+            "top": [r for r in repeated if r["redundant"]][:5] or repeated[:5],
+        },
+    }
+
+
+def supersede(reports):
+    """Mark, but never delete, a main transcript that another one wholly continues.
+
+    A resumed session is written to a NEW file that repeats the whole earlier transcript
+    and then continues it, so both files carry the same `sessionId` and the same first
+    timestamp. Counting both bills the shared prefix twice — on this machine that was one
+    pair worth ~44M cache-read tokens. The longer, later-ending file is kept; the other is
+    flagged `superseded_by` and excluded from aggregates. Nothing is removed from the
+    report, so the decision stays visible rather than silent.
+    """
+    by = defaultdict(list)
+    for r in reports:
+        if not r["is_subagent"] and r["session_id"]:
+            by[r["session_id"]].append(r)
+    for sid, group in by.items():
+        if len(group) < 2:
+            continue
+        keep = max(group, key=lambda r: (r["turns"], r["last_timestamp"] or ""))
+        for r in group:
+            if r is not keep:
+                r["superseded_by"] = keep["file"]
+    return reports
+
+
+def collect(root, since=None, include_superseded=False):
+    if not root.is_dir():
+        return []
+    out = []
+    for p in sorted(root.rglob("*.jsonl")):
+        r = analyze(p, root)
+        if r is None:
+            continue
+        if since and (r["last_timestamp"] or "") < since:
+            continue
+        out.append(r)
+    supersede(out)
+    if not include_superseded:
+        out = [r for r in out if not r.get("superseded_by")]
+    return out
+
+
+def aggregate(reports):
+    main = [r for r in reports if not r["is_subagent"]]
+    sub = [r for r in reports if r["is_subagent"]]
+    keys = ("input", "cache_read", "cache_write", "cache_write_5m",
+            "cache_write_1h", "output", "thinking")
+    tot = {k: sum(r["totals"][k] for r in reports) for k in keys}
+    w = {k: sum(r["weighted"][k] for r in reports)
+         for k in ("input", "cache_read", "cache_write", "output")}
+    wt = sum(w.values()) or 1.0
+    turns = sum(r["turns"] for r in reports)
+    tool_calls, tool_chars, efforts = Counter(), Counter(), Counter()
+    for r in reports:
+        tool_calls.update(r["tool_calls"])
+        tool_chars.update(r["tool_result_chars"])
+        efforts.update(r.get("effort") or {})
+    # The median of each main session's own median. The mean is dragged around by one
+    # 300-turn session; the median says what a typical turn re-read, which is the number
+    # a before/after comparison has to move.
+    med_of_med = statistics.median(
+        [r["cache_read_per_turn"]["median"] for r in main] or [0])
+    high = sum(v for k, v in efforts.items() if k in ("high", "xhigh", "max"))
+    return {
+        "sessions": len(reports),
+        "main_sessions": len(main),
+        "subagent_sessions": len(sub),
+        "turns": turns,
+        "turns_per_main_session": round(sum(r["turns"] for r in main) / len(main), 1) if main else 0,
+        "totals": tot,
+        "weighted_share_pct": {k: round(100 * v / wt, 1) for k, v in w.items()},
+        "cache_read_per_turn_mean": round(tot["cache_read"] / turns, 0) if turns else 0,
+        "cache_read_per_turn_median": int(med_of_med),
+        "high_effort_rate_pct": (round(100 * high / sum(efforts.values()), 1)
+                                 if efforts else None),
+        "thinking_share_of_output_pct": round(100 * tot["thinking"] / tot["output"], 1) if tot["output"] else 0,
+        "effort": dict(efforts.most_common()),
+        "tool_calls": dict(tool_calls.most_common(12)),
+        "tool_result_chars": dict(tool_chars.most_common(8)),
+        "large_results": {
+            "threshold_chars": LARGE_RESULT_CHARS,
+            "count": sum(r["large_results"]["count"] for r in reports),
+            "total_chars": sum(r["large_results"]["total_chars"] for r in reports),
+        },
+        "repeated_reads": {
+            "repeat_calls": sum(r["repeated_reads"]["repeat_calls"] for r in reports),
+            "redundant_calls": sum(r["repeated_reads"]["redundant_calls"] for r in reports),
+            "wasted_chars": sum(r["repeated_reads"]["wasted_chars"] for r in reports),
+        },
+    }
+
+
+def guard(reports, agg):
+    """Cheap anomaly detection over what was actually measured.
+
+    Every threshold here is RELATIVE to the cohort being measured, not an absolute number
+    written into the code. A fixed limit ages badly and is wrong on the first unusual task;
+    "far above this machine's own median" stays meaningful as the work changes.
+
+    It warns. It blocks nothing, and it never rewrites a policy — the point is to make an
+    expensive pattern visible to a person while they can still act on it.
+
+    Every finding carries a CODE, and the code is what `aios_lifecycle.guard_lifecycle`
+    turns into a lifecycle reading. The mapping lives there rather than here so the
+    measured half and the record-aware half of the same decision cannot drift apart.
+    """
+    main = [r for r in reports if not r["is_subagent"]]
+    if not main:
+        return []
+    findings = []
+    med_read = statistics.median(
+        [r["cache_read_per_turn"]["median"] for r in main if r["turns"] > 3] or [0])
+
+    for r in main:
+        sid = (r["session_id"] or "?")[:8]
+        cr = r["cache_read_per_turn"]
+
+        # A session that grew far past where it started, and never restarted. This is the
+        # single most expensive pattern in the baseline: context is re-read every turn, so
+        # a long tail is charged again and again.
+        # Growth-and-never-fell is an absolute shape, not a relative one: a session that
+        # quadrupled its per-turn context and kept going is expensive whether or not its
+        # neighbours did the same. Making this cohort-relative made it unable to fire at
+        # all on a single-session cohort, where 2 x the median is the session itself.
+        # 60 turns is a signal threshold, not a limit — nothing is refused for crossing it.
+        if r["turns"] >= 60 and cr["first"] and cr["last"] > 4 * cr["first"]:
+            findings.append((
+                3, sid, "grew_and_never_fell",
+                f"{r['turns']} turns; context grew {cr['first']:,} -> {cr['last']:,} per "
+                f"turn and never fell",
+                "no checkpoint and fresh context at any boundary — the whole tail was "
+                "re-read on every later turn"))
+
+        if med_read and cr["median"] > 2 * med_read and r["turns"] > 10:
+            findings.append((
+                2, sid, "above_cohort",
+                f"median {cr['median']:,} tokens re-read per turn, against a cohort "
+                f"median of {int(med_read):,}",
+                "carrying far more context than comparable sessions"))
+
+        lr = r["large_results"]
+        if lr["count"] >= 5:
+            findings.append((
+                2, sid, "large_results",
+                f"{lr['count']} tool results of {lr['threshold_chars']:,}+ chars "
+                f"({lr['total_chars']:,} chars admitted raw)",
+                "run large or repetitive commands through `ai-os observe --`"))
+
+        rr = r["repeated_reads"]
+        if rr["redundant_calls"]:
+            findings.append((
+                2, sid, "redundant_reads",
+                f"{rr['redundant_calls']} observation(s) re-read with byte-identical "
+                f"content ({rr['wasted_chars']:,} chars)",
+                "the file had not changed — nothing was learned by reading it again"))
+
+        strong = {m: n for m, n in r["models"].items() if "opus" in m or "fable" in m}
+        if strong and r["turns"] >= 20:
+            share = 100 * sum(strong.values()) / r["turns"]
+            mech = sum(r["tool_calls"].get(k, 0) for k in ("Read", "Bash", "Grep", "Glob"))
+            if share > 50 and mech > 0.7 * sum(r["tool_calls"].values() or [1]):
+                findings.append((
+                    1, sid, "strong_model_navigating",
+                    f"{share:.0f}% of turns on a strong model, and "
+                    f"{mech}/{sum(r['tool_calls'].values())} tool calls were navigation",
+                    "a strong model spent its turns on grep and file reading"))
+
+    findings.sort(key=lambda f: -f[0])
+    return findings
+
+
+def print_guard(findings):
+    if not findings:
+        print("\n  cost guard: nothing anomalous in the measured sessions\n")
+        return
+    sev = {3: "high", 2: "med ", 1: "low "}
+    print(f"\n  cost guard — {len(findings)} finding(s), most expensive first\n")
+    for s, sid, code, what, why in findings:
+        decision, action = LC.guard_lifecycle(code)
+        print(f"  [{sev[s]}] {sid}  {what}")
+        print(f"          {why}")
+        print(f"          -> {decision}: {action}")
+    print("\n  These are observations, not limits. Nothing was blocked.")
+    print("  The lifecycle reading above is the measured half only. `ai-os lifecycle`")
+    print("  decides against the records, and will not discard a context still in use.\n")
+
+
+def n(x):
+    return f"{x:,}" if isinstance(x, int) else f"{x:,.1f}"
+
+
+def scale_free(agg):
+    """The comparable metrics, in display order. Every one is a rate, not a total.
+
+    An absolute token count is not comparable between two cohorts of different sizes: the
+    first draft of this view compared 53 baseline sessions against 11 later ones and
+    reported "cache-read tokens -62.7% better", which measured nothing but the smaller
+    sample. A saving has to survive being divided by the work done, so nothing here is a
+    total.
+    """
+    turns = agg.get("turns") or 0
+    main = agg.get("main_sessions") or 0
+    tot = agg.get("totals") or {}
+
+    def per_turn(v):
+        return round(v / turns, 1) if turns and v is not None else None
+
+    return [
+        ("turns per session", agg.get("turns_per_main_session")),
+        ("cache re-read/turn, median", agg.get("cache_read_per_turn_median")),
+        ("cache re-read/turn, mean", agg.get("cache_read_per_turn_mean")),
+        ("cache-write/turn", per_turn(tot.get("cache_write"))),
+        ("output/turn", per_turn(tot.get("output"))),
+        ("thinking share of output %", agg.get("thinking_share_of_output_pct")),
+        ("high-effort rate %", agg.get("high_effort_rate_pct")),
+        ("large results/session",
+         round((agg.get("large_results") or {}).get("count", 0) / main, 2) if main else None),
+    ]
+
+
+def print_compare(agg, base, base_path, since=None):
+    """Now, against a recorded baseline. Both columns are measured; neither is a claim.
+
+    A number moving here is evidence only once post-change sessions exist in the sample.
+    Comparing a baseline against a cohort that still contains the baseline's own sessions
+    says almost nothing, so the sample sizes are printed beside the numbers rather than
+    hidden — the reader can see whether the comparison is yet worth anything.
+    """
+    b = base.get("aggregate", {})
+    print(f"\n  before  {base_path}")
+    print(f"          {b.get('main_sessions', '?')} main sessions, "
+          f"{b.get('turns', '?'):,} turns")
+    print(f"  after   the cohort measured now"
+          + (f", limited to sessions ending on/after {since}" if since else
+             " — NOTE: no --since, so this still contains the baseline's own sessions"))
+    print(f"          {agg['main_sessions']} main sessions, {agg['turns']:,} turns\n")
+    print(f"  {'':<28} {'before':>14} {'after':>14}   {'change':>10}")
+    for (label, was), (_, now) in zip(scale_free(b), scale_free(agg)):
+        if was in (None, 0) or now is None:
+            print(f"  {label:<28} {str(was or '—'):>14} {str(now or '—'):>14}"
+                  f"   {'not in the baseline':>10}" if was in (None, 0)
+                  else f"  {label:<28} {was:>14,.0f} {'—':>14}")
+            continue
+        pct = 100 * (now - was) / was
+        arrow = "better" if pct < 0 else "worse"
+        if abs(pct) < 1:
+            arrow = "flat"
+        print(f"  {label:<28} {was:>14,.0f} {now:>14,.0f}   {pct:>+9.1f}% {arrow}")
+    print("\n  Both columns are measured from the client's own transcripts. Until the "
+          "cohort\n  is mostly post-change sessions, a moved number is not yet a saving.\n")
+
+
+def print_summary(agg, reports, top):
+    print(f"\nsessions {agg['sessions']}  (main {agg['main_sessions']}, "
+          f"subagent {agg['subagent_sessions']})   turns {n(agg['turns'])}"
+          f"   turns/main session {agg['turns_per_main_session']}")
+    t = agg["totals"]
+    print(f"\n  tokens      input {n(t['input'])}   cache-read {n(t['cache_read'])}"
+          f"   cache-write {n(t['cache_write'])}   output {n(t['output'])}"
+          f"   (thinking {n(t['thinking'])})")
+    s = agg["weighted_share_pct"]
+    print(f"  weighted %  cache-read {s['cache_read']}   cache-write {s['cache_write']}"
+          f"   output {s['output']}   input {s['input']}")
+    print(f"  cache re-read per turn (mean)  {n(int(agg['cache_read_per_turn_mean']))}")
+    print(f"  thinking share of output       {agg['thinking_share_of_output_pct']}%")
+    lr = agg["large_results"]
+    print(f"  tool results >= {n(lr['threshold_chars'])} chars   {lr['count']}"
+          f"   totalling {n(lr['total_chars'])} chars")
+    rr = agg["repeated_reads"]
+    print(f"  repeated observations  {rr['repeat_calls']} repeats, of which"
+          f" {rr['redundant_calls']} returned UNCHANGED content"
+          f" ({n(rr['wasted_chars'])} chars re-admitted)")
+    if agg.get("effort"):
+        tot = sum(agg["effort"].values()) or 1
+        print("  effort      " + "  ".join(
+            f"{k}={v} ({100 * v / tot:.0f}%)" for k, v in agg["effort"].items()))
+    if agg["tool_calls"]:
+        print("  tool calls  " + "  ".join(f"{k}={v}" for k, v in agg["tool_calls"].items()))
+
+    ranked = sorted(reports, key=lambda r: -r["weighted_total"])[:top]
+    print(f"\n  most expensive sessions (weighted)")
+    print(f"  {'turns':>6} {'cache-read':>12} {'median/turn':>12} {'output':>9} "
+          f"{'big':>4} {'rr':>4}  session")
+    for r in ranked:
+        print(f"  {r['turns']:>6} {r['totals']['cache_read']:>12,} "
+              f"{r['cache_read_per_turn']['median']:>12,} {r['totals']['output']:>9,} "
+              f"{r['large_results']['count']:>4} "
+              f"{r['repeated_reads']['redundant_calls']:>4}  "
+              f"{(r['session_id'] or '?')[:8]}{' [sub]' if r['is_subagent'] else ''}")
+    print()
+
+
+def print_session(r):
+    print(f"\nsession {r['session_id']}   {'(subagent)' if r['is_subagent'] else ''}")
+    print(f"  file    {r['file']}")
+    print(f"  cwd     {r['cwd']}")
+    print(f"  window  {r['first_timestamp']} .. {r['last_timestamp']}")
+    print(f"  turns   {r['turns']}   models: "
+          + ", ".join(f"{k}={v}" for k, v in r["models"].items()))
+    t, c = r["totals"], r["cache_read_per_turn"]
+    print(f"\n  cache-read   total {n(t['cache_read'])}   first {n(c['first'])}"
+          f"   median {n(c['median'])}   last {n(c['last'])}   max {n(c['max'])}")
+    print(f"  cache-write  total {n(t['cache_write'])}   (5m {n(t['cache_write_5m'])},"
+          f" 1h {n(t['cache_write_1h'])})")
+    print(f"  output       total {n(t['output'])}   thinking {n(t['thinking'])}")
+    tc = r["tool_result_chars"]
+    if tc:
+        print("\n  tool result chars  "
+              + "  ".join(f"{k}={v // 1000}k" for k, v in list(tc.items())[:6]))
+        print("  tool calls         "
+              + "  ".join(f"{k}={v}" for k, v in list(r["tool_calls"].items())[:8]))
+    lr = r["large_results"]
+    print(f"\n  large results  {lr['count']} >= {n(lr['threshold_chars'])} chars, "
+          f"{n(lr['total_chars'])} chars total")
+    for e in lr["top"]:
+        print(f"      {e['tool']:<12} {n(e['chars'])} chars")
+    rr = r["repeated_reads"]
+    print(f"  repeated observations  {rr['repeat_calls']} repeats, "
+          f"{rr['redundant_calls']} redundant, {n(rr['wasted_chars'])} chars")
+    for e in rr["top"]:
+        print(f"      x{e['times']} ({e['redundant']} redundant, {n(e['wasted_chars'])} ch)  "
+              f"{e['observation'][:96]}")
+    print()
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="ai-os usage", add_help=True,
+                                 description="measure recorded token spend per session")
+    ap.add_argument("--transcripts")
+    ap.add_argument("--session")
+    ap.add_argument("--since")
+    ap.add_argument("--top", type=int, default=10)
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--baseline")
+    ap.add_argument("--compare", metavar="FILE",
+                    help="a baseline written earlier by --baseline: before against now")
+    ap.add_argument("--weights")
+    ap.add_argument("--guard", action="store_true",
+                    help="report expensive patterns found in the measured sessions")
+    ap.add_argument("--include-superseded", action="store_true",
+                    help="also count resumed-session prefixes that another file continues")
+    a = ap.parse_args(argv)
+
+    if a.weights:
+        for pair in a.weights.split(","):
+            k, _, v = pair.partition("=")
+            if k.strip() in WEIGHTS:
+                WEIGHTS[k.strip()] = float(v)
+
+    root = transcript_root(a.transcripts)
+    reports = collect(root, a.since, a.include_superseded)
+    if not reports:
+        print(f"ai-os usage: no transcripts with usage under {root}", file=sys.stderr)
+        return 1
+
+    if a.session:
+        hit = [r for r in reports
+               if r["session_id"] == a.session
+               or Path(r["file"]).stem == a.session
+               or r["file"] == a.session]
+        if not hit:
+            print(f"ai-os usage: no session matching '{a.session}'", file=sys.stderr)
+            return 1
+        if a.json:
+            print(json.dumps(hit[0], indent=2))
+        else:
+            for r in hit:
+                print_session(r)
+        return 0
+
+    agg = aggregate(reports)
+    findings = guard(reports, agg)
+    payload = {"root": str(root), "since": a.since, "weights": WEIGHTS,
+               "aggregate": agg, "sessions": reports,
+               "guard": [{"severity": s, "session": sid, "code": c, "observed": w,
+                          "why": y,
+                          "lifecycle": dict(zip(("decision", "action"),
+                                                LC.guard_lifecycle(c)))}
+                         for s, sid, c, w, y in findings]}
+    if a.baseline:
+        p = Path(os.path.expanduser(a.baseline))
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"baseline written: {p}")
+    if a.compare:
+        p = Path(os.path.expanduser(a.compare))
+        if not p.exists():
+            print(f"ai-os usage: no baseline at {p}", file=sys.stderr)
+            return 1
+        base = json.loads(p.read_text())
+        if a.json:
+            print(json.dumps({"before": base.get("aggregate"), "after": agg,
+                              "before_source": str(p)}, indent=2))
+        else:
+            print_compare(agg, base, str(p), a.since)
+        return 0
+    if a.json:
+        print(json.dumps(payload, indent=2))
+    elif a.guard:
+        print_guard(findings)
+    else:
+        print_summary(agg, reports, a.top)
+        if findings:
+            print(f"  cost guard: {len(findings)} finding(s) — ai-os usage --guard\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

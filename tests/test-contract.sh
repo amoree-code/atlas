@@ -303,10 +303,10 @@ chk "a credential on the copyright line is still a finding" $?
 # — the first draft of this test did exactly that, and the repo scan caught it.
 grep -q 'COPYRIGHT_LINE = re.compile' "$CLI/ai-os-privacy-scan"
 chk "licence attribution is a pattern in the scanner, not a literal name" $?
-n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/governance/policies/privacy-allowlist.txt")
+n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/internal/governance/policies/privacy-allowlist.txt")
 [ "$n" -eq 12 ]
 chk "the allowlist gained no entry — every one is a hole in the scan ($n)" $?
-grep -q "^exceptions:" "$REPO/governance/policies/privacy-classification.yaml"
+grep -q "^exceptions:" "$REPO/internal/governance/policies/privacy-classification.yaml"
 chk "both exemptions are documented as policy" $?
 # And the scan of this very repository is the real guard: if a name, a home path or an
 # email ever lands in a tracked file, the cleanliness test below fails. That is what
@@ -607,7 +607,7 @@ t "the formatter that broke the registry is fenced off"
 [ -f "$REPO/.prettierignore" ];                      chk ".prettierignore ships with the repo" $?
 grep -q '^adapters/' "$REPO/.prettierignore";        chk "  ...covering adapters/" $?
 grep -q '^capabilities/' "$REPO/.prettierignore";     chk "  ...covering capabilities/" $?
-grep -q '^governance/' "$REPO/.prettierignore";      chk "  ...covering governance/" $?
+grep -q '^internal/governance/' "$REPO/.prettierignore";      chk "  ...covering internal/governance/" $?
 grep -q '^schemas/' "$REPO/.prettierignore";         chk "  ...covering the yaml fences in schemas/" $?
 [ -f "$REPO/.vscode/settings.json" ];                chk "repo-level editor settings disable format-on-save" $?
 grep -q '"editor.formatOnSave": false' "$REPO/.vscode/settings.json"
@@ -1922,7 +1922,7 @@ chk "  ...and states the boundary: not an agent/orchestrator/planner" $?
 # =====================================================================================
 t "handoff: dispatcher exposes ai-os handoff"
 grep -q 'ai-os handoff' "$CLI/ai-os";      chk "ai-os handoff is a documented subcommand" $?
-grep -q '|handoff)' "$CLI/ai-os";          chk "  ...and dispatches to ai-os-handoff" $?
+grep -qE '\|handoff[|)]' "$CLI/ai-os";          chk "  ...and dispatches to ai-os-handoff" $?
 [ -x "$CLI/ai-os-handoff" ];               chk "cli/ai-os-handoff exists and is executable" $?
 
 # =====================================================================================
@@ -2412,7 +2412,7 @@ chk "the destination was invoked exactly once — nothing was retried" $?
 
 # =====================================================================================
 t "handoff send: the shipped transport registry is evidence-gated"
-[ -f "$REPO/governance/policies/handoff-transports.yaml" ]; chk "governance/policies/handoff-transports.yaml exists" $?
+[ -f "$REPO/internal/governance/policies/handoff-transports.yaml" ]; chk "internal/governance/policies/handoff-transports.yaml exists" $?
 # Asserted through the repo's own manifest parser, not by grepping: the file explains in
 # prose what `verified: true` would mean, and a text search cannot tell that apart from a
 # transport actually being enabled.
@@ -2422,7 +2422,7 @@ repo = pathlib.Path(sys.argv[1])
 spec = importlib.util.spec_from_loader("_a", importlib.machinery.SourceFileLoader(
     "_a", str(repo / "cli" / "ai-os-adapter")))
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-doc = mod.parse((repo / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
+doc = mod.parse((repo / "internal" / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
 transports = doc.get("transports") or {}
 bad = []
 codex = transports.get("codex") or {}
@@ -2444,11 +2444,11 @@ if bad:
     sys.exit(1)
 PYEOF
 chk "codex and claude-code are verified by owner-run evidence" $?
-grep -q 'read-only' "$REPO/governance/policies/handoff-transports.yaml"
+grep -q 'read-only' "$REPO/internal/governance/policies/handoff-transports.yaml"
 chk "  ...and the declared argv pin the client's read-only mode" $?
-grep -q 'stdin: packet' "$REPO/governance/policies/handoff-transports.yaml"
+grep -q 'stdin: packet' "$REPO/internal/governance/policies/handoff-transports.yaml"
 chk "  ...and take the packet on stdin, never in argv" $?
-grep -q 'documentation is not evidence' "$REPO/governance/policies/handoff-transports.yaml"
+grep -q 'documentation is not evidence' "$REPO/internal/governance/policies/handoff-transports.yaml"
 chk "  ...under the same evidence rule adapters/ uses" $?
 # A restriction flag has to actually restrict. `--allowed-tools ""` reads like a lockdown
 # and is not one: it is an ALLOW-list, so an empty value pre-approves nothing and removes
@@ -2460,7 +2460,7 @@ repo = pathlib.Path(sys.argv[1])
 spec = importlib.util.spec_from_loader("_a", importlib.machinery.SourceFileLoader(
     "_a", str(repo / "cli" / "ai-os-adapter")))
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-doc = mod.parse((repo / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
+doc = mod.parse((repo / "internal" / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
 bad = []
 for name, entry in (doc.get("transports") or {}).items():
     argv = entry.get("argv") or []
@@ -2808,24 +2808,24 @@ chk "  ...and requires: [browser] still resolves to the capability" $?
 
 # =====================================================================================
 t "the governance move kept every policy reachable"
-[ -d "$REPO/governance/policies" ];        chk "policies live under governance/" $?
+[ -d "$REPO/internal/governance/policies" ];        chk "policies live under internal/governance/" $?
 [ ! -e "$REPO/policies" ];                 chk "  ...and the old policies/ root is gone" $?
 for f in git.yaml privacy-classification.yaml public-private-contract.yaml \
          workspace-privacy.yaml handoff-transports.yaml privacy-allowlist.txt; do
-  [ -f "$REPO/governance/policies/$f" ] || { false; break; }
+  [ -f "$REPO/internal/governance/policies/$f" ] || { false; break; }
 done
 chk "  ...with every policy file present" $?
-[ -f "$REPO/governance/README.md" ];       chk "governance/ has its own index" $?
-[ ! -d "$REPO/governance/rules" ];         chk "no empty governance/rules/ namespace was invented" $?
+[ -f "$REPO/internal/governance/README.md" ];       chk "internal/governance/ has its own index" $?
+[ ! -d "$REPO/internal/governance/rules" ];         chk "no empty internal/governance/rules/ namespace was invented" $?
 # The scanner's own allowlist has to be found at the new path, or the scan silently widens.
 "$CLI/ai-os-privacy-scan" --quiet "$REPO" >/dev/null 2>&1
-chk "privacy-scan finds its allowlist under governance/" $?
-grep -q 'governance/policies/privacy-allowlist.txt' "$CLI/ai-os-privacy-scan"
+chk "privacy-scan finds its allowlist under internal/governance/" $?
+grep -q 'internal/governance/policies/privacy-allowlist.txt' "$CLI/ai-os-privacy-scan"
 chk "  ...by the new path, not the old one" $?
 # The three-layer model is retired; the policy file must not still describe it as live.
-grep -qi 'Public / Private / Runtime contract' "$REPO/governance/policies/public-private-contract.yaml"
+grep -qi 'Public / Private / Runtime contract' "$REPO/internal/governance/policies/public-private-contract.yaml"
 [ $? -ne 0 ];                              chk "the contract policy no longer claims three layers" $?
-grep -q 'legacy_runtime:' "$REPO/governance/policies/public-private-contract.yaml"
+grep -q 'legacy_runtime:' "$REPO/internal/governance/policies/public-private-contract.yaml"
 chk "  ...and records the retired runtime layer as history" $?
 
 # =====================================================================================
@@ -3523,12 +3523,769 @@ print('yes' if p.is_dir() else 'no')
 export AI_OS_HOME="$TMP/clean"
 
 # =====================================================================================
+t "ai-os usage --guard — warns from measured data, blocks nothing"
+GTX="$TMP/guard-transcripts"; mkdir -p "${GTX}/p"
+gu() { printf '{"input_tokens":0,"cache_read_input_tokens":%s,"cache_creation_input_tokens":10,"cache_creation":{"ephemeral_5m_input_tokens":10,"ephemeral_1h_input_tokens":0},"output_tokens":5,"output_tokens_details":{"thinking_tokens":1}}' "$1"; }
+# A long session whose per-turn context grows far past where it started and never falls.
+{ i=1; while [ $i -le 70 ]; do
+    printf '{"type":"assistant","sessionId":"BIG","timestamp":"2026-09-01T00:00:00Z","message":{"id":"b%s","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$i" "$(gu $((10000 + i * 6000)))"
+    i=$((i+1)); done; } > "${GTX}/p/BIG.jsonl"
+# A short, flat one: nothing to say about it.
+{ i=1; while [ $i -le 5 ]; do
+    printf '{"type":"assistant","sessionId":"SML","timestamp":"2026-09-01T00:00:00Z","message":{"id":"s%s","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$i" "$(gu 12000)"
+    i=$((i+1)); done; } > "${GTX}/p/SML.jsonl"
+
+out=$("$CLI/ai-os-usage" --transcripts "${GTX}" --guard 2>&1); rc=$?
+chk "exits 0 — a warning is not a failure" $rc
+printf '%s' "$out" | grep -q 'BIG\|never fell'
+chk "flags a long session whose context grew and never fell" $?
+printf '%s' "$out" | grep -q 'blocked'
+chk "  ...and says plainly that nothing was blocked" $?
+"$CLI/ai-os-usage" --transcripts "${GTX}" --json 2>/dev/null \
+  | python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if d['guard'] else 1)"
+chk "the findings are in the machine-readable output too" $?
+# The thresholds are relative to the cohort, so a healthy cohort produces nothing.
+GTH="$TMP/healthy"; mkdir -p "${GTH}/p"
+{ i=1; while [ $i -le 8 ]; do
+    printf '{"type":"assistant","sessionId":"OK%s","timestamp":"2026-09-01T00:00:00Z","message":{"id":"o%s","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$i" "$i" "$(gu 12000)"
+    i=$((i+1)); done; } > "${GTH}/p/OK.jsonl"
+out=$("$CLI/ai-os-usage" --transcripts "${GTH}" --guard 2>&1)
+printf '%s' "$out" | grep -q 'nothing anomalous'
+chk "a cohort with no outlier produces no findings" $?
+
+# =====================================================================================
+t "ai-os policy — the bootstrap routes, the modules load on demand"
+PL="$TMP/pol"; export AI_OS_HOME="$PL"
+"$CLI/ai-os-init" >/dev/null 2>&1
+PRULES="$PL/internal/governance/rules"; PPOL="$PL/internal/governance/policies"
+mkdir -p "${PRULES}" "${PPOL}"
+cat > "${PRULES}/core.md" <<'EOC'
+# Global rules
+| Load | When |
+|---|---|
+| `task` | starting a unit of work |
+| `context` | deciding what to read |
+EOC
+{ printf '# Policy — task\n\nbody-of-task\n'; i=0
+  while [ $i -lt 60 ]; do echo "a line of task policy that a bootstrap should not carry"; i=$((i+1)); done
+} > "${PPOL}/task.md"
+{ printf '# Policy — context\n\nbody-of-context\n'; i=0
+  while [ $i -lt 60 ]; do echo "a line of context policy that a bootstrap should not carry"; i=$((i+1)); done
+} > "${PPOL}/context.md"
+
+out=$("$CLI/ai-os-policy" list 2>&1); rc=$?
+chk "list exits 0" $rc
+printf '%s' "$out" | grep -q 'task' && printf '%s' "$out" | grep -q 'context'
+chk "  ...and names every module on disk" $?
+printf '%s' "$out" | grep -q 'body-of-task'
+[ $? -ne 0 ];                            chk "  ...without printing any module's body" $?
+
+# No pipe: the module body is long and the match is at the top, so `grep -q` would close
+# the pipe first and printf would die of SIGPIPE — which pipefail reports as a failure.
+out=$("$CLI/ai-os-policy" task 2>&1)
+case "$out" in *body-of-task*) true ;; *) false ;; esac
+chk "a named module is printed in full" $?
+"$CLI/ai-os-policy" nonexistent >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "an unknown module is refused, not guessed at" $?
+
+"$CLI/ai-os-policy" doctor >/dev/null 2>&1
+chk "doctor is clean when the table and the modules agree" $?
+# A name the bootstrap routes to but which has no file sends a reader nowhere.
+printf '| `memory` | recording a fact |\n' >> "${PRULES}/core.md"
+out=$("$CLI/ai-os-policy" doctor 2>&1)
+printf '%s' "$out" | grep -q "routes to 'memory'"
+chk "doctor catches a routed module that does not exist" $?
+printf '# Policy — memory\n\nbody\n' > "${PPOL}/memory.md"
+"$CLI/ai-os-policy" doctor >/dev/null 2>&1
+chk "  ...and is clean once it does" $?
+# A module nothing routes to is unreachable, which is the same as absent.
+printf '# Policy — graph\n\nbody\n' > "${PPOL}/graph.md"
+out=$("$CLI/ai-os-policy" doctor 2>&1)
+printf '%s' "$out" | grep -q "routes nothing to it"
+chk "doctor catches a module the bootstrap never routes to" $?
+rm -f "${PPOL}/graph.md"
+
+# The point of the split: the always-loaded half must be much smaller than the rest.
+core_b=$(wc -c < "${PRULES}/core.md"); mod_b=$(cat "${PPOL}"/*.md | wc -c)
+[ "$core_b" -lt "$mod_b" ];              chk "the bootstrap is smaller than what it routes to" $?
+"$CLI/ai-os" policy list >/dev/null 2>&1
+chk "reachable as the 'ai-os policy' subcommand" $?
+
+# =====================================================================================
+t "the real bootstrap stays a bootstrap"
+unset AI_OS_HOME
+REAL_CORE="$HOME/.ai-os/internal/governance/rules/core.md"
+if [ -f "$REAL_CORE" ]; then
+  # A soft budget, asserted loudly: this file is rendered into every client's system
+  # prompt, so growth here is charged to every request of every session. It was 24,523
+  # bytes before the split. The check is not a cap on content — it is a tripwire for the
+  # split quietly being undone.
+  b=$(wc -c < "$REAL_CORE")
+  [ "$b" -lt 12000 ];                    chk "core.md is still a bootstrap, not a manual ($b bytes)" $?
+  grep -q 'ai-os policy' "$REAL_CORE";   chk "  ...and it says how to reach the modules" $?
+  grep -q 'requires explicit approval, every time' "$REAL_CORE"
+  chk "  ...and still carries the remote-git boundary itself" $?
+  grep -qi 'never write a secret' "$REAL_CORE"
+  chk "  ...and the secrets invariant" $?
+  grep -q 'blockquote' "$REAL_CORE"
+  chk "  ...and the direction rules a reply would be corrupted without" $?
+else
+  printf '  %sSKIP%s no private workspace on this machine\n' "$D" "$X"
+fi
+
+# =====================================================================================
+t "ai-os observe — the raw output is kept, only the deciding part is returned"
+OB="$TMP/obs-home"; export AI_OS_HOME="$OB"
+"$CLI/ai-os-init" >/dev/null 2>&1
+NOISE="$TMP/noise.sh"
+cat > "$NOISE" <<'EOS'
+#!/bin/sh
+i=0; while [ $i -lt 400 ]; do echo "  PASS step $i completed with no failure at all"; i=$((i+1)); done
+echo "  FAIL the thing that actually broke"
+echo "src/broken.py:41: error: something specific"
+echo "3 passed, 1 failed"
+exit 7
+EOS
+chmod +x "$NOISE"
+
+out=$("$CLI/ai-os-observe" -- echo hello 2>&1); rc=$?
+chk "a small command exits with the command's own status" $rc
+printf '%s' "$out" | grep -q 'hello'
+chk "  ...and its output is returned in full, unreduced" $?
+
+out=$("$CLI/ai-os-observe" -- "$NOISE" 2>&1); rc=$?
+[ "$rc" -eq 7 ];                         chk "the wrapped command's exit code is propagated" $?
+printf '%s' "$out" | grep -q '3 passed, 1 failed'
+chk "the run's own summary line is returned" $?
+printf '%s' "$out" | grep -q 'the thing that actually broke'
+chk "the failing line is returned" $?
+printf '%s' "$out" | grep -q 'src/broken.py'
+chk "the path named by the failure is returned" $?
+printf '%s' "$out" | grep -q 'PASS step 12 '
+[ $? -ne 0 ];                            chk "the 400 passing lines are NOT admitted" $?
+# The guard against the opposite mistake: a PASSING line that contains the word "failure"
+# must not be reported as a failure. Getting this wrong fills the observation with noise
+# that looks exactly like the signal.
+printf '%s' "$out" | grep -q '\[failure\].*PASS step'
+[ $? -ne 0 ];                            chk "a passing line mentioning 'failure' is not a signal" $?
+[ "${#out}" -lt 4000 ];                  chk "the observation is far smaller than the raw output" $?
+
+OID=$(printf '%s' "$out" | sed -n 's/^observe \([0-9a-z-]*\) .*/\1/p' | head -1)
+[ -n "$OID" ];                           chk "the observation reports an id for retrieval" $?
+raw=$("$CLI/ai-os-observe" show "$OID" --all 2>&1)
+printf '%s' "$raw" | grep -q 'PASS step 399'
+chk "show --all returns the complete raw output that was withheld" $?
+g=$("$CLI/ai-os-observe" show "$OID" --grep 'actually broke' 2>&1)
+printf '%s' "$g" | grep -q 'actually broke'
+chk "show --grep returns a matching slice with line numbers" $?
+l=$("$CLI/ai-os-observe" show "$OID" --lines 1-2 2>&1)
+printf '%s' "$l" | grep -q 'PASS step 0'
+chk "show --lines returns the requested range" $?
+[ -f "$OB/internal/runtime/observations/$OID/raw.txt" ]
+chk "the raw capture lives in runtime state, not beside a task record" $?
+
+# Repeated identical observations: reported, not re-admitted.
+again=$("$CLI/ai-os-observe" -- "$NOISE" 2>&1)
+printf '%s' "$again" | grep -q 'unchanged since'
+chk "re-running a command with byte-identical output says so instead of repeating it" $?
+printf '%s' "$again" | grep -q 'actually broke'
+[ $? -ne 0 ];                            chk "  ...and re-admits none of the text" $?
+[ "${#again}" -lt 400 ];                 chk "  ...so the repeat costs almost nothing" $?
+# Any difference must break the equality — a stale "unchanged" would be worse than the
+# tokens it saves.
+# Change what the script PRINTS. Appending after its `exit` would change the file and
+# not the output, which is the opposite of what this asserts.
+sed -i.bak 's/the thing that actually broke/a different thing broke/' "$NOISE"
+changed=$("$CLI/ai-os-observe" -- "$NOISE" 2>&1)
+printf '%s' "$changed" | grep -q 'unchanged since'
+[ $? -ne 0 ];                            chk "changed output is never reported as unchanged" $?
+
+n=$("$CLI/ai-os-observe" list 2>&1 | grep -c "^  2")
+[ "$n" -ge 3 ];                          chk "list shows the recorded observations" $?
+"$CLI/ai-os-observe" prune --keep 1 >/dev/null 2>&1
+n=$("$CLI/ai-os-observe" list 2>&1 | grep -c "^  2")
+[ "$n" -eq 1 ];                          chk "prune keeps only what was asked for" $?
+"$CLI/ai-os" observe -- echo wired >/dev/null 2>&1
+chk "reachable as the 'ai-os observe' subcommand" $?
+
+# =====================================================================================
+t "ai-os tickets — the records are the state, every view is derived"
+TK="$TMP/tk"; export AI_OS_HOME="$TK"
+"$CLI/ai-os-init" >/dev/null 2>&1
+mkticket() { # id state title next-action
+  d="$TK/projects/demo/tickets/$1"; mkdir -p "$d"
+  cat > "$d/task.md" <<EOT
+---
+id: $1
+title: $3
+state: $2
+project: demo
+opened: 2026-09-01
+updated: 2026-09-01
+artifacts: []
+class: small
+---
+
+## Objective
+
+Prove the record is the state.
+
+## Next action
+
+$4
+
+## Verification
+
+\`echo ok\`
+
+## Blockers
+
+None.
+
+## Log
+
+- 2026-09-01 — HISTORICAL DETAIL THAT MUST NOT REACH THE PACKET
+- 2026-09-02 — second entry
+EOT
+}
+mkdir -p "$TK/projects/demo"
+mkticket DEMO-001 active "First thing"  "Do the first thing."
+mkticket DEMO-002 done   "Second thing" "Complete."
+mkticket DEMO-003 blocked "Third thing" "Wait for the owner."
+printf '# Work — demo\n\n## Tickets\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n' \
+  > "$TK/projects/demo/index.md"
+
+out=$("$CLI/ai-os-tickets" list 2>&1)
+printf '%s' "$out" | grep -q DEMO-001 && printf '%s' "$out" | grep -q DEMO-003
+chk "list derives the live set (active and blocked)" $?
+printf '%s' "$out" | grep -q DEMO-002
+[ $? -ne 0 ];                            chk "  ...and leaves out what is done" $?
+
+"$CLI/ai-os-tickets" doctor >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "doctor fails while the generated table is empty" $?
+"$CLI/ai-os-tickets" index --write >/dev/null 2>&1
+chk "index --write generates the board table" $?
+grep -q 'DEMO-001' "$TK/projects/demo/index.md"
+chk "  ...and the table names the records" $?
+"$CLI/ai-os-tickets" doctor >/dev/null 2>&1
+chk "  ...after which doctor is clean" $?
+
+# Drift is the failure this replaces hand-synchronisation to prevent.
+sed -i.bak 's/| DEMO-001 | `active`/| DEMO-001 | `done`/' "$TK/projects/demo/index.md"
+out=$("$CLI/ai-os-tickets" doctor 2>&1)
+printf '%s' "$out" | grep -q 'disagrees with the'
+chk "doctor catches a hand-edited table that disagrees with the records" $?
+"$CLI/ai-os-tickets" index --write >/dev/null 2>&1
+
+# Correction: authority is detected structurally, never by finding the id in prose.
+mkdir -p "$TK/personal/daily/2026/09/2026-09-04"
+printf 'Worked on DEMO-001 today; state: active; it is done now.\n' \
+  > "$TK/personal/daily/2026/09/2026-09-04/log.md"
+printf -- '- [WIP] demo — DEMO-001 state: blocked\n' >> "$TK/projects/tasks.md"
+"$CLI/ai-os-tickets" doctor >/dev/null 2>&1
+chk "a ticket id in a daily log or backlog line is a mention, not a declaration" $?
+
+# A second RECORD declaring the same id is a real duplicate, and is an error.
+mkdir -p "$TK/projects/other/tickets/DEMO-001"
+cp "$TK/projects/demo/tickets/DEMO-001/task.md" "$TK/projects/other/tickets/DEMO-001/task.md"
+out=$("$CLI/ai-os-tickets" doctor 2>&1)
+printf '%s' "$out" | grep -q 'declared by 2 records'
+chk "two records declaring one id is refused" $?
+rm -rf "$TK/projects/other"
+
+sed -i.bak 's/^artifacts: \[\]/artifacts: [nope.md]/' "$TK/projects/demo/tickets/DEMO-002/task.md"
+out=$("$CLI/ai-os-tickets" doctor 2>&1)
+printf '%s' "$out" | grep -q "which does not exist"
+chk "an artifact manifest naming a missing file is refused" $?
+sed -i.bak 's/^artifacts: \[nope.md\]/artifacts: []/' "$TK/projects/demo/tickets/DEMO-002/task.md"
+rm -f "$TK/projects/demo/tickets/"*/task.md.bak "$TK/projects/demo/index.md.bak"
+
+# =====================================================================================
+t "ai-os context — a derived cold-start packet, without the history"
+"$CLI/ai-os-tickets" index --write >/dev/null 2>&1
+out=$("$CLI/ai-os-context" 2>&1); rc=$?
+chk "exits 0" $rc
+printf '%s' "$out" | grep -q 'DEMO-001'; chk "names the live tickets" $?
+printf '%s' "$out" | grep -q 'DEMO-002'
+[ $? -ne 0 ];                            chk "  ...and not the finished ones" $?
+printf '%s' "$out" | grep -q 'HISTORICAL DETAIL'
+[ $? -ne 0 ];                            chk "admits no log history into the packet" $?
+
+full=$("$CLI/ai-os-context" DEMO-001 2>&1)
+printf '%s' "$full" | grep -q 'Do the first thing'
+chk "a named ticket brings its objective, next action and verification" $?
+printf '%s' "$full" | grep -q 'HISTORICAL DETAIL'
+chk "  ...and its most recent log lines, which is where that entry belongs" $?
+# Soft, not a cap: the packet must stay far cheaper than the records behind it.
+recs=$(cat "$TK/projects/demo/tickets/"*/task.md | wc -c)
+[ "${#full}" -lt "$recs" ];              chk "the packet is smaller than the records it derives from" $?
+
+"$CLI/ai-os-context" NOPE-999 >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "an unknown ticket id is refused, not guessed" $?
+"$CLI/ai-os-context" --json 2>/dev/null | python3 -c "import json,sys;json.load(sys.stdin)"
+chk "--json emits valid JSON" $?
+b=$("$CLI/ai-os-context" --boundary 2>&1)
+printf '%s' "$b" | grep -q 'evidence, not a verdict'
+chk "--boundary reports signals and states plainly that it decides nothing" $?
+printf '%s' "$b" | grep -q 'reconstructs cold.*DEMO-001'
+chk "--boundary reports which records reconstruct cold" $?
+"$CLI/ai-os" context >/dev/null 2>&1
+chk "reachable as the 'ai-os context' subcommand" $?
+
+# =====================================================================================
+t "ai-os lifecycle — the decision, and what it refuses to decide"
+# The engine is pure, so the decision table is tested directly on evidence rather than
+# through a fixture. `decision/sequence` is what a caller acts on.
+# Evidence arrives as key=value words, deliberately: a {'k':v} literal is brace-expanded
+# by the shell before python ever sees it, which silently split every case into two.
+lc() { python3 -c "
+import sys
+sys.path.insert(0, '$CLI')
+import aios_lifecycle as LC
+kw = {}
+for a in sys.argv[1:]:
+    k, _, v = a.partition('=')
+    kw[k] = (True if v == 'True' else False if v == 'False'
+             else int(v) if v.lstrip('-').isdigit() else v)
+d = LC.decide(LC.evidence(**kw))
+print(d['decision'], '+'.join(d['sequence']) or '-', d['certainty'])" "$@"; }
+LIVE="has_record=True reconstructable=True task_state=active"
+GREW="measured=True turns=80 context_first=20000 context_last=200000"
+
+# 1. A completed task. Its state belongs in the record; the transcript does not.
+[ "$(lc $LIVE task_complete=True)" = "FRESH CHECKPOINT+FRESH deterministic" ]
+chk "a completed task checkpoints, then starts cold" $?
+
+# 2. The same task, with reasoning that still depends on this context.
+[ "$(lc $LIVE measured=True turns=20 context_first=20000 context_last=30000)" \
+  = "CONTINUE - deterministic" ]
+chk "the same task with unresolved reasoning continues" $?
+
+# 3. Large and stale, with a record that rebuilds it.
+[ "$(lc $LIVE $GREW unresolved_reasoning=False)" = "FRESH CHECKPOINT+FRESH recommended" ]
+chk "expensive, resolved and reconstructable checkpoints, then starts cold" $?
+
+# 4. Large, and the record could not rebuild it. Losing it is the worse outcome.
+[ "$(lc has_record=True reconstructable=False $GREW unresolved_reasoning=False)" \
+  = "COMPACT COMPACT recommended" ]
+chk "expensive with no safe reconstruction compacts rather than discards" $?
+out=$(lc has_record=True reconstructable=False $GREW)
+case "$out" in CONTINUE*|COMPACT*) true ;; *) false ;; esac
+chk "  ...and never goes fresh with nothing to come back to" $?
+
+# 5. A different, explicitly named workstream.
+[ "$(lc $LIVE ticket=A-1 transition_to=B-2)" = "FRESH CHECKPOINT+FRESH deterministic" ]
+chk "an explicit transition checkpoints the current task and starts fresh" $?
+[ "$(lc $LIVE ticket=A-1 transition_to=A-1)" = "CONTINUE - deterministic" ]
+chk "  ...but naming the SAME ticket is not a transition" $?
+
+# 6. Heavy disposable investigation belongs in a worker, not in this context.
+[ "$(lc $LIVE disposable_exploration=True)" = "HANDOFF HANDOFF recommended" ]
+chk "heavy disposable exploration is isolated in a worker" $?
+
+# 10. THE THRESHOLD GUARD. Relevance decides, not size.
+big="measured=True turns=200 context_first=20000 context_last=400000 large_results=20"
+out=$(lc $LIVE $big)
+case "$out" in CONTINUE*) true ;; *) false ;; esac
+chk "a large but still-relevant context is NOT discarded on thresholds alone" $?
+printf '%s' "$out" | grep -q 'FRESH'
+[ $? -ne 0 ];                            chk "  ...and FRESH appears nowhere in that decision" $?
+# One signal is not evidence. A long but flat session has crossed a turn count and
+# nothing else.
+[ "$(lc $LIVE unresolved_reasoning=False measured=True turns=120 \
+        context_first=30000 context_last=31000)" = "CONTINUE - deterministic" ]
+chk "a turn count on its own decides nothing — two signals are required" $?
+
+# No record is the one thing that makes a fresh context unsafe.
+[ "$(lc has_record=False task_complete=True)" = "CHECKPOINT CHECKPOINT deterministic" ]
+chk "a completed task with no record is promoted, not discarded" $?
+# COMPACT must not become the habit.
+[ "$(lc $LIVE)" = "CONTINUE - deterministic" ]
+chk "the default decision is CONTINUE, never COMPACT" $?
+[ "$(lc $LIVE unresolved_reasoning=False handoff_open=True)" \
+  = "FRESH CHECKPOINT+FRESH recommended" ]
+chk "an open handoff already holds the state, so this context is disposable" $?
+[ "$(lc $LIVE milestone_done=True)" = "CHECKPOINT CHECKPOINT deterministic" ]
+chk "a milestone with no cost signal checkpoints and keeps going" $?
+[ "$(lc $LIVE measured=True turns=10 large_results=9)" \
+  = "CHECKPOINT CHECKPOINT recommended" ]
+chk "raw tool output is a checkpoint, not a reason to restart" $?
+
+# A typo in an evidence field must fail loudly rather than silently defaulting.
+python3 -c "
+import sys
+sys.path.insert(0, '$CLI')
+import aios_lifecycle as LC
+try:
+    LC.evidence(unresolved_resoning=False)
+except KeyError:
+    sys.exit(0)
+sys.exit(1)"
+chk "an unknown evidence field is refused, not quietly ignored" $?
+
+# The measured half maps onto the same vocabulary.
+gmap() { python3 -c "
+import sys
+sys.path.insert(0, '$CLI')
+import aios_lifecycle as LC
+print(LC.guard_lifecycle(sys.argv[1], *[a == 'True' for a in sys.argv[2:]])[0])" "$@"; }
+[ "$(gmap grew_and_never_fell)" = "FRESH" ]
+chk "guard: a session that grew and never fell maps to FRESH" $?
+[ "$(gmap grew_and_never_fell True False)" = "CHECKPOINT" ]
+chk "  ...but only CHECKPOINT when the record cannot rebuild it" $?
+[ "$(gmap large_results)" = "CHECKPOINT" ]
+chk "guard: large raw results map to CHECKPOINT" $?
+[ "$(gmap strong_model_navigating)" = "HANDOFF" ]
+chk "guard: a strong model navigating maps to HANDOFF" $?
+[ "$(gmap redundant_reads)" = "CONTINUE" ]
+chk "guard: a redundant re-read is not a session boundary" $?
+
+# =====================================================================================
+t "ai-os lifecycle — against the real records and a measured transcript"
+export AI_OS_HOME="$TK"
+out=$("$CLI/ai-os-lifecycle" --ticket DEMO-001 --transcripts "$TMP/nowhere" 2>&1); rc=$?
+chk "exits 0 with no transcript to measure" $rc
+printf '%s' "$out" | grep -q 'NOT_MEASURED'
+chk "says plainly that nothing was measured, rather than assuming" $?
+printf '%s' "$out" | grep -q 'SAFE_RECONSTRUCTION'
+chk "reads reconstruction availability from the record" $?
+
+out=$("$CLI/ai-os-lifecycle" --ticket DEMO-001 --complete --transcripts "$TMP/nowhere" 2>&1)
+printf '%s' "$out" | grep -q 'Context boundary reached'
+chk "a completed task prints the boundary" $?
+printf '%s' "$out" | grep -q 'ai-os context DEMO-001'
+chk "  ...and the one command that rebuilds the context" $?
+printf '%s' "$out" | grep -q 'ai-os tickets checkpoint DEMO-001'
+chk "  ...and the checkpoint command, ready to run" $?
+printf '%s' "$out" | grep -qi 'no agent can clear or restart'
+chk "  ...and does not pretend it can restart the session itself" $?
+
+# The measured path: 70 turns growing 16k -> 430k, from the guard fixture.
+out=$("$CLI/ai-os-lifecycle" --ticket DEMO-001 --session BIG --resolved \
+        --transcripts "${GTX}" 2>&1)
+printf '%s' "$out" | grep -q 'CHECKPOINT → FRESH'
+chk "a measured runaway session with a safe record goes checkpoint then fresh" $?
+printf '%s' "$out" | grep -q 'CONTEXT_GREW_AND_NEVER_FELL'
+chk "  ...and names the measured signal it acted on" $?
+out=$("$CLI/ai-os-lifecycle" --ticket DEMO-001 --session BIG \
+        --transcripts "${GTX}" 2>&1)
+printf '%s' "$out" | grep -q 'FRESH'
+[ $? -ne 0 ];                            chk "  ...and without --resolved it will not go fresh at all" $?
+
+out=$("$CLI/ai-os-lifecycle" --transcripts "$TMP/nowhere" 2>&1)
+printf '%s' "$out" | grep -q 'pass --ticket'
+chk "two live tickets and none named: it asks instead of choosing" $?
+"$CLI/ai-os-lifecycle" --ticket DEMO-001 --json --transcripts "$TMP/nowhere" 2>/dev/null \
+  | python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if d['decision']['signals'] else 1)"
+chk "--json carries the decision and every signal behind it" $?
+"$CLI/ai-os" lifecycle --ticket DEMO-001 --transcripts "$TMP/nowhere" >/dev/null 2>&1
+chk "reachable as the 'ai-os lifecycle' subcommand" $?
+
+# =====================================================================================
+t "ai-os lifecycle effort — by class, down for mechanical work, up only with a reason"
+eff() { "$CLI/ai-os-lifecycle" effort "$@" 2>&1 | sed -n '2p'; }
+printf '%s' "$(eff --class small)"  | grep -q 'low'
+chk "a small task earns low effort" $?
+printf '%s' "$(eff --class medium)" | grep -q 'medium'
+chk "a medium task earns medium" $?
+printf '%s' "$(eff --class large)"  | grep -q 'high'
+chk "architecture-class work earns high" $?
+printf '%s' "$(eff --class large --kind ticket-bookkeeping)" | grep -q 'low'
+chk "bookkeeping inside a large task is still mechanical, so effort goes DOWN" $?
+"$CLI/ai-os-lifecycle" effort --class small --want high >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "raising effort with no recorded reason is refused" $?
+"$CLI/ai-os-lifecycle" effort --class small --want high \
+  --reason security-sensitive-decision >/dev/null 2>&1
+chk "  ...and allowed when the reason is one of the recorded ones" $?
+"$CLI/ai-os-lifecycle" effort --class small --want max >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "an escalation past the ladder with no reason is refused" $?
+"$CLI/ai-os-lifecycle" effort --class large --json 2>/dev/null | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+m = d['mechanisms']
+sys.exit(0 if d['effort'] == 'high' and 'per_task' not in m and 'process' in m else 1)"
+chk "--json names only the mechanisms confirmed to apply it" $?
+"$CLI/ai-os-lifecycle" effort --doctor --json >/dev/null 2>&1
+rc=$?; [ "$rc" = "0" ] || [ "$rc" = "1" ]
+chk "--doctor reports rather than crashing, whatever the client is set to" $?
+
+# Confirmed 2026-09-05: a subagent's `effort:` frontmatter is not honored — every
+# subagent inherits the parent session's level regardless of what it declares. --doctor
+# no longer scans agent frontmatter for it or compares it against models.yaml.
+EW="$TMP/effort-ws"; export AI_OS_HOME="$EW"
+"$CLI/ai-os-init" >/dev/null 2>&1
+printf 'effort_by_class:\n  small: low\n  medium: medium\n  large: high\n' \
+  > "$EW/internal/config/models.yaml"
+echo '{"effortLevel":"medium"}' > "$AI_OS_CLAUDE_SETTINGS"
+"$CLI/ai-os-lifecycle" effort --doctor >/dev/null 2>&1
+chk "clean when the policy and the client agree" $?
+# An illegal level in the policy could never have been applied by the client.
+printf 'effort_by_class:\n  small: low\n  medium: normal\n  large: high\n' \
+  > "$EW/internal/config/models.yaml"
+out=$("$CLI/ai-os-lifecycle" effort --doctor 2>&1)
+printf '%s' "$out" | grep -q 'NOT a client effort level'
+chk "a class mapped to a level the client does not have is caught" $?
+export AI_OS_HOME="$TK"
+
+# =====================================================================================
+t "ai-os tickets checkpoint — durable state at a boundary, and nothing else"
+before_b=$(wc -c < "$TK/projects/demo/tickets/DEMO-001/task.md")
+out=$("$CLI/ai-os-tickets" checkpoint DEMO-001 \
+        --note "engine written; contract suite green" \
+        --next "Wire the guard mapping." 2>&1); rc=$?
+chk "exits 0" $rc
+grep -q 'engine written; contract suite green' "$TK/projects/demo/tickets/DEMO-001/task.md"
+chk "the note is appended to the log" $?
+grep -q 'Wire the guard mapping.' "$TK/projects/demo/tickets/DEMO-001/task.md"
+chk "the next action is REPLACED, not appended — the record's action is the live one" $?
+grep -q 'Do the first thing' "$TK/projects/demo/tickets/DEMO-001/task.md"
+[ $? -ne 0 ];                            chk "  ...so the superseded action is gone" $?
+grep -q 'Prove the record is the state' "$TK/projects/demo/tickets/DEMO-001/task.md"
+chk "no other section is touched" $?
+grep -q "^updated: $(date +%F)" "$TK/projects/demo/tickets/DEMO-001/task.md"
+chk "updated: is bumped" $?
+after_b=$(wc -c < "$TK/projects/demo/tickets/DEMO-001/task.md")
+[ $((after_b - before_b)) -lt 400 ]
+chk "a checkpoint costs a record a few hundred bytes, not a transcript" $?
+printf '%s' "$out" | grep -q 'ai-os context DEMO-001'
+chk "  ...and it names how to resume cold" $?
+
+# Checkpointing after every small turn would trade one waste for another.
+out=$("$CLI/ai-os-tickets" checkpoint DEMO-001 \
+        --note "engine written; contract suite green" 2>&1)
+printf '%s' "$out" | grep -q 'already current'
+chk "the same note with no new action writes nothing at all" $?
+before=$(shasum "$TK/projects/demo/tickets/DEMO-001/task.md")
+"$CLI/ai-os-tickets" checkpoint DEMO-001 --note "engine written; contract suite green" \
+  >/dev/null 2>&1
+after=$(shasum "$TK/projects/demo/tickets/DEMO-001/task.md")
+[ "$before" = "$after" ];                chk "  ...and the file is byte-identical afterwards" $?
+
+"$CLI/ai-os-tickets" checkpoint DEMO-001 --note "paused for the owner" \
+  --state paused >/dev/null 2>&1
+grep -q '^state: paused' "$TK/projects/demo/tickets/DEMO-001/task.md"
+chk "--state moves the one place a status is declared" $?
+"$CLI/ai-os-tickets" checkpoint DEMO-001 --note "back to work" --state active >/dev/null 2>&1
+"$CLI/ai-os-tickets" checkpoint NOPE-999 --note "x" >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "an unknown ticket is refused" $?
+"$CLI/ai-os-tickets" checkpoint DEMO-001 >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "a checkpoint with no note is refused — a boundary needs a record" $?
+# A checkpoint moves the next action, which the generated board shows. Leaving that view
+# stale would mean every clean boundary ended with doctor failing.
+"$CLI/ai-os-tickets" checkpoint DEMO-001 --note "regenerates the board" \
+  --next "Check the board regenerated." >/dev/null 2>&1
+grep -q 'Check the board regenerated' "$TK/projects/demo/index.md"
+chk "a checkpoint regenerates the board it just made stale" $?
+"$CLI/ai-os-tickets" doctor >/dev/null 2>&1
+chk "  ...so the records and every view of them are clean with no second command" $?
+
+# =====================================================================================
+t "doctor: a worktree of the same repo is not a nested repository"
+WT="$TMP/wt-home"; mkdir -p "$WT"
+export AI_OS_HOME="$WT"
+"$CLI/ai-os-init" >/dev/null 2>&1
+git -C "$WT" init -q; git -C "$WT" config user.email t@e; git -C "$WT" config user.name t
+git -C "$WT" add -A >/dev/null 2>&1; git -C "$WT" commit -qm base >/dev/null 2>&1
+git -C "$WT" worktree add -q "$WT/.claude/worktrees/session" -b wt-session >/dev/null 2>&1
+out=$("$CLI/ai-os-doctor" 2>&1)
+printf '%s' "$out" | grep -q "private workspace: no nested repositories"
+chk "the repo's own worktree is not reported as nested" $?
+# The check must still catch what it exists for: a DIFFERENT repository hiding inside.
+git -C "$WT" worktree remove --force "$WT/.claude/worktrees/session" >/dev/null 2>&1
+mkdir -p "$WT/vendor/foreign"; git -C "$WT/vendor/foreign" init -q
+out=$("$CLI/ai-os-doctor" 2>&1)
+printf '%s' "$out" | grep -q "nested git repository inside the private workspace"
+chk "a genuinely foreign nested repository is still a failure" $?
+rm -rf "$WT/vendor"
+
+# =====================================================================================
+t "privacy-scan: an ignored DIRECTORY exempts what is inside it"
+# git names the directory, not its contents, whenever it will not descend — an excluded
+# directory, and always a nested repository or worktree. Matching whole paths against that
+# set treated every file inside one as publishable.
+PS="$TMP/ps-repo"; mkdir -p "$PS/.claude/worktrees/wt" "$PS/src"
+git -C "$PS" init -q 2>/dev/null
+printf '.claude/worktrees/\n' > "$PS/.gitignore"
+# Built from parts: writing the literal path here would put an absolute home path into
+# this repository, which is the very thing the scanner is right to refuse.
+printf 'gitdir: /%s/%s/p/.git/worktrees/wt\n' Users someone > "$PS/.claude/worktrees/wt/.git"
+printf 'clean source\n' > "$PS/src/ok.txt"
+out=$("$CLI/ai-os-privacy-scan" "$PS" 2>&1); rc=$?
+chk "exits 0 when the only home path is inside an ignored directory" $rc
+printf '%s' "$out" | grep -q 'PERSONAL'
+[ $? -ne 0 ];                            chk "  ...and reports no personal finding for it" $?
+# The exemption is for personal data only. A credential inside an ignored path is still
+# a credential, and must still be found.
+printf 'aws_secret_access_key = %s%s\n' AKIA IOSFODNN7EXAMPLE > "$PS/.claude/worktrees/wt/creds"
+"$CLI/ai-os-privacy-scan" "$PS" >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "a credential inside an ignored path is still refused" $?
+
+# =====================================================================================
+t "ai-os usage — measures transcripts, mutates nothing"
+U="$TMP/usage-transcripts"; mkdir -p "$U/proj-a/sess-super/subagents/workflows/wf_1"
+# One assistant turn written as THREE lines that repeat the same usage object — exactly
+# how the client records a multi-block turn. Counting lines would report three turns.
+mkusage() { # output_tokens cache_read cache_write
+  printf '{"input_tokens":0,"cache_read_input_tokens":%s,"cache_creation_input_tokens":%s,"cache_creation":{"ephemeral_5m_input_tokens":%s,"ephemeral_1h_input_tokens":0},"output_tokens":%s,"output_tokens_details":{"thinking_tokens":1}}' "$2" "$3" "$3" "$1"
+}
+BIG=$(head -c 9000 /dev/zero | tr '\0' 'x')
+{
+  for i in 1 2 3; do
+    printf '{"type":"assistant","sessionId":"S1","timestamp":"2026-09-01T00:00:0%sZ","cwd":"/w","message":{"id":"m1","model":"claude-sonnet-5","usage":%s,"content":[{"type":"tool_use","id":"tu%s","name":"Read","input":{"file_path":"/w/a.txt"}}]}}\n' "$i" "$(mkusage 100 5000 200)" "$i"
+  done
+  printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu1","content":"SAME"}]}}\n'
+  printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu2","content":"SAME"}]}}\n'
+  printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu3","content":"CHANGED"}]}}\n'
+  printf '{"type":"assistant","sessionId":"S1","timestamp":"2026-09-01T00:00:09Z","cwd":"/w","message":{"id":"m2","model":"claude-opus-5","usage":%s,"content":[{"type":"tool_use","id":"tb","name":"Bash","input":{"command":"ls"}}]}}\n' "$(mkusage 50 6000 100)"
+  printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tb","content":"%s"}]}}\n' "$BIG"
+} > "$U/proj-a/S1.jsonl"
+# A worker transcript nested two levels below subagents/ — not a main session.
+printf '{"type":"assistant","sessionId":"S1","timestamp":"2026-09-01T00:00:05Z","message":{"id":"w1","model":"claude-haiku-4-5","usage":%s,"content":[]}}\n' "$(mkusage 10 100 10)" > "$U/proj-a/sess-super/subagents/workflows/wf_1/agent-x.jsonl"
+# Two files for one session id: a prefix, and the longer continuation of it.
+printf '{"type":"assistant","sessionId":"S2","timestamp":"2026-09-02T00:00:01Z","message":{"id":"p1","usage":%s,"content":[]}}\n' "$(mkusage 10 7000 10)" > "$U/proj-a/S2-prefix.jsonl"
+{ printf '{"type":"assistant","sessionId":"S2","timestamp":"2026-09-02T00:00:01Z","message":{"id":"p1","usage":%s,"content":[]}}\n' "$(mkusage 10 7000 10)"
+  printf '{"type":"assistant","sessionId":"S2","timestamp":"2026-09-02T00:00:02Z","message":{"id":"p2","usage":%s,"content":[]}}\n' "$(mkusage 10 7000 10)"
+} > "$U/proj-a/S2-full.jsonl"
+
+before=$(find "$U" -type f -exec shasum {} \; | sort | shasum)
+J="$TMP/usage.json"
+"$CLI/ai-os-usage" --transcripts "$U" --json > "$J" 2>/dev/null; rc=$?
+chk "exits 0 with transcripts present" $rc
+python3 -c "import json;json.load(open('$J'))" 2>/dev/null;    chk "--json emits valid JSON" $?
+after=$(find "$U" -type f -exec shasum {} \; | sort | shasum)
+[ "$before" = "$after" ];                chk "measuring changed no transcript" $?
+
+q() { python3 -c "
+import json,sys
+d=json.load(open('$J'))
+s={r['session_id']:r for r in d['sessions'] if not r['is_subagent']}
+print(eval(sys.argv[1]))" "$1"; }
+
+[ "$(q "d['aggregate']['main_sessions']")" = "2" ]
+chk "counts 2 main sessions — the worker and the superseded prefix are not main" $?
+[ "$(q "d['aggregate']['subagent_sessions']")" = "1" ]
+chk "a worker nested under subagents/workflows/ counts as a subagent" $?
+[ "$(q "s['S1']['turns']")" = "2" ]
+chk "one turn split across three lines counts once (message.id dedup)" $?
+[ "$(q "s['S1']['totals']['output']")" = "150" ]
+chk "output is not multiplied by the block count" $?
+[ "$(q "s['S1']['totals']['cache_read']")" = "11000" ]
+chk "cache-read is not multiplied by the block count" $?
+[ "$(q "s['S2']['turns']")" = "2" ]
+chk "the longer file wins supersession, the prefix is dropped" $?
+# 11,000 (S1) + 14,000 (S2 continuation) + 100 (worker) = 25,100.
+# Billing the superseded prefix as well would read 32,100.
+[ "$(q "d['aggregate']['totals']['cache_read']")" = "25100" ]
+chk "the superseded prefix's tokens are not billed twice" $?
+"$CLI/ai-os-usage" --transcripts "$U" --json --include-superseded 2>/dev/null \
+  | python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if d['aggregate']['main_sessions']==3 else 1)"
+chk "--include-superseded restores the dropped prefix" $?
+[ "$(q "s['S1']['large_results']['count']")" = "1" ]
+chk "a tool result over the reporting threshold is flagged" $?
+[ "$(q "s['S1']['repeated_reads']['redundant_calls']")" = "1" ]
+chk "a re-read returning identical content counts as redundant" $?
+[ "$(q "s['S1']['repeated_reads']['repeat_calls']")" = "2" ]
+chk "a re-read returning changed content is a repeat but not redundant" $?
+[ "$(q "sorted(s['S1']['models'])")" = "['claude-opus-5', 'claude-sonnet-5']" ]
+chk "per-session model usage is observable" $?
+"$CLI/ai-os-usage" --transcripts "$TMP/no-such-dir" >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "refuses when no transcripts exist" $?
+"$CLI/ai-os-usage" --transcripts "$U" --since 2026-09-02 --json 2>/dev/null \
+  | python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if d['aggregate']['main_sessions']==1 else 1)"
+chk "--since filters by the last turn's date" $?
+"$CLI/ai-os" usage --transcripts "$U" >/dev/null 2>&1
+chk "reachable as the 'ai-os usage' subcommand" $?
+
+# The benchmark view: a recorded baseline against the cohort measured now. Without it a
+# before/after claim is arithmetic done by hand, which is how a saving gets asserted
+# before any post-change session exists.
+B2="$TMP/bench.json"
+"$CLI/ai-os-usage" --transcripts "$U" --baseline "$B2" >/dev/null 2>&1
+out=$("$CLI/ai-os-usage" --transcripts "$U" --compare "$B2" 2>&1); rc=$?
+chk "--compare exits 0 against a baseline it wrote" $rc
+printf '%s' "$out" | grep -q 'before' && printf '%s' "$out" | grep -q 'after'
+chk "  ...and prints both columns" $?
+printf '%s' "$out" | grep -qi 'not yet a saving'
+chk "  ...and refuses to call an unchanged cohort a saving" $?
+"$CLI/ai-os-usage" --transcripts "$U" --compare "$TMP/no-baseline.json" >/dev/null 2>&1
+[ $? -ne 0 ];                            chk "a missing baseline is refused, not invented" $?
+[ "$(q "d['aggregate']['cache_read_per_turn_median']")" != "None" ]
+chk "the aggregate carries a median re-read per turn, not only a mean" $?
+
+# The high-effort rate is the number that says whether effort routing changed anything.
+EFT="$TMP/effort-tx"; mkdir -p "$EFT/p"
+ef() { printf '{"type":"assistant","effort":"%s","sessionId":"E1","timestamp":"2026-09-01T00:00:00Z","message":{"id":"%s","model":"claude-sonnet-5","usage":{"input_tokens":1,"cache_read_input_tokens":10,"cache_creation_input_tokens":0,"output_tokens":1,"output_tokens_details":{"thinking_tokens":1}},"content":[]}}\n' "$1" "$2"; }
+{ ef high e1; ef xhigh e2; ef low e3; ef medium e4; } > "$EFT/p/E1.jsonl"
+"$CLI/ai-os-usage" --transcripts "$EFT" --json 2>/dev/null | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+sys.exit(0 if d['aggregate']['high_effort_rate_pct'] == 50.0 else 1)"
+chk "high/xhigh/max are counted as high effort, and the rate is measured not assumed" $?
+
+# The same block-per-turn trap that inflated turns by 1.8x also inflated effort: one turn
+# is several lines and every one repeats the effort. Measured on a real transcript it
+# read 196 where there were 114 turns — in the exact number effort routing is judged by.
+EFT2="$TMP/effort-blocks"; mkdir -p "$EFT2/p"
+ef2() { printf '{"type":"assistant","effort":"%s","sessionId":"E2","timestamp":"2026-09-01T00:00:00Z","message":{"id":"%s","model":"claude-sonnet-5","usage":{"input_tokens":1,"cache_read_input_tokens":10,"cache_creation_input_tokens":0,"output_tokens":1,"output_tokens_details":{"thinking_tokens":1}},"content":[]}}\n' "$1" "$2"; }
+{ ef2 high d1; ef2 high d1; ef2 high d1; ef2 low d2; ef2 low d2; } > "$EFT2/p/E2.jsonl"
+"$CLI/ai-os-usage" --transcripts "$EFT2" --session E2 --json 2>/dev/null | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+sys.exit(0 if (d['turns'] == 2 and sum(d['effort'].values()) == 2
+               and d['effort'] == {'high': 1, 'low': 1}) else 1)"
+chk "effort is counted once per turn, not once per content block" $?
+
+# =====================================================================================
+t "response protocol contract"
+RESP="$HOME/.ai-os/internal/governance/policies/response.md"
+if [ -f "$RESP" ]; then
+  # Lazy: the module lives in policies/, not in the always-loaded bootstrap.
+  ! grep -q 'QUICK_RESULT\|EXECUTION_REPORT' "$REAL_CORE" 2>/dev/null
+  chk "core.md does not carry the response modes — they stay lazy-loaded" $?
+  for mode in QUICK_RESULT EXECUTION_REPORT TECHNICAL_EXPLANATION BLOCKER DECISION_REQUIRED PROMPT_ARTIFACT BILINGUAL; do
+    grep -q "$mode" "$RESP"
+    chk "  ...defines $mode" $?
+  done
+  grep -qi 'smallest response shape' "$RESP"
+  chk "  ...states the governing principle" $?
+  grep -q 'bold sparingly' "$RESP"
+  chk "  ...still says use bold sparingly" $?
+  grep -q 'meaningful event' "$RESP"
+  chk "  ...progress updates are gated on meaningful events, not every tool call" $?
+else
+  printf '  %sSKIP%s no private workspace on this machine\n' "$D" "$X"
+fi
+
+# Client-aware honesty: only a client with a real enforcement mechanism claims one.
+CC_ADAPTER="$REPO/adapters/claude-code/adapter.yaml"
+if [ -f "$CC_ADAPTER" ]; then
+  grep -q 'enforces:.*response' "$CC_ADAPTER"
+  chk "claude-code adapter claims response enforcement, and it has a hook for it" $?
+  [ -x "$REPO/adapters/claude-code/ai-response-gate" ]
+  chk "  ...ai-response-gate exists and is executable" $?
+fi
+for c in codex gemini; do
+  A="$REPO/adapters/$c/adapter.yaml"
+  if [ -f "$A" ]; then
+    grep -q 'enforces: \[\]' "$A"
+    chk "$c adapter does not claim enforcement it cannot deliver" $?
+  fi
+done
+
+# =====================================================================================
 t "inherited suites still pass"
+unset AI_OS_HOME   # these exercise the real private workspace, not a fixture home
 if [ -f "$REPO/adapters/claude-code/tests/test-guard-push.py" ]; then
   python3 "$REPO/adapters/claude-code/tests/test-guard-push.py" >/dev/null 2>&1
   chk "claude-code git push guard" $?
 else
   printf '  %sSKIP%s claude-code push guard tests not found\n' "$D" "$X"
+fi
+if [ -f "$REPO/adapters/claude-code/tests/test-response-gate.py" ]; then
+  python3 "$REPO/adapters/claude-code/tests/test-response-gate.py" >/dev/null 2>&1
+  chk "claude-code Arabic response gate" $?
+else
+  printf '  %sSKIP%s claude-code response gate tests not found\n' "$D" "$X"
 fi
 if [ -f "$REPO/tests/test-runtime-relocation.py" ]; then
   python3 "$REPO/tests/test-runtime-relocation.py" >/dev/null 2>&1

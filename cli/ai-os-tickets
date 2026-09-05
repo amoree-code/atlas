@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+"""ai-os-tickets — the ticket records are the state; every view of them is derived.
+
+  ai-os tickets list [--project P] [--state S] [--json]   the active set, from the records
+  ai-os tickets index [--project P] [--write]             regenerate a project's board table
+  ai-os tickets doctor [--project P]                      structural checks over the records
+  ai-os tickets log <ID> "<text>"                         one dated entry, nothing else
+  ai-os tickets checkpoint <ID> --note "…" [--next "…"]   durable state at a boundary
+
+## Why this exists
+
+A ticket's status was being written down in six places — its own `task.md`, the project
+board's table, `context/current.md`, `context/checkpoint.md`, two sections of `state.md`
+and the backlog line — and kept in agreement by hand. Hand-synchronised copies drift, and
+a reader who opens the wrong one is told something false with full confidence.
+
+So: **`tickets/<ID>/task.md` is the only place a ticket's status is declared.** Everything
+else that shows status is generated from the records, between markers, and `doctor` fails
+when a generated block no longer matches what the records say. A view that can go stale
+silently is not allowed to exist.
+
+## What doctor will and will not fail on
+
+It reads *structure* — frontmatter fields, the directory name, the artifact manifest, the
+generated block — never prose. A ticket id mentioned in a daily log, a session record or a
+document is a mention, not a declaration, and is none of this command's business. The one
+duplicate-authority rule is structural and exact: two records may not both declare
+`id: <THE-SAME-ID>` in their frontmatter.
+
+It reports; it changes nothing. `index --write` is the only writing path, it touches only
+the region between the markers, and it refuses a file whose markers are missing.
+
+Zero non-stdlib dependencies.
+"""
+import argparse, datetime, json, os, re, sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from aios_paths import private_path_or_die
+from aios_tickets import (STATES, LIVE, REQUIRED, CLASSES, SCOPES, BEGIN, END,
+                         SOFT_NEXT_ACTION_CHARS, SOFT_LOG_ENTRIES, SOFT_TASK_BYTES,
+                         parse_frontmatter, section, first_line, load, discover)
+
+def rank(t):
+    order = {s: i for i, s in enumerate(("active", "blocked", "paused", "todo",
+                                         "done", "cancelled"))}
+    return (order.get(t["state"], 9), t["id"] or "")
+
+
+def render_table(tickets, rel_from):
+    rows = ["| ID | State | Class | Title | Next action | Record |",
+            "|---|---|---|---|---|---|"]
+    for t in sorted(tickets, key=rank):
+        na = t["next_action_line"] or "—"
+        if len(na) > 120:
+            na = na[:117].rstrip() + "…"
+        na = na.replace("|", "\\|")
+        title = (t["title"] or "").replace("|", "\\|")
+        rel = os.path.relpath(t["path"], rel_from)
+        rows.append(f"| {t['id']} | `{t['state']}` | {t['klass'] or '—'} | {title} | "
+                    f"{na} | [`task.md`]({rel}) |")
+    return "\n".join(rows)
+
+
+def index_block(tickets, index_path):
+    body = render_table(tickets, index_path.parent)
+    return (f"{BEGIN}\n"
+            f"<!-- Generated from tickets/*/task.md by `ai-os tickets index --write`.\n"
+            f"     The records are authoritative; this table is a view. Do not hand-edit. -->\n\n"
+            f"{body}\n\n{END}")
+
+
+def splice(text, block):
+    if BEGIN not in text or END not in text:
+        return None
+    pre, rest = text.split(BEGIN, 1)
+    _, post = rest.split(END, 1)
+    return pre + block + post
+
+
+def cmd_list(a, tickets):
+    sel = [t for t in tickets if (not a.state or t["state"] == a.state)]
+    if a.state is None:
+        sel = [t for t in sel if t["state"] in LIVE]
+    if a.json:
+        print(json.dumps(sel, indent=2))
+        return 0
+    if not sel:
+        print("no tickets match")
+        return 0
+    for t in sorted(sel, key=rank):
+        print(f"  {t['id']:<10} {t['state']:<8} {t['project']:<10} {t['title']}")
+        if t["next_action_line"]:
+            print(f"  {'':<10} -> {t['next_action_line'][:110]}")
+    return 0
+
+
+def cmd_index(a, tickets, projects_root):
+    projects = sorted({t["project_dir"] for t in tickets})
+    rc = 0
+    for proj in projects:
+        index_path = projects_root / proj / "index.md"
+        if not index_path.exists():
+            print(f"  ✗ {proj}: no index.md", file=sys.stderr)
+            rc = 1
+            continue
+        text = index_path.read_text()
+        block = index_block([t for t in tickets if t["project_dir"] == proj], index_path)
+        merged = splice(text, block)
+        if merged is None:
+            print(f"  ✗ {proj}/index.md has no {BEGIN} … {END} region — "
+                  f"add it once, then this stays generated", file=sys.stderr)
+            rc = 1
+            continue
+        if merged == text:
+            print(f"  ok    {proj}/index.md already current")
+        elif a.write:
+            index_path.write_text(merged)
+            print(f"  wrote {proj}/index.md")
+        else:
+            print(f"  stale {proj}/index.md (run with --write)")
+            rc = 1
+    return rc
+
+
+def cmd_doctor(a, tickets, projects_root):
+    errors, warnings = [], []
+
+    by_id = {}
+    for t in tickets:
+        if not t["id"]:
+            errors.append(f"{t['path']}: frontmatter declares no id")
+            continue
+        by_id.setdefault(t["id"], []).append(t["path"])
+    for tid, paths in by_id.items():
+        if len(paths) > 1:
+            errors.append(f"{tid}: declared by {len(paths)} records — "
+                          + ", ".join(paths))
+
+    for t in tickets:
+        where = f"{t['id'] or t['path']}"
+        for field in REQUIRED:
+            if not t["meta"].get(field):
+                errors.append(f"{where}: missing frontmatter '{field}'")
+        if t["id"] and t["id"] != t["dir_name"]:
+            errors.append(f"{where}: id does not match its directory '{t['dir_name']}'")
+        if t["state"] and t["state"] not in STATES:
+            errors.append(f"{where}: state '{t['state']}' is not one of {'/'.join(STATES)}")
+        if t["klass"] and t["klass"] not in CLASSES:
+            errors.append(f"{where}: class '{t['klass']}' is not one of {'/'.join(CLASSES)}")
+        if t["expected_context"] and t["expected_context"] not in SCOPES:
+            errors.append(f"{where}: expected_context '{t['expected_context']}' "
+                          f"is not one of {'/'.join(SCOPES)}")
+        present = {p.name for p in Path(t["dir"]).iterdir()
+                   if p.is_file() and p.name != "task.md"}
+        declared = set(t["artifacts"])
+        for missing in sorted(declared - present):
+            errors.append(f"{where}: artifacts lists '{missing}', which does not exist")
+        for extra in sorted(present - declared):
+            warnings.append(f"{where}: '{extra}' exists but is not in artifacts")
+        if t["state"] in LIVE and not t["next_action_line"]:
+            errors.append(f"{where}: is {t['state']} but has no Next action")
+        if len(t["next_action"]) > SOFT_NEXT_ACTION_CHARS:
+            warnings.append(f"{where}: Next action is {len(t['next_action'])} chars — "
+                            f"a cold read pays for all of it; one action is enough")
+        if t["log_entries"] > SOFT_LOG_ENTRIES:
+            warnings.append(f"{where}: {t['log_entries']} log entries — "
+                            f"move the history to log.md and keep the recent ones")
+        if t["bytes"] > SOFT_TASK_BYTES:
+            warnings.append(f"{where}: task.md is {t['bytes']:,} bytes — "
+                            f"large enough that reading it is itself a cost")
+
+    for proj in sorted({t["project_dir"] for t in tickets}):
+        index_path = projects_root / proj / "index.md"
+        if not index_path.exists():
+            continue
+        text = index_path.read_text()
+        block = index_block([t for t in tickets if t["project_dir"] == proj], index_path)
+        merged = splice(text, block)
+        if merged is None:
+            warnings.append(f"{proj}/index.md: no generated ticket region — "
+                            f"its table can drift from the records")
+        elif merged != text:
+            errors.append(f"{proj}/index.md: the generated table disagrees with the "
+                          f"records — run: ai-os tickets index --write")
+
+    for e in errors:
+        print(f"  ✗ {e}")
+    for w in warnings:
+        print(f"  ! {w}")
+    print(f"\n  {len(tickets)} ticket(s) · {len(errors)} error(s) · {len(warnings)} warning(s)")
+    return 1 if errors else 0
+
+
+def find(tickets, tid):
+    hit = [t for t in tickets if (t["id"] or "").upper() == tid.upper()]
+    if not hit:
+        print(f"ai-os tickets: no ticket '{tid}'", file=sys.stderr)
+        return None
+    return hit[0]
+
+
+def append_log(text, day, entry_text):
+    """One dated entry appended under `## Log`. Never rewrites an existing entry."""
+    entry = f"- {day} — {entry_text.strip()}"
+    m = re.search(r"^## Log\s*$", text, re.M)
+    if not m:
+        return text.rstrip() + f"\n\n## Log\n\n{entry}\n"
+    rest = text[m.end():]
+    nxt = re.search(r"^## ", rest, re.M)
+    end = m.end() + (nxt.start() if nxt else len(rest))
+    body = text[m.end():end].rstrip()
+    return text[:m.end()] + body + "\n" + entry + "\n\n" + text[end:]
+
+
+def replace_section(text, heading, new_body):
+    """The body under one `## heading`, replaced. Returns None when there is no heading."""
+    m = re.search(rf"^## {re.escape(heading)}\s*$", text, re.M)
+    if not m:
+        return None
+    rest = text[m.end():]
+    nxt = re.search(r"^## ", rest, re.M)
+    end = m.end() + (nxt.start() if nxt else len(rest))
+    return text[:m.end()] + f"\n\n{new_body.strip()}\n\n" + text[end:]
+
+
+def cmd_log(a, tickets):
+    """Append one dated entry to a ticket's log, and bump `updated:`.
+
+    It appends. It never rewrites an entry, never changes state, and never touches any
+    other section. `checkpoint` is the fuller move; this is the one-line note.
+    """
+    t = find(tickets, a.id)
+    if not t:
+        return 1
+    path = Path(t["path"])
+    day = a.date or datetime.date.today().isoformat()
+    text = append_log(path.read_text(), day, a.text)
+    text = re.sub(r"^updated: .*$", f"updated: {day}", text, count=1, flags=re.M)
+    path.write_text(text)
+    print(f"  {t['id']}: logged, updated {day}")
+
+    reloaded = load(path)
+    if reloaded["log_entries"] > SOFT_LOG_ENTRIES:
+        print(f"  ! {reloaded['log_entries']} entries — move the history to log.md so a "
+              f"cold read stops paying for it")
+    return 0
+
+
+def refresh_index(projects_root, project_dir):
+    """Regenerate one project's board after its records changed.
+
+    A checkpoint moves the next action, which is one of the columns the generated table
+    shows — so without this, every checkpoint left `ai-os tickets doctor` failing on a
+    view it had just made stale, and closing a session cleanly took a second command
+    nobody would remember. It regenerates only what it can: no index.md, or no marker
+    region, and it does nothing and says nothing.
+    """
+    index_path = projects_root / project_dir / "index.md"
+    if not index_path.exists():
+        return None
+    fresh = discover(projects_root, project_dir)
+    text = index_path.read_text()
+    merged = splice(text, index_block(fresh, index_path))
+    if merged is None or merged == text:
+        return None
+    index_path.write_text(merged)
+    return index_path
+
+
+def cmd_checkpoint(a, tickets, projects_root):
+    """Persist durable state at a boundary — the one write that makes ending cheap.
+
+    A checkpoint is what lets a session stop carrying its own history: the next one
+    starts from `ai-os context <ID>` instead of re-reading a conversation that no longer
+    exists. `log` alone was not enough, because a record whose `## Next action` still
+    describes the previous boundary sends the next session to the wrong place — the
+    entry said what happened while the action said something already done.
+
+    Durable only. What goes in is what `aios_lifecycle.CHECKPOINT_FIELDS` names: goal,
+    status, milestone, decisions, changed files, evidence, verification state, blockers,
+    next action, handoff state. Not the conversation, not raw logs, not superseded
+    reasoning, not large tool output — those are why the transcript is expensive, and
+    copying them into the record would move the cost rather than remove it.
+
+    It writes nothing when nothing changed. Checkpointing after every small turn would
+    trade one waste for another, so a repeated note with no new action is a no-op that
+    says so.
+    """
+    t = find(tickets, a.id)
+    if not t:
+        return 1
+    path = Path(t["path"])
+    before = path.read_text()
+    text, wrote = before, []
+    day = a.date or datetime.date.today().isoformat()
+
+    log = section(text, "Log") or ""
+    last = [l for l in log.splitlines() if l.startswith("- ")]
+    repeat = bool(last) and a.note.strip() in last[-1]
+
+    current_next = (section(text, "Next action") or "").strip()
+    next_changes = bool(a.next) and a.next.strip() != current_next
+    state_changes = bool(a.state) and a.state != t["state"]
+
+    if repeat and not next_changes and not state_changes:
+        print(f"  {t['id']}: already current — nothing written")
+        print("  the same note is already the last entry, and no action or state changed")
+        return 0
+
+    if not repeat:
+        text = append_log(text, day, a.note)
+        wrote.append("log entry")
+    if next_changes:
+        merged = replace_section(text, "Next action", a.next)
+        if merged is None:
+            print(f"ai-os tickets: {t['id']} has no '## Next action' section",
+                  file=sys.stderr)
+            return 1
+        text = merged
+        wrote.append("next action")
+    if state_changes:
+        if a.state not in STATES:
+            print(f"ai-os tickets: '{a.state}' is not one of {'/'.join(STATES)}",
+                  file=sys.stderr)
+            return 1
+        text = re.sub(r"^state: .*$", f"state: {a.state}", text, count=1, flags=re.M)
+        wrote.append(f"state -> {a.state}")
+
+    text = re.sub(r"^updated: .*$", f"updated: {day}", text, count=1, flags=re.M)
+    path.write_text(text)
+    print(f"  {t['id']}: checkpointed {day} — {', '.join(wrote)}")
+
+    regenerated = refresh_index(projects_root, t["project_dir"])
+    if regenerated:
+        print(f"  {t['project_dir']}/index.md regenerated from the records")
+
+    reloaded = load(path)
+    if reloaded["log_entries"] > SOFT_LOG_ENTRIES:
+        print(f"  ! {reloaded['log_entries']} entries — move the history to log.md so a "
+              f"cold read stops paying for it")
+    if reloaded["bytes"] > SOFT_TASK_BYTES:
+        print(f"  ! task.md is {reloaded['bytes']:,} bytes — a cold read pays for all "
+              f"of it")
+    print(f"  resume cold with:  ai-os context {t['id']}")
+    return 0
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="ai-os tickets")
+    sub = ap.add_subparsers(dest="cmd")
+    for name in ("list", "index", "doctor", "log", "checkpoint"):
+        p = sub.add_parser(name)
+        p.add_argument("--project")
+        if name == "list":
+            p.add_argument("--state", choices=STATES)
+            p.add_argument("--json", action="store_true")
+        if name == "index":
+            p.add_argument("--write", action="store_true")
+        if name == "log":
+            p.add_argument("id")
+            p.add_argument("text")
+            p.add_argument("--date")
+        if name == "checkpoint":
+            p.add_argument("id")
+            p.add_argument("--note", required=True,
+                           help="what landed: milestone, decisions, evidence, "
+                                "verification state")
+            p.add_argument("--next", help="replace the one next action")
+            p.add_argument("--state", choices=STATES, help="the ticket's new state")
+            p.add_argument("--date")
+    a = ap.parse_args(argv)
+    if not a.cmd:
+        ap.print_help()
+        return 2
+
+    projects_root = private_path_or_die("projects")
+    tickets = discover(projects_root, a.project)
+    if not tickets:
+        print(f"ai-os tickets: no ticket records under {projects_root}", file=sys.stderr)
+        return 1
+    return {"list": lambda: cmd_list(a, tickets),
+            "index": lambda: cmd_index(a, tickets, projects_root),
+            "doctor": lambda: cmd_doctor(a, tickets, projects_root),
+            "log": lambda: cmd_log(a, tickets),
+            "checkpoint": lambda: cmd_checkpoint(a, tickets, projects_root)}[a.cmd]()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
