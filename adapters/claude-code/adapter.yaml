@@ -29,7 +29,8 @@ integrates:
   # learns this client exists; this command tells it only WHERE this client's mounts are.
   memory.mounts: { command: ai-memory-mounts, format: newline-paths, verified: true }
 
-enforces: [git]             # governance/policies/git.yaml, via ai-guard-push (PreToolUse)
+enforces: [git, response]  # git.yaml via ai-guard-push (PreToolUse); response.md's Arabic
+                            # trigger via ai-response-gate (UserPromptSubmit)
 
 conventions:
   # Client-specific filesystem names. Skills reference these as {{client.*}} so one
