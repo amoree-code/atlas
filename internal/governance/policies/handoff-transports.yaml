@@ -36,6 +36,24 @@
 
 contract: 1
 
+# ---------------------------------------------------------------------------------
+# Roles, and which client fills each one.
+#
+# The flow was written around client names — "Codex plans, Claude executes" — which bakes
+# two vendors into the architecture and has to be rewritten when either changes. A role is
+# the stable half: the work is planning or execution or review regardless of who does it.
+# A packet is addressed to a ROLE, and this map says who currently holds it.
+#
+# Changing a name here re-points the flow. Nothing else needs to change, and no transport
+# gains any privilege from being named: `send` still refuses anything not `verified: true`
+# in the registry below.
+roles:
+  planner: codex # frames the work and produces the plan
+  executor: claude-code # makes the change
+  verifier: codex # reviews what was returned
+  explorer: claude-code # large disposable reads, isolated from the parent
+  scribe: claude-code # bookkeeping: summaries, logs, records
+
 transports:
 
   codex:
