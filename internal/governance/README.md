@@ -6,7 +6,7 @@ config flag, a wrapper script). The policy file never assumes a specific enforce
 mechanism; the adapter never redefines the policy, only implements it.
 
 ```
-governance/policies/git.yaml           the rule: git.push requires approval, always
+internal/governance/policies/git.yaml           the rule: git.push requires approval, always
         │
         ↓ implemented by
 adapters/claude-code/ai-guard-push     a PreToolUse hook that inspects Bash commands
@@ -17,12 +17,12 @@ adapters/gemini/…                      not implemented yet
 ## Layout
 
 ```
-governance/
+internal/governance/
 ├── README.md      this file
 └── policies/      the declarations themselves
 ```
 
-There is deliberately no `governance/rules/`. No public, client-agnostic rules content
+There is deliberately no `internal/governance/rules/`. No public, client-agnostic rules content
 exists yet, and an empty namespace would be the placeholder problem this repository has
 already refused once. The user's own behavioural rules live in their private workspace,
 not here.

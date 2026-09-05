@@ -78,4 +78,4 @@ generic patterns and cannot catch a name or a client repository — the file its
 private and is never read by anything in the public repository.
 
 A `git push` from the public repository requires explicit approval every time; see
-`governance/policies/git.yaml` and `docs/design/governance.md`.
+`internal/governance/policies/git.yaml` and `docs/design/governance.md`.

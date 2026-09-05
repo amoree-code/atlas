@@ -119,6 +119,6 @@ on it.
 
 ## Machine-readable
 
-- `governance/policies/public-private-contract.yaml` — this document, as policy
-- `governance/policies/workspace-privacy.yaml` — what requires approval at the boundary
-- `governance/policies/privacy-classification.yaml` — credential vs. personal data
+- `internal/governance/policies/public-private-contract.yaml` — this document, as policy
+- `internal/governance/policies/workspace-privacy.yaml` — what requires approval at the boundary
+- `internal/governance/policies/privacy-classification.yaml` — credential vs. personal data

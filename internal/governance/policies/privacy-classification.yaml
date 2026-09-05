@@ -72,7 +72,7 @@ exceptions:
       still scanned normally. Any other file is unaffected.
     not_an_allowlist_entry: >
       Deliberately a context rule in the scanner, not a string in
-      governance/policies/privacy-allowlist.txt. Putting the owner's real name in the allowlist
+      internal/governance/policies/privacy-allowlist.txt. Putting the owner's real name in the allowlist
       would ship that name in the public repository — the exact failure this scanner
       exists to prevent. A context rule carries no name.
 
@@ -90,7 +90,7 @@ term_sources:
     classification: private   # never copied to, referenced by, or committed in the public repo
     optional: true            # absent means generic-only scanning, with a warning
   allowlist:
-    where: <ai-os>/governance/policies/privacy-allowlist.txt
+    where: <ai-os>/internal/governance/policies/privacy-allowlist.txt
     contains: known-benign strings that would otherwise match
     purpose: keep the signal-to-noise ratio high enough that the scan is actually run
 

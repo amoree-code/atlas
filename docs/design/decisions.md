@@ -27,7 +27,7 @@ each is a genuinely different axis, and conflating two makes both harder to reas
 **Modular.** Optional functionality is a module or adapter, not baked into the core.
 
 **Safe autonomy.** The agent can act on its own, but sensitive operations — a remote
-push, a merge, a delete — require explicit approval. See `../governance/policies/`.
+push, a merge, a delete — require explicit approval. See `internal/governance/policies/`.
 
 **Context-efficient.** Retrieve only what's relevant. Never load the whole workspace for
 a request that needs three files.

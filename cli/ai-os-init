@@ -10,7 +10,7 @@
 #
 # Direction of flow is public -> private, only here, only at initialization. Nothing in
 # this script ever reads private content into the public repository.
-# See governance/policies/public-private-contract.yaml.
+# See internal/governance/policies/public-private-contract.yaml.
 
 set -euo pipefail
 

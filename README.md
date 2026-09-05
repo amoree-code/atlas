@@ -93,7 +93,7 @@ Core is the mechanism shared across every client and every capability —
 persistence`, and nothing else. An **adapter** answers *how does one AI client reach AI
 OS?* A **capability** answers *what can AI OS do?* A **domain** answers *what area of
 work is this?*, and executes nothing. **Governance** is policy: what must be true,
-client-agnostically — it lives in `governance/policies/` today. **Schemas** are the contracts
+client-agnostically — it lives in `internal/governance/policies/` today. **Schemas** are the contracts
 everything above is checked against. Detail on each: `docs/design/core.md`,
 `docs/use/adapters.md`, `docs/use/capabilities.md`, `docs/use/domains.md`,
 `docs/design/governance.md`.
@@ -109,7 +109,6 @@ ai-os/                      the public repository — software only
 ├── capabilities/<id>/      what AI OS can do — browser control ships today
 ├── domains/                areas of work, declared and inert — nothing executes one
 ├── schemas/                the contracts: adapter · capability · domain · run
-├── governance/             policy: the contract, privacy classification, git approval
 ├── skills/                 public skills — yours in ~/.ai-os/skills override these
 ├── templates/
 │   ├── workspace/          seeds for a new ~/.ai-os — placeholder data only
@@ -117,8 +116,9 @@ ai-os/                      the public repository — software only
 ├── docs/
 │   └── examples/           worked examples — placeholder until real ones land
 ├── tests/
-└── internal/
-    └── core/               pointer to docs/design/core.md — no separate binary yet
+└── internal/               not the product surface — machinery it ships with
+    ├── core/               pointer to docs/design/core.md — no separate binary yet
+    └── governance/         policy: the contract, privacy classification, git approval
 ```
 
 Agent definitions are not here: they live in your workspace, because an agent is

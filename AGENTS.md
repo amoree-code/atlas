@@ -20,7 +20,7 @@ real file paths from a contributor's machine, no credentials.
   belongs under `adapters/<client>/`, not in `templates/`.
 - Never commit example data that looks like it could be real — use obviously
   placeholder values (`example.com`, `Example Org`, `a-project`) in every template.
-- A policy in `governance/policies/` states *what* must be true; an adapter states
+- A policy in `internal/governance/policies/` states *what* must be true; an adapter states
   *how* one client makes it true. Don't let a policy file assume a specific client's
   implementation.
 
@@ -32,7 +32,7 @@ before you write it down, and prefer deleting a stale sentence to carrying it fo
 - **Never list a path that does not exist.** Layout blocks, command lists and schema
   lists go stale first. Verify each entry before editing one.
 - **Never say a thing does not exist without looking.** Check `capabilities/`,
-  `adapters/`, `governance/policies/`, `schemas/` and `domains/` first. "Empty by
+  `adapters/`, `internal/governance/policies/`, `schemas/` and `domains/` first. "Empty by
   design" and "none ship yet" were both false for months.
 - **There are two layers, not three.** `~/.ai` is retired: the engine is `cli/`, client
   integration is `adapters/<client>/`, and transient state is `$AI_OS_HOME/runtime/`.

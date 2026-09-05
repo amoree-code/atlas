@@ -181,11 +181,11 @@ and belongs to V0.2.
 ## Enforcement
 
 ```yaml
-enforces: [git]     # implements governance/policies/git.yaml in this client's mechanism
+enforces: [git]     # implements internal/governance/policies/git.yaml in this client's mechanism
 ```
 
 An adapter *implements* a policy. It never restates one, never relaxes one, and never
-defines its own. The policy lives in `governance/policies/`, client-agnostic; the adapter is one
+defines its own. The policy lives in `internal/governance/policies/`, client-agnostic; the adapter is one
 enforcement of it.
 
 ## Compatibility
