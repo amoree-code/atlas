@@ -120,6 +120,23 @@ def is_subagent_transcript(path, root):
     return "subagents" in parts
 
 
+def worker_agent_type(path):
+    """The `agentType` a worker's sibling `.meta.json` recorded, or None.
+
+    A main session's transcript has no such sibling, so this returns None for it too —
+    the caller distinguishes "not a worker" from "worker with no recorded type" the same
+    way: both report `unknown` in the `--models` view, because neither is evidence of a
+    specific agent identity beyond what the client itself wrote down.
+    """
+    meta = path.with_name(path.stem + ".meta.json")
+    if not meta.is_file():
+        return None
+    try:
+        return json.loads(meta.read_text()).get("agentType")
+    except (ValueError, OSError):
+        return None
+
+
 def analyze(path, root=None):
     """One transcript file → one report dict. Returns None if it holds no usage at all."""
     turns = []                      # deduped, in order
@@ -259,6 +276,7 @@ def analyze(path, root=None):
             "mean": round(statistics.fmean(reads), 1),
             "median": int(statistics.median(reads)), "max": max(reads),
         },
+        "agent_type": worker_agent_type(path),
         "models": dict(models),
         "effort": dict(efforts),
         "tool_calls": dict(tool_calls.most_common()),
@@ -372,6 +390,120 @@ def aggregate(reports):
             "wasted_chars": sum(r["repeated_reads"]["wasted_chars"] for r in reports),
         },
     }
+
+
+def dominant(counter):
+    """The most-recorded key in a Counter-like dict, or None if it is empty.
+
+    Used for model and effort: a session can carry more than one value (a mid-session
+    model switch, an effort change), and the dominant one is what most turns actually
+    ran under. Never a guess — it comes straight from the transcript's own recorded
+    values, or is None when the transcript recorded none at all.
+    """
+    if not counter:
+        return None
+    return max(counter.items(), key=lambda kv: kv[1])[0]
+
+
+def worker_view(worker, parent_models, parent_effort):
+    """One worker transcript, judged only against what the parent transcript recorded.
+
+    model_override and effort_source are both UNKNOWN, not a guess, whenever the
+    evidence needed to compare is missing on either side — a worker recording no effort,
+    or a parent recording no model, settles nothing about inheritance or override.
+    """
+    w_model = dominant(worker["models"])
+    w_effort = dominant(worker.get("effort") or {})
+
+    if w_model is None or not parent_models:
+        model_override = "unknown"
+    else:
+        model_override = w_model not in parent_models
+
+    if w_effort is None or parent_effort is None:
+        effort_source = "unknown"
+    elif w_effort == parent_effort:
+        effort_source = "inherited"
+    else:
+        effort_source = "override"
+
+    return {
+        "agent_type": worker.get("agent_type") or "unknown",
+        "model": w_model or "unknown",
+        "model_override": model_override,
+        "effort": w_effort or "unknown",
+        "effort_source": effort_source,
+        "turns": worker["turns"],
+        "totals": worker["totals"],
+        "file": worker["file"],
+    }
+
+
+def models_view(reports, session=None):
+    """Parent + workers for one session, from transcript evidence only.
+
+    Workers are matched to a parent by `session_id` alone: a worker's own transcript
+    records the PARENT's sessionId (verified directly against real transcripts — not a
+    path-parsing assumption), so grouping needs no directory-structure inference and
+    survives whatever nesting a workflow worker uses (`subagents/workflows/wf_*/...`).
+    """
+    main = [r for r in reports if not r["is_subagent"]]
+    if not main:
+        return None
+
+    if session:
+        picked = [r for r in main
+                  if r["session_id"] == session
+                  or Path(r["file"]).stem == session
+                  or r["file"] == session]
+        if not picked:
+            return None
+        parent = picked[0]
+    else:
+        parent = max(main, key=lambda r: r["last_timestamp"] or "")
+
+    workers = [r for r in reports if r["is_subagent"] and r["session_id"] == parent["session_id"]]
+    parent_models = set(parent["models"])
+    parent_effort = dominant(parent.get("effort") or {})
+
+    return {
+        "session_id": parent["session_id"],
+        "parent": {
+            "model": dominant(parent["models"]) or "unknown",
+            "effort": parent_effort or "unknown",
+            "turns": parent["turns"],
+            "totals": parent["totals"],
+            "file": parent["file"],
+        },
+        "workers": [worker_view(w, parent_models, parent_effort)
+                    for w in sorted(workers, key=lambda r: r["first_timestamp"] or "")],
+    }
+
+
+def print_models(view):
+    if view is None:
+        print("ai-os usage --models: no main session found", file=sys.stderr)
+        return
+    p = view["parent"]
+    print(f"\nsession {view['session_id']}")
+    print(f"\nParent")
+    print(f"  model: {p['model']}")
+    print(f"  effort: {p['effort']}")
+    print(f"  turns: {p['turns']}")
+    print(f"\nWorkers")
+    if not view["workers"]:
+        print("  none")
+    else:
+        for w in view["workers"]:
+            print(f"  {w['agent_type']}")
+            print(f"    model: {w['model']}")
+            ov = w["model_override"]
+            ov_s = ov if ov == "unknown" else str(ov).lower()
+            print(f"    model_override: {ov_s}")
+            print(f"    effort: {w['effort']}")
+            print(f"    effort_source: {w['effort_source']}")
+            print(f"    turns: {w['turns']}")
+    print()
 
 
 def guard(reports, agg):
@@ -621,6 +753,9 @@ def main(argv):
     ap.add_argument("--weights")
     ap.add_argument("--guard", action="store_true",
                     help="report expensive patterns found in the measured sessions")
+    ap.add_argument("--models", action="store_true",
+                    help="which model/effort the parent and any workers actually ran, "
+                         "from transcript evidence (use --session to pick one)")
     ap.add_argument("--include-superseded", action="store_true",
                     help="also count resumed-session prefixes that another file continues")
     a = ap.parse_args(argv)
@@ -636,6 +771,18 @@ def main(argv):
     if not reports:
         print(f"ai-os usage: no transcripts with usage under {root}", file=sys.stderr)
         return 1
+
+    if a.models:
+        view = models_view(reports, a.session)
+        if view is None:
+            print(f"ai-os usage --models: no main session"
+                  + (f" matching '{a.session}'" if a.session else " found"), file=sys.stderr)
+            return 1
+        if a.json:
+            print(json.dumps(view, indent=2))
+        else:
+            print_models(view)
+        return 0
 
     if a.session:
         hit = [r for r in reports

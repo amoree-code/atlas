@@ -4236,6 +4236,86 @@ sys.exit(0 if (d['turns'] == 2 and sum(d['effort'].values()) == 2
 chk "effort is counted once per turn, not once per content block" $?
 
 # =====================================================================================
+t "ai-os usage --models — parent/worker identity from transcript evidence only"
+MU="$TMP/usage-models"; mkdir -p "$MU/proj/P2/subagents"
+mu() { # output_tokens cache_read cache_write
+  printf '{"input_tokens":0,"cache_read_input_tokens":%s,"cache_creation_input_tokens":%s,"cache_creation":{"ephemeral_5m_input_tokens":%s,"ephemeral_1h_input_tokens":0},"output_tokens":%s,"output_tokens_details":{"thinking_tokens":0}}' "$2" "$3" "$3" "$1"
+}
+# P1: a parent with no workers at all.
+{ printf '{"type":"assistant","effort":"high","sessionId":"P1","timestamp":"2026-09-01T00:00:00Z","message":{"id":"p1a","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$(mu 1 10 1)"
+  printf '{"type":"assistant","effort":"high","sessionId":"P1","timestamp":"2026-09-01T00:00:01Z","message":{"id":"p1b","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$(mu 1 10 1)"
+} > "$MU/proj/P1.jsonl"
+# P2: a parent (sonnet, medium) with two workers.
+{ printf '{"type":"assistant","effort":"medium","sessionId":"P2","timestamp":"2026-09-01T00:00:00Z","message":{"id":"q1","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$(mu 1 10 1)"
+  printf '{"type":"assistant","effort":"medium","sessionId":"P2","timestamp":"2026-09-01T00:00:01Z","message":{"id":"q2","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$(mu 1 10 1)"
+  printf '{"type":"assistant","effort":"medium","sessionId":"P2","timestamp":"2026-09-01T00:00:02Z","message":{"id":"q3","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$(mu 1 10 1)"
+} > "$MU/proj/P2.jsonl"
+# Worker "architect": model overridden to opus, effort matches the parent's (medium) ->
+# inherited. Its one real turn is written three times with the SAME message.id, exactly
+# how one multi-block turn is recorded — must count as 1 turn, not 3.
+{ printf '{"type":"assistant","effort":"medium","sessionId":"P2","timestamp":"2026-09-01T00:00:03Z","message":{"id":"w1","model":"claude-opus-5","usage":%s,"content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]}}\n' "$(mu 1 20 1)"
+  printf '{"type":"assistant","effort":"medium","sessionId":"P2","timestamp":"2026-09-01T00:00:03Z","message":{"id":"w1","model":"claude-opus-5","usage":%s,"content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]}}\n' "$(mu 1 20 1)"
+  printf '{"type":"assistant","effort":"medium","sessionId":"P2","timestamp":"2026-09-01T00:00:03Z","message":{"id":"w1","model":"claude-opus-5","usage":%s,"content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]}}\n' "$(mu 1 20 1)"
+  printf '{"type":"assistant","effort":"medium","sessionId":"P2","timestamp":"2026-09-01T00:00:04Z","message":{"id":"w2","model":"claude-opus-5","usage":%s,"content":[]}}\n' "$(mu 1 20 1)"
+} > "$MU/proj/P2/subagents/agent-arch.jsonl"
+printf '{"agentType":"architect"}' > "$MU/proj/P2/subagents/agent-arch.meta.json"
+# Worker "debugger": same model as the parent (no override), no effort field recorded at
+# all -> unknown, not assumed inherited.
+printf '{"type":"assistant","sessionId":"P2","timestamp":"2026-09-01T00:00:05Z","message":{"id":"d1","model":"claude-sonnet-5","usage":%s,"content":[]}}\n' "$(mu 1 5 1)" > "$MU/proj/P2/subagents/agent-dbg.jsonl"
+printf '{"agentType":"debugger"}' > "$MU/proj/P2/subagents/agent-dbg.meta.json"
+
+MJ="$TMP/usage-models.json"
+"$CLI/ai-os-usage" --transcripts "$MU" --models --session P1 --json > "$MJ" 2>/dev/null
+chk "--models --session exits 0 for a parent-only session" $?
+python3 -c "import json;json.load(open('$MJ'))" >/dev/null 2>&1
+chk "  ...and emits valid JSON" $?
+[ "$(python3 -c "import json;d=json.load(open('$MJ'));print(d['workers'])")" = "[]" ]
+chk "a parent with no worker transcripts reports an empty worker list" $?
+"$CLI/ai-os-usage" --transcripts "$MU" --models --session P1 2>/dev/null | grep -q '^Workers$'
+chk "  ...and the human view prints a Workers section" $?
+"$CLI/ai-os-usage" --transcripts "$MU" --models --session P1 2>/dev/null | grep -qx '  none'
+chk "  ...saying 'none', not an empty list" $?
+[ "$(python3 -c "import json;d=json.load(open('$MJ'));print(d['parent']['model'])")" = "claude-sonnet-5" ]
+chk "parent model is read from the transcript" $?
+[ "$(python3 -c "import json;d=json.load(open('$MJ'));print(d['parent']['effort'])")" = "high" ]
+chk "parent effort is read from the transcript" $?
+[ "$(python3 -c "import json;d=json.load(open('$MJ'));print(d['parent']['turns'])")" = "2" ]
+chk "parent turns match the deduplicated count" $?
+
+MJ2="$TMP/usage-models-p2.json"
+"$CLI/ai-os-usage" --transcripts "$MU" --models --session P2 --json > "$MJ2" 2>/dev/null
+chk "--models --session exits 0 for a parent with workers" $?
+python3 -c "import json;json.load(open('$MJ2'))" >/dev/null 2>&1
+chk "  ...and emits valid JSON" $?
+[ "$(python3 -c "import json;d=json.load(open('$MJ2'));print(len(d['workers']))")" = "2" ]
+chk "both workers are found and grouped under their parent's session_id" $?
+wq() { python3 -c "
+import json, sys
+d=json.load(open('$MJ2'))
+w={x['agent_type']:x for x in d['workers']}
+print(eval(sys.argv[1]))" "$1"; }
+[ "$(wq "w['architect']['model']")" = "claude-opus-5" ]
+chk "worker agent_type comes from the sibling .meta.json" $?
+[ "$(wq "w['architect']['model_override']")" = "True" ]
+chk "opus worker under a sonnet parent is reported as a model override" $?
+[ "$(wq "w['architect']['turns']")" = "2" ]
+chk "  ...and its turns are deduplicated (one message.id split across 3 lines counts once)" $?
+[ "$(wq "w['architect']['effort']")" = "medium" ]
+chk "worker effort matching the parent's recorded effort is surfaced" $?
+[ "$(wq "w['architect']['effort_source']")" = "inherited" ]
+chk "  ...and classified as inherited, not asserted from policy" $?
+[ "$(wq "w['debugger']['model_override']")" = "False" ]
+chk "a worker on the same model as its parent is not flagged as an override" $?
+[ "$(wq "w['debugger']['effort']")" = "unknown" ]
+chk "a worker with no recorded effort field reports unknown, not a guessed value" $?
+[ "$(wq "w['debugger']['effort_source']")" = "unknown" ]
+chk "  ...and inheritance is not claimed without evidence" $?
+"$CLI/ai-os-usage" --transcripts "$MU" --models --session P2 2>/dev/null | grep -q 'architect'
+chk "human view lists each worker by its agent_type" $?
+"$CLI/ai-os-usage" --transcripts "$MU" --session P1 --json >/dev/null 2>&1
+chk "plain 'ai-os usage --session' (no --models) still works unchanged" $?
+
+# =====================================================================================
 t "response protocol contract"
 RESP="$HOME/.ai-os/internal/governance/policies/response.md"
 if [ -f "$RESP" ]; then
