@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""ai-atlas-turn-checkpoint — Stop/PreCompact hook. Records one bounded, safe journal
+entry per completed Claude response, without inventing semantic task state.
+
+## Why this exists
+
+`ai-atlas-resume` (SessionStart) discovers a *manually* written checkpoint
+(`ai-os tickets checkpoint`) at the start of a new session. This file is the other half:
+an automatic, per-turn safety net that fires even when nobody remembered to run that
+command, so a session that ends abruptly (crash, closed terminal, hit a usage limit)
+still leaves *something* behind — honestly labeled as a turn-boundary record, not
+dressed up as a real semantic checkpoint it has no way to produce.
+
+## What was verified before this was written (not assumed)
+
+A real, isolated, headless `claude --settings <throwaway>.json -p "..."` run, with
+`Stop`, `SessionEnd` and `PreCompact` all registered as marker-writing command hooks:
+
+  - `Stop` fires after every completed response (confirmed on a plain one-turn `-p` call)
+    and its stdin JSON includes `session_id`, `transcript_path`, `prompt_id`,
+    `last_assistant_message`, `stop_hook_active`, `permission_mode`, `effort`,
+    `background_tasks`, `session_crons`. It does NOT include a ticket id, a next action,
+    a verification result, or a changed-files list — nothing in the payload lets a hook
+    determine "what should happen next," only "a response just finished."
+  - `PreCompact` fires on `/compact` (confirmed the same way) with `session_id`,
+    `transcript_path`, `prompt_id`, `trigger` (`"manual"` seen; `"auto"` is documented but
+    not exercised here — automatic compaction was not induced), `custom_instructions`.
+    Same absence of semantic task fields.
+  - `SessionEnd` fires on process exit with a `reason` field (`"other"` seen for a `-p`
+    exit; `clear`/`logout`/`prompt_input_exit` are documented but not exercised here).
+
+Because neither payload carries semantic state, this file follows the two-layer design
+required for that situation: record the boundary and whatever metadata is genuinely
+available, automatically, every time — and never guess a ticket, a next action, or a
+verification result to fill the gap. `$ATLAS_HOME/runtime/session-handoffs/latest.md`
+(the SessionStart pointer) is read here, never written — a real semantic checkpoint
+written by `ai-os tickets checkpoint` always stays authoritative and is never overwritten
+by an automatic, semantic-free turn record.
+
+## What this does NOT do
+
+- Does not write, touch, or rotate `latest.md`. `SessionStart`'s `ai-atlas-resume` reads
+  only that file and is unaffected by this one's existence.
+- Does not call `catch-up`, `ai-os context`, or any ticket-mutating command.
+- Does not execute, approve, commit, or publish anything named in the transcript.
+- Does not read the transcript file itself — only the hook's own stdin JSON. Reading and
+  interpreting the transcript would be exactly the kind of state invention this file is
+  built to avoid.
+- Never blocks: any failure here is swallowed and the hook exits 0. A turn checkpoint
+  that could crash a session would be worse than the crash it is meant to survive.
+
+Reads stdin JSON. Writes at most one line to
+`$ATLAS_HOME/runtime/session-handoffs/turns.jsonl`, then re-bounds that file's size.
+Zero non-stdlib dependencies.
+"""
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+MAX_LINES = 500
+MAX_BYTES = 512_000
+DEDUPE_SCAN_LINES = 50
+
+POINTER_FIELDS = ("ticket", "checkpointed_at", "state", "next_action", "blockers",
+                  "read_with", "status")
+
+
+def atlas_home():
+    return Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
+        else Path.home() / "atlas"
+
+
+def journal_path():
+    return atlas_home() / "runtime" / "session-handoffs" / "turns.jsonl"
+
+
+def pointer_path():
+    return atlas_home() / "runtime" / "session-handoffs" / "latest.md"
+
+
+def now_readable():
+    n = time.localtime()
+    hour = time.strftime("%I", n).lstrip("0") or "12"
+    return f"{time.strftime('%Y-%m-%d', n)} {hour}:{time.strftime('%M %p', n)}"
+
+
+def load_credential_patterns():
+    """Best-effort reuse of the one real scanner. Unavailable -> no patterns -> never
+    blocks a turn record on an import failure alone (same fallback shape ai-os-tickets
+    already uses for the same reason)."""
+    try:
+        import importlib.util
+        from importlib.machinery import SourceFileLoader
+        repo = Path(__file__).resolve().parent.parent.parent
+        scan_path = repo / "cli" / "ai-os-privacy-scan"
+        loader = SourceFileLoader("ai_os_privacy_scan_patterns", str(scan_path))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        return [rx for _, rx in mod.CREDENTIAL]
+    except Exception:
+        return []
+
+
+CREDENTIAL_PATTERNS = load_credential_patterns()
+
+
+def redact_if_credential_shaped(value):
+    if not value:
+        return value
+    for rx in CREDENTIAL_PATTERNS:
+        if rx.search(value):
+            return "[redacted — credential-shaped content omitted]"
+    return value
+
+
+def read_pointer_fields():
+    """Read-only, best-effort. Returns the last MANUALLY checkpointed ticket/state/
+    next_action/blockers, or all-None if there is no pointer, it cannot be read, or it is
+    malformed. Never raises. Never writes. This is the only way this file learns
+    anything resembling semantic state, and it is always carried-forward, never new."""
+    path = pointer_path()
+    try:
+        text = path.read_text()
+    except OSError:
+        return {k: None for k in POINTER_FIELDS}
+    fields = {}
+    for name in POINTER_FIELDS:
+        m = re.search(rf"^{re.escape(name)}:[ \t]*(.*)$", text, re.M)
+        fields[name] = m.group(1).strip() if m and m.group(1).strip() else None
+    return fields
+
+
+def read_stdin_event():
+    try:
+        raw = sys.stdin.read()
+    except Exception:
+        return None
+    if not raw or not raw.strip():
+        return None
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def already_recorded(path, session_id, turn_id, event_name):
+    """Scan only the last DEDUPE_SCAN_LINES lines — bounded work, not a full-file read,
+    and duplicate Stop/PreCompact firings for the same turn are always adjacent."""
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return False
+    for line in lines[-DEDUPE_SCAN_LINES:]:
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        if (rec.get("session_id") == session_id and rec.get("turn_id") == turn_id
+                and rec.get("trigger_event") == event_name):
+            return True
+    return False
+
+
+def build_record(event):
+    session_id = event.get("session_id") or "unknown"
+    turn_id = event.get("prompt_id") or "unknown"
+    event_name = event.get("hook_event_name") or "unknown"
+    trigger = {"Stop": "stop", "PreCompact": "precompact"}.get(event_name, event_name.lower())
+    cwd = event.get("cwd") or None
+
+    pointer = read_pointer_fields()
+    have_ticket = bool(pointer.get("ticket"))
+
+    record = {
+        "at": now_readable(),
+        "trigger": trigger,
+        "trigger_event": event_name,
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "cwd": cwd,
+        "ticket": pointer.get("ticket"),
+        "state": redact_if_credential_shaped(pointer.get("state")) if have_ticket
+                 else "unavailable — automatic turn boundary, no semantic checkpoint yet",
+        "next_action": redact_if_credential_shaped(pointer.get("next_action")) if have_ticket
+                 else "unavailable — run `ai-os tickets checkpoint` for a real next action",
+        "blockers": redact_if_credential_shaped(pointer.get("blockers")) if have_ticket else None,
+        "verification": "unavailable — the Stop/PreCompact hook payload carries no "
+                        "verification result",
+        "changed_files": "unavailable — the Stop/PreCompact hook payload carries no "
+                         "changed-file list",
+        "source_of_truth": (f"ticket {pointer['ticket']} via latest.md (carried forward, "
+                            f"not re-verified this turn)" if have_ticket
+                            else f"transcript at {event.get('transcript_path') or 'unknown'} "
+                                 f"(not read by this hook)"),
+        "status": "recorded",
+    }
+    return record, session_id, turn_id, event_name
+
+
+def bound_journal(path):
+    """Deterministic FIFO trim: drop oldest whole lines until both caps are satisfied.
+    Never truncates mid-line. Atomic replace."""
+    try:
+        text = path.read_text()
+    except OSError:
+        return
+    lines = text.splitlines()
+    while len(lines) > MAX_LINES:
+        lines.pop(0)
+    joined = "\n".join(lines) + ("\n" if lines else "")
+    while len(joined.encode()) > MAX_BYTES and lines:
+        lines.pop(0)
+        joined = "\n".join(lines) + ("\n" if lines else "")
+    if joined != text:
+        tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+        tmp.write_text(joined)
+        os.replace(tmp, path)
+
+
+def main():
+    event = read_stdin_event()
+    if not event:
+        return  # malformed or empty stdin — never invent a record from nothing
+
+    home = atlas_home()
+    runtime = home / "runtime"
+    if not runtime.is_dir():
+        return  # uninitialized workspace — nothing to journal into yet, and creating
+                 # runtime/ from a hook is out of scope for a read-mostly safety net
+
+    record, session_id, turn_id, event_name = build_record(event)
+
+    d = journal_path().parent
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+
+    path = journal_path()
+    if already_recorded(path, session_id, turn_id, event_name):
+        return  # idempotent: this exact turn/event was already journaled
+
+    line = json.dumps(record, ensure_ascii=False)
+    try:
+        tmp = path.with_name(path.name + f".appendtmp{os.getpid()}")
+        existing = path.read_text() if path.is_file() else ""
+        tmp.write_text(existing + line + "\n")
+        os.replace(tmp, path)
+    except OSError:
+        return
+
+    bound_journal(path)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        pass
+    sys.exit(0)
