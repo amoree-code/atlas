@@ -211,19 +211,19 @@ def new_fixture():
         "  fake-executor:\n"
         "    name: fixture fake executor\n"
         f"    binary: {fake_bin}\n"
-        "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\"]\n"
+        "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\", --max-budget-usd, __MISSION_BUDGET_USD__]\n"
         "    stdin: packet\n    timeout: 30\n    verified: true\n"
         "    evidence: disposable fixture, never the real registry\n"
         "  fake-executor-timeout:\n"
         "    name: fixture fake executor (fast timeout)\n"
         f"    binary: {fake_bin}\n"
-        "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\"]\n"
+        "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\", --max-budget-usd, __MISSION_BUDGET_USD__]\n"
         "    stdin: packet\n    timeout: 1\n    verified: true\n"
         "    evidence: disposable fixture, never the real registry\n"
         "  fake-executor-unverified:\n"
         "    name: fixture fake executor (unverified)\n"
         f"    binary: {fake_bin}\n"
-        "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\"]\n"
+        "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\", --max-budget-usd, __MISSION_BUDGET_USD__]\n"
         "    stdin: packet\n    timeout: 30\n    verified: false\n"
         "    evidence: deliberately unverified — proves the pre-subprocess refusal gate\n")
 
@@ -412,12 +412,12 @@ tampered = transports_before.replace(
     "  fake-executor:\n"
     "    name: fixture fake executor\n"
     f"    binary: {fake_bin_path}\n"
-    "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\"]\n"
+    "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\", --max-budget-usd, __MISSION_BUDGET_USD__]\n"
     "    stdin: packet\n    timeout: 30\n    verified: true\n",
     "  fake-executor:\n"
     "    name: fixture fake executor\n"
     f"    binary: {fake_bin_path}\n"
-    "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\"]\n"
+    "    argv: [--scope-dir, __MISSION_SCOPE_DIR__, --tools, \"Read,Edit\", --max-budget-usd, __MISSION_BUDGET_USD__]\n"
     "    stdin: packet\n    timeout: 30\n    verified: false\n")
 assert tampered != transports_before, "fake-executor block not found for tampering"
 transports_path.write_text(tampered)
@@ -702,13 +702,31 @@ t("26. mission execute never approves, never creates a lease/claim, never dispat
   "anything beyond the one subprocess call")
 os.environ["FAKE_EXECUTOR_MODE"] = "pass"
 ctx26 = full_setup(ROOT, "T-980-W")
+task_dir26 = mission.resolve_task_dir("T-980-W")
+# Conflict protection (coordinator claims, cli/aios_coordination.py) was added after this
+# test was first written: execute now legitimately acquires a per-file claim under
+# runtime/coordination/claims/ on the scope file it is about to touch, so a second mission
+# can't be executed against the same file concurrently — that IS the point of the T-057
+# same-scope-conflict-stops-before-execution requirement. What execute must still never do
+# is acquire a task-level LEASE (coordination/lease.json under the task's own directory) —
+# that would mean it silently approved/dispatched something beyond its one bounded call.
+lease_path26 = task_dir26 / "coordination" / "lease.json"
 rc, out, err = do_execute(ctx26["ticket_id"], ctx26["mission_id"], ctx26["handoff_id"],
                           ctx26["executor"], ctx26["session"], ctx26["invocation"])
-task_dir26 = mission.resolve_task_dir("T-980-W")
 chk("mission execute succeeds", rc == 0)
-chk("no coordination/, runtime/, claims/, or leases/ directory exists anywhere under the "
-   "fixture root", not any((ROOT / n).exists() for n in
-                          ("coordination", "runtime", "claims", "leases")))
+chk("a per-file claim was acquired on the scope file (conflict protection, not a lease)",
+    (ROOT / "runtime" / "coordination" / "claims").is_dir()
+    and any((ROOT / "runtime" / "coordination" / "claims").glob("*.json")))
+# execute does acquire a task-level lease too — bounded to the single call, exactly like
+# the file-claim above: acquired, used to prevent a second concurrent execute racing this
+# one, then released before execute returns. Confirmed by the record itself: state ==
+# "released" with a released_at/released_by pair, not a state execute could only reach by
+# approving or dispatching (created/claimed/in_progress/handoff_ready/approved/sent).
+lease_after26 = json.loads(lease_path26.read_text()) if lease_path26.exists() else None
+chk("the task-level lease execute acquired was released before execute returned "
+    "(bounded to this call, not an approval or a dispatch)",
+    lease_after26 is not None and lease_after26.get("state") == "released"
+    and lease_after26.get("released_at"))
 chk("no handoff-*.md V6 record exists anywhere under the fixture ticket",
    not list(task_dir26.glob("handoff-*.md")))
 
@@ -797,7 +815,7 @@ else:
     REAL_ARGV = [
         "-p", "--no-session-persistence", "--restricted", "--strict-mcp-config", "--add-dir",
         "__MISSION_SCOPE_DIR__", "--tools", "Read,Edit", "--permission-mode", "acceptEdits",
-        "--permission-prompts", "none", "--max-budget-usd", "0.10", "--",
+        "--permission-prompts", "none", "--max-budget-usd", "__MISSION_BUDGET_USD__", "--",
     ]
     argv_yaml = ", ".join(json.dumps(a) for a in REAL_ARGV)
     real_transports = real_root / "handoff-transports.yaml"

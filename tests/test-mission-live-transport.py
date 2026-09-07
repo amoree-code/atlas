@@ -139,31 +139,38 @@ chk("the real file still contains the exact original AIOS-012 add-dir line, unmo
     "--add-dir, projects/ai-os/tickets/AIOS-012," in raw_transports_text)
 
 # =============================================================================================
-t("2. new claude-code-mission-pilot entry: declared, unverified, correctly shaped")
+t("2. claude-code-mission-pilot entry: promoted, correctly shaped")
 new_pilot = real_transports.get("claude-code-mission-pilot")
 chk("claude-code-mission-pilot exists in the real registry", new_pilot is not None)
-chk("it starts verified: false (no owner trial has promoted it)",
-    new_pilot.get("verified") is False)
+# Owner-approved promotion on 2026-09-07 (after this slice's own live pilot evidence)
+# moved this from declared-unverified to verified: true — a real, ticket-recorded state
+# change, not a regression. The budget is a per-mission placeholder now, not a static
+# "0.10" — substituted at execute time (see the live-invocation checks below, which
+# confirm the actual substituted value reaches argv correctly).
+chk("it is verified: true (owner-approved promotion, T-051-S7)",
+    new_pilot.get("verified") is True)
 chk("its binary is 'claude'", new_pilot.get("binary") == "claude")
 chk("its timeout matches the existing foreground timeout convention (300s)",
     new_pilot.get("timeout") == 300)
 new_argv = new_pilot.get("argv") or []
 chk("its argv contains the __MISSION_SCOPE_DIR__ placeholder exactly once",
     new_argv.count("__MISSION_SCOPE_DIR__") == 1)
-chk("its argv declares only Read,Edit tools", "Read" in new_argv and "Edit" in new_argv)
+chk("its argv contains the __MISSION_BUDGET_USD__ placeholder exactly once",
+    new_argv.count("__MISSION_BUDGET_USD__") == 1)
+chk("its argv declares only Read,Edit tools", "Read,Edit" in new_argv)
 chk("its argv contains no Bash tool", "Bash" not in new_argv)
 chk("its argv includes --restricted (removes Bash/PowerShell/REPL)", "--restricted" in new_argv)
 chk("its argv includes --strict-mcp-config (no MCP servers)", "--strict-mcp-config" in new_argv)
 chk("its argv includes --permission-mode acceptEdits", "acceptEdits" in new_argv)
 chk("its argv includes --permission-prompts none", "none" in new_argv)
-chk("its argv includes --max-budget-usd 0.10 (the exact required cap)",
-    "--max-budget-usd" in new_argv and "0.10" in new_argv)
+chk("its argv includes --max-budget-usd, with the budget substituted per mission, "
+    "not a static cap", "--max-budget-usd" in new_argv)
 chk("its argv includes --no-session-persistence (no background persistence)",
     "--no-session-persistence" in new_argv)
 chk("its argv ends with the bare '--' packet-boundary marker, matching the existing "
     "transport convention", new_argv[-1] == "--")
-chk("evidence text discloses this is not yet owner-verified",
-    "not yet owner-verified" in (new_pilot.get("evidence") or "").lower())
+chk("evidence text discloses the owner-approved promotion",
+    "owner-approved promotion" in (new_pilot.get("evidence") or "").lower())
 
 # =============================================================================================
 t("3. governance/product mirror and other transports unaffected")
@@ -617,10 +624,13 @@ chk("the REAL Claude CLI invocation for mission A actually edited alpha.txt to t
 chk("exactly two live Claude CLI invocations were recorded", len(CLAUDE_LIVE_INVOCATIONS) == 2)
 for label, argv, proc_rc, _o, _e in CLAUDE_LIVE_INVOCATIONS:
     chk(f"the {label} live invocation exited 0", proc_rc == 0)
-    chk(f"the {label} live invocation's argv used --tools Read Edit only",
-        "Read" in argv and "Edit" in argv and "Bash" not in argv)
-    chk(f"the {label} live invocation's argv used --max-budget-usd 0.10",
-        "--max-budget-usd" in argv and "0.10" in argv)
+    chk(f"the {label} live invocation's argv used --tools Read,Edit only",
+        "Read,Edit" in argv and "Bash" not in argv)
+    chk(f"the {label} live invocation's argv substituted a real numeric budget, "
+        "not the placeholder",
+        "--max-budget-usd" in argv
+        and "__MISSION_BUDGET_USD__" not in argv
+        and any(a.replace(".", "", 1).isdigit() for a in argv))
 
 # =============================================================================================
 t("15. each real result came from the correct invocation, verified through mission verify")
@@ -781,11 +791,13 @@ chk("the continuation mission has exactly two handoffs (original + one continuat
     "duplicate)", handoffs_a_cont_count == 2)
 
 # =============================================================================================
-t("23. no production file changes — the real registry's new entry is still verified: false")
+t("23. no production file changes — the real registry entry's verified status is unchanged "
+  "by this test run")
 real_transports_after = hoff_real.load_transports()
-chk("after the entire live pilot run, the REAL claude-code-mission-pilot entry is still "
-    "verified: false — this test never promoted it",
-    real_transports_after.get("claude-code-mission-pilot", {}).get("verified") is False)
+chk("after the entire live pilot run, the REAL claude-code-mission-pilot entry's verified "
+    "status is unchanged (still true, from its 2026-09-07 owner-approved promotion) — "
+    "this test never flips it either way",
+    real_transports_after.get("claude-code-mission-pilot", {}).get("verified") is True)
 chk("after the entire live pilot run, the REAL claude-code-tools-pilot entry is still "
     "byte-for-byte its original argv",
     real_transports_after.get("claude-code-tools-pilot", {}).get("argv") == EXPECTED_OLD_ARGV)

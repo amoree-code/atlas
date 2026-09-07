@@ -1130,6 +1130,14 @@ def real_ticket_env():
     make_ticket_home(root)
     env = dict(os.environ)
     env["ATLAS_HOME"] = str(root)
+    # engine/internal/governance/policies/handoff-transports.yaml is product code (lives
+    # in the repo, not the private workspace) — core/ is a separate, still-partial
+    # skeleton tree (AIOS-020) with no internal/ directory of its own yet, so its own
+    # copy of ai-os-handoff would otherwise fall back to a path that doesn't exist there.
+    # Point both processes at the SAME current registry so this section proves route
+    # decisions agree, not tree completeness of an admittedly unfinished skeleton.
+    env["AI_OS_HANDOFF_TRANSPORTS"] = str(REPO / "internal" / "governance" / "policies" /
+                                          "handoff-transports.yaml")
     return env
 
 

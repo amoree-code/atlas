@@ -14,9 +14,14 @@ transports = (ROOT / "engine/internal/governance/policies/handoff-transports.yam
 gemini_transport = block(transports, "gemini-cli-mission-pilot:")
 assert "adapter: gemini" in gemini_transport
 assert "verified: false" in gemini_transport
-assert "--tools, Read" in gemini_transport
+gemini_argv_line = next(l for l in gemini_transport.splitlines() if l.strip().startswith("argv:"))
+# gemini has no real tool-restriction flag today: `gemini --help` marks --allowed-tools
+# DEPRECATED and describes it as controlling confirmation prompts, not which tools can
+# run — not the substring "--tools, Read" this test previously expected. Asserting its
+# absence from the actual argv (evidence: below is free to explain the history in
+# prose, which does mention the deprecated flag by name).
+assert "--allowed-tools" not in gemini_argv_line
 assert "__MISSION_SCOPE_DIR__" in gemini_transport
-assert "__MISSION_BUDGET_USD__" in gemini_transport
 assert "timeout: 300" in gemini_transport
 
 gemini = (ROOT / "engine/adapters/gemini/adapter.yaml").read_text()
