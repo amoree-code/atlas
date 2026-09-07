@@ -23,7 +23,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 CLI = REPO / "cli"
 SKILLS = REPO / "skills"
-POLICIES = Path.home() / ".ai-os" / "internal" / "governance" / "policies"
+# Resolver-driven, not hardcoded to the legacy $AI_OS_HOME path — policies has been
+# Atlas-cut-over since T-030, and hardcoding here only ever worked because ~/.ai-os
+# happened to still exist too (T-046 proved that live by quarantining it).
+import subprocess as _subprocess
+_policies_out = _subprocess.run([str(CLI / "ai-os-paths"), "get", "policies"],
+                                 capture_output=True, text=True).stdout.strip()
+POLICIES = Path(_policies_out) if _policies_out else (Path.home() / ".ai-os" / "internal" / "governance" / "policies")
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():

@@ -24,7 +24,7 @@
 # the user can resolve, and merging them would destroy the evidence of which is current.
 #
 # As a library:  . "$SELF_DIR/ai-os-paths" && d=$(aios_path memory) || handle-the-conflict
-# As a command:  ai-os-paths get|layout|list|env [--sh]|check|rewrite|ticket [<arg>]
+# As a command:  ai-os-paths get|layout|list|env [--sh]|check|rewrite|ticket|project [<arg>]
 #
 # `env` prints raw values for machine parsers — never eval it; `env --sh` is the
 # shell-quoted form, and bash callers should source this file and call aios_paths_export.
@@ -66,6 +66,66 @@ _aios_pair() {  # <root> -> "<new-rel> <old-rel>"
 }
 
 aios_paths_home() { printf '%s' "${AI_OS_HOME:-$HOME/.ai-os}"; }
+
+# --- Atlas-first resolution for cut-over durable-data roots (T-030, reopened T-046) ----
+# personal/, projects/ and governance/'s rules+policies are canonical at $ATLAS_HOME once
+# T-030's data cutover has run and verified. T-030/T-045 originally ruled config, skills,
+# agents, helpers, schemas and sessions permanent-legacy under $AI_OS_HOME; T-046 (owner
+# reopened that ruling) cuts them over too, physically migrated into $ATLAS_HOME by the
+# same slice that added them here. tickets is handled separately by aios_ticket.
+#
+# Scoped to the real, single private workspace ONLY: this checks `home = $HOME/.ai-os`,
+# the literal default `aios_paths_home` returns with no override. An isolated/alternate
+# AI_OS_HOME (every fixture in tests/test-contract.sh sets one, precisely to exercise the
+# old/new-layout logic below in isolation) never matches, so Atlas authority never leaks
+# into a test fixture or a deliberately alternate workspace — it is a fact about the one
+# real workspace, not a general property of whatever AI_OS_HOME happens to be this run.
+#
+# Legacy fallback is automatic and reversible: if $ATLAS_HOME lacks the directory (not yet
+# cut over, or a rollback), resolution falls straight through to the old/new logic below —
+# nothing here ever errors or blocks on a missing Atlas root.
+_aios_atlas_rel() {  # <root> -> its Atlas-relative path, or empty if not cut over by T-030
+  case "$1" in
+    memory)       echo "personal/memory" ;;
+    knowledge)    echo "personal/knowledge" ;;
+    daily)        echo "personal/daily" ;;
+    templates)    echo "personal/templates" ;;
+    professional) echo "personal/professional" ;;
+    inbox)        echo "personal/inbox" ;;
+    projects)     echo "projects" ;;
+    rules)        echo "governance/rules" ;;
+    policies)     echo "governance/policies" ;;
+    runtime)      echo "runtime" ;;
+    config)       echo "config" ;;
+    skills)       echo "skills" ;;
+    agents)       echo "agents" ;;
+    helpers)      echo "helpers" ;;
+    schemas)      echo "schemas" ;;
+    sessions)     echo "sessions" ;;
+    *) return 1 ;;
+  esac
+}
+
+aios_atlas_home() { printf '%s' "${ATLAS_HOME:-$HOME/atlas}"; }
+
+_aios_atlas_path() {  # <root> -> the Atlas path for <root>, only for the real workspace
+  # Exit codes: 0 resolved · 1 not applicable / not cut over (legacy fallback is correct)
+  # · 9 the canonical Atlas root exists but is not a directory (T-045: malformed must fail
+  # loud, never fall through to a silent legacy answer — a file or broken symlink sitting
+  # where a ticket/data root belongs is corruption, not "not migrated yet").
+  local root="$1" home atlas_rel atlas_dir
+  home="$(aios_paths_home)"
+  [ "$home" = "$HOME/.ai-os" ] || return 1
+  atlas_rel="$(_aios_atlas_rel "$root")" || return 1
+  atlas_dir="$(aios_atlas_home)/$atlas_rel"
+  if [ -e "$atlas_dir" ] && [ ! -d "$atlas_dir" ]; then
+    printf 'ai-os-paths: canonical Atlas root for "%s" exists but is not a directory: %s\n' \
+      "$root" "$atlas_dir" >&2
+    return 9
+  fi
+  [ -d "$atlas_dir" ] || return 1
+  printf '%s\n' "$atlas_dir"
+}
 
 # Physical path when it exists, the literal otherwise — so a report can still name it.
 _aios_rp() { (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
@@ -235,11 +295,16 @@ aios_path_conflict() {  # <root> -> the report, on stdout
   printf 'CONFLICT: private root "%s" exists in both layouts, as different directories\n' "$root"
   printf '  old  %s\n' "$home/$old_rel"
   _aios_new_dirs "$home" "$root" | sed 's/^/  new  /'
-  printf '  AI-OS will not merge, copy or pick between them. Resolve it by hand, then re-run.\n'
+  printf '  Atlas will not merge, copy or pick between them. Resolve it by hand, then re-run.\n'
 }
 
 aios_path() {  # <root> -> the absolute path, on stdout
-  local root="$1" home pair new_rel old_rel layout
+  local root="$1" home pair new_rel old_rel layout atlas_answer atlas_rc
+  atlas_answer="$(_aios_atlas_path "$root")"; atlas_rc=$?
+  [ "$atlas_rc" -eq 0 ] && { printf '%s\n' "$atlas_answer"; return 0; }
+  # 9 = malformed canonical root: _aios_atlas_path already reported it on stderr. Never
+  # fall through to the legacy layout below — that would silently hand back the wrong root.
+  [ "$atlas_rc" -eq 9 ] && return 9
   home="$(aios_paths_home)"
   pair="$(_aios_pair "$root")" || { printf 'ai-os-paths: unknown private root "%s"\n' "$root" >&2; return 2; }
   new_rel="${pair%% *}"; old_rel="${pair##* }"
@@ -332,8 +397,16 @@ _aios_moved_to() {  # <ticket-dir> -> the workspace-relative path its pointer na
 }
 
 aios_ticket() {  # <id> -> the absolute directory holding that ticket's record
-  local id="${1:-}" home hits n p rel target restore=1
+  local id="${1:-}" home projects_base atlas_rc hits n p rel target restore=1
   home="$(aios_paths_home)"
+  # T-030: projects/ (and the tickets under it) is canonical at Atlas for the real
+  # workspace once cut over — same guard as _aios_atlas_path, so an isolated/alternate
+  # AI_OS_HOME (every test-contract.sh ticket-resolution fixture) is unaffected.
+  projects_base="$(_aios_atlas_path projects)"; atlas_rc=$?
+  # T-045: 9 = malformed canonical root, already reported on stderr — never fall through
+  # to the legacy tasks/ root, that would silently answer from the wrong authority.
+  [ "$atlas_rc" -eq 9 ] && return 9
+  [ "$atlas_rc" -eq 0 ] || projects_base="$home/projects"
   case "$id" in
     ''|*/*|.|..) printf 'ai-os-paths: not a ticket id: %s\n' "${id:-<empty>}" >&2; return 2 ;;
     # The archive namespace directories are containers, never ticket ids — a directory
@@ -346,7 +419,7 @@ aios_ticket() {  # <id> -> the absolute directory holding that ticket's record
   shopt -q nullglob && restore=0
   shopt -s nullglob
   hits=""
-  for p in "$home"/projects/*/tickets/"$id" "$home"/projects/*/tickets/archive/*/"$id"; do
+  for p in "$projects_base"/*/tickets/"$id" "$projects_base"/*/tickets/archive/*/"$id"; do
     [ -d "$p" ] && hits="$hits$p"$'\n'
   done
   [ "$restore" -eq 0 ] || shopt -u nullglob
@@ -375,6 +448,29 @@ aios_ticket() {  # <id> -> the absolute directory holding that ticket's record
   fi
   printf 'ai-os-paths: no ticket "%s" — looked in projects/*/tickets/ and tasks/\n' "$id" >&2
   return 4
+}
+
+aios_project() {  # <id> -> one canonical project directory
+  # Fail-closed: an id must be a single bare path segment (no separators, no dot-traversal,
+  # no glob/shell metacharacters) so it can never be ambiguous or step outside projects/.
+  local id="${1:-}" projects_base base_real candidate candidate_real
+  case "$id" in
+    ''|*/*|.|..|*[!A-Za-z0-9._-]*)
+      printf 'ai-os-paths: not a project id: %s\n' "${id:-<empty>}" >&2; return 2 ;;
+  esac
+  projects_base="$(aios_path projects)" || return $?
+  base_real="$(_aios_rp "$projects_base")"
+  candidate="$projects_base/$id"
+  [ -d "$candidate" ] || {
+    printf 'ai-os-paths: no project "%s" under %s\n' "$id" "$projects_base" >&2
+    return 4
+  }
+  candidate_real="$(_aios_rp "$candidate")"
+  case "$candidate_real/" in
+    "$base_real"/*) printf '%s\n' "$candidate_real"; return 0 ;;
+    *) printf 'ai-os-paths: project "%s" escapes the canonical projects root\n' "$id" >&2
+       return 3 ;;
+  esac
 }
 
 aios_paths_check() {  # report every conflicting root; exit = how many
@@ -411,6 +507,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   case "${1:-list}" in
     get)    _aios_need_root "${2:-}" get;    aios_path "$2" ;;
     ticket) aios_ticket "${2:-}" ;;
+    project) aios_project "${2:-}" ;;
     layout) _aios_need_root "${2:-}" layout; aios_path_layout "$2" ;;
     list)
       for r in $AIOS_PATH_ROOTS; do
@@ -447,7 +544,7 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     check)  aios_paths_check; exit $? ;;
     help|--help|-h) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) echo "ai-os-paths: unknown command '${1:-}'" >&2
-       echo "usage: ai-os-paths get|layout|list|env [--sh]|check|rewrite|ticket [<root>|<path>|<id>]" >&2
+       echo "usage: ai-os-paths get|layout|list|env [--sh]|check|rewrite|ticket|project [<root>|<path>|<id>]" >&2
        echo "roots: $AIOS_PATH_ROOTS" >&2; exit 2 ;;
   esac
 fi

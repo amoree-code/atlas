@@ -1,0 +1,27 @@
+# Atlas workspace state — the canonical answer to one question:
+#
+#     has this workspace completed onboarding?
+#
+# This is the filled-in counterpart of
+# `templates/workspace/internal/config/workspace.yaml` — see that file for the full
+# explanation of the mechanism. Here, `ai-os onboard` has actually run to completion.
+
+schema: 1
+
+# uninitialized -> onboarding -> initialized
+status: initialized
+
+# Set once, when onboarding completed. Never rewritten by a later run.
+workspace_version: "1"
+initialized_at: "2026-08-01"
+
+# Per-step ledger, so an interrupted onboarding resumes instead of restarting.
+# pending | done
+step_identity: done
+step_language: done
+step_profile: done
+
+# Where the real data lives. Pointers, not copies.
+canonical_identity: personal/memory/identity/
+canonical_preferences: personal/memory/preferences/
+canonical_profile: internal/config/profile.yaml

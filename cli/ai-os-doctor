@@ -53,8 +53,15 @@ head "roots"
 # ====================================================================================
 R_PUB=$(rp "$REPO"); R_RUN=$(rp "$AI_OS_LEGACY"); R_PRIV=$(rp "$AI_OS_HOME")
 
-if [ ! -d "$AI_OS_HOME" ]; then
-  fail "private workspace does not exist: $AI_OS_HOME"
+# T-046: the legacy $AI_OS_HOME directory itself is no longer required to exist — every
+# root it used to hold exclusively (personal/, projects/, governance/, plus runtime/
+# config/skills/agents/helpers/schemas/sessions once reopened) may now live under
+# $ATLAS_HOME instead. Only fail here when NEITHER side has a workspace at all; the
+# per-root loop below (which already asks ai-os-paths, not this variable) is what
+# actually proves each section present.
+ATLAS_HOME_DEFAULT="${ATLAS_HOME:-$HOME/atlas}"
+if [ ! -d "$AI_OS_HOME" ] && [ ! -d "$ATLAS_HOME_DEFAULT/personal" ]; then
+  fail "no private workspace found: neither $AI_OS_HOME nor $ATLAS_HOME_DEFAULT/personal exists"
   note "run: ai-os init"
   printf '\n%s%d problem(s)%s\n\n' "$R" "$fails" "$X"
   exit "$fails"
@@ -112,7 +119,8 @@ for r in memory knowledge projects rules runtime config policies daily templates
 done
 if [ -n "$missing" ]; then fail "missing section(s):$missing"; note "run: ai-os init"
 else
-  total=$(find "$AI_OS_HOME" -type f -not -path '*/.git/*' | wc -l | tr -d ' ')
+  COUNT_HOME="$AI_OS_HOME"; [ -d "$COUNT_HOME" ] || COUNT_HOME="$ATLAS_HOME_DEFAULT"
+  total=$(find "$COUNT_HOME" -type f -not -path '*/.git/*' 2>/dev/null | wc -l | tr -d ' ')
   ok "all sections present  ${D}($total files)${X}"
 fi
 MEM_ROOT="${AI_OS_PATH_MEMORY:-}"; KNOW_ROOT="${AI_OS_PATH_KNOWLEDGE:-}"
@@ -313,10 +321,10 @@ else
   done
   n=$(find "$AI_OS_LEGACY" -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
   if [ -n "$live" ]; then
-    fail "the legacy layer still holds active AI OS components:$live"
+    fail "the legacy layer still holds active Atlas components:$live"
     note "these moved in V0.1.5; anything left here is a second source of truth"
   else
-    ok "legacy layer holds no active AI OS components"
+    ok "legacy layer holds no active Atlas components"
   fi
   if [ "$n" -gt 0 ]; then
     fail "$n symlink(s) still resolve out of the legacy layer"
@@ -370,7 +378,7 @@ print("\n".join(sorted(out)))' "$CLAUDE_SETTINGS" "$REPO" 2>/dev/null)
     done <<< "$hooked"
     [ "$bad" -eq 0 ] && ok "claude-code adapter: $(echo "$hooked" | wc -l | tr -d ' ') hook target(s) present and executable"
   else
-    warn "claude-code adapter: no AI OS hooks found in settings.json"
+    warn "claude-code adapter: no Atlas hooks found in settings.json"
   fi
 else
   warn "claude-code adapter: no settings.json at $CLAUDE_SETTINGS"
@@ -435,7 +443,7 @@ fi
 head "adapters and capabilities"
 # Two registries, two contracts, checked by the tools that own them. doctor reports the
 # verdicts rather than reimplementing the rules — one definition of "valid manifest" each.
-# An adapter connects a client; a capability is something AI-OS can do. They are never
+# An adapter connects a client; a capability is something Atlas can do. They are never
 # the same thing, which is why they are never the same registry.
 # ====================================================================================
 if [ -x "$SELF_DIR/ai-os-adapter" ]; then

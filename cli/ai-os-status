@@ -13,13 +13,15 @@ if [ -t 1 ]; then G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; D=
 else G=; Y=; R=; B=; D=; X=; fi
 row() { printf '  %-12s %s\n' "$1" "$2"; }
 
-printf '\n%sAI OS%s  %sv%s%s\n\n' "$B" "$X" "$D" "$VERSION" "$X"
+printf '\n%sAtlas%s  %sv%s%s\n\n' "$B" "$X" "$D" "$VERSION" "$X"
 
 row "public"  "$REPO  ${D}(software)${X}"
 row "runtime" "$AI_OS_RUNTIME  ${D}(execution — implementation detail of V0.x)${X}"
 row "private" "$AI_OS_HOME  ${D}(your data)${X}"
 
-if [ ! -d "$AI_OS_HOME" ]; then
+# T-046: $AI_OS_HOME itself no longer has to exist — its roots may live under $ATLAS_HOME.
+ATLAS_HOME_DEFAULT="${ATLAS_HOME:-$HOME/atlas}"
+if [ ! -d "$AI_OS_HOME" ] && [ ! -d "$ATLAS_HOME_DEFAULT/personal" ]; then
   printf '\n  %sno workspace%s — run: ai-os init\n\n' "$Y" "$X"; exit 1
 fi
 

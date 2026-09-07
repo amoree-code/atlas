@@ -1,7 +1,7 @@
 # Capability contract — version 1
 
-An AI-OS **capability** is something AI-OS can *do*. It answers *"what can AI-OS do?"* —
-never *"how does this client reach AI-OS?"*, which is an **adapter**
+An Atlas **capability** is something Atlas can *do*. It answers *"what can Atlas do?"* —
+never *"how does this client reach Atlas?"*, which is an **adapter**
 (`schemas/adapter.schema.md`).
 
 > Until 2026-08-31 this filename described client adapters. The two meanings had inverted;
@@ -77,7 +77,7 @@ an error. See **Layout** in `schemas/adapter.schema.md`, and `.prettierignore`.
 ## Domains are not capabilities
 
 A **domain** is an area of work that names outcome kinds and requires capabilities
-(`schemas/domain.schema.md`, `domains/`). A capability is something AI-OS can *do*. The
+(`schemas/domain.schema.md`, `domains/`). A capability is something Atlas can *do*. The
 arrow runs `Domain → requires → Capability` and never the reverse: a capability is never
 owned by, scoped to, or a member of a domain, and **it declares no domain of its own**.
 
@@ -97,7 +97,7 @@ idempotent: true    reading, navigating, observing   -> bounded automatic retry 
 idempotent: false   submitting, purchasing, deleting -> never retried automatically
 ```
 
-An operation that changes the world outside AI-OS is not idempotent, and a runner that
+An operation that changes the world outside Atlas is not idempotent, and a runner that
 retries one is the most dangerous thing this contract can permit. The field exists so that
 the answer is declared by the capability author rather than guessed by a caller.
 

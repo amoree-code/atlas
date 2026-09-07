@@ -25,8 +25,8 @@ New here? Start with `use/getting-started.md` — it links out to everything els
 | [workspace.md](use/workspace.md) | the workspace layout, config, templates, skills |
 | [memory.md](use/memory.md) | memory, knowledge, and how a client reaches the store |
 | [projects.md](use/projects.md) | project-scoped state and isolation |
-| [adapters.md](use/adapters.md) | connecting an AI client to AI OS |
-| [capabilities.md](use/capabilities.md) | what AI OS can actually do |
+| [adapters.md](use/adapters.md) | connecting an AI client to Atlas |
+| [capabilities.md](use/capabilities.md) | what Atlas can actually do |
 | [domains.md](use/domains.md) | declaring an area of work |
 | [safety.md](use/safety.md) | versioning your workspace, keeping the public repo publishable |
 | [mcp.md](use/mcp.md) | the bar an MCP server has to clear before you add it |

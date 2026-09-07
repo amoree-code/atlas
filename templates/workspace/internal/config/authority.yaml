@@ -1,4 +1,4 @@
-# Authority grants — what AI-OS is permitted to actually DO on your behalf.
+# Authority grants — what Atlas is permitted to actually DO on your behalf.
 #
 # A capability manifest declares the rung each of its operations NEEDS. This file is the
 # other half: what you have GRANTED. An operation runs only when both agree, and the

@@ -1,6 +1,6 @@
 # Your profile — PRIVATE. The values that make the canonical skills yours.
 #
-# The public AI OS repository holds one canonical copy of each skill, written with
+# The public Atlas repository holds one canonical copy of each skill, written with
 # {{profile.*}} placeholders. Your personal values live here and are injected when a skill
 # is rendered for a client. That is why there is exactly one skill body to maintain
 # instead of one generic copy and one personalised copy drifting apart.

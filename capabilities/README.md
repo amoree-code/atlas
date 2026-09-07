@@ -1,6 +1,6 @@
-# Capabilities — what AI-OS can do
+# Capabilities — what Atlas can do
 
-A **capability** answers *"what can AI-OS do?"* — the kind of thing browser control,
+A **capability** answers *"what can Atlas do?"* — the kind of thing browser control,
 software delivery or automation would each be. Its contract is
 `../schemas/capability.schema.md`.
 
@@ -19,17 +19,17 @@ so the browser engine is replaceable without touching the capability or Core.
 
 Every operation is checked by `browser-verify`, which re-reads live browser state rather
 than trusting the operation's own report. That is why *executed* and *verified* are
-separate outcomes, and why the operations that change something outside AI-OS are
+separate outcomes, and why the operations that change something outside Atlas are
 `idempotent: false` and never retried automatically.
 
 ## Capability, adapter, domain
 
-An **adapter** answers *"how does an AI client reach AI-OS?"* — Claude Code, Codex,
+An **adapter** answers *"how does an AI client reach Atlas?"* — Claude Code, Codex,
 Cursor, Gemini, OpenCode. Those live in `../adapters/`, contract
 `../schemas/adapter.schema.md`. A capability is client-agnostic and never names one.
 
 ```
-client  ->  adapter  ->  AI-OS Core  ->  capability  ->  execution  ->  verification
+client  ->  adapter  ->  Atlas Core  ->  capability  ->  execution  ->  verification
 ```
 
 A **domain** (`../domains/`) names an area of work and the capability **ids** that

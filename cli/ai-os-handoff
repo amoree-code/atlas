@@ -3,8 +3,16 @@
 
   ai-os handoff prepare <task-id> --to <client> --gate <gate> --scope <scope>
                         [--summary <text>] [--status draft|waiting-owner] [--id <handoff-id>]
+                        [--source-client <client-id>] [--source-session <session-id>]
   ai-os handoff approve <task-id> <handoff-id> --gate <gate> --to <client> --scope <scope>
                         --owner-words <text>
+
+`--source-client`/`--source-session` are optional identity — who (which AI client, which
+session) ran `prepare`. Nothing here auto-detects them: a caller passes them, exactly like
+`--to`/`--gate`/`--scope` are passed rather than guessed. Omitted means recorded as
+`unspecified`, not fabricated, and `approve` carries whatever `prepare` recorded forward
+unchanged — identity is written once, at prepare time, and is never a lease, a lock or a
+claim of any kind.
   ai-os handoff send <task-id> <handoff-id> [--dry-run]
   ai-os handoff receive <task-id> <handoff-id> --from <client> --file <path>
                         [--status returned|reviewed]
@@ -91,7 +99,7 @@ import hashlib, json, os, re, shutil, subprocess, sys, time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
+ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
 sys.path.insert(0, str(REPO / "cli"))
 
 # Task records live in per-project work, where there is no single root to join a path onto.
@@ -108,7 +116,8 @@ TRANSPORTS = Path(os.environ.get("AI_OS_HANDOFF_TRANSPORTS",
 
 # The canonical written form. Read for reference by a human, never parsed by this file —
 # the packet below mirrors its sections, and the private copy is where the full rules live.
-TEMPLATE_REF = "$AI_OS_HOME/internal/templates/agent-handoff.md"
+# T-046: restored from ~/.ai-os/internal/templates/ (deleted) to ~/atlas/templates/.
+TEMPLATE_REF = str(ATLAS_HOME / "templates" / "agent-handoff.md")
 
 # The template's gate vocabulary, verbatim. A gate has to be a closed set: a later approval
 # is valid only for one exact gate, and "exact" means nothing against free text.
@@ -137,6 +146,13 @@ STATUSES = ("draft", "waiting-owner")
 # A single path segment, no traversal, no separators. Used for both the task id and the
 # handoff id because both become part of a filesystem path.
 SAFE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
+
+# T-048: source_client / source_session_id use the same shape — a client id like
+# `claude-cli` and a session id (often a UUID) are both one bare token, never free text.
+# Reusing SAFE rather than inventing a second regex is the point: one identifier shape in
+# this file, not two.
+IDENTITY = SAFE
+IDENTITY_UNSPECIFIED = "unspecified"
 
 # Credential shapes, kept deliberately narrow — the same families ai-os-privacy-scan treats
 # as unrecoverable. A handoff packet is a durable file; a secret must never reach one.
@@ -357,6 +373,32 @@ def load_transports():
     return got if isinstance(got, dict) else {}
 
 
+def run_transport_subprocess(argv, stdin_text, timeout):
+    """One bounded, foreground subprocess call: a plain list `argv` (never shell=True), the
+    given text on stdin, a hard timeout, and no retry. Returns
+    (returncode_or_None, stdout, stderr, timed_out, error_detail) — `returncode` is None only
+    when the process never produced one (a timeout, or an OSError before/without exec).
+
+    This is the one and only place in this codebase that owns "make one bounded call to an
+    external client binary and capture what it prints" as a reusable function — `cmd_send`
+    above still makes its own separate, uncaptured call (a `send`'s reply must never be
+    captured; see its own docstring), so this function changes nothing about `send`. T-051-S7
+    (`mission execute`, in `cli/aios_mission.py`) is this function's only other caller: it
+    needs the executor's stdout back (to convert into the existing S4 result contract), which
+    `send`'s own call deliberately does not capture at all."""
+    try:
+        proc = subprocess.run(argv, input=stdin_text, capture_output=True, text=True,
+                              timeout=timeout)
+        return proc.returncode, proc.stdout or "", proc.stderr or "", False, None
+    except subprocess.TimeoutExpired as e:
+        stdout = e.stdout if isinstance(e.stdout, str) else ""
+        stderr = e.stderr if isinstance(e.stderr, str) else ""
+        return (None, stdout, stderr, True,
+               f"subprocess exceeded the {timeout}s timeout")
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, "", "", False, f"{type(e).__name__}: {e}"
+
+
 def resolve_transport(client):
     """(spec, binary_path, unavailable_reason). Never raises and never sends.
 
@@ -442,7 +484,7 @@ def sync_metadata_block(text, meta):
 
 # ---------------------------------------------------------------------------------------
 def render(*, handoff_id, task_id, status, created, to, gate, scope, summary, project, title,
-           argv_shown):
+           argv_shown, source_client=IDENTITY_UNSPECIFIED, source_session_id=IDENTITY_UNSPECIFIED):
     owner_action = "approve" if status == "waiting-owner" else "none"
     summary_text = summary or "none — no summary was given at prepare time"
     return f"""---
@@ -453,6 +495,8 @@ created: {yv(created)}
 to: {yv(to)}
 gate: {yv(gate)}
 scope: {yv(scope)}
+source_client: {yv(source_client)}
+source_session_id: {yv(source_session_id)}
 current_holder: owner
 next_holder: {yv(to)}
 owner_action_required: {yv(owner_action)}
@@ -478,6 +522,8 @@ status:                {status}
 created:               {created}
 gate:                  {gate}
 scope:                 {scope}
+source_client:         {source_client}
+source_session_id:     {source_session_id}
 current_holder:        owner
 next_holder:           {to}
 owner_action_required: {owner_action}
@@ -539,6 +585,8 @@ returned block, only from the client the packet went to, and only once it has be
 prepared_by:      ai-os handoff prepare
 prepared_command: {argv_shown}
 prepared_at:      {created}
+source_client:      {source_client}
+source_session_id:  {source_session_id}
 approved:         no — V2 did not approve this handoff and has no code path that could
 sent:             no — V2 did not send this handoff; nothing left this machine
 transport:        none
@@ -552,27 +600,32 @@ payload_hash:     n/a — nothing was transmitted, so there is nothing to hash
 def cmd_prepare(args):
     if not args or args[0].startswith("-"):
         die("usage: ai-os handoff prepare <task-id> --to <client> --gate <gate> --scope <scope> "
-            "[--summary <text>] [--status draft|waiting-owner] [--id <handoff-id>]")
+            "[--summary <text>] [--status draft|waiting-owner] [--id <handoff-id>] "
+            "[--source-client <client-id>] [--source-session <session-id>]")
     task_id, rest = args[0], args[1:]
     to = gate = scope = summary = handoff_id = None
+    source_client = source_session = None
     status = "draft"
     seen = set()
     i = 0
     while i < len(rest):
         a = rest[i]
-        if a in ("--to", "--gate", "--scope", "--summary", "--status", "--id"):
+        if a in ("--to", "--gate", "--scope", "--summary", "--status", "--id",
+                 "--source-client", "--source-session"):
             if i + 1 >= len(rest):
                 die(f"{a} needs a value")
             if a in seen:
                 die(f"{a} was given more than once — one handoff has one {a[2:]}")
             seen.add(a)
             v = rest[i + 1]
-            if a == "--to":       to = v
-            elif a == "--gate":   gate = v
-            elif a == "--scope":  scope = v
-            elif a == "--summary": summary = v
-            elif a == "--status": status = v
-            else:                 handoff_id = v
+            if a == "--to":              to = v
+            elif a == "--gate":          gate = v
+            elif a == "--scope":         scope = v
+            elif a == "--summary":       summary = v
+            elif a == "--status":        status = v
+            elif a == "--source-client":  source_client = v
+            elif a == "--source-session": source_session = v
+            else:                        handoff_id = v
             i += 2
         else:
             die(f"unknown argument {a!r}")
@@ -609,17 +662,33 @@ def cmd_prepare(args):
     if p.exists():
         die(f"handoff {handoff_id} already exists at {p} — records are never overwritten", code=2)
 
-    scan_credentials(scope, summary or "")
+    # Identity is optional and is never inferred — a caller that doesn't pass it gets
+    # `unspecified` recorded, not a guess. Format is validated exactly like every other
+    # single-token id in this file (--id, --to): malformed is refused before anything is
+    # written, absent is not an error.
+    if source_client is not None and not IDENTITY.fullmatch(source_client):
+        die(f"not a client identifier: {source_client!r} — one token of [A-Za-z0-9._-]")
+    if source_session is not None and not IDENTITY.fullmatch(source_session):
+        die(f"not a session identifier: {source_session!r} — one token of [A-Za-z0-9._-]")
+    source_client = source_client or IDENTITY_UNSPECIFIED
+    source_session = source_session or IDENTITY_UNSPECIFIED
+
+    scan_credentials(scope, summary or "", source_client, source_session)
 
     created = time.strftime("%Y-%m-%d %H:%M:%S")
-    argv_shown = " ".join(["ai-os handoff prepare", task_id, "--to", to, "--gate", gate,
-                           "--scope", "<scope>"] + (["--summary", "<summary>"] if summary else []))
+    argv_shown = " ".join(
+        ["ai-os handoff prepare", task_id, "--to", to, "--gate", gate, "--scope", "<scope>"]
+        + (["--summary", "<summary>"] if summary else [])
+        + (["--source-client", source_client] if source_client != IDENTITY_UNSPECIFIED else [])
+        + (["--source-session", source_session] if source_session != IDENTITY_UNSPECIFIED else []))
     p.write_text(render(handoff_id=handoff_id, task_id=task_id, status=status, created=created,
                         to=to, gate=gate, scope=scope, summary=summary,
                         project=task_field(d, "project"), title=task_field(d, "title"),
-                        argv_shown=argv_shown))
+                        argv_shown=argv_shown,
+                        source_client=source_client, source_session_id=source_session))
     print(f"  {G}prepared{X}  {handoff_id}  {D}{p}{X}")
     print(f"  status: {status} · gate: {gate} · next holder: {to}")
+    print(f"  source: {source_client}/{source_session}")
     print(f"  {D}not approved, not sent — V2 writes the record and stops there{X}")
     return 0
 
@@ -628,8 +697,12 @@ def cmd_show(args):
     if len(args) < 2:
         die("usage: ai-os handoff show <task-id> <handoff-id>")
     d = task_dir(args[0])
-    p, _text, _meta = load_record(d, args[1])
-    sys.stdout.write(p.read_text(errors="replace"))
+    p, text, meta = load_record(d, args[1])
+    sys.stdout.write(text)
+    # T-048: derived only, printed after the raw record — never written back, so a
+    # record from before this ticket is neither rewritten nor made to claim identity it
+    # never recorded.
+    print(f"\n{D}source client/session: {identity_display(meta)}{X}")
     return 0
 
 
@@ -1130,8 +1203,20 @@ def cmd_list(args):
                 meta[k.strip()] = v.strip().strip('"')
         print(f"  {meta.get('handoff_id', f.stem):<20} {meta.get('status', '?'):<15} "
               f"{meta.get('to', '?'):<14} {meta.get('gate', '?')}")
+        # T-048: identity is informational only — never a lock, never a claim. A record
+        # written before this ticket has neither key at all, hence the fallback: absence
+        # is shown plainly rather than rendered as an empty or misleading value.
+        print(f"  {D}  source: {identity_display(meta)}{X}")
     print()
     return 0
+
+
+def identity_display(meta):
+    """'unspecified' means a T-048-aware `prepare` recorded no identity on purpose.
+    'legacy' means the record predates these fields and never had the chance."""
+    client = meta.get("source_client") or "legacy"
+    session = meta.get("source_session_id") or "legacy"
+    return f"{client}/{session}"
 
 
 CMDS = {"prepare": cmd_prepare, "show": cmd_show, "list": cmd_list,

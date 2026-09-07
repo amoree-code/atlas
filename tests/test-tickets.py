@@ -57,7 +57,7 @@ def make_ticket(root, project, ticket_id, state="active", extra_frontmatter="",
 
 def make_atlas_ticket(root, project, ticket_id, state="done", checklist=None,
                        opened_at="2026-09-05 2:00 PM", updated_at="2026-09-05 2:00 PM",
-                       checkpoint_current="completed", next_action=""):
+                       checkpoint_current="completed", next_action="", extra_frontmatter=""):
     """A ticket in the full Atlas-native metadata shape: opened_at/updated_at, then
     checklist, then checkpoint last — the shape this ticket (T-001) itself finalizes."""
     checklist = checklist if checklist is not None else ['"[x] one thing done"']
@@ -67,7 +67,7 @@ def make_atlas_ticket(root, project, ticket_id, state="done", checklist=None,
     (d / "task.md").write_text(
         f"---\nid: {ticket_id}\ntitle: fixture {ticket_id}\nstate: {state}\n"
         f"project: {project}\n\nopened_at: {opened_at}\nupdated_at: {updated_at}\n\n"
-        f"artifacts: []\n\nchecklist:\n{items}\n\n"
+        f"artifacts: []\n{extra_frontmatter}\nchecklist:\n{items}\n\n"
         f"checkpoint:\n  current: {checkpoint_current}\n  updated_at: {updated_at}\n---\n\n"
         f"## Next action\n\n{next_action}\n"
     )
@@ -77,7 +77,12 @@ def make_atlas_ticket(root, project, ticket_id, state="done", checklist=None,
 def run_tickets(home, *args):
     return subprocess.run(
         [str(CLI / "ai-os-tickets"), *args], cwd=str(home),
-        env={"AI_OS_HOME": str(home), "PATH": "/usr/bin:/bin"},
+        # ATLAS_HOME is isolated too: `checkpoint` also generates a session-handoff
+        # pointer under $ATLAS_HOME/runtime/ (see ai-os-context --resume) — without this,
+        # every checkpoint call in this file would silently fall through to the real
+        # ~/atlas and write a real pointer from fixture data. Caught by running this
+        # exact suite after that feature was added, not by inspection.
+        env={"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
         capture_output=True, text=True,
     )
 
@@ -197,8 +202,51 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("checkpoint/log bumped the top-level updated_at to a fresh readable timestamp",
         "2020-01-01 1:00 AM" not in top_level_updated_at
         and bool(tickets_mod.TIMESTAMP_RE.match(top_level_updated_at.partition(":")[2].strip())))
-    chk("the checkpoint block's own current/updated_at is untouched (out of scope by design)",
+chk("the checkpoint block's own current/updated_at is untouched (out of scope by design)",
         "current: completed" in text and "2020-01-01 1:00 AM" in text)
+
+# =========================================================================================
+t("ticket intent layer — parent/extension/future metadata")
+with tempfile.TemporaryDirectory() as tmp:
+    home = Path(tmp)
+    make_atlas_ticket(home, "demo", "T-040", state="active",
+                       extra_frontmatter="class: large\nrelation: parent\ngoal: unify the product\n",
+                       next_action="approve the first slice")
+    make_atlas_ticket(home, "demo", "T-041", state="todo",
+                       extra_frontmatter=("class: small\nparent: T-040\nrelation: optional\n"
+                                          "requirement: REQ-040\n"),
+                       next_action="")
+    (home / "projects" / "demo" / "index.md").write_text(
+        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+    run_tickets(home, "index", "--write")
+    r = run_tickets(home, "doctor")
+    chk("doctor accepts a parent ticket and optional child relation",
+        r.returncode == 0 and "0 error" in r.stdout)
+    idx = (home / "projects" / "demo" / "index.md").read_text()
+    chk("generated index exposes the role column",
+        "| ID | State | Class | Role | Title | Next action | Record |" in idx)
+    chk("generated index shows optional child under its parent",
+        "optional of T-040" in idx)
+    loaded = {t["id"]: t for t in tickets_mod.discover(home / "projects")}
+    chk("reader carries goal/parent/relation metadata for callers",
+        loaded["T-040"]["goal"] == "unify the product"
+        and loaded["T-041"]["parent"] == "T-040"
+        and loaded["T-041"]["relation"] == "optional")
+
+with tempfile.TemporaryDirectory() as tmp:
+    home = Path(tmp)
+    make_atlas_ticket(home, "demo", "T-040", state="active",
+                       extra_frontmatter="class: large\nrelation: parent\n",
+                       next_action="approve")
+    make_atlas_ticket(home, "demo", "T-041", state="todo",
+                       extra_frontmatter="class: small\nrelation: optional\n",
+                       next_action="")
+    (home / "projects" / "demo" / "index.md").write_text(
+        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+    run_tickets(home, "index", "--write")
+    r = run_tickets(home, "doctor")
+    chk("doctor rejects an optional child with no parent",
+        r.returncode != 0 and "requires frontmatter 'parent'" in r.stdout)
 
 # =========================================================================================
 t("no collision between AIOS-001 and T-001 in the same project")

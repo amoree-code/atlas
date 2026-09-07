@@ -1,5 +1,5 @@
 # Your identifying terms — PRIVATE. Used by `ai-os privacy-scan` to check that the public
-# AI OS repository does not contain anything that identifies you.
+# Atlas repository does not contain anything that identifies you.
 #
 # This file never leaves ~/.ai-os. The public repository ships only generic patterns
 # (key shapes, email shapes, home-path shapes) — a scanner that hardcoded your real name

@@ -1,4 +1,4 @@
-# AI OS policy — data classification for the public repository.
+# Atlas policy — data classification for the public repository.
 #
 # Secret scanning is not enough. A repository can be entirely free of credentials and
 # still publish who the user is, where they live on disk, and what they are working on.

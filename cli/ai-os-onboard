@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ai-os-onboard — first-run initialization. Establishes who the user is, so the rest of
-# AI-OS has something to work from.
+# Atlas has something to work from.
 #
 # WHAT THIS IS NOT: it is not a second user-profile system. Onboarding establishes the
 # initial workspace state; memory owns durable facts. Every answer collected here is
@@ -100,10 +100,13 @@ have_preferences() { has_md "$PREFS_DIR"; }
 
 # --- assessment ----------------------------------------------------------------------
 # Returns one word on stdout. This is the single definition of "has onboarding completed"
-# and everything else in AI-OS defers to it.
+# and everything else in Atlas defers to it.
 
 assess() {
-  if [ ! -d "$AI_OS_HOME" ] || [ ! -f "$STATE" ]; then echo uninitialized; return; fi
+  # T-046: $STATE is already resolver-driven (ai-os-paths get config), so it alone tells
+  # us whether a workspace config exists — a separate $AI_OS_HOME directory check here is
+  # redundant with, and can now disagree with, what $STATE already answered.
+  if [ ! -f "$STATE" ]; then echo uninitialized; return; fi
   local st; st="$(ws_get status)"
   case "$st" in
     initialized)
@@ -430,7 +433,7 @@ cmd_interview() {
   head_ "optional  ${D}(enter to skip any of these)${X}"
   printf '  Configure a little more? [y/N] '; read -r ans
   if [ "${ans:-n}" = "y" ] || [ "${ans:-n}" = "Y" ]; then
-    printf '  What do you mainly use AI-OS for? '; read -r ans; [ -n "$ans" ] && write_work "$ans"
+    printf '  What do you mainly use Atlas for? '; read -r ans; [ -n "$ans" ] && write_work "$ans"
     if profile_blank code_root; then
       printf '  Where does your code live? '; read -r ans; [ -n "$ans" ] && profile_set code_root "$ans"
     else say "${D}code root already set to '$(sed -n 's/^code_root:[[:space:]]*//p' "$PROFILE" | head -n1)' — not asking${X}"; fi

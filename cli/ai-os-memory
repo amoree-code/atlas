@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ai-os-memory — the memory engine. Client-agnostic by construction.
 
-Memory is a core AI-OS capability, not a feature of whichever client happens to consume
+Memory is a core Atlas capability, not a feature of whichever client happens to consume
 it today. This file therefore contains no client name, no client path, and no branch on
 client identity. Everything it knows about a client arrives through the adapter registry.
 
@@ -126,7 +126,7 @@ _PARSER = {}
 
 
 def load_sibling(path):
-    """Import an extensionless AI-OS tool as a module. Its __main__ guard prevents its
+    """Import an extensionless Atlas tool as a module. Its __main__ guard prevents its
     CLI from executing, so importing one is free of side effects."""
     import importlib.util
     from importlib.machinery import SourceFileLoader

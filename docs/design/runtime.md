@@ -6,7 +6,7 @@ to keep them separate.
 
 ## The retired runtime layer
 
-Earlier versions of AI OS had a third layer, a directory at `~/.ai`, which held the live
+Earlier versions of Atlas had a third layer, a directory at `~/.ai`, which held the live
 hooks, the operational scripts, and the client integration that made the system actually
 run. That layer is retired. Its engine became this repository's `cli/`, its client
 integration became `adapters/<client>/`, the user's own data moved into the private

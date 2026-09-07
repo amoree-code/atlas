@@ -1,6 +1,6 @@
 """The browser provider boundary.
 
-Everything above this line is AI-OS: capability, authority, verification, session
+Everything above this line is Atlas: capability, authority, verification, session
 identity. Everything below it is one browser technology. A provider is the only place a
 browser engine may be named, and swapping one changes nothing above.
 

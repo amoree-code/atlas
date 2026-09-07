@@ -1,6 +1,6 @@
-# AI OS policy — the Public / Private contract.
+# Atlas policy — the Public / Private contract.
 #
-# This is the load-bearing boundary of the whole system. Everything else in AI OS
+# This is the load-bearing boundary of the whole system. Everything else in Atlas
 # assumes it holds. It is declared here once, client-agnostically; `ai-os doctor`
 # checks it, and each adapter enforces it in whatever mechanism it has.
 
@@ -22,7 +22,7 @@ principle: >
 layers:
 
   public:
-    what: the reusable AI OS software — publishable, installable by anyone
+    what: the reusable Atlas software — publishable, installable by anyone
     default_root: the ai-os repository, wherever it is cloned
     owns:
       - code
@@ -75,7 +75,7 @@ legacy_runtime:
     $AI_OS_HOME/runtime/.
   enforcement: >
     ai-os doctor treats ~/.ai as a legacy location, not a live layer. It passes when the
-    directory is absent or inert, and fails when it still holds active AI OS components or
+    directory is absent or inert, and fails when it still holds active Atlas components or
     when symlinks still resolve out of it.
 
 # --- invariants doctor checks -----------------------------------------------------
@@ -98,11 +98,11 @@ invariants:
 # --- ownership classes for anything init creates ----------------------------------
 ownership_classes:
   system-default:
-    meaning: seeded once from a public template; AI OS's opinion of a sensible starting point
+    meaning: seeded once from a public template; Atlas's opinion of a sensible starting point
     on_update: never overwritten; divergence from the template is reported, never resolved
   user-owned:
     meaning: written by the user or by the agent on the user's behalf; the user's property
-    on_update: never touched by any AI OS tool
+    on_update: never touched by any Atlas tool
   generated:
     meaning: derived from other content and reproducible (indexes, registries, manifests)
     on_update: may be regenerated, but only by the tool that owns it

@@ -43,6 +43,7 @@ from aios_paths import private_path_or_die, private_path, PathConflict
 from aios_tickets import LIVE, discover, section, first_line
 
 MAX_LOG_LINES = 3
+PACKET_SCHEMA = "atlas.context.packet.v1"
 
 
 def git(repo, *args):
@@ -120,6 +121,8 @@ def ticket_packet(t, full):
     out = {
         "id": t["id"], "state": t["state"], "title": t["title"],
         "class": t["klass"], "expected_context": t["expected_context"],
+        "relation": t.get("relation"), "parent": t.get("parent"),
+        "requirement": t.get("requirement"), "goal": t.get("goal"),
         "next_action": t["next_action_line"],
         "record": t["path"],
         # Whether a cold `ai-os context <ID>` would carry the work forward on its own.
@@ -147,7 +150,77 @@ def ticket_packet(t, full):
     return out
 
 
-def build(cwd, ticket_id=None):
+def _json_chars(value):
+    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+
+
+def _essential_ticket(t):
+    return {k: t[k] for k in ("id", "state", "title", "next_action", "record")
+            if k in t}
+
+
+def retrieve(packet, query):
+    """Keep retrieval deterministic: score only fields already present in the packet."""
+    terms = [x for x in re.findall(r"[\w-]+", query.lower()) if len(x) > 1]
+    if not terms:
+        return packet
+    candidates = packet.get("tickets_live", [])
+    ranked = []
+    for ticket in candidates:
+        haystack = " ".join(str(ticket.get(k, "")) for k in
+                            ("id", "title", "next_action", "objective", "verification"))
+        score = sum(haystack.lower().count(term) for term in terms)
+        if score:
+            ranked.append((score, ticket.get("id", ""), ticket))
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    packet["tickets_live"] = [item[2] for item in ranked]
+    packet["retrieval"] = {"query": query, "terms": terms,
+                            "matches": [item[1] for item in ranked]}
+    return packet
+
+
+def compact_packet(packet, budget_chars):
+    """Drop repetition in a fixed order while retaining reconstructable state."""
+    if budget_chars is None:
+        return packet
+    if budget_chars < 512:
+        raise ValueError("context packet budget must be at least 512 characters")
+    original_chars = _json_chars(packet)
+    out = json.loads(json.dumps(packet, ensure_ascii=False))
+    out["packet"] = {"schema": PACKET_SCHEMA, "source": "derived",
+                     "mode": "compact", "budget_chars": budget_chars,
+                     "original_chars": original_chars}
+
+    if _json_chars(out) > budget_chars:
+        out["tickets_live"] = [_essential_ticket(t) for t in out.get("tickets_live", [])]
+        if out.get("focus"):
+            out["focus"] = _essential_ticket(out["focus"])
+        out["read_next"] = {"one ticket in full": "ai-os context <TICKET-ID>"}
+    if _json_chars(out) > budget_chars:
+        out["tickets_live"] = [{k: t[k] for k in ("id", "state", "title") if k in t}
+                                for t in out.get("tickets_live", [])]
+        if out.get("focus"):
+            out["focus"] = {k: out["focus"][k] for k in ("id", "state", "title", "next_action")
+                             if k in out["focus"]}
+        out.pop("repos", None)
+    if _json_chars(out) > budget_chars - 128:
+        out = {
+            "project": out.get("project"),
+            "tickets_live": [{k: t[k] for k in ("id", "state") if k in t}
+                             for t in out.get("tickets_live", [])],
+            "focus": ({k: out["focus"][k] for k in ("id", "state", "next_action")
+                       if k in out["focus"]} if out.get("focus") else None),
+            "packet": out["packet"],
+        }
+    out["packet"]["compacted"] = True
+    out["packet"]["returned_chars"] = 0
+    for _ in range(3):
+        out["packet"]["returned_chars"] = _json_chars(out)
+    out["packet"]["compacted"] = out["packet"]["returned_chars"] < original_chars
+    return out
+
+
+def build(cwd, ticket_id=None, query=None, budget_chars=None):
     projects_root = private_path_or_die("projects")
     tickets = discover(projects_root)
     proj = active_project(projects_root, cwd)
@@ -167,7 +240,7 @@ def build(cwd, ticket_id=None):
 
     repos = []
     seen = set()
-    for cand in (cwd, os.environ.get("AI_OS_REPO", "")):
+    for cand in (cwd, os.environ.get("ATLAS_REPO", "") or os.environ.get("AI_OS_REPO", "")):
         if not cand:
             continue
         st = git_state(cand)
@@ -188,7 +261,10 @@ def build(cwd, ticket_id=None):
             "where it is going": (str(pdir / "context/roadmap.md") if pdir else None),
         },
     }
-    return packet
+    packet["packet"] = {"schema": PACKET_SCHEMA, "source": "derived", "mode": "full"}
+    if query:
+        retrieve(packet, query)
+    return compact_packet(packet, budget_chars)
 
 
 def render(p):
@@ -219,6 +295,10 @@ def render(p):
             lines.append(f"   class {f['class']}"
                          + (f" · expected context {f['expected_context']}"
                             if f.get("expected_context") else ""))
+        intent = [x for x in (f.get("relation"), f.get("parent"), f.get("requirement"),
+                              f.get("goal")) if x]
+        if intent:
+            lines.append(f"   intent {' · '.join(intent)}")
         if f.get("objective"):
             lines.append(f"\n   objective\n" + indent(f["objective"]))
         lines.append(f"\n   next action\n" + indent(f["next_action"]))
@@ -278,8 +358,13 @@ def main(argv):
     ap.add_argument("ticket", nargs="?")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--boundary", action="store_true")
+    ap.add_argument("--query", help="retrieve only matching live ticket packets")
+    ap.add_argument("--budget-chars", type=int, help="compact the JSON packet to this budget")
     a = ap.parse_args(argv)
-    p = build(os.getcwd(), a.ticket)
+    try:
+        p = build(os.getcwd(), a.ticket, a.query, a.budget_chars)
+    except ValueError as e:
+        ap.error(str(e))
     if a.json:
         print(json.dumps(p, indent=2))
     elif a.boundary:

@@ -1,82 +1,19 @@
 #!/usr/bin/env bash
-# ai-os — the single entry point. Everything else is a subcommand of exactly one verb,
-# so the documented `ai-os init` is the command that actually exists.
+# ai-os — T-031 (Phase H, Slice 2) compatibility alias for `atlas`, the canonical CLI name.
+# Kept for the deprecation window (migration-plan.md §Compatibility shims, row "`ai-os`
+# binary name"): both names must resolve identically, so this execs the same file `atlas`
+# does, with the same arguments, from the same directory. Not removed by this ticket —
+# removal is a later, separately-approved slice (Phase I3) once every adapter manifest,
+# doc and script references only `atlas` and a deprecation window has passed.
 set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="$(cat "$SELF_DIR/../VERSION" 2>/dev/null || echo unknown)"
-
-usage() { cat <<EOF
-ai-os v$VERSION — a portable operating layer for AI coding agents.
-
-  ai-os init [--dry-run]     create/verify your private workspace (never overwrites)
-  ai-os onboard [cmd]        first-run setup: who you are, so the rest has a starting point
-  ai-os doctor [--quiet]     verify the public/private contract (reports only)
-  ai-os status               where each layer is and whether the contract holds
-  ai-os workspace <cmd>      local versioning of the private workspace
-  ai-os adapter <cmd>        list | doctor — the client adapter registry
-  ai-os capability <cmd>     list | doctor — the capability registry
-  ai-os plugin <cmd>         compatibility alias for 'capability'
-  ai-os domain <cmd>         list | doctor — the domain registry (declarations only)
-  ai-os run <cmd>            create | step | status | list — bounded execution boundary
-  ai-os handoff <cmd>        prepare | approve | send | receive | show | list — handoffs
-  ai-os render <skill>       resolve a canonical skill for one client
-  ai-os memory <cmd>         status | doctor | attach — the memory engine
-  ai-os context [ticket]     the cold-start packet: project, live tickets, git state
-  ai-os observe -- <cmd>     run it, keep the output, return only what decides
-  ai-os policy <name>        list | doctor | <module> — governance, loaded on demand
-  ai-os tickets <cmd>        list | index | doctor | log | checkpoint — task records
-  ai-os usage [--json]       measured token spend per session, from client transcripts
-  ai-os lifecycle [effort]   continue, checkpoint, compact, restart or hand off
-  ai-os privacy-scan [path]  check the public repo for credentials and personal data
-  ai-os version
-
-Two layers, two owners:
-  public   this repository   reusable software — publishable
-  private  ~/.ai-os          your memory, knowledge, projects — never published
-
-The runtime layer at ~/.ai is retired: its engine is this cli/, its client integration is
-adapters/<client>/, and its transient state is \$AI_OS_HOME/internal/runtime/.
-
-See docs/design/public-private.md, schemas/adapter.schema.md,
-schemas/capability.schema.md, schemas/domain.schema.md and schemas/run.schema.md.
-EOF
-}
-
-cmd="${1:-status}"; shift || true
-case "$cmd" in
-  # T-015: observe's canonical implementation and write destination are now Atlas-owned
-  # (~/atlas/context/ai-os-observe -> ~/atlas/runtime/observations/). This line is a thin
-  # compatibility handoff; ai-os-observe under cli/ is historical only, no longer invoked.
-  # No other command's dispatch changed.
-  observe) exec "${ATLAS_HOME:-$HOME/atlas}/context/ai-os-observe" "$@" ;;
-  # T-016: context's canonical implementation is now Atlas-owned
-  # (${ATLAS_HOME:-~/atlas}/context/ai-os-context); durable data authority
-  # (projects/personal/governance) is unchanged — this implementation still resolves
-  # those through the same legacy sources ai-os-context always has. cli/ai-os-context is
-  # historical only, no longer invoked. usage and lifecycle are untouched and remain
-  # legacy canonical.
-  context) exec "${ATLAS_HOME:-$HOME/atlas}/context/ai-os-context" "$@" ;;
-  # T-017: usage's canonical implementation is now Atlas-owned
-  # (${ATLAS_HOME:-~/atlas}/context/ai-os-usage). It reads client transcripts and, via
-  # --baseline, caller-provided files, exactly as before — no telemetry writer was added
-  # and no data authority changed. cli/ai-os-usage is historical only, no longer invoked.
-  # lifecycle remains untouched and legacy canonical; usage's import of aios_lifecycle.py
-  # is a pure-function library (no filesystem/subprocess), not the dispatched lifecycle
-  # command, so this does not cut lifecycle over.
-  usage) exec "${ATLAS_HOME:-$HOME/atlas}/context/ai-os-usage" "$@" ;;
-  # T-018: lifecycle's canonical implementation is now Atlas-owned
-  # (${ATLAS_HOME:-~/atlas}/context/ai-os-lifecycle). Its sibling() loader resolves
-  # "ai-os-context"/"ai-os-usage" relative to its own file location, so running from
-  # context/ makes it load the Atlas ai-os-context/ai-os-usage (already canonical since
-  # T-016/T-017) with no legacy fallback possible — verified by direct execution, not
-  # inferred. All four context mechanisms are now Atlas canonical; durable/runtime data
-  # authority (tickets, projects, transcripts) is unchanged. cli/ai-os-lifecycle is
-  # historical only, no longer invoked.
-  lifecycle) exec "${ATLAS_HOME:-$HOME/atlas}/context/ai-os-lifecycle" "$@" ;;
-  init|onboard|doctor|status|workspace|privacy-scan|adapter|capability|domain|run|render|memory|handoff|tickets|policy) exec "$SELF_DIR/ai-os-$cmd" "$@" ;;
-  # Compatibility alias, kept for one version. `capability` is the current name.
-  plugin) exec "$SELF_DIR/ai-os-plugin" "$@" ;;
-  version|--version|-V) echo "$VERSION" ;;
-  help|--help|-h)       usage ;;
-  *) echo "ai-os: unknown command '$cmd'" >&2; echo >&2; usage >&2; exit 2 ;;
-esac
+# T-050-S1: `coordinator` is dispatched directly from this alias rather than added to
+# `atlas`'s own case statement — `atlas` is the canonical CLI and out of this ticket's
+# approved write paths, so a new subcommand that must "work through engine/cli/ai-os"
+# is wired here instead, alongside it, not inside it. Every other command is untouched
+# and still resolves through `atlas` exactly as before.
+if [ "${1:-}" = "coordinator" ]; then
+  shift
+  exec "$SELF_DIR/ai-os-coordinator" "$@"
+fi
+exec "$SELF_DIR/atlas" "$@"

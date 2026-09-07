@@ -1,0 +1,20 @@
+# Example capability — schemas/capability.schema.md. Fictional: weather-lookup ships
+# nowhere outside this example, and is not present in capabilities/.
+plugin: weather-lookup
+name: Weather Lookup
+contract: 1
+
+capability:
+  # No detect: — this example ships no real installation to check for. A real
+  # capability would list the path(s) whose presence means "available on this machine".
+  authority: observe   # the ceiling; its one operation sits at the same rung
+
+requires: []           # no other capability needed
+
+operations:
+  forecast:
+    summary: fetch a multi-day forecast for a location
+    command: weather-lookup       # a bare filename — never shipped in this example
+    authority: observe
+    idempotent: true              # reading a forecast is safe to retry automatically
+    verify: weather-lookup-verify # a bare filename — never shipped in this example

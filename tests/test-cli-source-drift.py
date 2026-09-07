@@ -91,6 +91,30 @@ if repo_f.is_file() and core_f.is_file() and ctx_f.is_file():
     chk(f"{CONTEXT_MECHANISM}: atlas/context (the dispatched command's own directory) "
         f"matches it too", sha(ctx_f) == h)
 
+# --- 1b. T-048 handoff identity: core is intentionally not byte-identical to engine
+# during the migration, but the live dispatched copy must carry the same approved
+# identity behavior. This catches the exact failure where the engine copy was updated
+# while `ai-os handoff` still ran an older core copy.
+t("T-048 handoff identity exists in both engine and the live core copy")
+HANDOFF_IDENTITY_MARKERS = (
+    "--source-client",
+    "--source-session",
+    "source_client",
+    "source_session_id",
+    "IDENTITY_UNSPECIFIED",
+    "def identity_display",
+)
+engine_handoff = CLI / "ai-os-handoff"
+atlas_handoff = ATLAS / "core" / "cli" / "ai-os-handoff"
+chk("ai-os-handoff engine copy exists", engine_handoff.is_file())
+chk("ai-os-handoff atlas/core/cli copy exists", atlas_handoff.is_file())
+if engine_handoff.is_file() and atlas_handoff.is_file():
+    engine_text = engine_handoff.read_text(errors="replace")
+    atlas_text = atlas_handoff.read_text(errors="replace")
+    for marker in HANDOFF_IDENTITY_MARKERS:
+        chk(f"ai-os-handoff identity marker {marker!r} is present in both copies",
+            marker in engine_text and marker in atlas_text)
+
 # --- 2. Dispatch tracing: the wrapper sends each representative command to the copy it --
 #         claims to, including honoring a custom ATLAS_HOME -----------------------------
 t("dispatch resolution: representative commands run from their declared canonical copy")

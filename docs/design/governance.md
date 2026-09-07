@@ -32,7 +32,7 @@ drift between them a real risk worth writing down rather than an impossible one.
 This is a small set on purpose. A policy lands here because something already enforces
 it, or because the boundary it describes is load-bearing enough to write down and audit —
 not ahead of either. A general policy engine (file deletion, package installs, outbound
-messages) is a later, deliberate version: see `docs/design/decisions.md` for why AI OS
+messages) is a later, deliberate version: see `docs/design/decisions.md` for why Atlas
 stays this size on purpose.
 
 ## The authority ladder

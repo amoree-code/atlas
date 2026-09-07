@@ -23,7 +23,7 @@ git -C ~/.ai-os checkout <sha> -- <path>    # recover one file from a snapshot
 git -C ~/.ai-os revert <sha>                # undo a snapshot, keeping history
 ```
 
-`reset --hard` is never used by AI OS tooling. `restore` and `revert` are additive and
+`reset --hard` is never used by Atlas tooling. `restore` and `revert` are additive and
 recoverable; `reset --hard` discards work with no undo.
 
 **Snapshot model:** one commit per completed task, not per file write. A finished task

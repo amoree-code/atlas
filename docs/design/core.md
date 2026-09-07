@@ -1,6 +1,6 @@
 # Core
 
-**Core resolves. Adapters integrate.** Core is the mechanism AI OS shares across every
+**Core resolves. Adapters integrate.** Core is the mechanism Atlas shares across every
 client and every capability — the part that must never learn what a PRD is, what a
 browser engine is, or how one specific client's config format works. Those belong to a
 capability or an adapter, and stay there.
