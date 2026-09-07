@@ -2,9 +2,12 @@
 """Persistent sync data belongs to the private workspace, not the runtime layer.
 
 V0.1.5 moved ai-sync's state record and its pre-overwrite backups out of
-~/.ai/sync/{state,backups} and into $AI_OS_HOME/internal/runtime/{state,backups}. These tests
-exercise that relocation against a throwaway HOME — nothing here reads or writes the
-real workspace, the real runtime, or any real client configuration.
+~/.ai/sync/{state,backups} and into $AI_OS_HOME/internal/runtime/{state,backups}. T-020
+later moved them again, off the AI_OS_HOME-compat resolver entirely, onto
+$ATLAS_HOME/runtime/{caches/state,backups} — Atlas-canonical, deliberately not shared
+with the 13+ other commands still reading AI_OS_HOME as before. These tests exercise
+that relocation against a throwaway HOME — nothing here reads or writes the real
+workspace, the real runtime, or any real client configuration.
 
 The migration's hard promise is that it never picks a winner. Where both sides hold the
 same bytes the legacy copy is redundant and goes; where they differ it stops and says so.
@@ -35,13 +38,16 @@ def chk(desc, ok):
 
 
 def load_sync(home: Path, ws: Path):
-    """Import ai-sync with HOME and AI_OS_HOME pointed at a scratch tree.
+    """Import ai-sync with HOME, AI_OS_HOME and ATLAS_HOME pointed at a scratch tree.
 
     Paths are module-level constants computed at import, so the environment has to be in
-    place first and the module has to be loaded fresh for every scenario.
+    place first and the module has to be loaded fresh for every scenario. RULES/PROFILE
+    still resolve through AI_OS_HOME (untouched by T-020); RUNTIME/CACHES/STATE/BACKUPS
+    resolve through ATLAS_HOME only — both must point at the same scratch tree.
     """
     os.environ["HOME"] = str(home)
     os.environ["AI_OS_HOME"] = str(ws)
+    os.environ["ATLAS_HOME"] = str(ws)
     os.environ["AI_OS_REPO"] = str(REPO)
     for mod in [m for m in sys.modules if m.startswith("aios_sync")]:
         del sys.modules[mod]
@@ -67,10 +73,10 @@ def scratch(tmp, label, legacy_state=None, legacy_backups=None, new_state=None,
         for n, c in files.items():
             (d / n).write_text(c)
     if new_state is not None:
-        d = ws / "internal" / "runtime" / "state"; d.mkdir(parents=True, exist_ok=True)
+        d = ws / "runtime" / "caches" / "state"; d.mkdir(parents=True, exist_ok=True)
         (d / "state.json").write_text(new_state)
     for tag, files in (new_backups or {}).items():
-        d = ws / "internal" / "runtime" / "backups" / tag; d.mkdir(parents=True, exist_ok=True)
+        d = ws / "runtime" / "backups" / tag; d.mkdir(parents=True, exist_ok=True)
         for n, c in files.items():
             (d / n).write_text(c)
     return load_sync(home, ws), home, ws
@@ -83,12 +89,12 @@ def main():
         # --- 1, 2, 11: a fresh installation writes only to the new canonical location ---
         print(f"\n{D}— fresh installation uses the private workspace{X}")
         m, home, ws = scratch(tmp, "fresh")
-        chk("state resolves under AI_OS_HOME/internal/runtime",
-            m.STATE == ws / "internal" / "runtime" / "state" / "state.json")
-        chk("backups resolve under AI_OS_HOME/internal/runtime",
-            m.BACKUPS == ws / "internal" / "runtime" / "backups")
-        chk("a custom AI_OS_HOME is honoured, not $HOME/.ai-os",
-            str(ws) in str(m.STATE) and ".ai-os" not in str(m.STATE))
+        chk("state resolves under ATLAS_HOME/runtime/caches",
+            m.STATE == ws / "runtime" / "caches" / "state" / "state.json")
+        chk("backups resolve under ATLAS_HOME/runtime",
+            m.BACKUPS == ws / "runtime" / "backups")
+        chk("a custom ATLAS_HOME is honoured, not $HOME/atlas",
+            str(ws) in str(m.STATE) and str(home / "atlas") not in str(m.STATE))
         m.migrate_runtime()
         m.save_state({"version": 1, "clients": {}, "history": []})
         chk("save_state wrote to the new location", m.STATE.exists())
@@ -213,9 +219,9 @@ def main():
                     ("claude", "codex", "gemini", "cursor", "opencode")))
         chk("no machine-specific path is introduced",
             not any(s in body for s in ("/Users/", "Documents", "Projects", "Developer")))
-        chk("the destination comes from AI_OS_HOME, never a literal",
-            "AI_OS_HOME" in src_text.split("def migrate_runtime")[0]
-            and 'RUNTIME = private_path_or_die("runtime")' in src_text)
+        chk("the destination comes from ATLAS_HOME, never a literal",
+            "ATLAS_HOME" in src_text.split("def migrate_runtime")[0]
+            and 'RUNTIME = ATLAS_HOME / "runtime"' in src_text)
     finally:
         if real_home:
             os.environ["HOME"] = real_home

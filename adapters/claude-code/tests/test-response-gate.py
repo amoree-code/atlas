@@ -20,7 +20,12 @@ for prompt, want in CASES:
     if got:
         payload = json.loads(out.stdout)
         assert payload["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
-        assert "QUICK_RESULT" in payload["hookSpecificOutput"]["additionalContext"]
+        # Not a literal string from one policy revision — the policy text itself is
+        # user-editable content that gets rewritten over time. Check structure instead:
+        # non-trivial content that actually names the Arabic-mode behavior it gates.
+        ctx = payload["hookSpecificOutput"]["additionalContext"]
+        assert len(ctx) > 40, f"additionalContext suspiciously short: {ctx!r}"
+        assert "arabic" in ctx.lower(), f"additionalContext doesn't mention Arabic: {ctx!r}"
     label = prompt[:40] or "(empty)"
     print(f"  {'PASS' if ok else 'FAIL'}  gated={got!s:<5} (want {want!s:<5}) {label}")
     assert out.returncode == 0, f"non-zero exit for {label!r}"
