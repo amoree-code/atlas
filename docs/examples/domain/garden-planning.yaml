@@ -1,0 +1,20 @@
+# Example domain — schemas/domain.schema.md. Fictional: garden-planning is not a real
+# Atlas domain, ships nowhere outside this example, and is not present in domains/.
+domain: garden-planning
+name: Garden Planning
+contract: 1
+
+# Capability ids only — ids, never paths. weather-lookup is the fictional capability
+# worked out in ../capability/; it isn't in the real registry either, so
+# `ai-os domain doctor` would report a warning here, never a failure — declaring a
+# domain before its capabilities exist is legitimate.
+requires: [weather-lookup]
+
+# Outcome KINDS — vocabulary, a set, never a sequence. An outcome INSTANCE (a specific
+# season's plan, for a specific plot) is named by a task in the private workspace and
+# never appears here.
+outcomes:
+  planting-schedule:
+    summary: a season's planting schedule matched to bed layout and the last-frost date
+  bed-layout:
+    summary: a garden bed layout mapped to each plant's spacing needs

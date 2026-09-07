@@ -5,7 +5,7 @@
   ai-os domain doctor    validate every declaration against schemas/domain.schema.md
 
 A DOMAIN is an area of work. It names the outcome kinds that area recognizes and the
-capabilities delivering them needs. A CAPABILITY is something AI-OS can do and lives in
+capabilities delivering them needs. A CAPABILITY is something Atlas can do and lives in
 capabilities/ (cli/ai-os-capability). The arrow runs Domain -> requires -> Capability and
 never the reverse: a domain uses capabilities; it never owns, contains or reimplements one.
 

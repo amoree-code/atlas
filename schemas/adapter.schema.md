@@ -1,13 +1,13 @@
 # Adapter contract — version 1
 
-An AI-OS **adapter** connects **one AI client** to AI-OS. It is code. `$AI_OS_HOME` is the
+An Atlas **adapter** connects **one AI client** to Atlas. It is code. `$AI_OS_HOME` is the
 user's data. The contract exists to keep those two facts from blurring.
 
 > **Core resolves. Adapters integrate.**
 > An adapter never owns, never declares, and never reaches into `$AI_OS_HOME` on its own.
 
 **An adapter is not a capability.** An adapter answers *"how does this client reach
-AI-OS?"*; a capability answers *"what can AI-OS do?"*. Capabilities live in
+Atlas?"*; a capability answers *"what can Atlas do?"*. Capabilities live in
 `capabilities/` and are described by `schemas/capability.schema.md`. Until 2026-08-31 this
 file was named `plugin.schema.md` and `adapters/` manifests lived in `plugins/` — the
 inversion recorded as deferred in `AIOS-001/checkpoint.md` §13.1, resolved by task
@@ -26,7 +26,7 @@ One manifest per adapter: `adapters/<id>/adapter.yaml`.
 ```yaml
 adapter: claude-code       # stable id — MUST equal the directory name
 name: Claude Code          # human label
-contract: 1                # the AI-OS adapter contract version this manifest targets
+contract: 1                # the Atlas adapter contract version this manifest targets
 
 client:
   detect: [~/.local/bin/claude, ~/.claude/]   # any path present ⇒ client installed
@@ -40,7 +40,7 @@ enforces: [ ... ]          # core policies this adapter implements
 
 ### Layout
 
-`cli/ai-os-adapter` reads this subset with a hand-written parser, not pyyaml — AI-OS has
+`cli/ai-os-adapter` reads this subset with a hand-written parser, not pyyaml — Atlas has
 no dependencies. It rejects what it cannot read rather than guessing, because a silently
 mis-parsed manifest is worse than an unreadable one. `cli/ai-os-capability` and
 `cli/ai-os-domain` borrow the same parser, so this holds for every manifest in the repo.

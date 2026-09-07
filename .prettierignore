@@ -1,6 +1,6 @@
 # Nothing in this repository is Prettier's to reformat.
 #
-# AI-OS is zero-dependency by design: every YAML file here is read by a hand-written
+# Atlas is zero-dependency by design: every YAML file here is read by a hand-written
 # parser (cli/ai-os-adapter, borrowed by cli/ai-os-capability), or by line-oriented shell
 # (grep '^key:' in cli/ai-os-status, the tab-indentation check in cli/ai-os-doctor).
 # Those parsers are deliberately strict — they reject what they do not understand rather

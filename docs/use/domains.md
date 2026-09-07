@@ -1,8 +1,8 @@
 # Domains
 
 A **domain** answers *"what area of work is this, and which capabilities would delivering
-it need?"* — never *"what can AI OS do?"* (that's a capability, `docs/use/capabilities.md`)
-and never *"how does a client reach AI OS?"* (that's an adapter, `docs/use/adapters.md`).
+it need?"* — never *"what can Atlas do?"* (that's a capability, `docs/use/capabilities.md`)
+and never *"how does a client reach Atlas?"* (that's an adapter, `docs/use/adapters.md`).
 
 **You can declare an area of work. Nothing will run it. Declaring is the feature.** Design
 rationale and the full contract: `docs/design/domain-delivery.md` and

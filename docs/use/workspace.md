@@ -1,6 +1,6 @@
 # Your workspace
 
-`~/.ai-os` is yours. AI OS writes into it at `init` and reads from it forever after; it
+`~/.ai-os` is yours. Atlas writes into it at `init` and reads from it forever after; it
 never owns it, never publishes it, and never overwrites what you have put there.
 
 ```
@@ -12,7 +12,7 @@ never owns it, never publishes it, and never overwrites what you have put there.
 │   ├── knowledge/           what work taught the system — 7 kinds
 │   └── templates/           reusable document templates
 ├── projects/             registry · backlog · project-owned work and context
-├── internal/             AI-OS machinery and governance
+├── internal/             Atlas machinery and governance
 │   ├── config/              settings, model routing, profile
 │   ├── governance/
 │   │   ├── rules/           canonical behavioral rules
@@ -62,19 +62,19 @@ how the active project is determined are in `docs/use/projects.md`.
 
 Four concepts that must not be collapsed:
 
-- **Adapter** — how one AI client reaches AI OS. `docs/use/adapters.md`.
-- **Capability** (a `plugin`) — something AI OS can *do*. `docs/use/capabilities.md`.
+- **Adapter** — how one AI client reaches Atlas. `docs/use/adapters.md`.
+- **Capability** (a `plugin`) — something Atlas can *do*. `docs/use/capabilities.md`.
 - **Domain** — an area of work that names which capabilities it would need, and executes
   nothing. `docs/use/domains.md`.
 - **MCP** — the protocol/server mechanism that may deliver a capability. `mcp/` is a
-  reserved namespace, owned by AI OS rather than any agent, skill, project or client.
-  There are currently zero AI-OS-managed servers; the namespace exists so one can be added
+  reserved namespace, owned by Atlas rather than any agent, skill, project or client.
+  There are currently zero Atlas-managed servers; the namespace exists so one can be added
   without inventing where it goes.
 
 ## Configuration
 
 ```
-AI OS defaults  <  your configuration  <  project configuration
+Atlas defaults  <  your configuration  <  project configuration
 ```
 
 Your values win over defaults; a project's win over yours. A future update **may add** a

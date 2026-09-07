@@ -5,7 +5,7 @@
   ai-os capability doctor            validate every manifest against schemas/capability.schema.md
   ai-os capability invoke <id>.<op>  run ONE declared operation, and stop
 
-A CAPABILITY is what AI-OS can do. An ADAPTER is how one AI client reaches AI-OS and lives
+A CAPABILITY is what Atlas can do. An ADAPTER is how one AI client reaches Atlas and lives
 in adapters/ — see cli/ai-os-adapter. Until 2026-08-31 those two meanings were inverted;
 task AIOS-005 resolved it.
 

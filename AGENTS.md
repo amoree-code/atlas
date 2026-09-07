@@ -1,11 +1,11 @@
 # AGENTS.md — working in this repository
 
-This file is for an AI agent working *on* AI OS itself (this repo), not for an AI OS
+This file is for an AI agent working *on* Atlas itself (this repo), not for an Atlas
 user's own project.
 
 ## What this repo is
 
-The public, reusable half of AI OS: engine concepts, schemas, policies, adapters,
+The public, reusable half of Atlas: engine concepts, schemas, policies, adapters,
 capabilities, domain declarations, skill templates, and a CLI. It contains no personal
 data and must never be made to contain any — no real names, no real project names, no
 real file paths from a contributor's machine, no credentials.

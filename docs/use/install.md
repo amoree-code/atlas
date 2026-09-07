@@ -1,7 +1,11 @@
 # Installation
 
-Early software. `ai-os init` assumes a single-user local setup and has been exercised
+Early software. `atlas init` assumes a single-user local setup and has been exercised
 against one machine. Treat it as a working sketch.
+
+**Naming note (T-031):** `atlas` is the canonical command; `ai-os` remains a temporary
+compatibility alias that resolves identically during the transition window. Examples
+below use `atlas`; anywhere you read `ai-os`, it still works the same way.
 
 ## What you are installing
 
@@ -10,9 +14,13 @@ Two things live in two places, and only one of them is this repository.
 | | Where | Created by |
 |---|---|---|
 | **Public** — the software | wherever you clone it | `git clone` |
-| **Private** — your data | `$AI_OS_HOME`, default `~/.ai-os` | `ai-os init` |
+| **Private** — your data | `$ATLAS_HOME`, default `~/atlas` | `atlas init` |
 
-Client integration is not a third place: each client reaches AI OS through its adapter in
+Compatibility fallback: `$AI_OS_HOME`, default `~/.ai-os`, still resolves for any root Atlas
+does not yet hold — see `cli/ai-os-paths`. Atlas is never bypassed when it already has the
+requested resource.
+
+Client integration is not a third place: each client reaches Atlas through its adapter in
 `adapters/<client>/`, which is public software like the rest of the repository.
 
 `docs/design/public-private.md` explains why the two are separate. It is worth reading
@@ -31,9 +39,9 @@ dependencies, no build step.
 ## Initialize your workspace
 
 ```bash
-ai-os init --dry-run     # see exactly what would happen
-ai-os init               # do it
-ai-os doctor             # verify the contract holds
+atlas init --dry-run     # see exactly what would happen
+atlas init               # do it
+atlas doctor             # verify the contract holds
 ```
 
 `init` creates the seven workspace directories, the eight memory sections, the seven
@@ -44,13 +52,14 @@ hundredth are the same as the first. If a file it would seed already exists and 
 from the template, it says so and leaves yours alone.
 
 It does **not** create a git repository, does **not** create a remote, and does **not**
-copy public skills into your workspace. It also asks you nothing — that is `ai-os
+copy public skills into your workspace. It also asks you nothing — that is `atlas
 onboard`, below.
 
-Put the workspace somewhere else with `AI_OS_HOME`:
+Put the workspace somewhere else with `ATLAS_HOME` (or, as a compatibility fallback,
+`AI_OS_HOME` for roots Atlas has not cut over):
 
 ```bash
-AI_OS_HOME=~/work/ai-os-data ai-os init
+ATLAS_HOME=~/work/atlas-data atlas init
 ```
 
 `init` refuses to initialize into the public repository, or into the retired `~/.ai`
@@ -63,8 +72,8 @@ the same as a workspace that knows who you are, and conflating the two is how a 
 up claiming an identity it never collected.
 
 ```bash
-ai-os onboard            # first run: a few questions, then it validates and marks done
-ai-os onboard status     # has this workspace completed onboarding?
+atlas onboard            # first run: a few questions, then it validates and marks done
+atlas onboard status     # has this workspace completed onboarding?
 ```
 
 Onboarding asks for the minimum — what to call you, what languages you work in, what to
@@ -89,18 +98,18 @@ somewhere else.
 already answered:
 
 ```bash
-ai-os onboard --adopt    # records that setup is done; writes no memory file
+atlas onboard --adopt    # records that setup is done; writes no memory file
 ```
 
-**Interrupted halfway?** Run `ai-os onboard` again. Answered steps are skipped; it resumes
+**Interrupted halfway?** Run `atlas onboard` again. Answered steps are skipped; it resumes
 at the first unanswered one. Completed onboarding never re-runs the interview.
 
 **Driving it from an AI client, or a script?** The same primitives, non-interactively:
 
 ```bash
-ai-os onboard set name "<your name>"
-ai-os onboard set language "<language>"
-ai-os onboard complete
+atlas onboard set name "<your name>"
+atlas onboard set language "<language>"
+atlas onboard complete
 ```
 
 `complete` validates before it marks anything — required answers recorded, canonical files
@@ -109,15 +118,15 @@ state alone.
 
 If the marker ever claims `initialized` while the data it points at is gone, `status`
 reports `inconsistent` and exits 12 rather than assuming either side is right.
-`ai-os onboard --repair` reopens only the missing steps and touches nothing that survived.
+`atlas onboard --repair` reopens only the missing steps and touches nothing that survived.
 
 ## Then
 
 ```bash
-ai-os status                  # where each layer is, and whether the contract holds
-ai-os doctor                  # full check — reports, never repairs
-ai-os privacy-scan            # is the public repo still publishable?
-ai-os workspace status        # local versioning of your private data
+atlas status                  # where each layer is, and whether the contract holds
+atlas doctor                  # full check — reports, never repairs
+atlas privacy-scan            # is the public repo still publishable?
+atlas workspace status        # local versioning of your private data
 ```
 
 Two things worth doing once:
@@ -138,6 +147,6 @@ Two things worth doing once:
 
 ## Uninstalling
 
-Delete the clone. Your workspace at `~/.ai-os` is untouched by that — it is yours, it was
+Delete the clone. Your workspace at `~/atlas` (compatibility fallback: `~/.ai-os`) is untouched by that — it is yours, it was
 never owned by the repository, and nothing in the repository is needed to read it. It is
 plain Markdown and YAML on disk.

@@ -182,5 +182,108 @@ r = subprocess.run([str(CLI / "ai-os-privacy-scan"), "--atlas-classify",
 chk("with no ATLAS_HOME override, defaults to ~/atlas and classifies the real skeleton",
     r.returncode == 0 and "publishable" in r.stdout)
 
+# =========================================================================================
+t("T-028: governance/ per-file promotion — publishable files become eligible")
+with tempfile.TemporaryDirectory() as tmp:
+    atlas = Path(tmp)
+    for rel, cls in priv.GOVERNANCE_FILE_CLASSES.items():
+        cls_actual, eligible, reason = priv.publication_eligibility(
+            atlas / "governance" / rel, atlas)
+        if cls == "publishable":
+            chk(f"governance/{rel} -> class=publishable, eligible",
+                cls_actual == "publishable" and eligible)
+            chk(f"governance/{rel} reason cites the T-028 promotion", "T-028" in reason)
+        else:
+            chk(f"governance/{rel} -> class={cls}, not eligible",
+                cls_actual == cls and not eligible)
+
+# =========================================================================================
+t("T-028: governance/ default-deny still holds for anything not explicitly promoted")
+with tempfile.TemporaryDirectory() as tmp:
+    atlas = Path(tmp)
+    for rel in ("product/some-new-file-not-yet-classified.yaml",
+                "rules/some-new-private-file.md", "not-in-the-table.txt"):
+        cls, eligible, reason = priv.publication_eligibility(atlas / "governance" / rel, atlas)
+        chk(f"governance/{rel} (unlisted) -> class=mixed, not eligible",
+            cls == "mixed" and not eligible)
+
+# =========================================================================================
+t("T-028: promotion is scoped to governance/ only — other mixed roots are untouched")
+with tempfile.TemporaryDirectory() as tmp:
+    atlas = Path(tmp)
+    for root in ("adapters", "extensions", "integration"):
+        chk(f"{root}/ is still classified mixed (unaffected by the governance promotion table)",
+            priv.ROOTS[root]["class"] == "mixed")
+        cls, eligible, reason = priv.publication_eligibility(
+            atlas / root / "product" / "x.yaml", atlas)
+        chk(f"{root}/product/x.yaml -> still mixed, not eligible (no promotion table here)",
+            cls == "mixed" and not eligible)
+
+# =========================================================================================
+t("T-028: every real file under ~/atlas/governance/ has an explicit classification")
+real_governance = Path.home() / "atlas" / "governance"
+if real_governance.is_dir():
+    real_files = sorted(
+        str(p.relative_to(real_governance)) for p in real_governance.rglob("*") if p.is_file())
+    classified = set(priv.GOVERNANCE_FILE_CLASSES)
+    missing = [f for f in real_files if f not in classified]
+    chk(f"no unclassified file under the real governance/ tree (missing: {missing})",
+        not missing)
+else:
+    chk("~/atlas/governance/ not present on this machine — skipped (not a failure)", True)
+
+# =========================================================================================
+t("T-029: extensions/ per-file promotion — publishable files become eligible")
+with tempfile.TemporaryDirectory() as tmp:
+    atlas = Path(tmp)
+    for rel, cls in priv.EXTENSIONS_FILE_CLASSES.items():
+        cls_actual, eligible, reason = priv.publication_eligibility(
+            atlas / "extensions" / rel, atlas)
+        if cls == "publishable":
+            chk(f"extensions/{rel} -> class=publishable, eligible",
+                cls_actual == "publishable" and eligible)
+            chk(f"extensions/{rel} reason cites the T-029 promotion", "T-029" in reason)
+        else:
+            chk(f"extensions/{rel} -> class={cls}, not eligible",
+                cls_actual == cls and not eligible)
+
+# =========================================================================================
+t("T-029: extensions/ default-deny still holds for anything not explicitly promoted")
+with tempfile.TemporaryDirectory() as tmp:
+    atlas = Path(tmp)
+    for rel in ("skills/some-new-skill/SKILL.md", "agents/some-new-agent.md",
+                "mcp/servers/some-new-server/config.yaml", "not-in-the-table.txt"):
+        cls, eligible, reason = priv.publication_eligibility(atlas / "extensions" / rel, atlas)
+        chk(f"extensions/{rel} (unlisted) -> class=mixed, not eligible",
+            cls == "mixed" and not eligible)
+
+# =========================================================================================
+t("T-029: extensions/ promotion does not affect governance/'s own table, or vice versa")
+with tempfile.TemporaryDirectory() as tmp:
+    atlas = Path(tmp)
+    cls, eligible, reason = priv.publication_eligibility(
+        atlas / "governance" / "skills" / "README.md", atlas)
+    chk("governance/skills/README.md (not a real governance path) -> mixed, not eligible "
+        "(extensions' table does not leak into governance)", cls == "mixed" and not eligible)
+    for root in ("adapters", "integration"):
+        chk(f"{root}/ is still classified mixed (unaffected by the extensions promotion table)",
+            priv.ROOTS[root]["class"] == "mixed")
+
+# =========================================================================================
+t("T-029: every real file under ~/atlas/extensions/ has an explicit classification")
+real_extensions = Path.home() / "atlas" / "extensions"
+if real_extensions.is_dir():
+    real_files = sorted(
+        str(p.relative_to(real_extensions)) for p in real_extensions.rglob("*")
+        if p.is_file() and p.relative_to(real_extensions) != Path("README.md"))
+    # extensions/README.md itself (the root doorway file) is intentionally outside the
+    # per-file table — it documents the merge, it is not merged content.
+    classified = set(priv.EXTENSIONS_FILE_CLASSES)
+    missing = [f for f in real_files if f not in classified]
+    chk(f"no unclassified file under the real extensions/ tree (missing: {missing})",
+        not missing)
+else:
+    chk("~/atlas/extensions/ not present on this machine — skipped (not a failure)", True)
+
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

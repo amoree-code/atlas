@@ -67,6 +67,82 @@ roots:
   docs:         { class: publishable, evidence: "candidate-tree.md docs/: Publishable." }
   tests:        { class: publishable, evidence: "candidate-tree.md tests/: Publishable (suite)." }
 
+# --- per-file promotion inside a mixed root (T-028, extended T-029) --------------------
+# `mixed` roots above are private-by-default at the root level, with per-item promotion
+# named as "a future mechanism, not built by this policy". T-028 built that mechanism,
+# scoped to `governance/`. T-029 extends the same mechanism to `extensions/` (the Phase D3
+# merge of the public skills/ + private internal/extensions/{agents,capabilities,mcp,
+# skills}). `adapters` and `integration` still get no promotion table by either change;
+# both stay exactly as default-deny as before. Enforced in `cli/aios_atlas_privacy.py`'s
+# `GOVERNANCE_FILE_CLASSES` / `EXTENSIONS_FILE_CLASSES` tables, which this section mirrors
+# for human review.
+promotions:
+  governance:
+    mechanism: "per-file table, keyed by path relative to governance/, default-deny for anything not listed"
+    private:
+      - README.md
+      - authority.yaml
+      - rules/core.md
+      - policies/README.md
+      - policies/context.md
+      - policies/git.md
+      - policies/graph.md
+      - policies/knowledge.md
+      - policies/lifecycle.md
+      - policies/memory.md
+      - policies/models.md
+      - policies/privacy-terms.txt
+      - policies/response.md
+      - policies/stack.md
+      - policies/task.md
+      - policies/verification.md
+    publishable:
+      # still requires content/credential scan + owner approval — promotion only narrows
+      # what is even eligible to reach that gate, per `publication_model` below.
+      - product/README.md
+      - product/atlas-path-classification.yaml
+      - product/git.yaml
+      - product/handoff-transports.yaml
+      - product/privacy-allowlist.txt
+      - product/privacy-classification.yaml
+      - product/public-private-contract.yaml
+      - product/workspace-privacy.yaml
+  extensions:
+    mechanism: "per-file table, keyed by path relative to extensions/, default-deny for anything not listed"
+    private:
+      - skills/README.md
+      - agents/architect.md
+      - agents/debugger.md
+      - agents/memory-curator.md
+      - agents/task-scribe.md
+      - capabilities/README.md
+      - mcp/README.md
+      - mcp/config/.gitkeep
+      - mcp/registry/.gitkeep
+      - mcp/servers/.gitkeep
+    publishable:
+      # still requires content/credential scan + owner approval — promotion only narrows
+      # what is even eligible to reach that gate, per `publication_model` below.
+      - skills/catch-up/SKILL.md
+      - skills/day-start/SKILL.md
+      - skills/graphify/SKILL.md
+      - skills/graphify/.graphify_version
+      - skills/graphify/references/add-watch.md
+      - skills/graphify/references/exports.md
+      - skills/graphify/references/extraction-spec.md
+      - skills/graphify/references/github-and-merge.md
+      - skills/graphify/references/hooks.md
+      - skills/graphify/references/query.md
+      - skills/graphify/references/transcribe.md
+      - skills/graphify/references/update.md
+      - skills/project-init/SKILL.md
+      - skills/project-register/SKILL.md
+      - skills/research/SKILL.md
+      - skills/session-end/SKILL.md
+      - skills/session-handoff/SKILL.md
+      - skills/workspace-health/SKILL.md
+      - agents/README.md
+
 # --- publication model -----------------------------------------------------------------
 publication_model: >
   candidate path -> path classification (this policy, default-deny) -> [if publishable]
@@ -79,7 +155,7 @@ default: deny   # an unrecognized root, or any path not resolving under a known 
 # --- relationship to existing mechanisms (KEEP / ADAPT / SUPERSEDE LATER) --------------
 # Nothing below is deleted or weakened by this policy. The old two-root guarantees stay
 # fully in force for as long as ~/.ai-os and the public repo both still hold real content
-# (transition period — all three paths coexist: ~/.ai-os, ~/Documents/amir/ai-os, ~/atlas).
+# (transition period — all three paths coexist: ~/.ai-os, ~/Documents/amir/atlas-engine, ~/atlas).
 relationship:
   workspace-privacy.yaml:            { verdict: KEEP,             why: "still the live, enforced boundary for the two current physical roots; not superseded until they stop existing" }
   privacy-classification.yaml:       { verdict: KEEP,             why: "credential/personal CONTENT classification is orthogonal to path classification — both layers stay" }

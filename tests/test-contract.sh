@@ -6,6 +6,12 @@
 # to prove the boundary holds, not to cross it.
 set -uo pipefail
 
+# T-033: the developer shell now exports ATLAS_REPO (and may export AI_OS_REPO) for
+# real use. Fixture-isolation tests below set these per-invocation to prove specific
+# resolution paths — an ambient value would silently win before the test's own override
+# is even reached, so both must start unset here regardless of the calling shell.
+unset ATLAS_REPO AI_OS_REPO
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI="$REPO/cli"; export CLI
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/ai-os-test.XXXXXX")"
@@ -97,7 +103,7 @@ out=$("$CLI/ai-os-doctor" 2>&1); rc=$?
 t "doctor: an active component in the legacy layer is still a failure"
 LEG="$TMP/legacy-live"; mkdir -p "$LEG/bin"
 out=$(AI_OS_RUNTIME="$LEG" "$CLI/ai-os-doctor" 2>&1); rc=$?
-echo "$out" | grep -q "legacy layer still holds active AI OS components"
+echo "$out" | grep -q "legacy layer still holds active Atlas components"
 chk "bin/ left in the legacy layer is reported" $?
 echo "$out" | grep -q "second source of truth"
 chk "  ...with the reason, not just the fact" $?
@@ -350,6 +356,22 @@ echo "$out" | grep -q "INSIDE \$AI_OS_HOME";          chk "provides: path inside
 [ "$rc" -gt 0 ];                                     chk "  ...and it is a hard failure" $?
 rm -rf "$F2/badpath"
 
+# AIOS-016: the same hard rule must hold under $ATLAS_HOME, the current canonical root —
+# $AI_OS_HOME is a legacy compatibility alias (README.md), not the only private workspace.
+mk badatlas <<EOF
+adapter: badatlas
+name: Bad Atlas
+contract: 1
+client: { detect: [/nonexistent], consumer_verified: false }
+provides:
+  rules: { path: $TMP/a16-atlas-check/user/stolen.md, format: markdown, verified: true }
+writes: [rules]
+EOF
+out=$(ATLAS_HOME="$TMP/a16-atlas-check" AI_OS_ADAPTERS="$F2" "$CLI/ai-os-adapter" doctor 2>&1); rc=$?
+echo "$out" | grep -q "INSIDE \$ATLAS_HOME";          chk "provides: path inside \$ATLAS_HOME is ALSO rejected" $?
+[ "$rc" -gt 0 ];                                     chk "  ...and it is a hard failure" $?
+rm -rf "$F2/badatlas"
+
 # verified:false must never be written.
 mk unverified <<'EOF'
 adapter: unverified
@@ -401,6 +423,123 @@ out=$(AI_OS_ADAPTERS="$F2" "$CLI/ai-os-adapter" doctor 2>&1); rc=$?
 [ "$rc" -gt 0 ];                                     chk "a malformed manifest fails" $?
 [ "$before" = "$(shasum "$F2/broken/adapter.yaml")" ]; chk "  ...and nothing was modified" $?
 rm -rf "$F2/broken"
+
+# =====================================================================================
+t "adapter contract: AIOS-016 \`adapter init\` — detection"
+# Every invocation below pins its own ATLAS_HOME/AI_OS_ADAPTERS to a throwaway path under
+# $TMP so nothing here ever reads or writes the real ~/atlas or the real adapters/ tree.
+A16_EMPTY="$TMP/a16-empty-adapters"; mkdir -p "$A16_EMPTY"
+A16_HOME="$TMP/a16-home"
+
+out=$(AI_OS_ACTIVE_ADAPTER=ignored ATLAS_HOME="$A16_HOME" AI_OS_ADAPTERS="$A16_EMPTY" \
+      "$CLI/ai-os-adapter" init scratchtool --skip 2>&1)
+echo "$out" | grep -q "scratchtool (explicit)"
+chk "explicit id on the command line wins over \$AI_OS_ACTIVE_ADAPTER" $?
+
+out=$(AI_OS_ACTIVE_ADAPTER=scratchtool ATLAS_HOME="$A16_HOME" AI_OS_ADAPTERS="$A16_EMPTY" \
+      "$CLI/ai-os-adapter" init --skip 2>&1)
+echo "$out" | grep -q "scratchtool (detected)"
+chk "\$AI_OS_ACTIVE_ADAPTER is read when no explicit id, confidence=detected" $?
+
+out=$(AI_OS_ACTIVE_ADAPTER= ATLAS_HOME="$A16_HOME" AI_OS_ADAPTERS="$A16_EMPTY" \
+      "$CLI/ai-os-adapter" init 2>&1); rc=$?
+echo "$out" | grep -q "unknown"
+chk "no id and no env var -> unknown, refuses rather than guessing" $?
+[ "$rc" -eq 2 ];                                     chk "  ...exit code 2" $?
+[ ! -d "$A16_HOME" ];                                chk "  ...detection alone never writes anything" $?
+
+out=$(ATLAS_HOME="$A16_HOME" AI_OS_ADAPTERS="$A16_EMPTY" \
+      "$CLI/ai-os-adapter" init '../../evil' --approve 2>&1); rc=$?
+echo "$out" | grep -q "invalid tool id"
+chk "a path-traversal / garbage tool id is refused, not sanitized-and-used" $?
+[ "$rc" -eq 2 ];                                     chk "  ...exit code 2" $?
+[ ! -d "$A16_HOME" ];                                chk "  ...and nothing escaped the draft root" $?
+
+out=$(ATLAS_HOME="$A16_HOME" "$CLI/ai-os-adapter" init claude-code 2>&1); rc=$?
+echo "$out" | grep -q "official adapter present"
+chk "a real, already-official adapter (claude-code) validates clean, no draft" $?
+[ "$rc" -eq 0 ];                                     chk "  ...exit 0" $?
+[ ! -d "$A16_HOME/runtime/draft-adapters/claude-code" ]
+chk "  ...no draft dir was created for an official adapter" $?
+
+t "adapter contract: AIOS-016 \`adapter init\` — draft scaffold lifecycle"
+A16_HOME2="$TMP/a16-home2"
+adapters_before=$(find "$REPO/adapters" -type f -exec shasum {} \; | sort | shasum)
+
+out=$(ATLAS_HOME="$A16_HOME2" AI_OS_ADAPTERS="$A16_EMPTY" \
+      "$CLI/ai-os-adapter" init scratchtool --skip 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "skip exits 0" $?
+[ ! -d "$A16_HOME2/runtime/draft-adapters/scratchtool" ]
+chk "  ...and creates nothing" $?
+
+out=$(ATLAS_HOME="$A16_HOME2" AI_OS_ADAPTERS="$A16_EMPTY" \
+      "$CLI/ai-os-adapter" init scratchtool 2>&1); rc=$?
+echo "$out" | grep -q "Approve"
+chk "missing required input (no --approve/--skip) prints the owner prompt" $?
+[ "$rc" -eq 3 ];                                     chk "  ...refuses (non-zero exit), no silent action" $?
+[ ! -d "$A16_HOME2/runtime/draft-adapters/scratchtool" ]
+chk "  ...and still nothing was written" $?
+
+out=$(ATLAS_HOME="$A16_HOME2" AI_OS_ADAPTERS="$A16_EMPTY" \
+      "$CLI/ai-os-adapter" init scratchtool --approve 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "approve exits 0" $?
+A16_DD="$A16_HOME2/runtime/draft-adapters/scratchtool"
+[ -f "$A16_DD/adapter.yaml" ] && [ -f "$A16_DD/integration.md" ] && [ -f "$A16_DD/metadata.json" ]
+chk "approve creates exactly the 3 draft files" $?
+A16_M="$A16_DD/adapter.yaml"
+grep -q '^adapter: scratchtool$' "$A16_M"
+chk "  manifest: adapter: equals the directory name" $?
+grep -q '^status: draft$' "$A16_M";                  chk "  manifest: status: draft" $?
+grep -q '^contract: 1$' "$A16_M";                    chk "  manifest: contract: 1" $?
+grep -q '^client:$' "$A16_M" && grep -q 'consumer_verified: false' "$A16_M"
+chk "  manifest: client block present, consumer_verified false (never true on a draft)" $?
+grep -q '^provides: {}$' "$A16_M" && grep -q '^requires: \[\]$' "$A16_M" \
+  && grep -q '^enforces: \[\]$' "$A16_M"
+chk "  manifest: provides/requires/enforces empty (the AI must not invent capabilities)" $?
+grep -q '^draft:$' "$A16_M" && grep -q 'promotion_state: awaiting-review' "$A16_M"
+chk "  manifest: draft block present with promotion_state" $?
+
+before=$(find "$A16_HOME2" -type f -exec shasum {} \; | sort | shasum)
+out=$(ATLAS_HOME="$A16_HOME2" AI_OS_ADAPTERS="$A16_EMPTY" \
+      "$CLI/ai-os-adapter" init scratchtool 2>&1); rc=$?
+after=$(find "$A16_HOME2" -type f -exec shasum {} \; | sort | shasum)
+[ "$rc" -eq 0 ];                                     chk "re-running on an existing draft exits 0" $?
+echo "$out" | grep -q "draft already exists"
+chk "  ...and reports the draft already exists" $?
+[ "$before" = "$after" ];                            chk "  ...byte-identical, no new files (idempotent)" $?
+
+adapters_after=$(find "$REPO/adapters" -type f -exec shasum {} \; | sort | shasum)
+[ "$adapters_before" = "$adapters_after" ]
+chk "no write ever landed in the real adapters/ tree" $?
+
+# Simulate promotion (an owner hand-commit): the same id now resolves as an OFFICIAL
+# adapter. Re-running must validate that one and leave the stale draft alone — never
+# resurrect or recreate it.
+A16_PROMOTED="$TMP/a16-promoted-adapters"; mkdir -p "$A16_PROMOTED/scratchtool"
+cat > "$A16_PROMOTED/scratchtool/adapter.yaml" <<'EOF'
+adapter: scratchtool
+name: Scratchtool
+contract: 1
+client: { detect: [/nonexistent], consumer_verified: false }
+provides: {}
+requires: []
+writes: []
+EOF
+draft_before=$(shasum "$A16_M")
+out=$(ATLAS_HOME="$A16_HOME2" AI_OS_ADAPTERS="$A16_PROMOTED" \
+      "$CLI/ai-os-adapter" init scratchtool 2>&1); rc=$?
+[ "$rc" -eq 0 ];                                     chk "re-running after promotion exits 0" $?
+echo "$out" | grep -q "official adapter present"
+chk "  ...validates the OFFICIAL adapter, not the draft" $?
+draft_after=$(shasum "$A16_M")
+[ "$draft_before" = "$draft_after" ]
+chk "  ...the stale draft is left untouched, not resurrected" $?
+
+top=$(find "$A16_HOME2" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort | tr '\n' ' ')
+[ "$top" = "runtime " ]
+chk "only runtime/ exists under \$ATLAS_HOME — no config/policy path was ever written" $?
+
+rm -rf "$A16_EMPTY" "$A16_HOME" "$A16_HOME2" "$A16_PROMOTED"
 
 t "registry resolution is pinned (the old hardcoded table, as a regression guard)"
 # ai-sync no longer HAS a client table, so comparing against it would be tautological.
@@ -884,12 +1023,20 @@ resolves "$R5" "$out";                          chk "a ~-prefixed ai_os_repo exp
 out=$(AI_OS_REPO="$R1" AI_OS_HOME="$TMP/ws3" "$HK" cli/probe 2>&1)
 resolves "$R1" "$out";                          chk "AI_OS_REPO overrides the configured value" $?
 
+# 8. ATLAS_REPO (canonical, T-032) also overrides the configured value
+out=$(ATLAS_REPO="$R1" AI_OS_HOME="$TMP/ws3" "$HK" cli/probe 2>&1)
+resolves "$R1" "$out";                          chk "ATLAS_REPO overrides the configured value" $?
+
+# 9. ATLAS_REPO wins over AI_OS_REPO when both are set (canonical beats deprecated)
+out=$(ATLAS_REPO="$R1" AI_OS_REPO="$FH/decoy-repo" AI_OS_HOME="$TMP/ws3" "$HK" cli/probe 2>&1)
+resolves "$R1" "$out";                          chk "ATLAS_REPO wins over AI_OS_REPO when both are set" $?
+
 t "hook launcher: a broken installation fails loudly, never silently"
 # 6. empty value
 mk_ws "$TMP/ws6" ""
 out=$(AI_OS_HOME="$TMP/ws6" "$HK" cli/probe 2>&1); rc=$?
 [ "$rc" -ne 0 ];                                chk "empty ai_os_repo exits non-zero" $?
-echo "$out" | grep -q "ai-os init";             chk "   ...and says how to fix it" $?
+echo "$out" | grep -q "atlas init";             chk "   ...and says how to fix it" $?
 out=$(AI_OS_HOME="$TMP/nonexistent-ws" "$HK" cli/probe 2>&1); rc=$?
 [ "$rc" -ne 0 ];                                chk "a missing workspace config exits non-zero" $?
 mk_ws "$TMP/ws8" "$TMP/no-such-repo"
@@ -1917,16 +2064,19 @@ fi
 
 # =====================================================================================
 t "run: dispatcher and schema exist and are wired"
-grep -q 'ai-os run' "$CLI/ai-os";          chk "ai-os run is a documented subcommand" $?
-grep -q '|run|' "$CLI/ai-os";              chk "  ...and dispatches to ai-os-run" $?
+# T-031: atlas is the canonical entry point that carries the documentation banner; ai-os is
+# now a thin compatibility alias (single exec line) with no banner text of its own.
+grep -q 'atlas run' "$CLI/atlas";          chk "atlas run is a documented subcommand" $?
+grep -q '|run|' "$CLI/atlas";              chk "  ...and dispatches to ai-os-run" $?
 [ -f "$REPO/schemas/run.schema.md" ];      chk "schemas/run.schema.md exists" $?
 grep -q 'not an agent' "$REPO/schemas/run.schema.md"
 chk "  ...and states the boundary: not an agent/orchestrator/planner" $?
 
 # =====================================================================================
 t "handoff: dispatcher exposes ai-os handoff"
-grep -q 'ai-os handoff' "$CLI/ai-os";      chk "ai-os handoff is a documented subcommand" $?
-grep -qE '\|handoff[|)]' "$CLI/ai-os";          chk "  ...and dispatches to ai-os-handoff" $?
+# T-031: same rationale as the run check above — canonical banner text now lives in atlas.
+grep -q 'atlas handoff' "$CLI/atlas";      chk "atlas handoff is a documented subcommand" $?
+grep -qE '\|handoff[|)]' "$CLI/atlas";          chk "  ...and dispatches to ai-os-handoff" $?
 [ -x "$CLI/ai-os-handoff" ];               chk "cli/ai-os-handoff exists and is executable" $?
 
 # =====================================================================================
@@ -2714,7 +2864,7 @@ chk "the only statuses receive can write are returned and reviewed" $?
 grep -q 'def cmd_receive' "$CLI/ai-os-handoff"; chk "receive is implemented, not reserved" $?
 grep -Eq 'RESERVED|cmd_reserved' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "  ...and the reserved-command scaffolding is gone" $?
-grep -q 'handoff .*receive' "$CLI/ai-os"; chk "receive is a documented subcommand" $?
+grep -q 'handoff .*receive' "$CLI/atlas"; chk "receive is a documented subcommand" $?
 
 # =====================================================================================
 t "the plugin -> capability rename keeps its compatibility window open"

@@ -1,6 +1,6 @@
 # Governance
 
-The rules AI OS holds itself to: what must be true, declared once and client-agnostically.
+The rules Atlas holds itself to: what must be true, declared once and client-agnostically.
 An adapter enforces a rule in whatever mechanism its client actually supports (a hook, a
 config flag, a wrapper script). The policy file never assumes a specific enforcement
 mechanism; the adapter never redefines the policy, only implements it.

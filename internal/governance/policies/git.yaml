@@ -1,4 +1,4 @@
-# AI OS policy — git operations.
+# Atlas policy — git operations.
 # A policy states WHAT must be true, client-agnostically. Each adapter enforces it its
 # own way (see ../adapters/<client>/). This file has no Claude-specific assumptions.
 

@@ -14,7 +14,10 @@
 
 set -euo pipefail
 
-AI_OS_HOME="${AI_OS_HOME:-$HOME/.ai-os}"
+# T-046: the legacy ~/.ai-os default would recreate a just-deleted root if this ever runs
+# again with no override set. Default to $ATLAS_HOME (~/atlas) instead; an explicit
+# AI_OS_HOME still wins, same precedence every other tool in this repo uses.
+AI_OS_HOME="${AI_OS_HOME:-${ATLAS_HOME:-$HOME/atlas}}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(dirname "$SELF_DIR")"
 TEMPLATES="$REPO/templates"

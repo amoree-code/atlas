@@ -1,4 +1,4 @@
-# AI OS policy — private workspace boundary.
+# Atlas policy — private workspace boundary.
 # Client-agnostic. Each adapter enforces it in whatever mechanism it has.
 
 policy: workspace-privacy

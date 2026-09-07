@@ -1,4 +1,4 @@
-"""Playwright provider. The only file in AI-OS permitted to know a browser engine.
+"""Playwright provider. The only file in Atlas permitted to know a browser engine.
 
 The session survives between CLI invocations: the browser is launched as its own process
 with a debugging endpoint, and later operations attach to that endpoint. Without this a

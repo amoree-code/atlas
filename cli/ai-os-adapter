@@ -3,10 +3,12 @@
 
   ai-os adapter list             what is declared, what is installed, what gets written
   ai-os adapter doctor           validate every manifest against schemas/adapter.schema.md
+  ai-os adapter init [tool]      AIOS-016: detect the active AI CLI, approval-gated local
+                                  draft scaffold only — never writes adapters/<id>/
   ai-os adapter enable  <id>     not wired yet — see below
   ai-os adapter disable <id>     not wired yet — see below
 
-An ADAPTER connects one AI client to AI-OS. A CAPABILITY is what AI-OS can do and lives in
+An ADAPTER connects one AI client to Atlas. A CAPABILITY is what Atlas can do and lives in
 capabilities/ — see cli/ai-os-capability. Until 2026-08-31 those two meanings were
 inverted; this file was named cli/ai-os-plugin and read plugins/. Task AIOS-005 resolved
 the inversion, and the capability surface was renamed plugin -> capability on 2026-09-03.
@@ -24,13 +26,20 @@ Strict about meaning, not about layout: a flow collection is read whether it sit
 key's line or on the line(s) below it, because a code formatter moves it and the document
 is unchanged either way. A collection that never closes is still an error.
 """
-import os, re, sys
+import json, os, re, sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 # Overridable so the test suite can point at fixtures instead of the real registry.
 ADAPTERS = Path(os.environ.get("AI_OS_ADAPTERS", REPO / "adapters"))
 AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", Path.home() / ".ai-os"))
+# AIOS-016: the one-project Atlas root, same default every T-016+ cutover tool uses
+# (`${ATLAS_HOME:-$HOME/atlas}` in cli/atlas; `Path(os.environ.get("ATLAS_HOME", ...))`
+# in context/ai-os-usage). Deliberately NOT routed through the legacy dual-layout
+# aios_paths resolver: that resolver answers "where does OLD private data live", a
+# question that predates Atlas and does not apply to a brand-new runtime subtree.
+ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
 CORE_CONTRACT_RANGE = (1, 1)          # this core supports contract 1..1
 CORE_RESOURCES = {"rules.render", "skills.list", "workspace.memory.path",
                   "workspace.knowledge.path", "policies.list"}
@@ -274,16 +283,25 @@ def validate(pid, m):
                 err.append(f"provides.{cap}: missing required field {field!r}")
         p = spec.get("path")
         if p:
-            # THE HARD RULE: never inside the private workspace.
+            # THE HARD RULE: never inside the private workspace. AI_OS_HOME is the legacy
+            # compatibility alias (see README.md's "compatibility fallback" note); ATLAS_HOME
+            # is the current canonical root. Both are private data, so both are enforced —
+            # checking only one would let a manifest declare a path under whichever of the
+            # two nobody happened to be checking.
             expanded = Path(os.path.expanduser(str(p)))
             try:
                 resolved = expanded if expanded.is_absolute() else (Path.home() / str(p))
-                inside = str(resolved).startswith(str(AI_OS_HOME) + os.sep) or \
-                         str(resolved) == str(AI_OS_HOME)
+                inside_ai_os_home = str(resolved).startswith(str(AI_OS_HOME) + os.sep) or \
+                                    str(resolved) == str(AI_OS_HOME)
+                inside_atlas_home = str(resolved).startswith(str(ATLAS_HOME) + os.sep) or \
+                                    str(resolved) == str(ATLAS_HOME)
             except Exception:
-                inside = False
-            if inside:
+                inside_ai_os_home = inside_atlas_home = False
+            if inside_ai_os_home:
                 err.append(f"provides.{cap}.path resolves INSIDE $AI_OS_HOME ({p}) — "
+                           f"an adapter may never declare private workspace paths")
+            elif inside_atlas_home:
+                err.append(f"provides.{cap}.path resolves INSIDE $ATLAS_HOME ({p}) — "
                            f"an adapter may never declare private workspace paths")
             elif not CLIENT_DOMAIN.match(str(p).replace(str(Path.home()), "~").lstrip("~/")
                                          .join(["", ""]) or str(p)):
@@ -363,6 +381,164 @@ def load_all():
     return out
 
 
+# ------------------------------------------------------------------ AIOS-016: adapter init
+#
+# Onboarding a sixth/seventh/tenth AI CLI. Detection is the only automatic step; creating
+# anything requires an explicit owner Approve. A draft is never mistaken for an official
+# adapter because it never lives under ADAPTERS (the public `adapters/` tree) — it lives
+# under the private runtime root instead, where doctor/list never look.
+DRAFT_ROOT = ATLAS_HOME / "runtime" / "draft-adapters"
+# A tool id becomes a single path component under DRAFT_ROOT. Without this, a garbage id
+# containing "/" or ".." (e.g. from a misconfigured $AI_OS_ACTIVE_ADAPTER) would escape
+# DRAFT_ROOT entirely — the exact write-anywhere hole the "no write outside the draft
+# directory" rule exists to prevent. Same shape as the existing adapter ids (claude-code,
+# opencode, …): letters, digits, `-` and `_`, first character alphanumeric.
+_SAFE_TOOL_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+
+
+def _draft_dir(tool):
+    return DRAFT_ROOT / tool
+
+
+def detect_tool(explicit):
+    """(tool, confidence) — confidence is explicit | detected | unknown, never guessed.
+
+    Parent-process and binary-name detection were considered and rejected (unreliable on
+    macOS, non-portable) — see AIOS-016/task.md § Detection. Only two sources are trusted:
+    the id passed on the command line, and $AI_OS_ACTIVE_ADAPTER set by the calling client.
+    """
+    if explicit:
+        return explicit, "explicit"
+    env = os.environ.get("AI_OS_ACTIVE_ADAPTER", "").strip()
+    if env:
+        return env, "detected"
+    return None, "unknown"
+
+
+def _onboarding_text():
+    for home in (ATLAS_HOME, AI_OS_HOME):
+        p = home / "projects" / "ai-os" / "tickets" / "AIOS-016" / "onboarding.md"
+        if p.is_file():
+            return p.read_text()
+    return ("# onboarding.md not found on this machine — see schemas/adapter.schema.md "
+            "and projects/ai-os/tickets/AIOS-016/ for the AI CLI onboarding contract.\n")
+
+
+def _validate_official(tool):
+    """Errors for an already-official adapter, or None if load_all() found no entry."""
+    for pid, m, e in load_all():
+        if pid != tool:
+            continue
+        if e:
+            return [e]
+        errs, _ = validate(tool, m)
+        return errs
+    return None
+
+
+def cmd_init(args):
+    approve = "--approve" in args
+    skip = "--skip" in args
+    positional = [a for a in args if not a.startswith("--")]
+    explicit = positional[0] if positional else None
+
+    tool, confidence = detect_tool(explicit)
+    if tool is None:
+        rows = load_all()
+        known = ", ".join(pid for pid, _, _ in rows) or "(none)"
+        print(f"\n  {Y}unknown{X} active AI CLI — no id on the command line and "
+              f"$AI_OS_ACTIVE_ADAPTER is not set.\n\n"
+              f"  known adapters: {known}\n"
+              f"  run: ai-os adapter init <id>\n")
+        return 2
+
+    if not _SAFE_TOOL_ID.match(tool):
+        print(f"\n  {R}invalid tool id{X} {tool!r} — ids must match "
+              f"[a-zA-Z0-9][a-zA-Z0-9_-]* (letters, digits, '-' and '_' only, no path\n"
+              f"  separators). Refusing rather than guessing what you meant.\n")
+        return 2
+
+    # Case 1: already an official adapter — validate, never touch the draft area.
+    official_errs = _validate_official(tool)
+    if official_errs is not None:
+        if official_errs:
+            print(f"\n  {R}FAIL{X}  official adapter {tool} has {len(official_errs)} "
+                  f"error(s) — see `ai-os adapter doctor`\n")
+            return 1
+        print(f"\n  detected: {tool} ({confidence})\n"
+              f"  official adapter present — validated, nothing to do.\n")
+        return 0
+
+    # Case 2: a draft already exists — reuse, re-validate, never overwrite.
+    draft_dir = _draft_dir(tool)
+    draft_manifest = draft_dir / "adapter.yaml"
+    if draft_manifest.exists():
+        try:
+            parse(draft_manifest.read_text(), f"draft-adapters/{tool}")
+        except ManifestError as e:
+            print(f"\n  {R}FAIL{X}  existing draft {tool} has an unreadable manifest: "
+                  f"{e}\n")
+            return 1
+        print(f"\n  detected: {tool} ({confidence})\n"
+              f"  draft already exists at {draft_dir} — reusing, no change.\n")
+        return 0
+
+    # Case 3: nothing yet. Skip creates nothing. Approve creates the draft scaffold only
+    # after an explicit answer — no interactive TTY read, so the AI CLI mediating the
+    # owner's Approve/Skip answer always passes it back as one of these two flags.
+    if skip:
+        print(f"\n  detected: {tool} ({confidence})\n"
+              f"  no adapter, no draft — skipped. Nothing was created.\n"
+              f"  Re-run `ai-os adapter init {tool} --approve` at any time.\n")
+        return 0
+
+    if not approve:
+        print(f"\n  AI-OS detected: {tool} ({confidence})\n\n"
+              f"  No adapter is currently registered for this AI CLI.\n\n"
+              f"  Create a local integration scaffold?\n\n"
+              f"    1. Approve  -> ai-os adapter init {tool} --approve\n"
+              f"    2. Skip     -> ai-os adapter init {tool} --skip\n")
+        return 3
+
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    manifest = (
+        f"adapter: {tool}\n"
+        f"name: {tool.replace('-', ' ').title()}\n"
+        f"contract: 1\n"
+        f"status: draft\n"
+        f"\n"
+        f"client:\n"
+        f"  detect: []\n"
+        f"  version_cmd: \"\"\n"
+        f"  consumer_verified: false\n"
+        f"\n"
+        f"provides: {{}}\n"
+        f"requires: []\n"
+        f"writes: []\n"
+        f"enforces: []\n"
+        f"\n"
+        f"draft:\n"
+        f"  created_at: {now}\n"
+        f"  created_by: ai-os adapter init\n"
+        f"  source_detected: {confidence}\n"
+        f"  promotion_state: awaiting-review\n"
+    )
+    draft_manifest.write_text(manifest)
+    (draft_dir / "integration.md").write_text(_onboarding_text())
+    (draft_dir / "metadata.json").write_text(json.dumps({
+        "created_at": now, "created_by": "ai-os adapter init",
+        "source_detected": confidence, "tool": tool,
+    }, indent=2) + "\n")
+    print(f"\n  detected: {tool} ({confidence})\n"
+          f"  approved — draft created at {draft_dir}\n\n"
+          f"  Fill in client.detect / provides / requires / enforces per "
+          f"schemas/adapter.schema.md, then run `ai-os adapter init {tool}` again to\n"
+          f"  validate. Promotion to adapters/{tool}/ is a hand commit by the owner — "
+          f"this command never writes there.\n")
+    return 0
+
+
 # ------------------------------------------------------------------ commands
 def cmd_list(_):
     rows = load_all()
@@ -419,7 +595,7 @@ def cmd_not_wired(args):
     return 2
 
 
-CMDS = {"list": cmd_list, "doctor": cmd_doctor}
+CMDS = {"list": cmd_list, "doctor": cmd_doctor, "init": cmd_init}
 if __name__ == "__main__":
     a = sys.argv[1:] or ["list"]
     if a[0] in ("enable", "disable"):

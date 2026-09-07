@@ -3,7 +3,7 @@
 
 Claude Code's native memory tool stores files in ~/.claude/projects/<cwd-slug>/memory/.
 That directory is keyed to the working directory, so memory written in one project is
-invisible from another. AI-OS resolves that by pointing every one of those directories at
+invisible from another. Atlas resolves that by pointing every one of those directories at
 the single canonical store.
 
 Two facts live here and nowhere else, because both are Claude Code's and not memory's:

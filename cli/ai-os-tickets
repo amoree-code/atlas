@@ -2,12 +2,72 @@
 """ai-os-tickets — the ticket records are the state; every view of them is derived.
 
   ai-os tickets list [--project P] [--state S] [--json]   the active set, from the records
+  ai-os tickets next [--project P] [--goal G] [--limit N] [--why] [--json]
+                                                           deterministic recommendation:
+                                                           Do now / Owner decisions /
+                                                           Blocked / Paused / Quick wins /
+                                                           Future
+  ai-os tickets new --title T --project P [metadata flags] [--next-action "…"] [--dry-run]
+                                                           create a ticket — refused
+                                                           outright if intent metadata is
+                                                           incomplete (see below)
+  ai-os tickets promote <ID> --relation {required|optional|blocks_parent|parent}
+                             [metadata flags] [--dry-run]
+                                                           move a future_candidate ticket
+                                                           into scheduled work, supplying
+                                                           only what is given explicitly
   ai-os tickets index [--project P] [--write]             regenerate a project's board table
   ai-os tickets doctor [--project P]                      structural checks over the records
   ai-os tickets log <ID> "<text>"                         one dated entry, nothing else
   ai-os tickets checkpoint <ID> --note "…" [--next "…"]   durable state at a boundary
   ai-os tickets archive [--project P] [--apply]           move done/cancelled tickets whole
                                                            into tickets/archive/{AIOS,Atlas}/
+  ai-os tickets archive --auto [--project P] [--dry-run]  reconciliation: completion-gated,
+                                                           idempotent (T-044)
+  ai-os tickets archive --list [--project P]              read-only: list archived tickets
+  ai-os tickets show <ID>                                 read-only: full record, live or
+                                                           archived, clearly labeled
+  ai-os tickets search <query>                            read-only: substring search over
+                                                           id/title/goal/body, both sets
+
+## Smart Automatic Ticket Archive System (T-044)
+
+`checkpoint --state done` or `--state cancelled` runs the completion gate immediately after
+writing the new state, and archives the ticket right then if it passes — no separate
+command needed for the common case. `archive --auto` is the reconciliation path for
+anything marked done/cancelled by an older tool or a manual edit: same gate, same result,
+safe to re-run. Neither ever touches a ticket that fails the gate; the exact reason is
+printed and the record is left byte-for-byte alone. `show`/`search`/`archive --list` never
+trigger archiving — read-only commands never mutate anything. Priority never decides
+eligibility, only where a result lands in the generated archive index (Completed/Cancelled
+x Level 1-5/Unspecified, plus a separate Legacy AIOS section that predates the priority
+system). There is no `unarchive`/restore command (deferred owner decision, same as T-024's).
+
+## Smart Dynamic Ticket System (T-041)
+
+`next` never invents a priority, a goal match, or a relationship — every score component
+and every line of `--why` reads a field the ticket itself declared (`priority`, `relation`/
+`parent`, `goal`, `unblocks`, `due`, `blocked_by`, `effort`/`risk`). A missing field is
+reported (lower `confidence`, a named gap in `reasons`) and ranked cautiously; it is never
+guessed to make the output look complete. `aios_tickets.classify_and_rank` is the one
+implementation of the bucket and scoring rules — this command only selects, limits and
+renders what that function returns, and `ai-os context`'s recommended-next-actions view
+calls the same function, so the two can never disagree about what is recommended.
+
+## Ticket lifecycle: `new` and `promote` (T-043)
+
+The entry gate for the system above: `new` refuses to write a ticket (nothing touched)
+whose intent metadata is incomplete (`priority`/`goal`/`requirement` — the same three
+fields `next`'s `confidence` already downgrades for), and `promote` refuses to move a
+`future_candidate` ticket into scheduled work under the same rule. Neither command ever
+invents a value — every field either comes from an explicit flag or is left absent and
+reported as an error; a ticket that would need a guessed value to pass simply is not
+created or promoted. Both call `aios_tickets.lifecycle_issues`, the one shared rule set
+`doctor` already checks after the fact — so nothing accepted here can later surprise
+`doctor`, and nothing `doctor` flags today could have been created through this gate. A
+`future_candidate` ticket is the one deliberate exemption from the three required fields
+(a parked idea worth tracking as a ticket, not yet a commitment) — `promote` is the only
+path that changes that relation, and it always re-imposes the full requirement.
 
 ## Archiving (T-024)
 
@@ -66,7 +126,11 @@ from aios_tickets import (STATES, LIVE, REQUIRED, CLASSES, SCOPES, BEGIN, END,
                          SOFT_NEXT_ACTION_CHARS, SOFT_LOG_ENTRIES, SOFT_TASK_BYTES,
                          ARCHIVE_DIRNAME, parse_frontmatter, section, first_line, load,
                          discover, parse_ticket_id, id_sort_key, required_fields_for,
-                         atlas_metadata_issues)
+                         atlas_metadata_issues, RELATIONS, PRIORITIES, BLOCKED_BY, EFFORTS,
+                         RISKS, CONFIDENCES, BOOLEANS, DATE_RE, CANDIDATE_STATES,
+                         classify_and_rank, render_recommendation, lifecycle_issues,
+                         next_ticket_id, INTENT_EXEMPT_RELATION, per_ticket_errors,
+                         archive_completion_gate)
 
 # T-024: what makes a ticket archivable, and where its generation's history lives.
 # Eligibility is state alone — never age, never id — and every id outside the two known
@@ -107,24 +171,123 @@ def bump_updated(text, day):
     return re.sub(r"^updated: .*$", f"updated: {day}", text, count=1, flags=re.M)
 
 
+def atlas_runtime_dir():
+    """${ATLAS_HOME:-~/atlas}/runtime — the same resolution `ai-os-observe` already uses
+    for its own writes (T-015), deliberately independent of the `projects` path resolver.
+
+    Why not derive this from `projects_root` instead (tying the pointer to wherever THIS
+    invocation's tickets actually live)? Tried first, and wrong: `ai-os-context` (which
+    reads this pointer back) imports `aios_paths` from `~/atlas/core/cli/`, and that
+    directory's own sibling `ai-os-paths` executable is a stale, pre-T-030 copy — verified
+    directly (`~/atlas/core/cli/ai-os-paths env` reports `AI_OS_PATH_PROJECTS=~/.ai-os/
+    projects`; the canonical copy here in atlas-engine reports `~/atlas/projects` for the
+    same real workspace). Deriving the pointer from `projects_root` would have made the
+    writer and the reader agree on nothing whenever those two resolvers disagree — a
+    second, independent bug on top of the one below, found only by cross-checking both
+    sides' actual resolution rather than assuming they'd match. Anchoring to $ATLAS_HOME
+    instead sidesteps that divergence entirely: both sides read the same one environment
+    convention, unrelated to which copy of the ticket-path resolver either happens to run.
+    """
+    home = Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
+        else Path.home() / "atlas"
+    return home / "runtime"
+
+
+def oneline(s, limit=200):
+    s = " ".join((s or "").split())
+    return s[:limit] + ("…" if len(s) > limit else "")
+
+
+def credential_shaped(*texts):
+    """True if any text looks like a credential — reusing `ai-os-privacy-scan`'s own
+    CREDENTIAL patterns (loaded as a sibling module) rather than a second regex list that
+    could silently drift from the real scanner. Unavailable scanner -> no patterns -> never
+    blocks the pointer on a false negative from an import failure alone.
+    """
+    try:
+        import importlib.util
+        from importlib.machinery import SourceFileLoader
+        scan_path = Path(__file__).resolve().parent / "ai-os-privacy-scan"
+        loader = SourceFileLoader("ai_os_privacy_scan_patterns", str(scan_path))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        mod = importlib.util.module_from_spec(spec)
+        loader.exec_module(mod)
+        patterns = [rx for _, rx in mod.CREDENTIAL]
+    except Exception:
+        patterns = []
+    blob = "\n".join(t for t in texts if t)
+    return any(rx.search(blob) for rx in patterns)
+
+
+def write_handoff_pointer(ticket_id, state_line, next_line, blockers_line):
+    """Generate (or replace) the session handoff pointer after a successful checkpoint.
+
+    One file, always overwritten — never appended to, never a history. Routing only: the
+    ticket stays authoritative for everything else. Best-effort and silent when
+    $ATLAS_HOME/runtime does not exist at all (an uninitialized workspace has nothing to
+    point into yet); a real write failure past that point is reported, not swallowed, but
+    never raised — this must never turn a successful checkpoint into a failed command.
+    """
+    runtime = atlas_runtime_dir()
+    if not runtime.is_dir():
+        return
+    if credential_shaped(state_line, next_line, blockers_line):
+        print("  ! handoff pointer skipped: the checkpoint note, next action or blockers "
+              "looked credential-shaped — the ticket itself was still written normally",
+              file=sys.stderr)
+        return
+    try:
+        d = runtime / "session-handoffs"
+        d.mkdir(parents=True, exist_ok=True)
+        content = "\n".join([
+            "# Atlas session handoff pointer — generated by `ai-os tickets checkpoint`.",
+            "# Routing only. The ticket file is authoritative for objective, files",
+            "# changed, verification, risks, log and artifacts — this is not a copy of it.",
+            f"ticket: {ticket_id}",
+            f"checkpointed_at: {now_readable()}",
+            f"state: {state_line}",
+            f"next_action: {next_line}",
+            f"blockers: {blockers_line}",
+            f"read_with: ai-os context {ticket_id}",
+            "status: pending",
+            "",
+        ])
+        tmp = d / f".latest.md.tmp{os.getpid()}"
+        tmp.write_text(content)
+        os.replace(tmp, d / "latest.md")
+    except OSError as e:
+        print(f"  ! handoff pointer not written: {e}", file=sys.stderr)
+
+
 def rank(t):
     order = {s: i for i, s in enumerate(("active", "blocked", "paused", "todo",
                                          "done", "cancelled"))}
     return (order.get(t["state"], 9), id_sort_key(t["id"]))
 
 
+def ticket_role(t):
+    relation = t.get("relation") or ""
+    parent = t.get("parent") or ""
+    if relation:
+        return f"{relation} of {parent}" if parent else relation
+    if parent:
+        return f"child of {parent}"
+    return "—"
+
+
 def render_table(tickets, rel_from):
-    rows = ["| ID | State | Class | Title | Next action | Record |",
-            "|---|---|---|---|---|---|"]
+    rows = ["| ID | State | Class | Role | Title | Next action | Record |",
+            "|---|---|---|---|---|---|---|"]
     for t in sorted(tickets, key=rank):
         na = t["next_action_line"] or "—"
         if len(na) > 120:
             na = na[:117].rstrip() + "…"
         na = na.replace("|", "\\|")
         title = (t["title"] or "").replace("|", "\\|")
+        role = ticket_role(t).replace("|", "\\|")
         rel = os.path.relpath(t["path"], rel_from)
-        rows.append(f"| {t['id']} | `{t['state']}` | {t['klass'] or '—'} | {title} | "
-                    f"{na} | [`task.md`]({rel}) |")
+        rows.append(f"| {t['id']} | `{t['state']}` | {t['klass'] or '—'} | {role} | "
+                    f"{title} | {na} | [`task.md`]({rel}) |")
     return "\n".join(rows)
 
 
@@ -155,7 +318,8 @@ def cmd_list(a, tickets):
         print("no tickets match")
         return 0
     for t in sorted(sel, key=rank):
-        print(f"  {t['id']:<10} {t['state']:<8} {t['project']:<10} {t['title']}")
+        print(f"  {t['id']:<10} {t['state']:<8} {t['project']:<10} "
+              f"{ticket_role(t):<28} {t['title']}")
         if t["next_action_line"]:
             print(f"  {'':<10} -> {t['next_action_line'][:110]}")
     return 0
@@ -192,6 +356,21 @@ def cmd_index(a, tickets, projects_root):
     return rc
 
 
+def cmd_next(a, tickets):
+    """Deterministic recommendation, from `aios_tickets.classify_and_rank` — this command
+    only selects, limits and renders; it computes nothing about priority or bucket itself,
+    so it can never disagree with what `ai-os context`'s next-actions view shows for the
+    same records (see that function's own docstring for the bucket rules and why)."""
+    buckets = classify_and_rank(tickets, goal=a.goal)
+    if a.limit:
+        buckets = {k: v[:a.limit] for k, v in buckets.items()}
+    if a.json:
+        print(json.dumps(buckets, indent=2))
+        return 0
+    print(render_recommendation(buckets, why=a.why))
+    return 0
+
+
 def cmd_doctor(a, tickets, projects_root):
     errors, warnings = [], []
 
@@ -206,32 +385,46 @@ def cmd_doctor(a, tickets, projects_root):
             errors.append(f"{tid}: declared by {len(paths)} records — "
                           + ", ".join(paths))
 
+    known_ids = set(by_id.keys())
     for t in tickets:
         where = f"{t['id'] or t['path']}"
-        for field in required_fields_for(t["id"]):
-            if not t["meta"].get(field):
-                errors.append(f"{where}: missing frontmatter '{field}'")
-        if t["id"] and t["id"] != t["dir_name"]:
-            errors.append(f"{where}: id does not match its directory '{t['dir_name']}'")
-        generation = parse_ticket_id(t["id"])
-        if generation and generation[0] == "T":
-            errors.extend(atlas_metadata_issues(Path(t["path"]).read_text(), t["meta"], t["id"]))
-        if t["state"] and t["state"] not in STATES:
-            errors.append(f"{where}: state '{t['state']}' is not one of {'/'.join(STATES)}")
-        if t["klass"] and t["klass"] not in CLASSES:
-            errors.append(f"{where}: class '{t['klass']}' is not one of {'/'.join(CLASSES)}")
-        if t["expected_context"] and t["expected_context"] not in SCOPES:
-            errors.append(f"{where}: expected_context '{t['expected_context']}' "
-                          f"is not one of {'/'.join(SCOPES)}")
+        parent = t.get("parent")
+        relation = t.get("relation")
+        blocked_by = t.get("blocked_by")
+        priority = t.get("priority")
+
+        # per_ticket_errors is the one shared rule set (also used by T-044's automatic
+        # archive completion gate) — see its own docstring in aios_tickets.py.
+        errors.extend(per_ticket_errors(t, known_ids))
+
+        if relation == "future_candidate" and t["state"] in LIVE:
+            warnings.append(f"{where}: future_candidate is {t['state']} — promote it to "
+                            f"required/optional/blocks_parent once it becomes scheduled")
+
+        # A blocked ticket with no recorded reason is a metadata gap, not a structural
+        # error — the ticket is still readable and actionable once the gap is filled, so
+        # this is a warning, matching the severity of every other "should record more"
+        # check in this function.
+        if t["state"] == "blocked" and (not blocked_by or blocked_by == "none"):
+            warnings.append(f"{where}: state is 'blocked' but 'blocked_by' is not "
+                            f"recorded — the reason is invisible to anyone reading it cold")
+
+        if t["state"] in LIVE:
+            for field in ("priority", "goal", "requirement"):
+                if not t.get(field):
+                    warnings.append(f"{where}: is {t['state']} but has no '{field}' "
+                                    f"recorded — 'ai-os tickets next' will rank it "
+                                    f"cautiously and report the gap, not guess it")
+
+        if priority == "level_5" and t["state"] in LIVE:
+            warnings.append(f"{where}: priority is level_5 (future) but state is "
+                            f"'{t['state']}' — treat it as future work, not active "
+                            f"development, or correct the priority")
         present = {p.name for p in Path(t["dir"]).iterdir()
                    if p.is_file() and p.name != "task.md"}
         declared = set(t["artifacts"])
-        for missing in sorted(declared - present):
-            errors.append(f"{where}: artifacts lists '{missing}', which does not exist")
         for extra in sorted(present - declared):
             warnings.append(f"{where}: '{extra}' exists but is not in artifacts")
-        if t["state"] in LIVE and not t["next_action_line"]:
-            errors.append(f"{where}: is {t['state']} but has no Next action")
         if len(t["next_action"]) > SOFT_NEXT_ACTION_CHARS:
             warnings.append(f"{where}: Next action is {len(t['next_action'])} chars — "
                             f"a cold read pays for all of it; one action is enough")
@@ -347,6 +540,206 @@ def refresh_index(projects_root, project_dir):
     return index_path
 
 
+def set_frontmatter_field(text, key, value):
+    """Replace `key: ...` in the frontmatter block if the key is already declared,
+    otherwise insert it immediately before `checklist:` — never after: an Atlas-native
+    ticket requires `checklist` to immediately precede `checkpoint`
+    (`atlas_metadata_issues`), so a newly-added top-level field must always land above
+    that pair, never between or after them. Touches exactly one line; every other line,
+    inside or outside the frontmatter block, is left byte-identical.
+    """
+    pattern = re.compile(rf"^{re.escape(key)}:[ \t]*.*$", re.M)
+    line = f"{key}: {value}"
+    if pattern.search(text):
+        return pattern.sub(line, text, count=1)
+    return re.sub(r"^checklist:", f"{line}\nchecklist:", text, count=1, flags=re.M)
+
+
+# Frontmatter fields `promote` is allowed to change — always because the caller passed an
+# explicit flag, never a guess. `relation` is handled separately (it is the one field
+# `promote` always sets, since changing it is the entire point of the command).
+PROMOTABLE_FIELDS = ("parent", "goal", "requirement", "priority", "decision_required",
+                    "blocked_by", "effort", "risk", "confidence", "due")
+
+
+def cmd_new(a, projects_root):
+    """Create a new Atlas-native ticket — the entry gate for the Smart Dynamic Ticket
+    System (T-043). Refused outright (nothing written) when `lifecycle_issues` finds a
+    problem, so a ticket can never enter the system half-complete and be fixed up later;
+    the alternative — write it, then let `doctor` complain forever after — is exactly the
+    silent drift this command exists to prevent. Assigns the next collision-free `T-*` id
+    unless `--id` names one explicitly, and writes the exact frontmatter shape
+    `atlas_metadata_issues` already requires, so a freshly created ticket passes `doctor`
+    immediately, not eventually.
+    """
+    all_tickets = discover(projects_root)
+    by_id = {t["id"]: t for t in all_tickets if t["id"]}
+
+    if not a.project or not (projects_root / a.project).is_dir():
+        print(f"ai-os tickets new: project '{a.project}' does not exist under "
+              f"{projects_root} — this command does not create projects, only tickets "
+              f"inside one that already exists", file=sys.stderr)
+        return 1
+
+    new_id = (a.id or next_ticket_id(all_tickets)).upper()
+    parsed = parse_ticket_id(new_id)
+    if parsed is None or parsed[0] != "T":
+        print(f"ai-os tickets new: '{new_id}' is not a valid T-* id", file=sys.stderr)
+        return 1
+    if new_id in by_id:
+        print(f"ai-os tickets new: '{new_id}' already exists "
+              f"({by_id[new_id]['path']})", file=sys.stderr)
+        return 1
+
+    meta = {
+        "title": a.title, "state": a.state, "class": a.klass,
+        "relation": a.relation, "parent": a.parent, "requirement": a.requirement,
+        "goal": a.goal, "priority": a.priority,
+        "decision_required": a.decision_required or "false",
+        "blocked_by": a.blocked_by or "none",
+        "unblocks": [u.strip().upper() for u in a.unblocks.split(",") if u.strip()]
+                    if a.unblocks else [],
+        "effort": a.effort, "risk": a.risk, "confidence": a.confidence,
+        "due": a.due, "last_touched": a.last_touched,
+    }
+    errors = lifecycle_issues(meta, by_id)
+    if not (a.next_action or "").strip():
+        errors.append("--next-action is required — a ticket must not enter the system "
+                      "with no recorded next step")
+    if errors:
+        for e in errors:
+            print(f"  ✗ {e}")
+        print(f"\n  ai-os tickets new: refused — {len(errors)} problem(s), nothing "
+              f"written")
+        return 1
+
+    if a.dry_run:
+        print(f"  ok    {new_id} would be created in {a.project} — nothing written "
+              f"(--dry-run)")
+        return 0
+
+    ts = now_readable()
+    lines = ["---", "kind: ticket", "namespace: atlas.ticket", f"id: {new_id}",
+             f"title: {meta['title']}", f"state: {meta['state']}", f"project: {a.project}",
+             "", f"opened_at: {ts}", f"updated_at: {ts}", "", "references: []",
+             "artifacts: []"]
+    if meta.get("class"):
+        lines.append(f"class: {meta['class']}")
+    if meta.get("requirement"):
+        lines.append(f"requirement: {meta['requirement']}")
+    if meta.get("relation"):
+        lines.append(f"relation: {meta['relation']}")
+    if meta.get("parent"):
+        lines.append(f"parent: {meta['parent']}")
+    if meta.get("goal"):
+        lines.append(f"goal: {meta['goal']}")
+    if meta.get("priority"):
+        lines.append(f"priority: {meta['priority']}")
+    lines.append(f"decision_required: {meta['decision_required']}")
+    lines.append(f"blocked_by: {meta['blocked_by']}")
+    if meta.get("unblocks"):
+        lines.append(f"unblocks: [{', '.join(meta['unblocks'])}]")
+    if meta.get("effort"):
+        lines.append(f"effort: {meta['effort']}")
+    if meta.get("risk"):
+        lines.append(f"risk: {meta['risk']}")
+    if meta.get("confidence"):
+        lines.append(f"confidence: {meta['confidence']}")
+    if meta.get("due"):
+        lines.append(f"due: {meta['due']}")
+    if meta.get("last_touched"):
+        lines.append(f"last_touched: {meta['last_touched']}")
+    lines += ["", "checklist:", f'  - "[ ] {a.next_action}"', "",
+             "checkpoint:", "  current: opened, not yet started",
+             f"  updated_at: {ts}", "---", "",
+             "## Objective", "", (a.objective or "(not yet written)"), "",
+             "## Next action", "", a.next_action, ""]
+
+    d = projects_root / a.project / "tickets" / new_id
+    d.mkdir(parents=True)
+    (d / "task.md").write_text("\n".join(lines) + "\n")
+    print(f"  created {a.project}/tickets/{new_id}/task.md")
+
+    regenerated = refresh_index(projects_root, a.project)
+    if regenerated:
+        print(f"  {a.project}/index.md regenerated from the records")
+    return 0
+
+
+def cmd_promote(a, projects_root):
+    """Move a `future_candidate` ticket into scheduled work. The only way this command
+    changes an existing ticket's relation/priority/goal/requirement/etc. is by writing
+    exactly the values the caller passed as explicit flags — never a guess, never a
+    default invented on the ticket's behalf — and it refuses the promotion outright (no
+    file touched) if the result would still fail `lifecycle_issues`, so a ticket can never
+    be half-promoted into an invalid state.
+    """
+    all_tickets = discover(projects_root)
+    by_id = {t["id"]: t for t in all_tickets if t["id"]}
+    t = by_id.get((a.id or "").upper())
+    if t is None:
+        print(f"ai-os tickets promote: no ticket '{a.id}'", file=sys.stderr)
+        return 1
+    if t["is_archived"]:
+        print(f"ai-os tickets promote: '{t['id']}' is archived — archived records are "
+              f"read-only through this CLI", file=sys.stderr)
+        return 1
+    if t.get("relation") != INTENT_EXEMPT_RELATION:
+        print(f"ai-os tickets promote: '{t['id']}' has relation "
+              f"'{t.get('relation') or '(none)'}', not '{INTENT_EXEMPT_RELATION}' — "
+              f"nothing to promote", file=sys.stderr)
+        return 1
+    if a.relation not in ("required", "optional", "blocks_parent", "parent"):
+        print(f"ai-os tickets promote: --relation must be one of required/optional/"
+              f"blocks_parent/parent, not {a.relation!r}", file=sys.stderr)
+        return 1
+
+    other_ids = {k: v for k, v in by_id.items() if k != t["id"]}
+    merged = dict(t)
+    for field in PROMOTABLE_FIELDS:
+        value = getattr(a, field, None)
+        if value is not None:
+            merged[field] = value
+    merged["relation"] = a.relation
+    if a.unblocks is not None:
+        merged["unblocks"] = [u.strip().upper() for u in a.unblocks.split(",") if u.strip()]
+
+    errors = lifecycle_issues(merged, other_ids)
+    if errors:
+        for e in errors:
+            print(f"  ✗ {e}")
+        print(f"\n  ai-os tickets promote: refused — {len(errors)} problem(s), nothing "
+              f"changed")
+        return 1
+
+    if a.dry_run:
+        print(f"  ok    {t['id']} would be promoted to relation={a.relation} — nothing "
+              f"changed (--dry-run)")
+        return 0
+
+    path = Path(t["path"])
+    text = path.read_text()
+    text = set_frontmatter_field(text, "relation", a.relation)
+    for field in PROMOTABLE_FIELDS:
+        value = getattr(a, field, None)
+        if value is not None:
+            text = set_frontmatter_field(text, field, value)
+    if a.unblocks is not None:
+        text = set_frontmatter_field(text, "unblocks",
+                                     "[" + ", ".join(merged["unblocks"]) + "]")
+    day = a.date or datetime.date.today().isoformat()
+    text = append_log(text, day,
+                      f"promoted from {INTENT_EXEMPT_RELATION} to relation={a.relation}")
+    text = bump_updated(text, day)
+    path.write_text(text)
+    print(f"  {t['id']}: promoted -> relation={a.relation}")
+
+    regenerated = refresh_index(projects_root, t["project_dir"])
+    if regenerated:
+        print(f"  {t['project_dir']}/index.md regenerated from the records")
+    return 0
+
+
 def cmd_checkpoint(a, tickets, projects_root):
     """Persist durable state at a boundary — the one write that makes ending cheap.
 
@@ -420,43 +813,317 @@ def cmd_checkpoint(a, tickets, projects_root):
     if regenerated:
         print(f"  {t['project_dir']}/index.md regenerated from the records")
 
-    reloaded = load(path)
-    if reloaded["log_entries"] > SOFT_LOG_ENTRIES:
-        print(f"  ! {reloaded['log_entries']} entries — move the history to log.md so a "
-              f"cold read stops paying for it")
-    if reloaded["bytes"] > SOFT_TASK_BYTES:
-        print(f"  ! task.md is {reloaded['bytes']:,} bytes — a cold read pays for all "
-              f"of it")
-    print(f"  resume cold with:  ai-os context {t['id']}")
+    blockers_section = section(text, "Blockers") or ""
+    blockers_line = first_line(blockers_section)
+    if blockers_line and re.match(r"(?i)^none\b", blockers_line.strip()):
+        blockers_line = ""
+    next_line = (section(text, "Next action") or "").strip()
+    write_handoff_pointer(t["id"], oneline(a.note), oneline(next_line),
+                          oneline(blockers_line))
+
+    # T-044: the automatic completion path. Only ever triggered here — a `checkpoint` that
+    # just changed `state` to done/cancelled — never from a read-only command. A failing
+    # gate leaves the ticket exactly as `checkpoint` just wrote it; nothing below assumes
+    # the ticket is still at `path` once this returns True.
+    archived = (state_changes and a.state in ARCHIVABLE_STATES
+               and auto_archive_after_checkpoint(t["id"], projects_root))
+
+    if not archived:
+        reloaded = load(path)
+        if reloaded["log_entries"] > SOFT_LOG_ENTRIES:
+            print(f"  ! {reloaded['log_entries']} entries — move the history to log.md "
+                  f"so a cold read stops paying for it")
+        if reloaded["bytes"] > SOFT_TASK_BYTES:
+            print(f"  ! task.md is {reloaded['bytes']:,} bytes — a cold read pays for "
+                  f"all of it")
+        print(f"  resume cold with:  ai-os context {t['id']}")
     return 0
 
 
-def archive_index_block(archived, index_path):
-    """A compact, generated pointer table — id/title/state/completed/where. Never the
-    ticket body: reading a historical record means opening its own task.md, still, by id.
+ARCHIVE_PRIORITY_SECTIONS = (("level_1", "Level 1"), ("level_2", "Level 2"),
+                             ("level_3", "Level 3"), ("level_4", "Level 4"),
+                             ("level_5", "Level 5"), (None, "Unspecified"))
+
+
+def archive_row(t, index_path):
+    """One compact pointer row — id/title/state/priority/goal/parent/date/record. Never
+    the ticket body: reading a historical record means opening its own task.md, by id."""
+    title = (t["title"] or "").replace("|", "\\|")
+    priority = (t.get("priority") or "—").replace("_", " ").title() \
+        if t.get("priority") in PRIORITIES else "—"
+    goal = oneline(t.get("goal") or "—", limit=90).replace("|", "\\|")
+    parent = t.get("parent") or "—"
+    date = (t["meta"].get("updated_at") or t["meta"].get("updated") or "—")
+    rel = os.path.relpath(t["path"], index_path.parent)
+    return (f"| {t['id']} | {title} | `{t['state']}` | {priority} | {goal} | {parent} | "
+            f"{date} | [`task.md`]({rel}) |")
+
+
+ARCHIVE_TABLE_HEADER = ("| ID | Title | State | Priority | Goal | Parent | Completed/Updated "
+                       "| Record |", "|---|---|---|---|---|---|---|---|")
+
+
+def render_archive_index(archived, index_path):
+    """The generated archive index (T-044): `Completed`/`Cancelled`, each split into
+    `Level 1`..`Level 5`/`Unspecified` by declared priority (priority never decides
+    ELIGIBILITY to archive — see `archive_completion_gate` — it only groups the result), and
+    a separate `Legacy AIOS` section for the frozen historical generation, which predates
+    the priority system entirely and is never split by it. Compact rows only, generated
+    fresh from the records every time — never hand-maintained, never the ticket body.
     """
-    rows = ["| ID | State | Completed | Title | Record |",
-            "|---|---|---|---|---|"]
+    legacy = [t for t in archived if t.get("archive_namespace") == "AIOS"]
+    atlas = [t for t in archived if t.get("archive_namespace") == "Atlas"]
+    completed = [t for t in atlas if t["state"] == "done"]
+    cancelled = [t for t in atlas if t["state"] == "cancelled"]
+
+    lines = ["# Ticket archive", "",
+            "Generated by `ai-os tickets archive` (explicit `--apply`), `--auto` "
+            "(reconciliation), or automatically on `checkpoint --state done/cancelled` "
+            "(T-044). Historical, done/cancelled records — the record itself is still the "
+            "source of truth, this is only a pointer table so an id can be found without a "
+            "directory listing. Resolve any id below the normal way: "
+            "`ai-os tickets show <ID>`, `ai-os context <ID>`, or `ai-os-paths ticket <ID>` "
+            "— none of them need this file to work. Restore is out of scope (T-044): move "
+            "a directory back under `tickets/<ID>/` by hand and re-run "
+            "`ai-os tickets index --write`.", ""]
+
+    for section_title, group in (("Completed", completed), ("Cancelled", cancelled)):
+        lines.append(f"## {section_title}")
+        lines.append("")
+        for key, label in ARCHIVE_PRIORITY_SECTIONS:
+            rows = sorted(
+                [t for t in group
+                 if (t.get("priority") if t.get("priority") in PRIORITIES else None) == key],
+                key=lambda t: id_sort_key(t["id"]))
+            lines.append(f"### {label}")
+            lines.append("")
+            if not rows:
+                lines.append("_none_")
+            else:
+                lines.extend(ARCHIVE_TABLE_HEADER)
+                lines.extend(archive_row(t, index_path) for t in rows)
+            lines.append("")
+
+    lines.append("## Legacy AIOS")
+    lines.append("")
+    if not legacy:
+        lines.append("_none_")
+    else:
+        lines.extend(ARCHIVE_TABLE_HEADER)
+        lines.extend(archive_row(t, index_path)
+                    for t in sorted(legacy, key=lambda t: id_sort_key(t["id"])))
+    lines.append("")
+    return "\n".join(lines)
+
+
+def archive_dest(t, projects_root):
+    """The destination directory for an eligible ticket, or None if its id does not belong
+    to a recognized generation (never invented — the archive command already leaves those
+    where they are)."""
+    gen = parse_ticket_id(t.get("id"))
+    if gen is None:
+        return None
+    return projects_root / t["project_dir"] / "tickets" / ARCHIVE_DIRNAME / \
+        ARCHIVE_NAMESPACE[gen[0]] / t["id"]
+
+
+def gate_reasons(t, all_tickets, projects_root):
+    """`archive_completion_gate`'s reasons, plus the one check that needs a physical path
+    to answer (destination collision) — kept here rather than in the shared module because
+    it is the only gate rule that is not a pure function of the ticket records alone."""
+    reasons = list(archive_completion_gate(t, all_tickets))
+    dest = archive_dest(t, projects_root)
+    if dest is not None and dest.exists():
+        reasons.append(f"{t['id']}: destination already exists: {dest}")
+    return reasons
+
+
+def move_one(t, dest_dir):
+    """Move one ticket directory whole, byte-verified. Returns (dest_dir, None) on success,
+    (None, reason) otherwise — never raises, so a caller processing many candidates can
+    keep going after one failure rather than losing track of what already moved."""
+    src_dir = Path(t["dir"])
+    pre_hash = sha256_file(t["path"])
+    try:
+        dest_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src_dir), str(dest_dir))
+    except OSError as e:
+        return None, f"move failed: {e}"
+    post_hash = sha256_file(dest_dir / "task.md")
+    if pre_hash != post_hash:
+        # Should be unreachable — a plain directory move touches no bytes — but this is
+        # exactly the invariant T-024/T-044 asked to be proven, not assumed.
+        return None, (f"task.md hash changed across the move "
+                      f"({pre_hash[:12]} -> {post_hash[:12]}) — investigate before "
+                      f"trusting this archive")
+    return dest_dir, None
+
+
+def regenerate_views(projects_root, project_dir):
+    """Regenerate one project's hot board and archive index from a fresh read, after its
+    ticket set changed by a move — never from an in-memory list, which still describes the
+    pre-move layout. Idempotent: re-running with nothing changed writes nothing new."""
+    fresh = discover(projects_root, project_dir)
+    index_path = projects_root / project_dir / "index.md"
+    if index_path.exists():
+        text = index_path.read_text()
+        merged = splice(text, index_block([t for t in fresh if not t["is_archived"]],
+                                          index_path))
+        if merged is not None and merged != text:
+            index_path.write_text(merged)
+    archived_now = [t for t in fresh if t["is_archived"]]
+    if archived_now:
+        archive_index_path = projects_root / project_dir / "tickets" / ARCHIVE_DIRNAME / "index.md"
+        archive_index_path.parent.mkdir(parents=True, exist_ok=True)
+        archive_index_path.write_text(render_archive_index(archived_now, archive_index_path))
+
+
+def auto_archive_after_checkpoint(ticket_id, projects_root):
+    """Called only by `checkpoint` immediately after it just wrote a done/cancelled state —
+    never by a read-only command (list/context/show/search never call this). Re-reads the
+    ticket fresh (its state was just written to disk) and runs the exact same completion
+    gate `archive --auto` uses, so the two paths can never disagree about what "genuinely
+    finished" means. Returns True if it archived the ticket, False otherwise — a False
+    return with reasons printed is a refusal, not a silent no-op.
+    """
+    all_tickets = discover(projects_root)
+    t = next((x for x in all_tickets if x["id"] == ticket_id), None)
+    if t is None or t["is_archived"]:
+        return False
+    reasons = gate_reasons(t, all_tickets, projects_root)
+    if reasons:
+        print(f"  {t['id']}: not archived automatically — " + "; ".join(reasons))
+        return False
+    dest = archive_dest(t, projects_root)
+    dest_dir, err = move_one(t, dest)
+    if err:
+        print(f"  ! {t['id']}: automatic archive failed — {err}", file=sys.stderr)
+        return False
+    print(f"  {t['id']}: automatically archived -> "
+          f"{os.path.relpath(dest_dir, projects_root)} (task.md hash unchanged)")
+    regenerate_views(projects_root, t["project_dir"])
+    print(f"  {t['project_dir']}/tickets/{ARCHIVE_DIRNAME}/index.md regenerated")
+    return True
+
+
+def cmd_show(a, tickets):
+    """Read-only: the full record, live or archived, clearly labeled which. Never mutates —
+    it is a plain read of the file already on disk."""
+    t = find(tickets, a.id)
+    if not t:
+        return 1
+    tag = f" [ARCHIVED — {t['archive_namespace']}]" if t["is_archived"] else ""
+    print(f"# {t['id']}{tag}")
+    print(f"  {t['path']}")
+    print()
+    print(Path(t["path"]).read_text())
+    return 0
+
+
+def cmd_search(a, tickets):
+    """Read-only substring search over id/title/goal/body, live and archived alike. Never
+    mutates; a match in an archived record is labeled, not hidden."""
+    q = a.query.strip().lower()
+    if not q:
+        print("ai-os tickets search: a non-empty query is required", file=sys.stderr)
+        return 1
+    hits = []
+    for t in tickets:
+        haystack = " ".join([t["id"] or "", t["title"] or "", t.get("goal") or "",
+                             Path(t["path"]).read_text()]).lower()
+        if q in haystack:
+            hits.append(t)
+    if not hits:
+        print(f"  no tickets match '{a.query}'")
+        return 0
+    for t in sorted(hits, key=lambda t: id_sort_key(t["id"])):
+        tag = " [archived]" if t["is_archived"] else ""
+        print(f"  {t['id']:<10} {t['state']:<10}{tag} {t['title']}")
+    return 0
+
+
+def cmd_archive_list(a, tickets):
+    """Read-only: every archived ticket, optionally filtered by project. Never mutates."""
+    archived = [t for t in tickets if t["is_archived"]]
+    if a.project:
+        archived = [t for t in archived if t["project_dir"] == a.project]
+    if not archived:
+        print("  no archived tickets")
+        return 0
     for t in sorted(archived, key=lambda t: id_sort_key(t["id"])):
-        title = (t["title"] or "").replace("|", "\\|")
-        rel = os.path.relpath(t["path"], index_path.parent)
-        rows.append(f"| {t['id']} | `{t['state']}` | {t['updated'] or '—'} | {title} | "
-                    f"[`task.md`]({rel}) |")
-    body = "\n".join(rows)
-    return (f"# Ticket archive\n\n"
-            f"Generated by `ai-os tickets archive`. Historical, done/cancelled records —\n"
-            f"the record itself is still the source of truth, this is only a pointer\n"
-            f"table so an id can be found without a directory listing. Resolve any id\n"
-            f"below the normal way: `ai-os tickets show <ID>`, `ai-os context <ID>`, or\n"
-            f"`ai-os-paths ticket <ID>` — none of them need this file to work.\n\n"
-            f"{body}\n")
+        print(f"  {t['id']:<10} {t['state']:<10} {t['archive_namespace'] or '—':<6} "
+              f"{t['title']}")
+    return 0
+
+
+def cmd_archive_auto(a, tickets, projects_root):
+    """Reconciliation (T-044): idempotent. Every done/cancelled, non-archived, recognized-
+    generation ticket is run through the completion gate; a passing ticket is archived
+    immediately (unless `--dry-run`), a failing one is left exactly where it is with the
+    exact reason printed — never moved, never rewritten. Safe to re-run: once nothing is
+    left eligible, the next run does nothing and says so.
+    """
+    candidates = [t for t in tickets
+                 if not t["is_archived"] and t["state"] in ARCHIVABLE_STATES
+                 and parse_ticket_id(t["id"]) is not None]
+    if a.project:
+        candidates = [t for t in candidates if t["project_dir"] == a.project]
+    if not candidates:
+        print("  no done/cancelled tickets outside the archive to reconcile")
+        return 0
+
+    to_move, refused = [], []
+    for t in sorted(candidates, key=lambda t: id_sort_key(t["id"])):
+        reasons = gate_reasons(t, tickets, projects_root)
+        (refused.append((t, reasons)) if reasons else to_move.append(t))
+
+    for t in to_move:
+        dest = archive_dest(t, projects_root)
+        print(f"  {t['id']:<10} {t['state']:<10} eligible -> "
+              f"{os.path.relpath(dest, projects_root)}")
+    for t, reasons in refused:
+        print(f"  {t['id']:<10} {t['state']:<10} refused: " + "; ".join(reasons))
+
+    if a.dry_run:
+        print(f"\n  {len(to_move)} would be archived, {len(refused)} refused — preview "
+              f"only (--dry-run), nothing moved")
+        return 0
+    if not to_move:
+        print(f"\n  0 archived, {len(refused)} refused — nothing eligible")
+        return 0
+
+    moved_projects, failed = set(), 0
+    for t in to_move:
+        dest_dir, err = move_one(t, archive_dest(t, projects_root))
+        if err:
+            failed += 1
+            print(f"  ! {t['id']}: automatic archive failed — {err}", file=sys.stderr)
+            continue
+        moved_projects.add(t["project_dir"])
+        print(f"  moved {t['id']} -> {os.path.relpath(dest_dir, projects_root)} "
+              f"(task.md hash unchanged)")
+
+    for proj in sorted(moved_projects):
+        regenerate_views(projects_root, proj)
+        print(f"  {proj}: index and archive index regenerated")
+
+    print(f"\n  {len(to_move) - failed} ticket(s) archived, {failed} failed, "
+          f"{len(refused)} refused")
+    return 1 if failed else 0
 
 
 def cmd_archive(a, tickets, projects_root):
     """Preview (default) or apply (`--apply`) moving eligible tickets into
     tickets/archive/{AIOS,Atlas}/. Eligibility: state in ARCHIVABLE_STATES, not already
-    archived, id belongs to a recognized generation. Nothing else decides it.
+    archived, id belongs to a recognized generation. Nothing else decides it — unchanged
+    from T-024, kept compatible on purpose. `--list` (read-only) and `--auto`
+    (reconciliation, completion-gated) are the T-044 additions, handled separately below.
     """
+    if a.list:
+        return cmd_archive_list(a, tickets)
+    if a.auto:
+        return cmd_archive_auto(a, tickets, projects_root)
+
     # Duplicate-authority guard first, over everything this invocation can see — archiving
     # on top of an unresolved conflict would make the conflict physically harder to see,
     # not resolve it.
@@ -507,41 +1174,21 @@ def cmd_archive(a, tickets, projects_root):
 
     moved = []
     for t, dest_dir in moves:
-        src_dir = Path(t["dir"])
         pre_hash = sha256_file(t["path"])
-        dest_dir.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src_dir), str(dest_dir))
-        post_hash = sha256_file(dest_dir / "task.md")
-        if pre_hash != post_hash:
-            # Should be unreachable — a plain directory move touches no bytes — but this
-            # is exactly the invariant Part K of the ticket asked to be proven, not assumed.
-            print(f"ai-os tickets archive: {t['id']} task.md hash changed across the move "
-                  f"({pre_hash[:12]} -> {post_hash[:12]}) — investigate before trusting "
-                  f"this archive", file=sys.stderr)
+        dest_dir_final, err = move_one(t, dest_dir)
+        if err:
+            print(f"ai-os tickets archive: {t['id']} {err}", file=sys.stderr)
             return 1
-        moved.append((t, dest_dir))
-        print(f"  moved {t['id']} -> {os.path.relpath(dest_dir, projects_root)}  "
+        moved.append((t, dest_dir_final))
+        print(f"  moved {t['id']} -> {os.path.relpath(dest_dir_final, projects_root)}  "
               f"(task.md hash unchanged: {pre_hash[:12]})")
 
     # Regenerate every touched project's hot board and archive index from a fresh read —
     # not from the in-memory `tickets` list, which still describes the pre-move layout.
     for proj in sorted({t["project_dir"] for t, _ in moved}):
-        fresh = discover(projects_root, proj)
-        index_path = projects_root / proj / "index.md"
-        if index_path.exists():
-            text = index_path.read_text()
-            merged = splice(text, index_block([t for t in fresh if not t["is_archived"]],
-                                              index_path))
-            if merged is not None and merged != text:
-                index_path.write_text(merged)
-                print(f"  {proj}/index.md regenerated — archived ticket(s) dropped from "
-                      f"the hot board")
-        archived_now = [t for t in fresh if t["is_archived"]]
-        if archived_now:
-            archive_index_path = projects_root / proj / "tickets" / ARCHIVE_DIRNAME / "index.md"
-            archive_index_path.write_text(archive_index_block(archived_now, archive_index_path))
-            print(f"  {proj}/tickets/{ARCHIVE_DIRNAME}/index.md written "
-                  f"({len(archived_now)} record(s))")
+        regenerate_views(projects_root, proj)
+        print(f"  {proj}/index.md and {proj}/tickets/{ARCHIVE_DIRNAME}/index.md "
+              f"regenerated")
 
     print(f"\n  {len(moved)} ticket(s) archived")
     return 0
@@ -550,12 +1197,62 @@ def cmd_archive(a, tickets, projects_root):
 def main(argv):
     ap = argparse.ArgumentParser(prog="ai-os tickets")
     sub = ap.add_subparsers(dest="cmd")
-    for name in ("list", "index", "doctor", "log", "checkpoint", "archive"):
+    for name in ("list", "next", "new", "promote", "index", "doctor", "log", "checkpoint",
+                "archive", "show", "search"):
         p = sub.add_parser(name)
         p.add_argument("--project")
         if name == "list":
             p.add_argument("--state", choices=STATES)
             p.add_argument("--json", action="store_true")
+        if name == "show":
+            p.add_argument("id")
+        if name == "search":
+            p.add_argument("query")
+        if name == "next":
+            p.add_argument("--goal")
+            p.add_argument("--limit", type=int)
+            p.add_argument("--why", action="store_true")
+            p.add_argument("--json", action="store_true")
+        if name == "new":
+            p.add_argument("--id", help="explicit T-* id; default: next unused one")
+            p.add_argument("--title", required=True)
+            p.add_argument("--state", default="todo", choices=STATES)
+            p.add_argument("--class", dest="klass", choices=CLASSES)
+            p.add_argument("--relation", choices=RELATIONS)
+            p.add_argument("--parent")
+            p.add_argument("--goal")
+            p.add_argument("--requirement")
+            p.add_argument("--priority", choices=PRIORITIES)
+            p.add_argument("--decision-required", dest="decision_required",
+                           choices=BOOLEANS)
+            p.add_argument("--blocked-by", dest="blocked_by", choices=BLOCKED_BY)
+            p.add_argument("--unblocks", help="comma-separated ticket ids")
+            p.add_argument("--effort", choices=EFFORTS)
+            p.add_argument("--risk", choices=RISKS)
+            p.add_argument("--confidence", choices=CONFIDENCES)
+            p.add_argument("--due")
+            p.add_argument("--last-touched", dest="last_touched")
+            p.add_argument("--objective")
+            p.add_argument("--next-action", dest="next_action")
+            p.add_argument("--dry-run", action="store_true")
+        if name == "promote":
+            p.add_argument("id")
+            p.add_argument("--relation", required=True,
+                           choices=("required", "optional", "blocks_parent", "parent"))
+            p.add_argument("--parent")
+            p.add_argument("--goal")
+            p.add_argument("--requirement")
+            p.add_argument("--priority", choices=PRIORITIES)
+            p.add_argument("--decision-required", dest="decision_required",
+                           choices=BOOLEANS)
+            p.add_argument("--blocked-by", dest="blocked_by", choices=BLOCKED_BY)
+            p.add_argument("--unblocks", help="comma-separated ticket ids")
+            p.add_argument("--effort", choices=EFFORTS)
+            p.add_argument("--risk", choices=RISKS)
+            p.add_argument("--confidence", choices=CONFIDENCES)
+            p.add_argument("--due")
+            p.add_argument("--date")
+            p.add_argument("--dry-run", action="store_true")
         if name == "index":
             p.add_argument("--write", action="store_true")
         if name == "log":
@@ -573,22 +1270,40 @@ def main(argv):
         if name == "archive":
             p.add_argument("--apply", action="store_true",
                            help="move the eligible tickets; without this, preview only")
+            p.add_argument("--auto", action="store_true",
+                           help="reconciliation: apply the completion gate to every "
+                                "eligible ticket, archive what passes, report what does "
+                                "not — idempotent")
+            p.add_argument("--dry-run", action="store_true",
+                           help="with --auto, preview only — nothing moves")
+            p.add_argument("--list", action="store_true",
+                           help="read-only: list archived tickets, nothing else")
     a = ap.parse_args(argv)
     if not a.cmd:
         ap.print_help()
         return 2
 
     projects_root = private_path_or_die("projects")
+    # `new` creates the first ticket a project may ever have — it must not be blocked by
+    # the "no ticket records" guard below, which every other subcommand needs (they all
+    # act on a ticket or a set of tickets that must already exist).
+    if a.cmd == "new":
+        return cmd_new(a, projects_root)
+
     tickets = discover(projects_root, a.project)
     if not tickets:
         print(f"ai-os tickets: no ticket records under {projects_root}", file=sys.stderr)
         return 1
     return {"list": lambda: cmd_list(a, tickets),
+            "next": lambda: cmd_next(a, tickets),
+            "promote": lambda: cmd_promote(a, projects_root),
             "index": lambda: cmd_index(a, tickets, projects_root),
             "doctor": lambda: cmd_doctor(a, tickets, projects_root),
             "log": lambda: cmd_log(a, tickets),
             "checkpoint": lambda: cmd_checkpoint(a, tickets, projects_root),
-            "archive": lambda: cmd_archive(a, tickets, projects_root)}[a.cmd]()
+            "archive": lambda: cmd_archive(a, tickets, projects_root),
+            "show": lambda: cmd_show(a, tickets),
+            "search": lambda: cmd_search(a, tickets)}[a.cmd]()
 
 
 if __name__ == "__main__":

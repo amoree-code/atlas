@@ -120,6 +120,8 @@ def ticket_packet(t, full):
     out = {
         "id": t["id"], "state": t["state"], "title": t["title"],
         "class": t["klass"], "expected_context": t["expected_context"],
+        "relation": t.get("relation"), "parent": t.get("parent"),
+        "requirement": t.get("requirement"), "goal": t.get("goal"),
         "next_action": t["next_action_line"],
         "record": t["path"],
         # Whether a cold `ai-os context <ID>` would carry the work forward on its own.
@@ -167,7 +169,7 @@ def build(cwd, ticket_id=None):
 
     repos = []
     seen = set()
-    for cand in (cwd, os.environ.get("AI_OS_REPO", "")):
+    for cand in (cwd, os.environ.get("ATLAS_REPO", "") or os.environ.get("AI_OS_REPO", "")):
         if not cand:
             continue
         st = git_state(cand)
@@ -219,6 +221,10 @@ def render(p):
             lines.append(f"   class {f['class']}"
                          + (f" · expected context {f['expected_context']}"
                             if f.get("expected_context") else ""))
+        intent = [x for x in (f.get("relation"), f.get("parent"), f.get("requirement"),
+                              f.get("goal")) if x]
+        if intent:
+            lines.append(f"   intent {' · '.join(intent)}")
         if f.get("objective"):
             lines.append(f"\n   objective\n" + indent(f["objective"]))
         lines.append(f"\n   next action\n" + indent(f["next_action"]))

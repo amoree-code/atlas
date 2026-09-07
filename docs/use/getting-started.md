@@ -2,6 +2,9 @@
 
 The fast path. Each step links to where to go deeper.
 
+**Naming note (T-031):** `atlas` is the canonical command; `ai-os` remains a temporary
+compatibility alias, resolving identically during the transition window.
+
 ## 1. Install
 
 ```bash
@@ -15,9 +18,9 @@ build step. Full walkthrough, including moving the workspace off the default pat
 ## 2. Create your workspace
 
 ```bash
-ai-os init --dry-run     # see exactly what would happen
-ai-os init               # create ~/.ai-os — never overwrites anything
-ai-os doctor             # verify the contract holds
+atlas init --dry-run     # see exactly what would happen
+atlas init               # create ~/atlas — never overwrites anything
+atlas doctor             # verify the contract holds
 ```
 
 What gets created and why it's shaped the way it is: `docs/use/workspace.md` and
@@ -26,26 +29,27 @@ What gets created and why it's shaped the way it is: `docs/use/workspace.md` and
 ## 3. Tell it who you are (optional, but worth doing once)
 
 ```bash
-ai-os onboard
+atlas onboard
 ```
 
 A few questions, written to their one canonical owner each — no second profile system.
-Already have a populated workspace? `ai-os onboard --adopt` instead. Detail: `docs/use/install.md`.
+Already have a populated workspace? `atlas onboard --adopt` instead. Detail: `docs/use/install.md`.
 
 ## 4. Know the boundary
 
-AI OS is two layers: this repository (public, reusable, publishable) and your workspace
-(`$AI_OS_HOME`, private, never published). `ai-os doctor` checks the boundary holds on
-every run. The full contract: `docs/design/public-private.md`.
+Atlas is two layers: this repository (public, reusable, publishable) and your workspace
+(`$ATLAS_HOME`, default `~/atlas`, private, never published — compatibility fallback
+`$AI_OS_HOME` for any root Atlas has not yet cut over). `atlas doctor` checks the
+boundary holds on every run. The full contract: `docs/design/public-private.md`.
 
 ## 5. Pick a client
 
 An **adapter** connects one AI client (Claude Code, Codex, Cursor, Gemini, OpenCode) to AI
 OS. `docs/use/adapters.md` lists what each one does today.
 
-## 6. See what AI OS can actually do
+## 6. See what Atlas can actually do
 
-- **Capabilities** — what AI OS can *do* (browser control ships today): `docs/use/capabilities.md`.
+- **Capabilities** — what Atlas can *do* (browser control ships today): `docs/use/capabilities.md`.
 - **Domains** — declaring an area of work, which executes nothing: `docs/use/domains.md`.
 
 ## Where to read next

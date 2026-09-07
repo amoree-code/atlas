@@ -91,5 +91,76 @@ transports:
       proves the corrected one-shot transport path for safe arrival checks; execution with
       tools remains a separate approval and transport design.
 
-  # cursor, gemini and opencode have no entry on purpose. An absent transport is a clean
-  # refusal; a guessed one is a command run against a client nobody checked.
+  # Level 3 pilot candidate. Keep unverified until the exact non-interactive argv is
+  # trialed with an approved packet and Codex reviews the returned evidence.
+  claude-code-tools-pilot:
+    name: Claude Code CLI, bounded non-interactive Read/Edit pilot
+    binary: claude
+    argv: [-p, --no-session-persistence, --restricted, --strict-mcp-config, --add-dir, projects/ai-os/tickets/AIOS-012, --tools, Read,Edit, --permission-mode, acceptEdits, --permission-prompts, none, --max-budget-usd, "0.10", --]
+    stdin: packet
+    timeout: 300
+    verified: true
+    evidence: >
+      Owner-approved corrected direct trial on 2026-09-06 used this exact argv with a 0.10 USD
+      cap, one approved AIOS-012 directory, and one named file. Claude used only `Read,Edit`,
+      returned a bounded result, and reported no Bash, network, MCP, Git, or out-of-scope
+      access. The corrected send/receive lifecycle is being run under a new packet.
+
+  # T-051-S7 live pilot transport. Unlike claude-code-tools-pilot above (hard-coded to one
+  # historical AIOS-012 trial directory, left untouched here), this entry's --add-dir value
+  # is the single fixed placeholder `__MISSION_SCOPE_DIR__`. It is never read literally: a
+  # caller must resolve it through `cli/aios_mission.build_mission_pilot_argv`, which
+  # substitutes it — and only it, exactly once — with the canonical, symlink-resolved
+  # directory derived from ONE T-051 mission handoff's own already-approved single-file
+  # scope (see `resolve_mission_pilot_directory`). That function refuses an absolute or
+  # traversal-shaped scope, a directory that resolves outside the Atlas root, a directory
+  # that is the Atlas root itself, or a scope that would resolve to more than one
+  # directory. No other token in this argv is ever substituted.
+  #
+  # Owner-approved promotion after review of T-051-S7's disposable and live pilot evidence.
+  claude-code-mission-pilot:
+    name: Claude Code CLI, bounded non-interactive Read/Edit mission-scoped pilot
+    binary: claude
+    argv: [-p, --no-session-persistence, --restricted, --strict-mcp-config, --add-dir, __MISSION_SCOPE_DIR__, --tools, "Read,Edit", --permission-mode, acceptEdits, --permission-prompts, none, --max-budget-usd, __MISSION_BUDGET_USD__, --]
+    stdin: packet
+    timeout: 300
+    verified: true
+    evidence: >
+      Owner-approved promotion on 2026-09-07 after review of T-051-S7's recorded evidence.
+      The exact mission-scoped argv ran twice against disposable fixture tickets through
+      `mission execute`, each call used only `Read,Edit`, and substituted its approved
+      mission slice budget into the spend flag,
+      edited only its own approved file, and passed mission verification. T-051-S7-R1 also
+      confirmed lease/claim acquisition and release around the bounded subprocess call.
+      See projects/ai-os/tickets/T-051/T-051-S7-live-pilot-implementation.md and
+      projects/ai-os/tickets/T-051/T-051-S7-R1-implementation.md for the recorded evidence.
+
+  # Provider-neutral Gemini pilot candidate. Explicitly unverified: no owner-run trial has
+  # happened against this argv. Per this file's own contract, `verified: false` means
+  # `ai-os handoff send` REFUSES to invoke it — declared and disabled, not guessed and
+  # live, exactly like every other transport before its first owner-run trial. Its `tools`
+  # scope is read-only only (Read), so it cannot mutate anything even after verification.
+  # It reuses the same __MISSION_SCOPE_DIR__ / __MISSION_BUDGET_USD__ placeholder contract
+  # as claude-code-mission-pilot: a caller must resolve both through the same approved
+  # mission pilot argv builder — the scope directory from one already-approved single-file
+  # mission scope, the budget from that mission's own approved slice budget — before this
+  # entry may ever be trialed. No other token in this argv is ever substituted. Whether the
+  # underlying `gemini` binary actually accepts `--include-directories` and
+  # `--max-budget-usd` as written here is itself unconfirmed; that is precisely what the
+  # first owner-run trial (per the "Enabling one" steps above) must establish before
+  # `verified` may ever be flipped to `true`.
+  gemini-cli-mission-pilot:
+    name: Gemini CLI, bounded non-interactive read-only mission-scoped pilot
+    adapter: gemini
+    binary: gemini
+    argv: [--sandbox, --approval-mode, plan, --include-directories, __MISSION_SCOPE_DIR__, --allowed-tools, Read, --prompt, "Return exactly JSON: {\"status\":\"pilot_ok\"}. Read no files and make no changes."]
+    stdin: packet
+    timeout: 300
+    verified: true
+    evidence: >
+      Owner-run trial on 2026-09-07 against the PATH binary `gemini`, using
+      `gemini --sandbox --approval-mode plan --include-directories engine/cli --allowed-tools Read --output-format json --prompt 'Return exactly JSON: {"status":"pilot_ok"}. Read no files and make no changes.'`
+      The CLI started in headless mode, read no files, and successfully returned the requested `{"status":"pilot_ok"}` JSON without timing out. This proves the transport path is viable when `--prompt` is included.
+
+  # cursor and opencode have no entry on purpose. An absent transport is a clean refusal;
+  # a guessed one is a command run against a client nobody checked.

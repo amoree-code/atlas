@@ -17,7 +17,7 @@ provides:
   skills: { path: ~/.gemini/skills/, format: SKILL.md+frontmatter, verified: true }
   mcp:    { path: ~/.gemini/settings.json, key: mcpServers, format: json, verified: true }
 
-writes: [rules, skills]
+writes: []
 
 requires:
   - rules.render

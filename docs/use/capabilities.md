@@ -1,8 +1,8 @@
 # Capabilities
 
-A **capability** answers *"what can AI OS do?"* — the kind of thing browser control,
+A **capability** answers *"what can Atlas do?"* — the kind of thing browser control,
 software delivery or automation would each be. It is not an adapter — an adapter answers
-*"how does this client reach AI OS?"* (`docs/use/adapters.md`). Capabilities live in
+*"how does this client reach Atlas?"* (`docs/use/adapters.md`). Capabilities live in
 `capabilities/`, are client-agnostic, and are reached by every client through its adapter;
 there is never a per-client copy of one. Full contract: `schemas/capability.schema.md`.
 Living inventory: `capabilities/README.md`.

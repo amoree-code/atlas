@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ai-guard-push — PreToolUse hook. The local/remote trust boundary.
 
-Implements the AI OS git policy (see internal/governance/policies/git.yaml) for Claude Code
+Implements the Atlas git policy (see internal/governance/policies/git.yaml) for Claude Code
 specifically. Local git is fully autonomous. Anything that writes to a REMOTE stops and
 asks a human. Glob permissions miss compound commands (`cd x && git push`), so this
 inspects the whole command string instead.
@@ -60,7 +60,7 @@ def decide(raw: str):
         if re.search(pat, cmd, re.I):
             return "ask", (
                 f"Remote write — {why}.\n"
-                "Per the AI OS git policy (git.push: approval: always), remote "
+                "Per the Atlas git policy (git.push: approval: always), remote "
                 "operations need explicit human approval.\n"
                 "Report branch, commit, tests and changed files, then wait for a yes.")
     return None, None

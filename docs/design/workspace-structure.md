@@ -6,7 +6,7 @@ The layout itself is in `docs/use/workspace.md`. This is the reasoning behind it
 
 A user should be able to hold the whole workspace in their head with three ideas:
 `personal/` is long-lived personal material, `projects/` is work state, and `internal/`
-is AI-OS machinery, and that now includes `sessions/`, which moved under
+is Atlas machinery, and that now includes `sessions/`, which moved under
 `internal/` after the heavy migration settles. They should not need to understand an
 orchestrator, an event bus, or an adapter's internals to use the system. That is the
 "simple for the user, not simple internally" principle in `docs/design/decisions.md`:
@@ -14,7 +14,7 @@ internal machinery is allowed to be intricate; the thing the user has to hold in
 is not.
 
 `mcp/` and private capability material sit under `internal/extensions/` because they are
-AI-OS extension points, not daily personal material and not project-owned work.
+Atlas extension points, not daily personal material and not project-owned work.
 
 ## Why numbered sections
 
@@ -52,6 +52,6 @@ classes above, applied to one specific case that comes up on every version bump.
 A namespace that is documented but not yet populated is a small, cheap promise: "this is
 where it goes when it exists." Omitting it from the layout entirely would mean inventing a
 location later, under time pressure, without the deliberation a workspace-root decision
-deserves. This is the same instinct that keeps AI OS from building an autonomous task
+deserves. This is the same instinct that keeps Atlas from building an autonomous task
 engine before Domain Delivery earns one — see `docs/design/decisions.md` and
 `docs/design/domain-delivery.md`.

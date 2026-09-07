@@ -19,7 +19,7 @@ G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; D=$'\033[2m'; X=$'\033[0m'
 die() { printf '%s✗%s %s\n' "$R" "$X" "$1" >&2; exit 1; }
 
 [ -d "$W" ]      || die "no workspace at $W"
-[ -d "$W/.git" ] || die "$W is not versioned yet. See the AI OS docs (V0.1.2)."
+[ -d "$W/.git" ] || die "$W is not versioned yet. See the Atlas docs (V0.1.2)."
 
 # --- safety checks shared by both subcommands -------------------------------------
 # Returns non-zero if anything is wrong. Prints findings.

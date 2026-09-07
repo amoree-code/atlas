@@ -1,5 +1,5 @@
 #!/bin/sh
-# ai-os-hook — resolve the AI OS repository at runtime, then run one of its commands.
+# ai-os-hook — resolve the Atlas repository at runtime, then run one of its commands.
 #
 # A client's hooks run in a non-login shell with a minimal PATH and no guaranteed working
 # directory, so they cannot find the repository themselves. The obvious fix — writing the
@@ -9,16 +9,18 @@
 # So the hook holds no path at all. It calls this launcher at a fixed, $HOME-relative
 # location, and the launcher looks the repository up every time it runs. Moving the
 # repository needs no edit here and no edit to any hook — only the recorded location
-# changes, and `ai-os init` records that automatically.
+# changes, and `atlas init` records that automatically.
 #
 #   ai-os-hook <repo-relative-command> [args...]
 #
-# Resolution order:
-#   1. $AI_OS_REPO                                              explicit override
-#   2. ai_os_repo: in ${AI_OS_HOME:-$HOME/.ai-os}/internal/config/settings.yaml
-#      falling back to the pre-move .../system/config/settings.yaml
+# Resolution order (Atlas-first, ai-os names kept as deprecated fallback — T-032):
+#   1. $ATLAS_REPO                                              explicit override, canonical
+#   2. $AI_OS_REPO                                               deprecated explicit override
+#   3. atlas_repo: in ${ATLAS_HOME:-${AI_OS_HOME:-$HOME/.ai-os}}/internal/config/settings.yaml
+#      falling back to ai_os_repo: in the same file, then the pre-move
+#      .../system/config/settings.yaml
 #
-# Those two paths are the one place in AI-OS that may not ask cli/ai-os-paths which layout
+# Those two paths are the one place in Atlas that may not ask cli/ai-os-paths which layout
 # the workspace is in: the resolver lives inside the repository, and this file runs before
 # the repository has been found. So it checks both, newest first — the same order the
 # resolver itself uses — and the duplication is deliberate, not an oversight.
@@ -38,20 +40,29 @@ die() { printf 'ai-os-hook: %s\n' "$*" >&2; exit 78; }
 
 [ $# -ge 1 ] || die "usage: ai-os-hook <repo-relative-command> [args...]"
 
-repo="${AI_OS_REPO:-}"
+repo="${ATLAS_REPO:-${AI_OS_REPO:-}}"
 
 if [ -z "$repo" ]; then
-    home="${AI_OS_HOME:-$HOME/.ai-os}"
+    home="${ATLAS_HOME:-${AI_OS_HOME:-$HOME/.ai-os}}"
     cfg="$home/internal/config/settings.yaml"
     [ -f "$cfg" ] || cfg="$home/system/config/settings.yaml"
-    [ -f "$cfg" ] || die "no AI_OS_REPO set and no workspace settings at $home/internal/config/settings.yaml or $home/system/config/settings.yaml"
-    # First ai_os_repo: line; strip an inline comment, surrounding quotes, trailing space.
-    repo=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$cfg" | head -n 1 | sed \
+    # T-046: config is cut over too now — once $home (still $AI_OS_HOME/.ai-os by default)
+    # is gone, the real answer lives at the Atlas layout instead (no internal/ prefix).
+    [ -f "$cfg" ] || cfg="${ATLAS_HOME:-$HOME/atlas}/config/settings.yaml"
+    [ -f "$cfg" ] || die "no ATLAS_REPO/AI_OS_REPO set and no workspace settings at $home/internal/config/settings.yaml, $home/system/config/settings.yaml, or ${ATLAS_HOME:-$HOME/atlas}/config/settings.yaml"
+    # First atlas_repo: line, else first ai_os_repo: line; strip an inline comment,
+    # surrounding quotes, trailing space.
+    repo=$(sed -n 's/^atlas_repo:[[:space:]]*//p' "$cfg" | head -n 1 | sed \
         -e 's/[[:space:]]*#.*$//' \
         -e 's/^"\(.*\)"$/\1/' \
         -e "s/^'\(.*\)'\$/\1/" \
         -e 's/[[:space:]]*$//')
-    [ -n "$repo" ] || die "ai_os_repo is empty in $cfg — run 'ai-os init' to record it"
+    [ -n "$repo" ] || repo=$(sed -n 's/^ai_os_repo:[[:space:]]*//p' "$cfg" | head -n 1 | sed \
+        -e 's/[[:space:]]*#.*$//' \
+        -e 's/^"\(.*\)"$/\1/' \
+        -e "s/^'\(.*\)'\$/\1/" \
+        -e 's/[[:space:]]*$//')
+    [ -n "$repo" ] || die "no atlas_repo/ai_os_repo set in $cfg — run 'atlas init' to record it"
 fi
 
 # A leading ~ is the user's own shorthand in a config file; nothing expanded it for us.

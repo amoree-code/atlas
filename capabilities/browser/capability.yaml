@@ -1,4 +1,4 @@
-# Browser control. AI-OS owns the capability; the provider owns browser mechanics.
+# Browser control. Atlas owns the capability; the provider owns browser mechanics.
 #
 # No engine, vendor or AI client is named anywhere in this manifest — the provider is
 # selected at runtime and is replaceable without touching this file or Core.
@@ -91,7 +91,7 @@ operations:
     idempotent: false
     verify: browser-verify
   submit:
-    summary: submit a form — irreversible from AI-OS's point of view
+    summary: submit a form — irreversible from Atlas's point of view
     command: browser
     authority: execute-with-approval
     idempotent: false
@@ -101,5 +101,5 @@ notes: >
   Every operation returns structured JSON on stdout. `browser-verify` re-reads live
   browser state and confirms the claimed post-condition; it never trusts the operation's
   own report, which is why executed and verified are separate outcomes. Operations that
-  change the world outside AI-OS — click, type, select, upload, download, submit — are
+  change the world outside Atlas — click, type, select, upload, download, submit — are
   idempotent:false and are never retried automatically.

@@ -1,7 +1,7 @@
 # Adapters
 
-An **adapter** answers *"how does this AI client reach AI OS?"* It is not a capability —
-a capability answers *"what can AI OS do?"* (`docs/use/capabilities.md`). Adapters are
+An **adapter** answers *"how does this AI client reach Atlas?"* It is not a capability —
+a capability answers *"what can Atlas do?"* (`docs/use/capabilities.md`). Adapters are
 public software, one per client, in `adapters/<client>/`. Full contract:
 `schemas/adapter.schema.md`.
 

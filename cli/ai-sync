@@ -69,20 +69,21 @@ PROFILE = private_path_or_die("config") / "profile.yaml"
 def _find_repo():
     """This file lives in the repository, so the repository is its own parent.
 
-    AI_OS_REPO still wins when set, which is what lets a test point the engine at a
-    fixture tree. The configured ai_os_repo: is deliberately NOT consulted here: a copy
+    ATLAS_REPO wins first when set (canonical, T-032); AI_OS_REPO is the deprecated
+    fallback that still works, which is what lets a test point the engine at a fixture
+    tree. The configured atlas_repo:/ai_os_repo: is deliberately NOT consulted here: a copy
     of core resolving some *other* checkout as canonical would sync from a tree nobody
     is looking at.
     """
-    env = os.environ.get("AI_OS_REPO")
+    env = os.environ.get("ATLAS_REPO") or os.environ.get("AI_OS_REPO")
     if env and (Path(env) / "adapters").is_dir():
         return Path(env)
     here = Path(__file__).resolve().parent.parent
     if (here / "adapters").is_dir():
         return here
     raise SystemExit(
-        "ai-sync: cannot locate the AI OS repository (needed for the adapter registry).\n"
-        "         Run it from inside the repository, or point AI_OS_REPO at one.")
+        "ai-sync: cannot locate the Atlas repository (needed for the adapter registry).\n"
+        "         Run it from inside the repository, or point ATLAS_REPO (or AI_OS_REPO) at one.")
 
 
 REPO = _find_repo()
