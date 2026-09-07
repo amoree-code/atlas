@@ -1,0 +1,70 @@
+# Claude Code CLI, bounded non-interactive Read/Edit pilot. A distinct client identity from
+# `claude-code` (same underlying binary, a deliberately narrower invocation mode) so the
+# handoff/coordinator layer can name and route to the exact bounded pilot that
+# `internal/governance/policies/handoff-transports.yaml`'s own `claude-code-tools-pilot`
+# transport entry already declares `verified: true`, without that entry's own restricted
+# argv (`--restricted --strict-mcp-config --tools Read,Edit --permission-mode acceptEdits
+# --permission-prompts none --max-budget-usd 0.10 --add-dir <one AIOS-012 directory>`)
+# being claimed, relaxed, or restated here. This manifest exists only so
+# `cli/ai-os-handoff`'s own `known_clients()` — which lists `adapters/*/adapter.yaml`
+# directories — recognizes this identity as a known destination; it changes nothing about
+# what the transport entry is allowed to do.
+#
+# This is NOT the general-purpose `claude-code` adapter (see `adapters/claude-code/`, which
+# already exists and already owns rules/skills/hooks/mcp/memory for the full, interactive
+# client). This identity provides none of that: it is a transport-only registration for one
+# bounded, owner-approved pilot lifecycle, and declares zero capabilities on purpose — see
+# "provides" below.
+adapter: claude-code-tools-pilot
+name: Claude Code CLI, bounded non-interactive Read/Edit pilot
+contract: 1
+
+client:
+  # Same underlying binary as `claude-code` — this is a bounded invocation mode of it, not
+  # a second installed program — so detection reuses the same evidence.
+  detect: [~/.local/bin/claude, ~/.claude/]
+  version_cmd: claude --version
+  # Not applicable in the usual sense: this identity provides no capability path for core
+  # to write, so there is nothing whose "being read" could be observed. False, not true,
+  # because nothing here should ever be described as behaviourally supported on that basis.
+  consumer_verified: false
+
+# Deliberately empty. This identity does not manage rules, skills, hooks, or MCP config for
+# Claude Code — `adapters/claude-code/` already does, for the same underlying client, under
+# its own unrestricted identity. Declaring any of those here would let `writes:` mark them
+# for writing under a name whose entire purpose is to be MORE restricted than that adapter,
+# not an additional copy of it — so nothing is provided, and nothing is written.
+provides: {}
+
+writes: []
+
+requires: []
+
+enforces: []
+
+notes: >
+  Capabilities this identity is granted, and only through the existing, unmodified
+  `handoff-transports.yaml` transport entry of the same name — never through this manifest,
+  which grants nothing on its own:
+
+    - one bounded, non-interactive `claude` invocation, `Read` and `Edit` tools only
+    - scoped to one already-approved AIOS-012 directory (`--add-dir`)
+    - a fixed spend cap per invocation (`--max-budget-usd 0.10`)
+    - no session persistence, no interactive permission prompts
+
+  Capabilities this identity is NOT granted, by this manifest or by the transport entry it
+  names — and this manifest claims none of them:
+
+    - no Bash, no shell, no arbitrary command execution
+    - no network access
+    - no MCP (`--strict-mcp-config`, and no `mcp:` capability declared here)
+    - no Git
+    - no unrestricted filesystem access — `--restricted` plus one named `--add-dir`
+    - no new hooks (`enforces: []`, no `hooks:` capability declared)
+    - no new credentials, tokens, or secrets of any kind
+    - no rules/skills/memory management (that remains `adapters/claude-code/`'s job, under
+      its own, separate, unrestricted identity)
+
+  This file does not, and cannot, change `handoff-transports.yaml`'s own `verified: true`
+  value or argv for `claude-code-tools-pilot` — that transport entry is the one place this
+  pilot's actual bound is declared, and it is unmodified by this change.

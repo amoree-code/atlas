@@ -1,0 +1,19 @@
+# Transport identity for the bounded Gemini mission pilot.
+adapter: gemini-cli-mission-pilot
+name: Gemini CLI, bounded mission-scoped pilot
+contract: 1
+
+client:
+  detect: [/opt/homebrew/bin/gemini, ~/.gemini/]
+  version_cmd: gemini --version
+  consumer_verified: false
+
+provides: {}
+writes: []
+requires: []
+enforces: []
+
+notes: >
+  Transport-only identity. The transport registry owns the sandbox, plan approval mode,
+  mission scope, Read-only tool boundary, and dynamic spend cap. The transport remains
+  disabled until an owner-run trial verifies the exact argv.

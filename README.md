@@ -1,10 +1,8 @@
 # Atlas
 
 **Status: early, active development.** The core (CLI, adapters, capabilities, privacy
-scanner, governance) is tested and working. A few known issues are still open: run/ai-sync
-path-resolution bugs, a handoff template reference, and an undocumented third
-`subprocess.run` call site in `cli/ai-os-handoff` pending security review. Expect breaking
-changes before a tagged release.
+scanner, governance) plus the mission/coordinator/channel-pilot subsystem are tested and
+passing. Expect breaking changes before a tagged release.
 
 A portable operating layer for AI coding agents — not a Claude Code configuration.
 

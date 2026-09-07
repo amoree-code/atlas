@@ -373,6 +373,32 @@ def load_transports():
     return got if isinstance(got, dict) else {}
 
 
+def run_transport_subprocess(argv, stdin_text, timeout):
+    """One bounded, foreground subprocess call: a plain list `argv` (never shell=True), the
+    given text on stdin, a hard timeout, and no retry. Returns
+    (returncode_or_None, stdout, stderr, timed_out, error_detail) — `returncode` is None only
+    when the process never produced one (a timeout, or an OSError before/without exec).
+
+    This is the one and only place in this codebase that owns "make one bounded call to an
+    external client binary and capture what it prints" as a reusable function — `cmd_send`
+    above still makes its own separate, uncaptured call (a `send`'s reply must never be
+    captured; see its own docstring), so this function changes nothing about `send`. T-051-S7
+    (`mission execute`, in `cli/aios_mission.py`) is this function's only other caller: it
+    needs the executor's stdout back (to convert into the existing S4 result contract), which
+    `send`'s own call deliberately does not capture at all."""
+    try:
+        proc = subprocess.run(argv, input=stdin_text, capture_output=True, text=True,
+                              timeout=timeout)
+        return proc.returncode, proc.stdout or "", proc.stderr or "", False, None
+    except subprocess.TimeoutExpired as e:
+        stdout = e.stdout if isinstance(e.stdout, str) else ""
+        stderr = e.stderr if isinstance(e.stderr, str) else ""
+        return (None, stdout, stderr, True,
+               f"subprocess exceeded the {timeout}s timeout")
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, "", "", False, f"{type(e).__name__}: {e}"
+
+
 def resolve_transport(client):
     """(spec, binary_path, unavailable_reason). Never raises and never sends.
 

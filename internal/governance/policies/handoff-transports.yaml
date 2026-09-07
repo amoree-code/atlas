@@ -159,14 +159,15 @@ transports:
     verified: false
     evidence: >
       Reverted to unverified 2026-09-08: this entry's argv previously restricted tools
-      with `--allowed-tools`, which this registry's own contract treats as a flag that
-      "restricts nothing" for a real security boundary (see the file's top-of-file
-      "least privilege" rule and the shipped test that scans every entry for exactly
-      this pattern). `--allowed-tools Read` has been removed from argv below; the
-      2026-09-07 trial's evidence was for that removed flag and no longer describes
-      the current argv. Do not flip back to `true` without a confirmed, real
-      restriction mechanism for this binary (equivalent to `--tools` for claude-code)
-      and a fresh owner trial against the corrected argv.
+      with `--allowed-tools`, which `gemini --help` itself marks DEPRECATED ("Use Policy
+      Engine instead") and describes as controlling confirmation prompts, not which
+      tools can run — this registry's own contract treats a flag like that as
+      "restricting nothing" for a real security boundary. `--allowed-tools Read` has
+      been removed from argv below. There is no real `--tools`-equivalent flag on the
+      actual gemini CLI today (confirmed via `gemini --help`); a real restriction would
+      have to go through gemini's Policy Engine, which is undesigned and untried here.
+      Do not flip back to `true` without a confirmed, real restriction mechanism for
+      this binary and a fresh owner trial against the corrected argv.
 
       Prior trial (2026-09-07, kept for context only — it tested the now-removed
       `--allowed-tools` flag): owner-run trial against the PATH binary `gemini`, using
