@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only. Prints the state the agent needs to resume work cold.
 set -uo pipefail
-W="${AI_OS_HOME:-$HOME/.ai-os}"
+W="${ATLAS_HOME:-$HOME/atlas}"
 D=$(date +%Y-%m-%d)
 DAILY="$W/personal/daily"
 PROJECTS="$W/projects"

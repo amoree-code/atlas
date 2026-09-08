@@ -15,11 +15,11 @@ def load(path, name):
     return mod
 
 
-ctx = load(ROOT / "cli" / "ai-os-context", "context_packet_under_test")
-core_ctx = load(ROOT.parent / "core" / "cli" / "ai-os-context", "core_context_packet_under_test")
+ctx = load(ROOT / "cli" / "atlas-context", "context_packet_under_test")
+core_ctx = load(ROOT.parent / "core" / "cli" / "atlas-context", "core_context_packet_under_test")
 packet = {
-    "project": "ai-os",
-    "project_dir": "/tmp/ai-os",
+    "project": "atlas",
+    "project_dir": "/tmp/atlas",
     "tickets_live": [
         {"id": "T-059", "state": "todo", "title": "Context optimization",
          "next_action": "write the packet contract", "record": "/tmp/T-059",
@@ -32,8 +32,8 @@ packet = {
               "next_action": "write the packet contract", "record": "/tmp/T-059",
               "objective": "reduce repeated context and token waste",
               "verification": "not run", "recent_log": ["x" * 2000]},
-    "repos": [{"path": "/tmp/ai-os", "branch": "main", "head": "abc", "uncommitted": 2}],
-    "read_next": {"one ticket in full": "ai-os context T-059", "every ticket": "ai-os tickets list"},
+    "repos": [{"path": "/tmp/atlas", "branch": "main", "head": "abc", "uncommitted": 2}],
+    "read_next": {"one ticket in full": "atlas context T-059", "every ticket": "atlas tickets list"},
 }
 
 retrieved = ctx.retrieve(json.loads(json.dumps(packet)), "context token")

@@ -85,19 +85,19 @@ term_sources:
     where: built into the scanner
     contains: shapes only — no name, no email, no path, no repository, belonging to anyone
   user_terms:
-    where: $AI_OS_HOME/internal/governance/policies/privacy-terms.txt
+    where: $ATLAS_HOME/internal/governance/policies/privacy-terms.txt
     contains: the user's own identifying strings, one per line, '#' comments allowed
     classification: private   # never copied to, referenced by, or committed in the public repo
     optional: true            # absent means generic-only scanning, with a warning
   allowlist:
-    where: <ai-os>/internal/governance/policies/privacy-allowlist.txt
+    where: <atlas>/internal/governance/policies/privacy-allowlist.txt
     contains: known-benign strings that would otherwise match
     purpose: keep the signal-to-noise ratio high enough that the scan is actually run
 
 scope:
   scan: [working tree, staged content]
   also_scan_on_request: git history       # --history; slow, and findings there need rewriting, not deletion
-  never_scan: [$AI_OS_HOME, ~/.ai]        # private and runtime are expected to contain all of this
+  never_scan: [$ATLAS_HOME, ~/.ai]        # private and runtime are expected to contain all of this
 
 false_positives:
   stance: >
@@ -107,6 +107,6 @@ false_positives:
   techniques: [allowlist file, skip binaries and .git, minimum entropy/length on generic key shapes, ignore the policy files that define the patterns, exempt personal findings in git-ignored files, exempt licence copyright attribution]
 
 enforcement:
-  command: ai-os privacy-scan
+  command: atlas privacy-scan
   exit: non-zero on any finding
   destructive: false        # reports; never edits, never deletes, never rewrites history

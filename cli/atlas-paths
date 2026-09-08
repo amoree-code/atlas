@@ -1,0 +1,550 @@
+#!/usr/bin/env bash
+# atlas-paths — where a private-workspace root actually is, right now.
+#
+# The private workspace is being restructured one reversible slice at a time. Until every
+# move has landed, no tool can assume a layout: the same machine may hold the old path,
+# the new one, or — mid-move — both. This file is the one place that answers the question,
+# so nothing downstream has to guess and no two tools can guess differently.
+#
+#   new exists, old absent    -> the new path
+#   old exists, new absent    -> the old path
+#   both, one directory       -> the new name  (a symlink shim is compatibility, not a clash)
+#   both, two directories     -> CONFLICT. Report and stop.
+#   neither                   -> the new path — the layout `atlas init` creates now
+#
+# One exception, and it is declared rather than inferred: a *pilot mirror* — content
+# written at a new address so the new shape can be judged, while the old root stays
+# authoritative — says so in its own front matter, pointing back at the record that still
+# owns it:  `migrated_from: tasks/<ID>/task.md`. A marked mirror is not a move, so it never
+# occupies the new side of `projects` or `tickets` and never makes either root conflict.
+# Nothing else is exempt, and an unmarked directory is still a conflict.
+#
+# It resolves. It never creates, moves, copies, merges or deletes anything, and it never
+# picks a winner when both layouts hold real data: two stores that disagree is a fact only
+# the user can resolve, and merging them would destroy the evidence of which is current.
+#
+# As a library:  . "$SELF_DIR/atlas-paths" && d=$(atlas_path memory) || handle-the-conflict
+# As a command:  atlas-paths get|layout|list|env [--sh]|check|rewrite|ticket|project [<arg>]
+#
+# `env` prints raw values for machine parsers — never eval it; `env --sh` is the
+# shell-quoted form, and bash callers should source this file and call atlas_paths_export.
+#
+# Exit: 0 ok · 2 unknown root · 3 conflict · 4 no single root in the new layout.
+
+# --- the table ----------------------------------------------------------------------
+# One line per root that moves. new-relative, old-relative. A `*` in the new path means
+# the root does not survive the move as a single directory — see atlas_path().
+#
+# The seven added in Slice 10A (config, policies, daily, templates, skills, agents,
+# helpers) are exactly the roots Slice 9 left behind as symlink shims, because
+# atlas-onboard, atlas-hook, atlas-render, atlas-privacy-scan, atlas-doctor and
+# atlas-status named them literally. Giving them a resolver root is what makes those
+# shims removable later — see roadmap.md "What Slice 10 has to remove".
+ATLAS_PATH_ROOTS="memory knowledge projects tickets rules runtime config policies daily templates skills agents helpers schemas professional inbox sessions"
+
+_atlas_pair() {  # <root> -> "<new-rel> <old-rel>"
+  case "$1" in
+    memory)    echo "personal/memory                 user/02-personal/memory" ;;
+    knowledge) echo "personal/knowledge              user/05-knowledge" ;;
+    projects)  echo "projects                        user/04-projects" ;;
+    tickets)   echo "projects/*/tickets              tasks" ;;
+    rules)     echo "internal/governance/rules       system/rules" ;;
+    runtime)   echo "internal/runtime                runtime" ;;
+    config)    echo "internal/config                 system/config" ;;
+    policies)  echo "internal/governance/policies    system/policies" ;;
+    daily)     echo "personal/daily                  user/01-daily" ;;
+    templates) echo "personal/templates              user/06-templates" ;;
+    skills)    echo "internal/extensions/skills      skills" ;;
+    agents)    echo "internal/extensions/agents      agents" ;;
+    helpers)   echo "internal/helpers                scripts" ;;
+    schemas)   echo "internal/schemas                system/schemas" ;;
+    professional) echo "personal/professional          user/03-professional" ;;
+    inbox)     echo "personal/inbox                  user/00-inbox" ;;
+    sessions)  echo "internal/sessions               sessions" ;;
+    *) return 1 ;;
+  esac
+}
+
+atlas_paths_home() { printf '%s' "${ATLAS_HOME:-$HOME/atlas}"; }
+
+# --- Atlas-first resolution for cut-over durable-data roots (T-030, reopened T-046) ----
+# personal/, projects/ and governance/'s rules+policies are canonical at $ATLAS_HOME once
+# T-030's data cutover has run and verified. T-030/T-045 originally ruled config, skills,
+# agents, helpers, schemas and sessions permanent-legacy under $ATLAS_HOME; T-046 (owner
+# reopened that ruling) cuts them over too, physically migrated into $ATLAS_HOME by the
+# same slice that added them here. tickets is handled separately by atlas_ticket.
+#
+# Scoped to the real, single private workspace ONLY: this checks `home = $HOME/atlas`,
+# the literal default `atlas_paths_home` returns with no override. An isolated/alternate
+# ATLAS_HOME (every fixture in tests/test-contract.sh sets one, precisely to exercise the
+# old/new-layout logic below in isolation) never matches, so Atlas authority never leaks
+# into a test fixture or a deliberately alternate workspace — it is a fact about the one
+# real workspace, not a general property of whatever ATLAS_HOME happens to be this run.
+#
+# Legacy fallback is automatic and reversible: if $ATLAS_HOME lacks the directory (not yet
+# cut over, or a rollback), resolution falls straight through to the old/new logic below —
+# nothing here ever errors or blocks on a missing Atlas root.
+_atlas_atlas_rel() {  # <root> -> its Atlas-relative path, or empty if not cut over by T-030
+  case "$1" in
+    memory)       echo "personal/memory" ;;
+    knowledge)    echo "personal/knowledge" ;;
+    daily)        echo "personal/daily" ;;
+    templates)    echo "personal/templates" ;;
+    professional) echo "personal/professional" ;;
+    inbox)        echo "personal/inbox" ;;
+    projects)     echo "projects" ;;
+    rules)        echo "governance/rules" ;;
+    policies)     echo "governance/policies" ;;
+    runtime)      echo "runtime" ;;
+    config)       echo "config" ;;
+    skills)       echo "skills" ;;
+    agents)       echo "agents" ;;
+    helpers)      echo "helpers" ;;
+    schemas)      echo "schemas" ;;
+    sessions)     echo "sessions" ;;
+    *) return 1 ;;
+  esac
+}
+
+atlas_atlas_home() { printf '%s' "${ATLAS_HOME:-$HOME/atlas}"; }
+
+_atlas_atlas_path() {  # <root> -> the Atlas path for <root>, only for the real workspace
+  # Exit codes: 0 resolved · 1 not applicable / not cut over (legacy fallback is correct)
+  # · 9 the canonical Atlas root exists but is not a directory (T-045: malformed must fail
+  # loud, never fall through to a silent legacy answer — a file or broken symlink sitting
+  # where a ticket/data root belongs is corruption, not "not migrated yet").
+  local root="$1" home atlas_rel atlas_dir
+  home="$(atlas_paths_home)"
+  [ "$home" = "$HOME/atlas" ] || [ -f "$home/.atlas-workspace.json" ] || return 1
+  atlas_rel="$(_atlas_atlas_rel "$root")" || return 1
+  atlas_dir="$(atlas_atlas_home)/$atlas_rel"
+  if [ -e "$atlas_dir" ] && [ ! -d "$atlas_dir" ]; then
+    printf 'atlas-paths: canonical Atlas root for "%s" exists but is not a directory: %s\n' \
+      "$root" "$atlas_dir" >&2
+    return 9
+  fi
+  [ -d "$atlas_dir" ] || return 1
+  printf '%s\n' "$atlas_dir"
+}
+
+# Physical path when it exists, the literal otherwise — so a report can still name it.
+_atlas_rp() { (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
+
+# --- the pilot exemption --------------------------------------------------------------
+# A pilot mirror is shaped exactly like a half-finished move: real content on the new side
+# of a root whose old side is still live. The only honest way to tell them apart is to let
+# the mirror declare itself, which is what its front matter already does:
+#
+#   migrated_from: tasks/AIOS-014/task.md
+#
+# That line names the record that remains authoritative, in the root that has not moved —
+# evidence the mirror is a copy for review, not the new home of anything. Deliberately
+# narrow: only `projects` and `tickets` can be exempt, only the three files a project's
+# board is known to index are consulted, and only their front matter. Nothing here reads
+# memory or knowledge.
+ATLAS_PILOT_MARKER='^migrated_from:[[:space:]]*tasks/[A-Za-z0-9._-]+/task\.md[[:space:]]*$'
+
+_atlas_is_pilot_ticket() {  # <tickets-dir> -> 0 when the project declares itself a mirror of a task record
+  local dir="$1" project f line i
+  project="$(dirname "$dir")"
+  for f in "$project/index.md" "$project/context/current.md" "$project/context/checkpoint.md"; do
+    [ -f "$f" ] || continue
+    i=0
+    while [ "$i" -lt 40 ] && IFS= read -r line; do
+      i=$((i+1))
+      if [[ $line =~ $ATLAS_PILOT_MARKER ]]; then return 0; fi
+    done < "$f"
+  done
+  return 1
+}
+
+_atlas_projects_all_pilot() {  # <projects-dir> -> 0 when every project under it is a mirror
+  # One unmarked project is enough to make this a real projects root. The exemption covers
+  # a directory that is nothing but pilot, never one that merely contains a pilot.
+  local dir="$1" p n=0 all=1 restore=1
+  shopt -q nullglob && restore=0
+  shopt -s nullglob
+  for p in "$dir"/*/; do
+    n=$((n+1))
+    _atlas_is_pilot_ticket "${p%/}/tickets" || { all=0; break; }
+  done
+  [ "$restore" -eq 0 ] || shopt -u nullglob
+  [ "$n" -gt 0 ] && [ "$all" -eq 1 ]
+}
+
+# --- the archived pointer layer --------------------------------------------------------
+# The mirror image, on the old side. Once `tasks/<ID>/` records move into per-project tickets,
+# the directory they came from is kept for one release as a compatibility layer: each entry
+# is a pointer naming where its record went. That layer is shaped exactly like a root that
+# has not moved yet, so — like a pilot mirror — it declares itself rather than being guessed
+# at, in the two lines the pointer template already writes:
+#
+#   moved_to: projects/<project>/tickets/<ID>/task.md
+#   authoritative: false
+#
+# The test is "does any authoritative record still live here?", not "is every directory a
+# pointer": a directory holding no `task.md` holds no record and cannot make the layer
+# authoritative, which is how an empty `archive/` stays irrelevant. One record that does not
+# renounce authority is enough to make the old side live again, and a conflict.
+# Deliberately narrow: only `tickets` can be exempt this way, and only the two files a
+# pointer is written into are read, and only their first lines.
+ATLAS_ARCHIVE_MOVED='^moved_to:[[:space:]]*[^[:space:]]+'
+ATLAS_ARCHIVE_FLAG='^authoritative:[[:space:]]*false[[:space:]]*$'
+
+_atlas_is_archived_ticket() {  # <ticket-dir> -> 0 when it renounces authority and names its successor
+  local dir="$1" f line i moved flag
+  for f in "$dir/task.md" "$dir/README.md"; do
+    [ -f "$f" ] || continue
+    moved=1; flag=1; i=0
+    while [ "$i" -lt 40 ] && IFS= read -r line; do
+      i=$((i+1))
+      if [[ $line =~ $ATLAS_ARCHIVE_MOVED ]]; then moved=0; fi
+      if [[ $line =~ $ATLAS_ARCHIVE_FLAG ]];  then flag=0; fi
+    done < "$f"
+    [ "$moved" -eq 0 ] && [ "$flag" -eq 0 ] && return 0
+  done
+  return 1
+}
+
+_atlas_tasks_all_archived() {  # <tasks-dir> -> 0 when no authoritative record remains under it
+  local dir="$1" p n=0 restore=1 rc=0
+  shopt -q nullglob && restore=0
+  shopt -s nullglob
+  for p in "$dir"/*/; do
+    [ -f "${p}task.md" ] || continue
+    n=$((n+1))
+    if ! _atlas_is_archived_ticket "${p%/}"; then rc=1; break; fi
+  done
+  [ "$restore" -eq 0 ] || shopt -u nullglob
+  [ "$rc" -eq 0 ] && [ "$n" -gt 0 ]
+}
+
+# Whether the old side of <root> still holds authority. Only `tickets` can renounce it.
+_atlas_old_is_live() {  # <root> <old-side dir>
+  [ -d "$2" ] || return 1
+  case "$1" in
+    tickets) _atlas_tasks_all_archived "$2" && return 1 ;;
+  esac
+  return 0
+}
+
+_atlas_is_pilot() {  # <root> <new-side dir> -> 0 when that directory is a marked pilot
+  case "$1" in
+    tickets)  _atlas_is_pilot_ticket "$2" ;;
+    projects) _atlas_projects_all_pilot "$2" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Every directory the new side of <root> currently occupies, one per line. Empty = absent.
+# A marked pilot mirror is skipped: it is content at a new address, not a root that has
+# moved there, so it must neither put the old root out of play nor make it conflict.
+_atlas_new_dirs() {  # <home> <root>
+  local home="$1" root="$2" pair rel p
+  pair="$(_atlas_pair "$root")" || return 1
+  rel="${pair%% *}"
+  case "$rel" in
+    *'*'*)
+      # A wildcard root has as many homes as there are projects. Nullglob so an unmatched
+      # pattern reads as "the new layout is not here yet", never as a literal path.
+      local restore=1; shopt -q nullglob && restore=0
+      shopt -s nullglob
+      for p in "$home"/$rel; do
+        [ -d "$p" ] || continue
+        if _atlas_is_pilot "$root" "$p"; then continue; fi
+        printf '%s\n' "$p"
+      done
+      [ "$restore" -eq 0 ] || shopt -u nullglob
+      ;;
+    *)
+      if [ -d "$home/$rel" ] && ! _atlas_is_pilot "$root" "$home/$rel"; then
+        printf '%s\n' "$home/$rel"
+      fi ;;
+  esac
+  return 0
+}
+
+# --- the answer ---------------------------------------------------------------------
+atlas_path_layout() {  # <root> -> new | old | conflict | none   (2 = unknown root)
+  local root="$1" home pair old_rel new_dirs old_dir
+  home="$(atlas_paths_home)"
+  pair="$(_atlas_pair "$root")" || { printf 'unknown\n'; return 2; }
+  old_rel="${pair##* }"
+  new_dirs="$(_atlas_new_dirs "$home" "$root")"
+  old_dir="$home/$old_rel"
+
+  if [ -n "$new_dirs" ] && _atlas_old_is_live "$root" "$old_dir"; then
+    # One directory reachable under both names is a deliberate shim, not a conflict.
+    if [ "$(printf '%s\n' "$new_dirs" | wc -l | tr -d ' ')" = "1" ] &&
+       [ "$(_atlas_rp "$new_dirs")" = "$(_atlas_rp "$old_dir")" ]; then
+      printf 'new\n'
+    else
+      printf 'conflict\n'
+    fi
+  elif [ -n "$new_dirs" ]; then printf 'new\n'
+  elif _atlas_old_is_live "$root" "$old_dir"; then printf 'old\n'
+  else                          printf 'none\n'
+  fi
+}
+
+atlas_path_conflict() {  # <root> -> the report, on stdout
+  local root="$1" home pair old_rel
+  home="$(atlas_paths_home)"
+  pair="$(_atlas_pair "$root")" || return 2
+  old_rel="${pair##* }"
+  printf 'CONFLICT: private root "%s" exists in both layouts, as different directories\n' "$root"
+  printf '  old  %s\n' "$home/$old_rel"
+  _atlas_new_dirs "$home" "$root" | sed 's/^/  new  /'
+  printf '  Atlas will not merge, copy or pick between them. Resolve it by hand, then re-run.\n'
+}
+
+atlas_path() {  # <root> -> the absolute path, on stdout
+  local root="$1" home pair new_rel old_rel layout atlas_answer atlas_rc
+  atlas_answer="$(_atlas_atlas_path "$root")"; atlas_rc=$?
+  [ "$atlas_rc" -eq 0 ] && { printf '%s\n' "$atlas_answer"; return 0; }
+  # 9 = malformed canonical root: _atlas_atlas_path already reported it on stderr. Never
+  # fall through to the legacy layout below — that would silently hand back the wrong root.
+  [ "$atlas_rc" -eq 9 ] && return 9
+  home="$(atlas_paths_home)"
+  pair="$(_atlas_pair "$root")" || { printf 'atlas-paths: unknown private root "%s"\n' "$root" >&2; return 2; }
+  new_rel="${pair%% *}"; old_rel="${pair##* }"
+  layout="$(atlas_path_layout "$root")"
+
+  case "$layout" in
+    conflict) atlas_path_conflict "$root" >&2; return 3 ;;
+    new)
+      # A wildcard root has no single home once the move lands. Refusing here is the
+      # point: the caller has to learn the new lookup rather than be handed a guess.
+      case "$new_rel" in
+        *'*'*)
+          printf 'atlas-paths: "%s" has no single root in the new layout (%s)\n' "$root" "$new_rel" >&2
+          printf '             its records moved into per-project tickets; teach the caller the new lookup\n' >&2
+          return 4 ;;
+      esac
+      printf '%s\n' "$home/$new_rel" ;;
+    old) printf '%s\n' "$home/$old_rel" ;;
+    none)
+      case "$new_rel" in
+        *'*'*) printf '%s\n' "$home/$old_rel" ;;
+        *)     printf '%s\n' "$home/$new_rel" ;;
+      esac ;;
+    *) return 2 ;;
+  esac
+}
+
+atlas_path_rewrite() {  # <workspace-relative path> -> the absolute path in the live layout
+  # The compatibility primitive: a path written against either side of the move comes back
+  # pointing at whichever layout this workspace is actually in. Anything under no moving
+  # root is returned unchanged. A conflicting root propagates its exit code rather than a
+  # guess.
+  local rel="$1" home root pair new_rel old_rel base suffix
+  home="$(atlas_paths_home)"
+  for root in $ATLAS_PATH_ROOTS; do
+    pair="$(_atlas_pair "$root")"; new_rel="${pair%% *}"; old_rel="${pair##* }"
+    case "$rel" in
+      "$old_rel"|"$old_rel"/*)
+        base="$(atlas_path "$root")" || return $?
+        printf '%s%s\n' "$base" "${rel#"$old_rel"}"
+        return 0 ;;
+    esac
+    case "$new_rel" in
+      *'*'*) ;;
+      *)
+        case "$rel" in
+          "$new_rel"|"$new_rel"/*)
+            base="$(atlas_path "$root")" || return $?
+            suffix="${rel#"$new_rel"}"
+            printf '%s%s\n' "$base" "$suffix"
+            return 0 ;;
+        esac ;;
+    esac
+  done
+  printf '%s/%s\n' "$home" "$rel"
+}
+
+# --- one ticket, by id ------------------------------------------------------------------
+# `tickets` has no single root once records live per project, so the honest primitive is
+# not "where is the tickets root" but "where is this ticket". Four places are consulted,
+# in the order that prefers the authoritative record over a compatibility/historical layer:
+#
+#   1. the live layout      projects/*/tickets/<ID>              — authoritative, current
+#   2. the in-project archive projects/*/tickets/archive/*/<ID>  — authoritative, historical
+#      (T-024: `tickets archive` moves a `done`/`cancelled` ticket's whole directory here —
+#      AIOS-### under archive/AIOS/, T-### under archive/Atlas/ — and nothing else ever
+#      writes under archive/, so a hit there is exactly as authoritative as a live one; it
+#      has simply stopped being on the hot browsing surface)
+#   3. the old layout        tasks/<ID>                          — only while it still holds a record
+#   4. the pointer           tasks/<ID> -> moved_to:              — the bridge the archive layer writes
+#
+# Two projects — or a live and an archived copy — claiming one id is a conflict, reported
+# rather than resolved: an id is supposed to be unique across the workspace, and picking
+# one would hide that it is not. This is a lookup, not a registry — nothing is indexed,
+# cached or written.
+_atlas_moved_to() {  # <ticket-dir> -> the workspace-relative path its pointer names
+  local dir="$1" f line i
+  for f in "$dir/task.md" "$dir/README.md"; do
+    [ -f "$f" ] || continue
+    i=0
+    while [ "$i" -lt 40 ] && IFS= read -r line; do
+      i=$((i+1))
+      case "$line" in
+        moved_to:*) line="${line#moved_to:}"
+                    printf '%s\n' "${line#"${line%%[![:space:]]*}"}"; return 0 ;;
+      esac
+    done < "$f"
+  done
+  return 1
+}
+
+atlas_ticket() {  # <id> -> the absolute directory holding that ticket's record
+  local id="${1:-}" home projects_base atlas_rc hits n p rel target restore=1
+  home="$(atlas_paths_home)"
+  # T-030: projects/ (and the tickets under it) is canonical at Atlas for the real
+  # workspace once cut over — same guard as _atlas_atlas_path, so an isolated/alternate
+  # ATLAS_HOME (every test-contract.sh ticket-resolution fixture) is unaffected.
+  projects_base="$(_atlas_atlas_path projects)"; atlas_rc=$?
+  # T-045: 9 = malformed canonical root, already reported on stderr — never fall through
+  # to the legacy tasks/ root, that would silently answer from the wrong authority.
+  [ "$atlas_rc" -eq 9 ] && return 9
+  [ "$atlas_rc" -eq 0 ] || projects_base="$home/projects"
+  case "$id" in
+    ''|*/*|.|..) printf 'atlas-paths: not a ticket id: %s\n' "${id:-<empty>}" >&2; return 2 ;;
+    # The archive namespace directories are containers, never ticket ids — a directory
+    # literally named "archive" would otherwise satisfy the glob below and be mistaken
+    # for a ticket that happens to share its name.
+    archive) printf 'atlas-paths: "archive" is a container directory, not a ticket id\n' >&2
+             return 2 ;;
+  esac
+
+  shopt -q nullglob && restore=0
+  shopt -s nullglob
+  hits=""
+  for p in "$projects_base"/*/tickets/"$id" "$projects_base"/*/tickets/archive/*/"$id"; do
+    [ -d "$p" ] && hits="$hits$p"$'\n'
+  done
+  [ "$restore" -eq 0 ] || shopt -u nullglob
+
+  n=$(printf '%s' "$hits" | grep -c . || true)
+  if [ "$n" -gt 1 ]; then
+    printf 'CONFLICT: ticket "%s" exists under more than one project or archive location\n' "$id" >&2
+    printf '%s' "$hits" | sed 's/^/  /' >&2
+    printf '  A ticket id is unique across the workspace. Resolve it by hand, then re-run.\n' >&2
+    return 3
+  fi
+  if [ "$n" -eq 1 ]; then printf '%s\n' "${hits%$'\n'}"; return 0; fi
+
+  # Nothing in the new layout. The old directory answers only while it still holds a
+  # record of its own; once it is a pointer, it answers by naming its successor.
+  if [ -d "$home/tasks/$id" ]; then
+    if ! _atlas_is_archived_ticket "$home/tasks/$id"; then
+      printf '%s\n' "$home/tasks/$id"; return 0
+    fi
+    if rel="$(_atlas_moved_to "$home/tasks/$id")"; then
+      target="$home/${rel%/task.md}"
+      if [ -d "$target" ]; then printf '%s\n' "$target"; return 0; fi
+      printf 'atlas-paths: ticket "%s" points at %s, which does not exist\n' "$id" "$rel" >&2
+      return 4
+    fi
+  fi
+  printf 'atlas-paths: no ticket "%s" — looked in projects/*/tickets/ and tasks/\n' "$id" >&2
+  return 4
+}
+
+atlas_project() {  # <id> -> one canonical project directory
+  # Fail-closed: an id must be a single bare path segment (no separators, no dot-traversal,
+  # no glob/shell metacharacters) so it can never be ambiguous or step outside projects/.
+  local id="${1:-}" projects_base base_real candidate candidate_real
+  case "$id" in
+    ''|*/*|.|..|*[!A-Za-z0-9._-]*)
+      printf 'atlas-paths: not a project id: %s\n' "${id:-<empty>}" >&2; return 2 ;;
+  esac
+  projects_base="$(atlas_path projects)" || return $?
+  base_real="$(_atlas_rp "$projects_base")"
+  candidate="$projects_base/$id"
+  [ -d "$candidate" ] || {
+    printf 'atlas-paths: no project "%s" under %s\n' "$id" "$projects_base" >&2
+    return 4
+  }
+  candidate_real="$(_atlas_rp "$candidate")"
+  case "$candidate_real/" in
+    "$base_real"/*) printf '%s\n' "$candidate_real"; return 0 ;;
+    *) printf 'atlas-paths: project "%s" escapes the canonical projects root\n' "$id" >&2
+       return 3 ;;
+  esac
+}
+
+atlas_paths_check() {  # report every conflicting root; exit = how many
+  local root n=0
+  for root in $ATLAS_PATH_ROOTS; do
+    [ "$(atlas_path_layout "$root")" = "conflict" ] || continue
+    atlas_path_conflict "$root"; n=$((n+1))
+  done
+  return "$n"
+}
+
+atlas_paths_export() {  # set ATLAS_PATH_<ROOT> / ATLAS_LAYOUT_<ROOT> in the calling shell
+  # The bash entry point, and the reason no caller needs `eval`. Assigning directly keeps
+  # the values out of the shell's parser entirely, so a workspace path containing a space,
+  # a quote or a `$` cannot come back as a command. `env` below is the text format for
+  # everything that is not bash; it is not, and does not need to be, eval-safe.
+  local root upper path
+  for root in $ATLAS_PATH_ROOTS; do
+    upper="$(printf '%s' "$root" | tr 'a-z' 'A-Z')"
+    unset "ATLAS_PATH_$upper"
+    printf -v "ATLAS_LAYOUT_$upper" '%s' "$(atlas_path_layout "$root")"
+    # A root with no single answer gets a layout and no path, deliberately: a consumer
+    # that needs the path must notice its absence rather than inherit a guess.
+    path="$(atlas_path "$root" 2>/dev/null)" && printf -v "ATLAS_PATH_$upper" '%s' "$path"
+  done
+  return 0
+}
+
+# --- command mode -------------------------------------------------------------------
+# Only when executed. Sourcing this file defines the functions and runs nothing.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  set -uo pipefail
+  _atlas_need_root() { [ -n "${1:-}" ] || { echo "atlas-paths: $2 needs a root name" >&2; exit 2; }; }
+  case "${1:-list}" in
+    get)    _atlas_need_root "${2:-}" get;    atlas_path "$2" ;;
+    ticket) atlas_ticket "${2:-}" ;;
+    project) atlas_project "${2:-}" ;;
+    layout) _atlas_need_root "${2:-}" layout; atlas_path_layout "$2" ;;
+    list)
+      for r in $ATLAS_PATH_ROOTS; do
+        l="$(atlas_path_layout "$r")"
+        p="$(atlas_path "$r" 2>/dev/null)" || p="-"
+        printf '%-10s %-9s %s\n' "$r" "$l" "$p"
+      done ;;
+    env)
+      # One call, every root — so a non-bash caller pays a single process, not six.
+      # A root with no single answer gets a layout and no path, deliberately: a consumer
+      # that needs the path must notice its absence rather than inherit a guess.
+      #
+      # Values are RAW: everything after the first `=` is the literal path, which is what
+      # a machine parser wants and what makes a path with spaces survive intact. That also
+      # makes plain `env` unsafe to hand to `eval` — bash would read the space as an
+      # argument separator. `env --sh` emits the same answers shell-quoted for that, and
+      # bash callers should skip both and source this file for atlas_paths_export.
+      q=0; [ "${2:-}" = "--sh" ] && q=1
+      for r in $ATLAS_PATH_ROOTS; do
+        u="$(printf '%s' "$r" | tr 'a-z' 'A-Z')"
+        l="$(atlas_path_layout "$r")"
+        p="$(atlas_path "$r" 2>/dev/null)" || p=""
+        if [ "$q" -eq 1 ]; then
+          printf 'ATLAS_LAYOUT_%s=%q\n' "$u" "$l"
+          [ -n "$p" ] && printf 'ATLAS_PATH_%s=%q\n' "$u" "$p"
+        else
+          printf 'ATLAS_LAYOUT_%s=%s\n' "$u" "$l"
+          [ -n "$p" ] && printf 'ATLAS_PATH_%s=%s\n' "$u" "$p"
+        fi
+      done
+      : ;;
+    rewrite) [ -n "${2:-}" ] || { echo "atlas-paths: rewrite needs a workspace-relative path" >&2; exit 2; }
+             atlas_path_rewrite "$2" ;;
+    check)  atlas_paths_check; exit $? ;;
+    help|--help|-h) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) echo "atlas-paths: unknown command '${1:-}'" >&2
+       echo "usage: atlas-paths get|layout|list|env [--sh]|check|rewrite|ticket|project [<root>|<path>|<id>]" >&2
+       echo "roots: $ATLAS_PATH_ROOTS" >&2; exit 2 ;;
+  esac
+fi

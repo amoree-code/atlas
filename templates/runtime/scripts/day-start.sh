@@ -2,7 +2,7 @@
 # Create today's daily folder and seed brief/plan/log from templates.
 # Idempotent: never overwrites an existing file. Prints the folder path.
 set -euo pipefail
-W="${AI_OS_HOME:-$HOME/.ai-os}"
+W="${ATLAS_HOME:-$HOME/atlas}"
 D=$(date +%Y-%m-%d)
 DAILY="$W/personal/daily"
 DIR="$DAILY/$(date +%Y)/$(date +%m)/$D"

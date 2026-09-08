@@ -13,8 +13,8 @@ real file paths from a contributor's machine, no credentials.
 ## Rules for this repo specifically
 
 - Every skill and script under `templates/` must be **path-agnostic**: no assumption
-  that the user's workspace lives at any specific location. Reference `$AI_OS_HOME`
-  (defaulting to `~/.ai-os`), never a hardcoded path.
+  that the user's workspace lives at any specific location. Reference `$ATLAS_HOME`
+  (defaulting to `~/atlas`), never a hardcoded path.
 - Every skill and script must be **client-agnostic** where possible. Where a piece of
   behavior is genuinely one client's mechanism (e.g. a Claude Code hook contract), it
   belongs under `adapters/<client>/`, not in `templates/`.
@@ -35,13 +35,13 @@ before you write it down, and prefer deleting a stale sentence to carrying it fo
   `adapters/`, `internal/governance/policies/`, `schemas/` and `domains/` first. "Empty by
   design" and "none ship yet" were both false for months.
 - **There are two layers, not three.** `~/.ai` is retired: the engine is `cli/`, client
-  integration is `adapters/<client>/`, and transient state is `$AI_OS_HOME/runtime/`.
-  `ai-os doctor` fails if the legacy location still holds active components.
+  integration is `adapters/<client>/`, and transient state is `$ATLAS_HOME/runtime/`.
+  `atlas doctor` fails if the legacy location still holds active components.
 - **A unit of behavior is a `capability`**, contract `schemas/capability.schema.md`.
   A client integration is an **adapter**, contract `schemas/adapter.schema.md`. Never
   use either word for the other, in a filename, an identifier or a sentence. `plugin` is
   the historical name for a capability and survives only as compatibility — the
-  `ai-os plugin` alias, the `AI_OS_PLUGINS` env fallback, the `plugin.yaml` manifest
+  `atlas plugin` alias, the `ATLAS_PLUGINS` env fallback, the `plugin.yaml` manifest
   fallback, and the `plugin:` manifest key in contract v1. Never use it as the current
   term.
 - **A domain declares; nothing executes it.** `domains/<id>.yaml` has no command, no
@@ -51,9 +51,9 @@ before you write it down, and prefer deleting a stale sentence to carrying it fo
   so. A visible gap is the point; an assumed one is the defect.
 - **Keep `VERSION` and any version claim in `README.md` in agreement.**
 - **No absolute paths from a contributor's machine**, and no real memory content in an
-  example. `$AI_OS_HOME` (default `~/.ai-os`) is the public referent.
+  example. `$ATLAS_HOME` (default `~/atlas`) is the public referent.
 
-`ai-os privacy-scan` is the backstop for the last rule only. Nothing automated checks the
+`atlas privacy-scan` is the backstop for the last rule only. Nothing automated checks the
 others, which is why they are written here.
 
 ## Testing

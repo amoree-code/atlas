@@ -21,15 +21,15 @@ skip it and say so.
 
 ## Steps
 
-0. **Lifecycle reading.** `ai-os lifecycle --ticket <ID>` if a ticket is live, else
-   `ai-os lifecycle`. This is the `SESSION_END_REQUEST` boundary — the deterministic
+0. **Lifecycle reading.** `atlas lifecycle --ticket <ID>` if a ticket is live, else
+   `atlas lifecycle`. This is the `SESSION_END_REQUEST` boundary — the deterministic
    verdict decides what the rest of this skill should do, not the other way round:
    `HANDOFF` → run the `session-handoff` skill instead of (or before) the steps below;
    `FRESH` → checkpoint (step 5 covers durable state) and tell the owner a fresh session
    is recommended; `CHECKPOINT`/`CONTINUE` → proceed with the steps below as normal.
 
 1. **Session record.** Write to
-   `~/.ai-os/internal/sessions/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d-%H%M)-<project>-<topic>.md`
+   `~/atlas/internal/sessions/$(date +%Y)/$(date +%m)/$(date +%Y-%m-%d-%H%M)-<project>-<topic>.md`
    using `{{profile.templates_dir}}/session.md`. `<topic>` is 1–3
    kebab-case words. Create the month folder if needed. Fill **Files changed** from
    `git status --short` and `git log` for this session — not from memory. Omit any
@@ -37,7 +37,7 @@ skip it and say so.
    start from cold.
 
 2. **Daily log.** Append the meaningful events to today's
-   `~/.ai-os/personal/daily/$(date +%Y/%m/%Y-%m-%d)/log.md`. Decisions, completions, problems and
+   `~/atlas/personal/daily/$(date +%Y/%m/%Y-%m-%d)/log.md`. Decisions, completions, problems and
    their fixes, discoveries. Not a narration of the session. Run
    `{{profile.scripts_dir}}/day-start.sh` first if today's folder doesn't exist.
 
@@ -50,11 +50,11 @@ skip it and say so.
 
    Nothing durable changed? Skip this step. Say you skipped it.
 
-4. **Tasks.** Update `~/.ai-os/projects/tasks.md` — close what's done, add
+4. **Tasks.** Update `~/atlas/projects/tasks.md` — close what's done, add
    what surfaced, restate next actions. Keep the format.
 
 5. **Registry.** Update this project's **Last** and **Next action** cells in
-   `~/.ai-os/projects/registry.md`. Nothing else.
+   `~/atlas/projects/registry.md`. Nothing else.
 
 6. **Global memory** — only if it passes §5 of the workspace `{{client.project_context}}`: stable, true
    across projects, not already recorded. This is rare. When in doubt, don't.

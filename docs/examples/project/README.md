@@ -18,9 +18,9 @@ Read [`a-project/tickets/EXMPL-001/task.md`](a-project/tickets/EXMPL-001/task.md
 it is a complete, filled-in `task.md` covering every required section in
 `schemas/task.md` §4 (Objective, Definition of done, Next action, Verification,
 Blockers, Log), with a real (if trivial) frontmatter. `index.md`'s ticket table is what
-`ai-os tickets index --write` would generate from that one record.
+`atlas tickets index --write` would generate from that one record.
 
-`context/state.md` and `context/roadmap.md` are the two files `cli/ai-os-context`
+`context/state.md` and `context/roadmap.md` are the two files `cli/atlas-context`
 actually reads by name for a project (see its `read_next` block) — the rest of what a
 context directory can hold is project-specific and optional; see
 `templates/context/README.md`.

@@ -10,14 +10,14 @@ Earlier versions of Atlas had a third layer, a directory at `~/.ai`, which held 
 hooks, the operational scripts, and the client integration that made the system actually
 run. That layer is retired. Its engine became this repository's `cli/`, its client
 integration became `adapters/<client>/`, the user's own data moved into the private
-workspace, and its transient state became `$AI_OS_HOME/internal/runtime/` — the second thing this
-document is about. `ai-os doctor` treats `~/.ai` as a legacy location and fails if it
+workspace, and its transient state became `$ATLAS_HOME/internal/runtime/` — the second thing this
+document is about. `atlas doctor` treats `~/.ai` as a legacy location and fails if it
 still holds active components. Full history: `docs/design/public-private.md`.
 
-## `$AI_OS_HOME/internal/runtime/` — a directory, not a layer
+## `$ATLAS_HOME/internal/runtime/` — a directory, not a layer
 
 `runtime/` is a directory *inside* the private workspace, owned by the workspace like
-everything else under `$AI_OS_HOME`. It is not a third layer with an owner of its own —
+everything else under `$ATLAS_HOME`. It is not a third layer with an owner of its own —
 see `docs/design/public-private.md` for the two-layer model this fits into.
 
 It holds **transient generated state**: the `runtime` ownership class in that same

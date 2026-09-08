@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+"""atlas-observe — run a command, keep the output, admit only the decision-relevant part.
+
+  atlas observe [options] -- <command> [args...]   run it, return a compact observation
+  atlas observe show <id> [--grep RE] [--lines A-B] [--all]   retrieve raw output later
+  atlas observe list [-n N]                        recent observations
+  atlas observe prune [--keep N]                   drop the oldest raw captures
+
+## What this is for
+
+A test suite, a verbose build, a long diff or a large log answers a question in a few
+lines and costs thousands of tokens to say so — and once admitted, that cost is paid again
+on every later turn of the session, because context is re-read, not consulted. Measured on
+this machine: 291 tool results of 8,000 characters or more, 4.3 million characters between
+them.
+
+So the raw output goes to a file and stays there. What comes back is the exit status, the
+lines that carry a failure, a summary line if the command produced one, the head and tail,
+and an id. When the compact form is not enough, `show` returns any slice of the raw — which
+is the point of keeping it rather than truncating it.
+
+## What it will not do
+
+**It does not wrap everything.** Output below `--full-below` is returned verbatim, because
+a wrapper around a two-line command costs more than it saves. The default is a soft budget,
+not a rule, and `--full-below 0` forces reduction while `--full-below 999999` disables it.
+
+**It does not decide correctness.** Extraction is literal pattern matching over the text,
+never a judgement about whether the command succeeded — the exit code says that. A run
+whose output it cannot make sense of returns head and tail and says so, rather than
+inventing a summary.
+
+**It does not hide a change.** Re-running a command whose output is byte-identical to the
+last capture reports that in one line instead of re-admitting the same text; ANY difference
+makes it a new observation, reported in full. Correctness of the comparison is the whole
+value: a stale "unchanged" would be worse than the tokens it saves.
+
+Zero non-stdlib dependencies.
+"""
+import argparse, hashlib, json, os, re, shutil, subprocess, sys, time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from atlas_paths import atlas_home
+
+# Soft budgets. Every one is a default that can be overridden per invocation; none is
+# enforced against the raw capture, which is always complete on disk.
+FULL_BELOW_CHARS = 2000     # below this, the output is returned as it is
+SIGNAL_LINES = 25           # failure/error lines shown before the rest are counted
+HEAD_LINES = 6
+TAIL_LINES = 12
+
+# Literal markers. A line is scanned only if it is not itself a success line: a passing
+# test whose NAME contains the word "failure" is not a failure, and treating it as one
+# fills the observation with the opposite of what happened. Case matters — `FAIL` as a
+# status token is a signal, the word "failure" inside a sentence is not — and the
+# lowercase forms must carry a colon, which is how compilers and runtimes actually print
+# them. These are literal patterns, not a judgement about whether the run succeeded; the
+# exit code says that.
+SUCCESS_LINE = re.compile(r"^\s*(?:PASS|OK|ok|SKIP|✓|✔)\b")
+SIGNAL = [
+    ("failure",   re.compile(r"(?:^|[\s\[(])(?:FAIL(?:ED|URE)?|✗|✘)\b")),
+    ("error",     re.compile(r"(?:^|[\s\[(])(?:ERROR|FATAL|PANIC|SEGFAULT)\b")),
+    ("error",     re.compile(r"(?i)(?:^|\s)(?:error|fatal|panic|exception|assertion)\s*:")),
+    ("traceback", re.compile(r"^\s*(?:Traceback \(most recent call last\)|\s+File \")")),
+    ("missing",   re.compile(r"(?i)\b(?:no such file|command not found|cannot find|"
+                             r"permission denied|not permitted)\b")),
+]
+# A line that states the run's own result. Reported verbatim, never recomputed.
+SUMMARY = re.compile(
+    r"(?i)\b\d+\s+(?:passed|failed|errors?|warnings?|tests?|ok|skipped)\b"
+    r"|\b(?:passed|failed)\s*[:=]\s*\d+"
+    r"|\bTests?:\s+\d+"
+    r"|\b\d+\s+(?:file|insertion|deletion)s?\s+changed")
+PATHLIKE = re.compile(r"(?:^|[\s\"'(])((?:/|\./|[A-Za-z0-9_.\-]+/)[A-Za-z0-9_./\-]+\.[A-Za-z0-9]+)")
+
+
+def store():
+    """Where a raw capture lands.
+
+    T-015 cutover: `$ATLAS_HOME/runtime/observations/` (default `~/atlas/runtime/observations`)
+    is the single canonical destination for new writes — no legacy fallback. If the Atlas
+    runtime root does not exist, this fails clearly rather than silently writing to the
+    legacy store, so a missing Atlas root can never produce a split-brain write.
+    """
+    atlas_runtime = atlas_home() / "runtime"
+    if not atlas_runtime.is_dir():
+        sys.exit(f"atlas observe: Atlas runtime root not found at {atlas_runtime} — "
+                  f"refusing to fall back to the legacy store. Create it or set ATLAS_HOME.")
+    d = atlas_runtime / "observations"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def new_id(root):
+    return time.strftime("%Y%m%d-%H%M%S") + "-" + os.urandom(3).hex()
+
+
+def collapse(lines):
+    """Consecutive identical lines become one, with a count. Repetition is not evidence."""
+    out, prev, n = [], None, 0
+    for l in lines:
+        if l == prev:
+            n += 1
+            continue
+        if prev is not None:
+            out.append(prev if n == 0 else f"{prev}    (x{n + 1})")
+        prev, n = l, 0
+    if prev is not None:
+        out.append(prev if n == 0 else f"{prev}    (x{n + 1})")
+    return out
+
+
+def reduce_output(text, signal_lines=SIGNAL_LINES):
+    lines = text.splitlines()
+    body = [l for l in lines if l.strip()]
+    signals, seen = [], set()
+    for l in body:
+        if SUCCESS_LINE.match(l):
+            continue
+        for label, rx in SIGNAL:
+            if rx.search(l):
+                key = l.strip()[:200]
+                if key not in seen:
+                    seen.add(key)
+                    signals.append((label, l.rstrip()))
+                break
+    summaries = [l.rstrip() for l in body if SUMMARY.search(l)]
+    paths = []
+    for l in signals and [s for _, s in signals] or body[:200]:
+        for m in PATHLIKE.finditer(l):
+            p = m.group(1)
+            if p not in paths:
+                paths.append(p)
+    return {
+        "lines": len(lines),
+        "chars": len(text),
+        "signals": collapse([f"[{lb}] {l}" for lb, l in signals])[:signal_lines],
+        "signals_total": len(signals),
+        "summaries": collapse(summaries)[-5:],
+        "paths": paths[:12],
+        "head": collapse([l.rstrip() for l in lines[:HEAD_LINES]]),
+        "tail": collapse([l.rstrip() for l in lines[-TAIL_LINES:]]),
+    }
+
+
+def previous_for(root, key):
+    """The most recent capture of the same command in the same directory."""
+    best = None
+    for meta in root.glob("*/meta.json"):
+        try:
+            m = json.loads(meta.read_text())
+        except ValueError:
+            continue
+        if m.get("key") == key and (best is None or m["started"] > best["started"]):
+            best = m
+    return best
+
+
+def cmd_run(a):
+    root = store()
+    cmd = a.command
+    if not cmd:
+        print("atlas observe: nothing to run — put the command after --", file=sys.stderr)
+        return 2
+    key = hashlib.sha256(("\x00".join(cmd) + "\x00" + os.getcwd())
+                         .encode()).hexdigest()[:16]
+    prev = previous_for(root, key)
+
+    oid = new_id(root)
+    d = root / oid
+    d.mkdir(parents=True)
+    raw = d / "raw.txt"
+    started = time.time()
+    with raw.open("w") as fh:
+        proc = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT)
+    elapsed = time.time() - started
+    text = raw.read_text(errors="replace")
+    digest = hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:16]
+
+    meta = {"id": oid, "key": key, "command": cmd, "cwd": os.getcwd(),
+            "exit": proc.returncode, "seconds": round(elapsed, 2),
+            "chars": len(text), "lines": text.count("\n"),
+            "digest": digest, "started": started, "tag": a.tag}
+    (d / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+
+    unchanged = bool(prev and prev.get("digest") == digest
+                     and prev.get("exit") == proc.returncode)
+    if a.json:
+        out = dict(meta)
+        out["unchanged_since"] = prev["id"] if unchanged else None
+        out["observation"] = None if unchanged else reduce_output(text, a.max_signals)
+        print(json.dumps(out, indent=2))
+        return proc.returncode
+
+    head = (f"observe {oid}   exit {proc.returncode}   {elapsed:.1f}s   "
+            f"{len(text):,} chars")
+    if unchanged:
+        print(f"{head}\n  unchanged since {prev['id']} — byte-identical output and the "
+              f"same exit status.\n  Nothing re-admitted. Raw: atlas observe show {oid}")
+        return proc.returncode
+
+    if len(text) <= a.full_below:
+        print(head + "   (under the reduction budget — returned in full)\n")
+        print(text.rstrip())
+        return proc.returncode
+
+    r = reduce_output(text, a.max_signals)
+    print(head + f"   {r['lines']:,} lines")
+    if r["summaries"]:
+        print("\n  result")
+        for s in r["summaries"]:
+            print(f"    {s[:200]}")
+    if r["signals"]:
+        print(f"\n  signals ({r['signals_total']} matched"
+              + (f", {r['signals_total'] - len(r['signals'])} not shown"
+                 if r["signals_total"] > len(r["signals"]) else "") + ")")
+        for s in r["signals"]:
+            print(f"    {s[:220]}")
+    if r["paths"]:
+        print("\n  paths named   " + "  ".join(r["paths"][:8]))
+    if not r["summaries"] and not r["signals"]:
+        print("\n  no failure or summary line matched — head and tail only")
+        print("\n  head")
+        for l in r["head"]:
+            print(f"    {l[:200]}")
+    print("\n  tail")
+    for l in r["tail"]:
+        print(f"    {l[:200]}")
+    print(f"\n  raw kept: {raw}")
+    print(f"  more:     atlas observe show {oid} [--grep RE | --lines A-B | --all]")
+    return proc.returncode
+
+
+def load(root, oid):
+    d = root / oid
+    if not (d / "meta.json").exists():
+        raise SystemExit(f"atlas observe: no observation '{oid}'")
+    return d, json.loads((d / "meta.json").read_text())
+
+
+def cmd_show(a):
+    root = store()
+    d, meta = load(root, a.id)
+    text = (d / "raw.txt").read_text(errors="replace")
+    lines = text.splitlines()
+    print(f"# {meta['id']}  exit {meta['exit']}  {' '.join(meta['command'])}")
+    if a.grep:
+        rx = re.compile(a.grep)
+        hits = [(i + 1, l) for i, l in enumerate(lines) if rx.search(l)]
+        print(f"# {len(hits)} matching line(s)")
+        for i, l in hits[:a.limit]:
+            print(f"{i:>6}  {l}")
+        if len(hits) > a.limit:
+            print(f"# {len(hits) - a.limit} more — raise --limit")
+    elif a.lines:
+        m = re.match(r"^(\d+)-(\d+)$", a.lines)
+        if not m:
+            raise SystemExit("atlas observe: --lines wants A-B")
+        lo, hi = int(m.group(1)), int(m.group(2))
+        for i in range(max(1, lo), min(len(lines), hi) + 1):
+            print(f"{i:>6}  {lines[i - 1]}")
+    elif a.all:
+        print(text.rstrip())
+    else:
+        print(f"# {len(lines)} lines. Pass --all, --lines A-B or --grep RE.")
+    return 0
+
+
+def cmd_list(a):
+    root = store()
+    metas = []
+    for m in root.glob("*/meta.json"):
+        try:
+            metas.append(json.loads(m.read_text()))
+        except ValueError:
+            pass
+    metas.sort(key=lambda m: -m.get("started", 0))
+    for m in metas[:a.n]:
+        print(f"  {m['id']}  exit {m['exit']:<3} {m['chars']:>9,} chars  "
+              f"{(m.get('tag') or '-'):<10} {' '.join(m['command'])[:70]}")
+    if not metas:
+        print("  (no observations recorded)")
+    return 0
+
+
+def cmd_prune(a):
+    root = store()
+    metas = []
+    for m in root.glob("*/meta.json"):
+        try:
+            metas.append(json.loads(m.read_text()))
+        except ValueError:
+            pass
+    metas.sort(key=lambda m: -m.get("started", 0))
+    dropped = 0
+    for m in metas[a.keep:]:
+        shutil.rmtree(root / m["id"], ignore_errors=True)
+        dropped += 1
+    print(f"  kept {min(len(metas), a.keep)}, removed {dropped}")
+    return 0
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="atlas observe", add_help=True)
+    sub = ap.add_subparsers(dest="cmd")
+    s = sub.add_parser("show"); s.add_argument("id")
+    s.add_argument("--grep"); s.add_argument("--lines"); s.add_argument("--all", action="store_true")
+    s.add_argument("--limit", type=int, default=80)
+    l = sub.add_parser("list"); l.add_argument("-n", type=int, default=20)
+    p = sub.add_parser("prune"); p.add_argument("--keep", type=int, default=50)
+    ap.add_argument("--tag")
+    ap.add_argument("--full-below", type=int, default=FULL_BELOW_CHARS)
+    ap.add_argument("--max-signals", type=int, default=SIGNAL_LINES)
+    ap.add_argument("--json", action="store_true")
+
+    if "--" in argv:
+        i = argv.index("--")
+        a = ap.parse_args(argv[:i])
+        a.cmd, a.command = None, argv[i + 1:]
+        return cmd_run(a)
+    a = ap.parse_args(argv)
+    if a.cmd == "show":
+        return cmd_show(a)
+    if a.cmd == "list":
+        return cmd_list(a)
+    if a.cmd == "prune":
+        return cmd_prune(a)
+    ap.print_help()
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

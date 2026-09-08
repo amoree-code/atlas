@@ -6,7 +6,7 @@
 # not a task, not a daily note, not a client-specific file. Those are all circumstantial:
 # they can exist on a workspace that was never set up, and be absent on one that was.
 #
-# `ai-os init` seeds this file as uninitialized. `ai-os onboard` is the only thing that
+# `atlas init` seeds this file as uninitialized. `atlas onboard` is the only thing that
 # advances it, and only after the data it promises is actually on disk.
 #
 # This file stores STATE and POINTERS. It never stores a copy of the user's identity or

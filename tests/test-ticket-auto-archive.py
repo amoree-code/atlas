@@ -51,8 +51,8 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "aios_tickets_auto_archive_under_test",
-    SourceFileLoader("aios_tickets_auto_archive_under_test", str(CLI / "aios_tickets.py")))
+    "atlas_tickets_auto_archive_under_test",
+    SourceFileLoader("atlas_tickets_auto_archive_under_test", str(CLI / "atlas_tickets.py")))
 tickets_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tickets_mod)
 
@@ -103,8 +103,8 @@ def make_ticket(root, project, ticket_id, state="active", priority=None, parent=
 
 def run(*args, cwd, home):
     return subprocess.run(
-        [str(CLI / "ai-os-tickets"), *args], cwd=str(cwd),
-        env={"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
+        [str(CLI / "atlas-tickets"), *args], cwd=str(cwd),
+        env={"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
         capture_output=True, text=True,
     )
 

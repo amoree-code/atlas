@@ -4,7 +4,7 @@
 bounded handoff, and T-051-S4 structured result / verifier gate.
 
 Every scenario runs against a disposable ATLAS_HOME, plus a disposable adapter registry and a
-disposable transport registry (via AI_OS_ADAPTERS / AI_OS_HANDOFF_TRANSPORTS), exactly like
+disposable transport registry (via ATLAS_ADAPTERS / ATLAS_HANDOFF_TRANSPORTS), exactly like
 `test-mission-result.py`'s own fixture pattern. Nothing here reads or writes the real
 `adapters/`, the real `internal/governance/policies/handoff-transports.yaml`, any real T-050
 record, or any real mission record.
@@ -60,10 +60,10 @@ def _load(cli_dir, name):
     return mod
 
 
-mission_cli = _load(CLI, "ai-os-mission")
-mission = _load(CLI, "aios_mission.py")
-core_mission_cli = _load(CORE_CLI, "ai-os-mission")
-core_mission = _load(CORE_CLI, "aios_mission.py")
+mission_cli = _load(CLI, "atlas-mission")
+mission = _load(CLI, "atlas_mission.py")
+core_mission_cli = _load(CORE_CLI, "atlas-mission")
+core_mission = _load(CORE_CLI, "atlas_mission.py")
 
 
 @contextlib.contextmanager
@@ -153,8 +153,8 @@ def new_fixture(ticket_id="T-940"):
     write_transports(transports_path, ["test-planner", "test-executor", "test-verifier"])
 
     os.environ["ATLAS_HOME"] = str(tmp)
-    os.environ["AI_OS_ADAPTERS"] = str(adapters_dir)
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(transports_path)
+    os.environ["ATLAS_ADAPTERS"] = str(adapters_dir)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(transports_path)
     return tmp, d, adapters_dir, transports_path
 
 
@@ -574,13 +574,13 @@ chk("mission state remains 'approved' (never auto-completed) after a continuatio
 
 # =============================================================================================
 t("25. no real AI invocation")
-src = (CLI / "aios_mission.py").read_text()
+src = (CLI / "atlas_mission.py").read_text()
 s5_section = src[src.index("# T-051-S5 — safe foreground continuation loop"):]
-chk("no subprocess call appears in the S5 section of aios_mission.py",
+chk("no subprocess call appears in the S5 section of atlas_mission.py",
     "subprocess.run(" not in s5_section)
-chk("no socket/urllib/requests import appears anywhere in aios_mission.py",
+chk("no socket/urllib/requests import appears anywhere in atlas_mission.py",
     not any(tok in src for tok in ("import socket", "import urllib", "import requests")))
-chk("the only subprocess.run call in the whole file targets ai-os-paths (pre-existing, S1)",
+chk("the only subprocess.run call in the whole file targets atlas-paths (pre-existing, S1)",
     src.count("subprocess.run(") == 1 and "PATHS_RESOLVER" in src)
 
 # =============================================================================================
@@ -594,30 +594,30 @@ chk("engine and core mission continue agree on outcome",
     rc_e == 0 and rc_c == 0 and view_e["previous_classification"] ==
     view_c["previous_classification"] == "PASS")
 
-engine_py = CLI / "aios_mission.py"
-core_py = CORE_CLI / "aios_mission.py"
-chk("engine/cli/aios_mission.py and core/cli/aios_mission.py remain byte-identical",
+engine_py = CLI / "atlas_mission.py"
+core_py = CORE_CLI / "atlas_mission.py"
+chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
     engine_py.read_bytes() == core_py.read_bytes())
-engine_cli_file = CLI / "ai-os-mission"
-core_cli_file = CORE_CLI / "ai-os-mission"
-chk("engine/cli/ai-os-mission and core/cli/ai-os-mission remain byte-identical",
+engine_cli_file = CLI / "atlas-mission"
+core_cli_file = CORE_CLI / "atlas-mission"
+chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
     engine_cli_file.read_bytes() == core_cli_file.read_bytes())
 
 # =============================================================================================
 t("27. protected T-050 files remain untouched")
 PROTECTED = [
-    CLI / "ai-os-coordinator", CORE_CLI / "ai-os-coordinator",
-    CLI / "aios_coordination.py", CORE_CLI / "aios_coordination.py",
-    CLI / "ai-os-handoff", CORE_CLI / "ai-os-handoff",
+    CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
+    CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
+    CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
     REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml",
     REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml",
 ]
 for p in PROTECTED:
     chk(f"protected file exists and was not deleted: {p.name}", p.is_file())
 
-chk("aios_mission.py never actually loads ai-os-coordinator or aios_coordination as a module",
-    '_load_sibling("ai-os-coordinator")' not in src and
-    "import aios_coordination" not in src and "from aios_coordination" not in src)
+chk("atlas_mission.py never actually loads atlas-coordinator or atlas_coordination as a module",
+    '_load_sibling("atlas-coordinator")' not in src and
+    "import atlas_coordination" not in src and "from atlas_coordination" not in src)
 
 # =============================================================================================
 t("28. unknown previous handoff refusal")
@@ -874,7 +874,7 @@ chk("a second continuation off the first continuation's own PASS succeeds", rc =
 # =============================================================================================
 t("50. everything under T-051-S1/S2/S3/S4 remains green")
 _CLEAN_ENV = {k: v for k, v in os.environ.items()
-             if k not in ("ATLAS_HOME", "AI_OS_ADAPTERS", "AI_OS_HANDOFF_TRANSPORTS")}
+             if k not in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS")}
 r1 = subprocess.run([sys.executable, str(REPO / "tests" / "test-mission-contract.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-mission-contract.py (T-051-S1) exits 0", r1.returncode == 0)

@@ -1,10 +1,10 @@
 # Adapter contract — version 1
 
-An Atlas **adapter** connects **one AI client** to Atlas. It is code. `$AI_OS_HOME` is the
+An Atlas **adapter** connects **one AI client** to Atlas. It is code. `$ATLAS_HOME` is the
 user's data. The contract exists to keep those two facts from blurring.
 
 > **Core resolves. Adapters integrate.**
-> An adapter never owns, never declares, and never reaches into `$AI_OS_HOME` on its own.
+> An adapter never owns, never declares, and never reaches into `$ATLAS_HOME` on its own.
 
 **An adapter is not a capability.** An adapter answers *"how does this client reach
 Atlas?"*; a capability answers *"what can Atlas do?"*. Capabilities live in
@@ -40,10 +40,10 @@ enforces: [ ... ]          # core policies this adapter implements
 
 ### Layout
 
-`cli/ai-os-adapter` reads this subset with a hand-written parser, not pyyaml — Atlas has
+`cli/atlas-adapter` reads this subset with a hand-written parser, not pyyaml — Atlas has
 no dependencies. It rejects what it cannot read rather than guessing, because a silently
-mis-parsed manifest is worse than an unreadable one. `cli/ai-os-capability` and
-`cli/ai-os-domain` borrow the same parser, so this holds for every manifest in the repo.
+mis-parsed manifest is worse than an unreadable one. `cli/atlas-capability` and
+`cli/atlas-domain` borrow the same parser, so this holds for every manifest in the repo.
 
 A flow collection may sit on its key's line or on the line(s) below it. These are the same
 manifest, and both parse:
@@ -125,7 +125,7 @@ domain**:
 ~/.claude/   ~/.codex/   ~/.gemini/   ~/.cursor/   ~/.config/opencode/
 ```
 
-It may **never** declare a path under `$AI_OS_HOME`. `ai-os doctor` rejects any manifest
+It may **never** declare a path under `$ATLAS_HOME`. `atlas doctor` rejects any manifest
 whose `provides:` path resolves inside the private workspace — a hard failure, not a
 warning. This is mechanically checkable, so it is checked.
 
@@ -165,7 +165,7 @@ memory.mounts   adapter answers "where does my client keep memory directories?"
 ```
 
 This is what lets one memory engine serve every client without a fork. Nothing in
-`cli/ai-os-memory` names a client, and any adapter that declares `memory.mounts` gets the
+`cli/atlas-memory` names a client, and any adapter that declares `memory.mounts` gets the
 whole engine. Today only `claude-code` declares it, because only Claude Code scopes memory
 by working directory — that is a fact about Claude Code, not a shape in core.
 
@@ -195,7 +195,7 @@ Three versions move independently:
 ```
 Core       0.1.x    supports a contract RANGE
 Contract   1        this schema
-Workspace  1        the ~/.ai-os layout
+Workspace  1        the ~/atlas layout
 ```
 
 An adapter declaring `contract: 2` on a core supporting `1..1` is **disabled with an explicit

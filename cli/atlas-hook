@@ -1,0 +1,70 @@
+#!/bin/sh
+# atlas-hook — resolve the Atlas repository at runtime, then run one of its commands.
+#
+# A client's hooks run in a non-login shell with a minimal PATH and no guaranteed working
+# directory, so they cannot find the repository themselves. The obvious fix — writing the
+# repository's path into the hook — is wrong twice over: it encodes the machine it was
+# written on, and it breaks the moment the repository moves.
+#
+# So the hook holds no path at all. It calls this launcher at a fixed, $HOME-relative
+# location, and the launcher looks the repository up every time it runs. Moving the
+# repository needs no edit here and no edit to any hook — only the recorded location
+# changes, and `atlas init` records that automatically.
+#
+#   atlas-hook <repo-relative-command> [args...]
+#
+# Resolution: $ATLAS_REPO, otherwise atlas_repo in the workspace settings.
+# Legacy directory layouts remain readable; retired product keys do not.
+#
+# Those two paths are the one place in Atlas that may not ask cli/atlas-paths which layout
+# the workspace is in: the resolver lives inside the repository, and this file runs before
+# the repository has been found. So it checks both, newest first — the same order the
+# resolver itself uses — and the duplication is deliberate, not an oversight.
+#
+# Nothing here names a client. Every adapter installs the same file into its own client's
+# configuration domain; which client is calling is not a question this needs to answer.
+#
+# Exit 78 (EX_CONFIG) on any resolution failure, loudly on stderr. A hook that wants to
+# tolerate that appends `|| true`; a hook enforcing a policy deliberately should not, so
+# that a broken installation fails closed rather than silently granting.
+#
+# POSIX sh, no dependencies beyond sed.
+
+set -u
+
+die() { printf 'atlas-hook: %s\n' "$*" >&2; exit 78; }
+
+[ $# -ge 1 ] || die "usage: atlas-hook <repo-relative-command> [args...]"
+
+repo="${ATLAS_REPO:-}"
+
+if [ -z "$repo" ]; then
+  home="${ATLAS_HOME:-$HOME/atlas}"
+    cfg="$home/internal/config/settings.yaml"
+    [ -f "$cfg" ] || cfg="$home/system/config/settings.yaml"
+    # T-046: config is cut over too; the Atlas layout is the preferred current location.
+    [ -f "$cfg" ] || cfg="${ATLAS_HOME:-$HOME/atlas}/config/settings.yaml"
+    [ -f "$cfg" ] || die "no ATLAS_REPO set and no workspace settings at $home/internal/config/settings.yaml, $home/system/config/settings.yaml, or $home/config/settings.yaml"
+    # Read the canonical key; strip inline comments, quotes and trailing space.
+    repo=$(sed -n 's/^atlas_repo:[[:space:]]*//p' "$cfg" | head -n 1 | sed \
+        -e 's/[[:space:]]*#.*$//' \
+        -e 's/^"\(.*\)"$/\1/' \
+        -e "s/^'\(.*\)'\$/\1/" \
+        -e 's/[[:space:]]*$//')
+    [ -n "$repo" ] || die "no atlas_repo set in $cfg — run 'atlas init' to record it"
+fi
+
+# A leading ~ is the user's own shorthand in a config file; nothing expanded it for us.
+case "$repo" in
+    "~")   repo="$HOME" ;;
+    "~/"*) repo="$HOME/${repo#\~/}" ;;
+esac
+
+[ -d "$repo" ] || die "recorded repository does not exist: $repo"
+
+cmd="$1"
+shift
+target="$repo/$cmd"
+[ -x "$target" ] || die "not executable inside the repository: $cmd  (looked in $repo)"
+
+exec "$target" "$@"

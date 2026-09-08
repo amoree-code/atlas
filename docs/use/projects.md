@@ -31,7 +31,7 @@ into a project's directory is what makes it active.
 
 ## Where the CLI stands today
 
-Project memory is a **documented layer**, not yet an engine feature. `ai-os memory doctor`
+Project memory is a **documented layer**, not yet an engine feature. `atlas memory doctor`
 validates the global store; skills and agents follow the doctrine above by convention, not
 because anything enforces it mechanically. Documenting a workflow ahead of the tooling
 that would enforce it is deliberate here — see `docs/design/decisions.md` for why Atlas

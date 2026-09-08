@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """tests/test-mission-contract.py — T-051-S1: the Mission Contract and durable Mission Run
-State layer only (`cli/aios_mission.py` / `cli/ai-os-mission`).
+State layer only (`cli/atlas_mission.py` / `cli/atlas-mission`).
 
 Every scenario below runs against a disposable ATLAS_HOME fixture, exactly like
 `test-coordinator-conflict-protection.py`'s own `make_ticket_home()` — nothing here touches
@@ -52,8 +52,8 @@ def _load(name):
     return mod
 
 
-mission_cli = _load("ai-os-mission")
-mission = _load("aios_mission.py")
+mission_cli = _load("atlas-mission")
+mission = _load("atlas_mission.py")
 
 
 def make_ticket_home(root, project="demo", ticket_id="T-900"):
@@ -392,15 +392,15 @@ chk("no handoff-*.md record exists under the ticket", not list(d.glob("handoff-*
 
 # =============================================================================================
 t("30. No AI invocation")
-mission_src = (CLI / "aios_mission.py").read_text()
-cli_src = (CLI / "ai-os-mission").read_text()
+mission_src = (CLI / "atlas_mission.py").read_text()
+cli_src = (CLI / "atlas-mission").read_text()
 forbidden_markers = ("codex-reply", "claude-reply", "anthropic.", "openai.", "requests.get",
                      "requests.post", "urllib.request", "http.client", "socket.socket")
-chk("aios_mission.py contains no AI/network invocation markers",
+chk("atlas_mission.py contains no AI/network invocation markers",
     not any(mk in mission_src for mk in forbidden_markers))
-chk("ai-os-mission contains no AI/network invocation markers",
+chk("atlas-mission contains no AI/network invocation markers",
     not any(mk in cli_src for mk in forbidden_markers))
-chk("the only subprocess use in aios_mission.py targets the existing ai-os-paths resolver",
+chk("the only subprocess use in atlas_mission.py targets the existing atlas-paths resolver",
     "subprocess.run([str(PATHS_RESOLVER)" in mission_src
     and mission_src.count("subprocess.run(") == 1)
 
@@ -420,30 +420,30 @@ def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
-core_mission_py = REPO.parent / "core" / "cli" / "aios_mission.py"
-core_mission_cli = REPO.parent / "core" / "cli" / "ai-os-mission"
-chk("core/cli/aios_mission.py exists", core_mission_py.is_file())
-chk("core/cli/ai-os-mission exists", core_mission_cli.is_file())
+core_mission_py = REPO.parent / "core" / "cli" / "atlas_mission.py"
+core_mission_cli = REPO.parent / "core" / "cli" / "atlas-mission"
+chk("core/cli/atlas_mission.py exists", core_mission_py.is_file())
+chk("core/cli/atlas-mission exists", core_mission_cli.is_file())
 if core_mission_py.is_file():
-    chk("engine/cli/aios_mission.py and core/cli/aios_mission.py are byte-identical",
-        sha(CLI / "aios_mission.py") == sha(core_mission_py))
+    chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py are byte-identical",
+        sha(CLI / "atlas_mission.py") == sha(core_mission_py))
 if core_mission_cli.is_file():
-    chk("engine/cli/ai-os-mission and core/cli/ai-os-mission are byte-identical",
-        sha(CLI / "ai-os-mission") == sha(core_mission_cli))
+    chk("engine/cli/atlas-mission and core/cli/atlas-mission are byte-identical",
+        sha(CLI / "atlas-mission") == sha(core_mission_cli))
 
 # =============================================================================================
 t("33. Canonical atlas parity — both dispatchers route 'mission' the same way")
 atlas_text = (CLI / "atlas").read_text()
-core_ai_os_text = (REPO.parent / "core" / "cli" / "ai-os").read_text()
-chk("engine/cli/atlas dispatches 'mission' to ai-os-mission",
-    "mission" in atlas_text and 'exec "$SELF_DIR/ai-os-$cmd"' in atlas_text)
-chk("core/cli/ai-os dispatches 'mission' to ai-os-mission",
-    "mission" in core_ai_os_text and 'exec "$SELF_DIR/ai-os-$cmd"' in core_ai_os_text)
+core_atlas_text = (REPO.parent / "core" / "cli" / "atlas").read_text()
+chk("engine/cli/atlas dispatches 'mission' to atlas-mission",
+    "mission" in atlas_text and 'exec "$SELF_DIR/atlas-$cmd"' in atlas_text)
+chk("core/cli/atlas dispatches 'mission' to atlas-mission",
+    "mission" in core_atlas_text and 'exec "$SELF_DIR/atlas-$cmd"' in core_atlas_text)
 import re as _re
 atlas_case = _re.search(r"init\|[a-z|-]*mission[a-z|-]*\)", atlas_text)
-core_case = _re.search(r"init\|[a-z|-]*mission[a-z|-]*\)", core_ai_os_text)
+core_case = _re.search(r"init\|[a-z|-]*mission[a-z|-]*\)", core_atlas_text)
 chk("'mission' sits in engine/cli/atlas's generic exec-by-name case arm", bool(atlas_case))
-chk("'mission' sits in core/cli/ai-os's generic exec-by-name case arm", bool(core_case))
+chk("'mission' sits in core/cli/atlas's generic exec-by-name case arm", bool(core_case))
 
 
 print(f"\n{passed} passed, {failed} failed")

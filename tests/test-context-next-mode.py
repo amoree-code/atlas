@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """tests/test-context-next-mode.py — T-041: `atlas context --mode next`.
 
-`ai-os-context`'s canonical, dispatched copy lives at ~/atlas/context/ai-os-context (cut
+`atlas-context`'s canonical, dispatched copy lives at ~/atlas/context/atlas-context (cut
 over by T-016, same file T-034's `--mode planning` test exercises). This file tests that
-live file directly, against a disposable AI_OS_HOME/ATLAS_HOME, so nothing here touches
+live file directly, against a disposable ATLAS_HOME/ATLAS_HOME, so nothing here touches
 the real workspace.
 
-Scope: `--mode next` must produce the exact same recommendation `ai-os tickets next`
-would for the same records (both call `aios_tickets.classify_and_rank`/
+Scope: `--mode next` must produce the exact same recommendation `atlas tickets next`
+would for the same records (both call `atlas_tickets.classify_and_rank`/
 `render_recommendation` — one implementation, two callers) and must:
   - compose with --json, unlike --mode planning
   - accept --goal/--limit/--why only together with --mode next
@@ -21,7 +21,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-LIVE_CONTEXT = Path.home() / "atlas" / "context" / "ai-os-context"
+LIVE_CONTEXT = Path.home() / "atlas" / "context" / "atlas-context"
 CLI = REPO / "cli"
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
@@ -43,7 +43,7 @@ def t(label):
 
 
 if not LIVE_CONTEXT.is_file():
-    print("  (skipped — no ~/atlas/context/ai-os-context found on this machine; nothing "
+    print("  (skipped — no ~/atlas/context/atlas-context found on this machine; nothing "
           "to check)")
     print("\n0 passed, 0 failed")
     sys.exit(0)
@@ -71,14 +71,14 @@ def registry(home, project, path):
 
 
 def run_context(home, *args, cwd=None):
-    env = {"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
+    env = {"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
     return subprocess.run([sys.executable, str(LIVE_CONTEXT), *args],
                           cwd=cwd or str(home), env=env, capture_output=True, text=True)
 
 
 def run_tickets(home, *args, cwd=None):
-    env = {"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
-    return subprocess.run([str(CLI / "ai-os-tickets"), *args],
+    env = {"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
+    return subprocess.run([str(CLI / "atlas-tickets"), *args],
                           cwd=cwd or str(home), env=env, capture_output=True, text=True)
 
 
@@ -113,7 +113,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("goal-match reason present", "matches the requested goal" in r.stdout)
     chk("unblocks reason present", "unblocks T-900" in r.stdout)
 
-    t("--mode next agrees with `ai-os tickets next` for the same records")
+    t("--mode next agrees with `atlas tickets next` for the same records")
     ctx = run_context(home, "--mode", "next", "--json", cwd=str(project_dir))
     tix = run_tickets(home, "next", "--project", "fixtureproj", "--json")
     ctx_ids = sorted(e["id"] for bucket in json.loads(ctx.stdout).values() for e in bucket)

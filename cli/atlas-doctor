@@ -1,0 +1,512 @@
+#!/usr/bin/env bash
+# atlas-doctor — verify the Public / Private / Runtime contract. Report; change nothing.
+#
+# Every check here answers one question: is the boundary between the reusable software,
+# the live runtime, and the user's private data still intact? Nothing in this file
+# repairs, moves, deletes or rewrites. A doctor that silently fixes things is a doctor
+# you stop trusting, and a boundary violation you never saw is worse than one you did.
+#
+#   atlas-doctor            full check
+#   atlas-doctor --quiet    findings only
+#
+# Exit: number of problems (0 = clean). See internal/governance/policies/public-private-contract.yaml.
+
+set -uo pipefail
+
+ATLAS_HOME="${ATLAS_HOME:-$HOME/atlas}"
+ATLAS_LEGACY="${ATLAS_LEGACY:-${ATLAS_RUNTIME:-$HOME/.ai}}"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(dirname "$SELF_DIR")"
+VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
+# Overridable so the test suite can point them at a fixture instead of the real client.
+CLAUDE_SETTINGS="${ATLAS_CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+CLAUDE_PROJECTS="${ATLAS_CLAUDE_PROJECTS:-$HOME/.claude/projects}"
+
+QUIET=0
+[ "${1:-}" = "--quiet" ] || [ "${1:-}" = "-q" ] && QUIET=1
+
+if [ -t 1 ]; then G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; D=$'\033[2m'; X=$'\033[0m'
+else G=; Y=; R=; B=; D=; X=; fi
+
+fails=0; warns=0
+ok()   { [ "$QUIET" -eq 1 ] || printf '  %sok%s    %s\n'   "$G" "$X" "$1"; }
+warn() { printf '  %sWARN%s  %s\n' "$Y" "$X" "$1"; warns=$((warns+1)); }
+fail() { printf '  %sFAIL%s  %s\n' "$R" "$X" "$1"; fails=$((fails+1)); }
+note() { [ "$QUIET" -eq 1 ] || printf '        %s%s%s\n' "$D" "$1" "$X"; }
+head() { [ "$QUIET" -eq 1 ] || printf '\n%s%s%s\n' "$B" "$1" "$X"; }
+
+# Resolve to a real path when it exists; otherwise keep the literal (so we can report it).
+rp() { cd "$1" 2>/dev/null && pwd -P || echo "$1"; }
+# Is $1 inside $2 (or equal to it)?
+inside() { case "$1/" in "$2"/*) return 0 ;; *) return 1 ;; esac; }
+
+[ "$QUIET" -eq 1 ] || {
+  printf '\natlas doctor  %sv%s%s\n' "$D" "$VERSION" "$X"
+  printf '  public   %s\n  private  %s\n  client   %s\n  archive  %s\n' \
+    "$REPO" "$ATLAS_HOME" "$(dirname "$CLAUDE_SETTINGS")" "$ATLAS_LEGACY/workspace"
+}
+
+# ====================================================================================
+head "roots"
+# The wrong-root guard. If two layers resolve to the same place, or one is nested in
+# another, then every other check in this file is measuring the wrong thing.
+# ====================================================================================
+R_PUB=$(rp "$REPO"); R_RUN=$(rp "$ATLAS_LEGACY"); R_PRIV=$(rp "$ATLAS_HOME")
+
+# T-046: the legacy $ATLAS_HOME directory itself is no longer required to exist — every
+# root it used to hold exclusively (personal/, projects/, governance/, plus runtime/
+# config/skills/agents/helpers/schemas/sessions once reopened) may now live under
+# $ATLAS_HOME instead. Only fail here when NEITHER side has a workspace at all; the
+# per-root loop below (which already asks atlas-paths, not this variable) is what
+# actually proves each section present.
+ATLAS_HOME_DEFAULT="${ATLAS_HOME:-$HOME/atlas}"
+if [ ! -d "$ATLAS_HOME" ] && [ ! -d "$ATLAS_HOME_DEFAULT/personal" ]; then
+  fail "no private workspace found: neither $ATLAS_HOME nor $ATLAS_HOME_DEFAULT/personal exists"
+  note "run: atlas init"
+  printf '\n%s%d problem(s)%s\n\n' "$R" "$fails" "$X"
+  exit "$fails"
+fi
+
+check_pair() {  # name-a path-a name-b path-b
+  if [ "$2" = "$4" ]; then
+    fail "$1 and $3 are the same directory: $2"
+    note "these are different layers with different ownership; they cannot share a root"
+  elif inside "$2" "$4"; then
+    fail "$1 is nested inside $3:  $2"
+    note "nesting makes one layer look like content of the other"
+  elif inside "$4" "$2"; then
+    fail "$3 is nested inside $1:  $4"
+    note "nesting makes one layer look like content of the other"
+  else
+    ok "$1 != $3, neither nested"
+  fi
+}
+if [ "$R_PUB" = "$R_PRIV/engine" ] && [ ! -e "$R_PRIV/.git" ]; then
+  ok "Atlas engine is the separate public repository inside the unversioned workspace"
+else
+  check_pair "public" "$R_PUB" "private" "$R_PRIV"
+fi
+check_pair "public" "$R_PUB" "archive" "$R_RUN"
+check_pair "archive" "$R_RUN" "private" "$R_PRIV"
+
+# A symlink can smuggle one layer into another without nesting it.
+smuggled=$(find "$R_PUB" -type l -not -path '*/.git/*' 2>/dev/null | while IFS= read -r l; do
+  t=$(cd "$(dirname "$l")" && cd "$(dirname "$(readlink "$l")")" 2>/dev/null && pwd -P)/$(basename "$(readlink "$l")")
+  if ! inside "$t" "$R_PUB" && { inside "$t" "$R_PRIV" || inside "$t" "$R_RUN"; }; then echo "$l -> $t"; fi
+done)
+if [ -n "$smuggled" ]; then
+  fail "the public repo contains symlinks reaching into private/runtime:"
+  echo "$smuggled" | sed 's/^/          /'
+  note "a symlink grants access; it must never make private data look like repo content"
+else
+  ok "no symlinks from public into private or runtime"
+fi
+
+# ====================================================================================
+head "workspace"
+# ====================================================================================
+missing=""
+# The roots that are mid-migration are asked for, not assumed. A root present in both
+# layouts as two different directories is a FAIL, never a silent choice between them:
+# two stores that disagree is exactly the state a doctor exists to surface.
+# Sourced, not eval'd: the paths are assigned straight into this shell, so a workspace
+# path with a space in it stays one path instead of becoming a command and its arguments.
+. "$SELF_DIR/atlas-paths"
+atlas_paths_export
+for r in memory knowledge projects rules runtime config policies daily templates skills agents helpers schemas professional inbox sessions; do
+  u="$(printf '%s' "$r" | tr 'a-z' 'A-Z')"; pv="ATLAS_PATH_$u"; lv="ATLAS_LAYOUT_$u"
+  case "${!lv:-none}" in
+    conflict) fail "private root '$r' exists in both layouts, as different directories"
+              atlas_path_conflict "$r" | sed 's/^/          /' ;;
+    *)        [ -d "${!pv:-}" ] || missing="$missing $r" ;;
+  esac
+done
+if [ -n "$missing" ]; then fail "missing section(s):$missing"; note "run: atlas init"
+else
+  COUNT_HOME="$ATLAS_HOME"; [ -d "$COUNT_HOME" ] || COUNT_HOME="$ATLAS_HOME_DEFAULT"
+  total=$(find "$COUNT_HOME" -type f -not -path '*/.git/*' 2>/dev/null | wc -l | tr -d ' ')
+  ok "all sections present  ${D}($total files)${X}"
+fi
+MEM_ROOT="${ATLAS_PATH_MEMORY:-}"; KNOW_ROOT="${ATLAS_PATH_KNOWLEDGE:-}"
+MEM_REL="${MEM_ROOT#"$ATLAS_HOME"/}"; KNOW_REL="${KNOW_ROOT#"$ATLAS_HOME"/}"
+if [ -n "$MEM_ROOT" ]; then
+  for s in identity education career projects goals travel preferences interests; do
+    [ -d "$MEM_ROOT/$s" ] || warn "missing memory section: $MEM_REL/$s/"
+  done
+  [ -f "$MEM_ROOT/MEMORY.md" ] || warn "$MEM_REL/MEMORY.md missing — the retrieval index"
+fi
+if [ -n "$KNOW_ROOT" ]; then
+  for k in task-results technical-solutions decisions architecture research discoveries failures; do
+    [ -d "$KNOW_ROOT/$k" ] || warn "missing knowledge kind: $KNOW_REL/$k/"
+  done
+  [ -f "$KNOW_ROOT/README.md" ] || warn "$KNOW_REL/README.md missing"
+fi
+
+# Onboarding state is reported, never repaired. An inconsistent marker is exactly the kind
+# of thing a doctor must surface and leave alone: the marker and the data disagree, and
+# only the user knows which of the two is the one that moved.
+if [ -x "$SELF_DIR/atlas-onboard" ]; then
+  ob_out=$("$SELF_DIR/atlas-onboard" status 2>&1); ob_rc=$?
+  # NB: this file defines a shell function called head(), so `head -n1` would call that
+  # and swallow the text. First line by expansion instead — no external command involved.
+  ob_first="${ob_out%%$'\n'*}"
+  case "$ob_rc" in
+    0)  ok "onboarding: $ob_first" ;;
+    10) warn "workspace has never been onboarded — run: atlas onboard" ;;
+    11) warn "onboarding started but never completed — resume: atlas onboard" ;;
+    12) fail "onboarding marker is inconsistent with the workspace"
+        printf '%s' "$ob_out" | sed 's/^/          /'
+        note "recovery: atlas onboard --repair  (reopens only the missing steps)" ;;
+    *)  warn "onboarding state could not be determined" ;;
+  esac
+else
+  warn "atlas-onboard not found — onboarding state not checked"
+fi
+
+# ====================================================================================
+head "git safety"
+# ====================================================================================
+if [ -d "$ATLAS_HOME/.git" ]; then
+  remote=$(git -C "$ATLAS_HOME" remote -v 2>/dev/null)
+  if [ -n "$remote" ]; then
+    fail "the PRIVATE workspace has a git remote — it must be local-only:"
+    echo "$remote" | sed 's/^/          /'
+    note "not removing it automatically: removing a remote you added on purpose would be"
+    note "as wrong as adding one. Remove it yourself, or confirm you meant it."
+  else
+    ok "private workspace: versioned, no remote"
+  fi
+  for h in pre-push pre-commit; do
+    [ -x "$ATLAS_HOME/.git/hooks/$h" ] && ok "private workspace: $h hook installed" \
+                                       || warn "private workspace: $h hook missing"
+  done
+else
+  ok "private workspace is unversioned and local-only; recovery uses explicit backups"
+fi
+
+# A git WORKTREE of this same repository is not a nested repository. It is one more
+# checkout of the repo we are already standing in, registered in `git worktree list`, and
+# its `.git` is a file naming the parent's gitdir rather than a store of its own. Claude
+# Code creates one under .claude/worktrees/ for every isolated session, so treating it as
+# a foreign repository made this check fail on an ordinary working setup — and a check
+# that cries wolf on normal conditions is one people learn to ignore. Ask git which paths
+# are its own worktrees, and exclude exactly those. Any OTHER nested .git is still a
+# failure, which is the case this check exists for.
+_atlas_drop_own_worktrees() {  # <repo> ; reads newline-separated .git paths on stdin
+  _repo="$1"
+  _wt=$(git -C "$_repo" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' \
+        | while IFS= read -r _w; do (cd "$_w" 2>/dev/null && pwd -P); done)
+  while IFS= read -r _p; do
+    [ -n "$_p" ] || continue
+    _dir=$(cd "${_p%/.git}" 2>/dev/null && pwd -P)
+    _keep=1
+    for _w in $_wt; do [ "$_dir" = "$_w" ] && { _keep=0; break; }; done
+    [ "$_keep" = 1 ] && printf '%s\n' "$_p"
+  done
+}
+
+nested=$(find "$R_PRIV" -mindepth 1 -maxdepth 6 \( -path "$R_PUB" -o -path "$R_PRIV/.git" \) -prune -o -name .git -print 2>/dev/null | _atlas_drop_own_worktrees "$ATLAS_HOME")
+[ -n "$nested" ] && { fail "nested git repository inside the private workspace:"; echo "$nested" | sed 's/^/          /'; } \
+                 || ok "private workspace: no nested repositories"
+
+if [ -d "$REPO/.git" ]; then
+  leaked=$(git -C "$REPO" ls-files | grep -E '(^|/)\.atlas/' || true)
+  [ -n "$leaked" ] && { fail "the public repo is tracking private workspace paths:"; echo "$leaked" | sed 's/^/          /'; } \
+                   || ok "public repo: tracks no private workspace paths"
+  nested_pub=$(find "$REPO" -mindepth 2 -maxdepth 6 -name .git 2>/dev/null | _atlas_drop_own_worktrees "$REPO")
+  [ -n "$nested_pub" ] && { fail "nested git repository inside the public repo:"; echo "$nested_pub" | sed 's/^/          /'; } \
+                       || ok "public repo: no nested repositories"
+  # Identity is reported, never changed — not global, not local, not ever.
+  pub_email=$(git -C "$REPO" config --local user.email || true)
+  if [ -n "$pub_email" ]; then
+    ok "public repo: repo-local git identity set  ${D}($pub_email)${X}"
+  else
+    glob_email=$(git -C "$REPO" config --global user.email || true)
+    warn "public repo has no repo-local git identity; commits use the global one${glob_email:+ ($glob_email)}"
+    note "a publishable repo bakes the committer email into every commit, permanently."
+    note "set one for THIS repo only:  git -C <repo> config user.email <public address>"
+    note "doctor will not set it for you, and will never touch your global identity."
+  fi
+else
+  warn "public repo is not a git repository"
+fi
+
+# ====================================================================================
+head "memory access"
+# Access is not ownership. The runtime reaches memory through symlinks; memory is still
+# private-workspace-owned. What matters is that every one of those links points at the
+# single canonical store and nowhere else.
+# ====================================================================================
+# Whichever layout it is in — the canonical store is one directory, not one path.
+CANON="${ATLAS_PATH_MEMORY:-$ATLAS_HOME/personal/memory}"
+STALE="$ATLAS_LEGACY/workspace/memory"
+
+if [ -L "$CANON" ]; then
+  fail "the canonical store is itself a symlink: $CANON -> $(readlink "$CANON")"
+  note "memory must be a real directory in the private workspace, not a pointer"
+elif [ -d "$CANON" ]; then
+  ok "canonical store is a real directory  ${D}($(find "$CANON" -name '*.md' | wc -l | tr -d ' ') files)${X}"
+else
+  fail "canonical memory store missing: $CANON"
+fi
+
+if [ -d "$CLAUDE_PROJECTS" ]; then
+  linked=0; targets=""
+  for d in "$CLAUDE_PROJECTS"/*/; do
+    m="${d%/}/memory"
+    [ -e "$m" ] || [ -L "$m" ] || continue
+    name=$(basename "${d%/}")
+    if [ -L "$m" ]; then
+      t=$(readlink "$m")
+      case "$t" in /*) abs="$t" ;; *) abs="$(dirname "$m")/$t" ;; esac
+      if [ ! -e "$m" ]; then
+        fail "broken memory link: $name -> $t"
+      elif [ "$(rp "$abs")" = "$(rp "$CANON")" ]; then
+        linked=$((linked+1)); targets="$targets$(rp "$abs")\n"
+      elif [ "$(rp "$abs")" = "$(rp "$STALE")" ]; then
+        fail "memory link points at the FROZEN pre-cutover archive: $name -> $t"
+        note "writes there are invisible to the live workspace"
+      elif inside "$(rp "$abs")" "$R_PRIV"; then
+        warn "memory link targets a non-canonical path inside the workspace: $name -> $t"
+        targets="$targets$(rp "$abs")\n"
+      else
+        fail "memory link targets a path OUTSIDE the private workspace: $name -> $t"
+        note "memory must live in $ATLAS_HOME; anything else is a second, unmanaged store"
+        targets="$targets$(rp "$abs")\n"
+      fi
+      # Recursive means the link sits INSIDE its own target — reading it loops forever.
+      # Compare the link's literal location, never its resolved one: resolving first
+      # makes every correct link equal its target and look recursive.
+      here="$(cd "$(dirname "$m")" && pwd -P)/$(basename "$m")"
+      if inside "$here" "$(rp "$abs")"; then
+        fail "recursive memory link: $name -> $t"
+      fi
+    else
+      fail "memory is a real directory, not a link: $name"
+      note "that is a second live memory store — its contents are invisible elsewhere"
+      note "reconcile it by hand, then link it; doctor will not move your files"
+    fi
+  done
+  distinct=$(printf "%b" "$targets" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')
+  if [ "$distinct" -gt 1 ]; then
+    fail "memory links point at $distinct different stores — there must be exactly one:"
+    printf "%b" "$targets" | sed '/^$/d' | sort -u | sed 's/^/          /'
+  elif [ "$linked" -gt 0 ]; then
+    ok "$linked client memory link(s), all -> $CANON"
+  fi
+else
+  ok "no client project dirs yet — nothing to link"
+fi
+
+# A duplicate live store is the failure mode the whole cutover existed to prevent.
+if [ -d "$STALE" ]; then
+  if [ -w "$STALE" ]; then
+    warn "the pre-cutover archive at $STALE is writable"
+    note "it should stay read-only so nothing can quietly write to the dead store"
+  else
+    ok "pre-cutover archive present and read-only  ${D}(rollback copy)${X}"
+  fi
+fi
+
+# ====================================================================================
+head "legacy archive"
+# ~/.ai is no longer a runtime layer. Its tooling moved into the public repository, its
+# state and configuration into the private workspace, and what remains is a frozen
+# rollback copy from the V0.1.1 cutover. Doctor's job here is the opposite of what it
+# used to be: confirm that nothing active is left behind, and that the archive is intact.
+# It never modifies either.
+# ====================================================================================
+if [ ! -e "$ATLAS_LEGACY" ]; then
+  ok "no legacy layer on this machine"
+else
+  live=""
+  for r in bin skills rules tasks docs manifest sync capabilities.yaml; do
+    [ -e "$ATLAS_LEGACY/$r" ] && live="$live $r"
+  done
+  n=$(find "$ATLAS_LEGACY" -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')
+  if [ -n "$live" ]; then
+    fail "the legacy layer still holds active Atlas components:$live"
+    note "these moved in V0.1.5; anything left here is a second source of truth"
+  else
+    ok "legacy layer holds no active Atlas components"
+  fi
+  if [ "$n" -gt 0 ]; then
+    fail "$n symlink(s) still resolve out of the legacy layer"
+    note "a live path resolving into a frozen archive returns stale data that looks valid"
+  else
+    ok "no symlinks resolving out of the legacy layer"
+  fi
+  if [ -d "$ATLAS_LEGACY/workspace" ]; then
+    ok "frozen archive present: $ATLAS_LEGACY/workspace  ${D}(rollback copy, read-only)${X}"
+    if grep -rqlF "$ATLAS_LEGACY/workspace" "${ATLAS_PATH_CONFIG:-$ATLAS_HOME/internal/config}" 2>/dev/null; then
+      fail "private configuration still resolves into the frozen archive"
+      note "the archive is a rollback copy; live configuration must not depend on it"
+    else
+      ok "no live configuration depends on the frozen archive"
+    fi
+  else
+    warn "no frozen archive under $ATLAS_LEGACY  ${D}(nothing to roll back to)${X}"
+  fi
+fi
+
+if [ -f "$CLAUDE_SETTINGS" ]; then
+  # Parse the JSON and read only hooks[].hooks[].command — grepping the whole file
+  # matches permission globs and yields truncated paths.
+  #
+  # Since V0.1.5 a hook names the launcher and a path relative to the repository, so the
+  # repository's own location never appears here. Resolve both halves: the launcher must
+  # exist, and so must what it is asked to run. A legacy hook still naming the retired
+  # runtime layer directly is reported rather than silently accepted.
+  hooked=$(python3 -c '
+import json,os,re,sys
+try: d=json.load(open(sys.argv[1]))
+except Exception: sys.exit(0)
+repo = sys.argv[2]
+out=set()
+for group in (d.get("hooks") or {}).values():
+    for entry in group:
+        for h in entry.get("hooks", []):
+            cmd = h.get("command","")
+            m = re.search(r"((?:\$HOME|~)/[^\s]*atlas-hook)\s+(\S+)", cmd)
+            if m:
+                out.add(m.group(1)); out.add(os.path.join(repo, m.group(2)))
+                continue
+            for x in re.findall(r"(?:\$HOME|~)/\.ai/bin/[A-Za-z0-9_-]+", cmd):
+                out.add(x)
+print("\n".join(sorted(out)))' "$CLAUDE_SETTINGS" "$REPO" 2>/dev/null)
+  if [ -n "$hooked" ]; then
+    bad=0
+    while IFS= read -r h; do
+      real="${h/\$HOME/$HOME}"; real="${real/#\~/$HOME}"
+      [ -x "$real" ] || { fail "adapter hook points at a missing executable: $h"; bad=1; }
+    done <<< "$hooked"
+    [ "$bad" -eq 0 ] && ok "claude-code adapter: $(echo "$hooked" | wc -l | tr -d ' ') hook target(s) present and executable"
+  else
+    warn "claude-code adapter: no Atlas hooks found in settings.json"
+  fi
+else
+  warn "claude-code adapter: no settings.json at $CLAUDE_SETTINGS"
+fi
+
+# ====================================================================================
+head "configuration"
+# Defaults < user < project. An update may add a missing key; it must never change one
+# the user has set. Doctor reports what an update WOULD add; it adds nothing.
+# ====================================================================================
+CFG="${ATLAS_PATH_CONFIG:-$ATLAS_HOME/internal/config}/settings.yaml"
+CFG_REL="${CFG#"$ATLAS_HOME"/}"
+TPL="$REPO/templates/workspace/internal/config/settings.yaml"
+if [ -f "$CFG" ]; then
+  if grep -qP '^\t' "$CFG" 2>/dev/null; then
+    fail "$CFG_REL contains tab indentation — not valid YAML"
+  else
+    ok "$CFG_REL present, no tab indentation"
+  fi
+  if [ -f "$TPL" ]; then
+    tkeys=$(grep -oE '^[a-z_]+:' "$TPL" | sort -u)
+    lkeys=$(grep -oE '^[a-z_]+:' "$CFG" | sort -u)
+    new=$(comm -23 <(echo "$tkeys") <(echo "$lkeys"))
+    if [ -n "$new" ]; then
+      warn "config keys in the current defaults that your config does not have:"
+      echo "$new" | sed 's/^/          /'
+      note "an update MAY add a missing key. It will never change a key you have set."
+    else
+      ok "config: no new default keys  ${D}(your values are authoritative)${X}"
+    fi
+  fi
+else
+  warn "$CFG_REL missing"
+fi
+TERMS="${ATLAS_PATH_POLICIES:-$ATLAS_HOME/internal/governance/policies}/privacy-terms.txt"
+TERMS_REL="${TERMS#"$ATLAS_HOME"/}"
+[ -f "$TERMS" ] \
+  && ok "$TERMS_REL present  ${D}(private — used by privacy-scan)${X}" \
+  || warn "$TERMS_REL missing — privacy-scan runs generic patterns only"
+
+# ====================================================================================
+head "skills"
+# ====================================================================================
+if [ -d "$REPO/skills" ]; then
+  USR_SKILLS="${ATLAS_PATH_SKILLS:-$ATLAS_HOME/internal/extensions/skills}"
+  pub=$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ')
+  usr=$(find "$USR_SKILLS" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+  ok "$pub public skill(s), $usr user skill(s)"
+  shadow=""
+  for d in "$USR_SKILLS"/*/; do
+    [ -d "$d" ] || continue
+    n=$(basename "${d%/}")
+    [ -d "$REPO/skills/$n" ] && shadow="$shadow $n"
+  done
+  [ -n "$shadow" ] && { ok "user skills override public ones:$shadow"; note "expected — the user's version wins by design"; } \
+                   || ok "no name collisions between user and public skills"
+else
+  warn "public skills directory missing: $REPO/skills"
+fi
+
+# ====================================================================================
+head "adapters and capabilities"
+# Two registries, two contracts, checked by the tools that own them. doctor reports the
+# verdicts rather than reimplementing the rules — one definition of "valid manifest" each.
+# An adapter connects a client; a capability is something Atlas can do. They are never
+# the same thing, which is why they are never the same registry.
+# ====================================================================================
+if [ -x "$SELF_DIR/atlas-adapter" ]; then
+  pout=$("$SELF_DIR/atlas-adapter" doctor 2>&1); prc=$?
+  pn=$(printf '%s' "$pout" | grep -c '^  ok ' || true)
+  if [ "$prc" -eq 0 ]; then
+    ok "$pn adapter manifest(s) valid  ${D}(contract range 1..1)${X}"
+    printf '%s' "$pout" | grep 'WARN' | sed "s|^  WARN  |        ${D}|;s|\$|${X}|"
+  else
+    fail "adapter manifest(s) violate the contract:"
+    printf '%s' "$pout" | grep -E 'FAIL' | sed 's/^/        /'
+    note "an adapter may never declare a provides: path inside \$ATLAS_HOME"
+  fi
+else
+  warn "atlas-adapter not found — adapter contract not checked"
+fi
+if [ -x "$SELF_DIR/atlas-capability" ]; then
+  cout=$("$SELF_DIR/atlas-capability" doctor 2>&1); crc=$?
+  cn=$(printf '%s' "$cout" | grep -c '^  ok ' || true)
+  if [ "$crc" -eq 0 ]; then
+    if [ "$cn" -eq 0 ]; then
+      ok "no capabilities declared  ${D}(none found in capabilities/)${X}"
+    else
+      ok "$cn capability manifest(s) valid"
+      printf '%s' "$cout" | grep 'WARN' | sed "s|^  WARN  |        ${D}|;s|\$|${X}|"
+    fi
+  else
+    fail "capability manifest(s) violate the contract:"
+    printf '%s' "$cout" | grep -E 'FAIL' | sed 's/^/        /'
+    note "a capability is client-agnostic; naming a client belongs in adapters/"
+  fi
+else
+  warn "atlas-capability not found — capability contract not checked"
+fi
+
+# ====================================================================================
+head "privacy"
+# ====================================================================================
+if [ -x "$SELF_DIR/atlas-privacy-scan" ]; then
+  out=$("$SELF_DIR/atlas-privacy-scan" --quiet "$REPO" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ]; then
+    ok "public repo: no credential or personal data found"
+  else
+    fail "public repo contains data that must not be published:"
+    echo "$out" | sed 's/^/        /'
+  fi
+  [ -f "$TERMS" ] || \
+    note "generic patterns only — add your terms to $TERMS_REL for a real check"
+else
+  warn "atlas-privacy-scan not found — public repo not checked for private data"
+fi
+
+# ====================================================================================
+[ "$QUIET" -eq 1 ] || printf '\n'
+if [ "$fails" -eq 0 ] && [ "$warns" -eq 0 ]; then
+  printf '%sclean%s — the public/private contract holds\n\n' "$G" "$X"
+elif [ "$fails" -eq 0 ]; then
+  printf '%s%d warning(s)%s, no failures — the contract holds\n\n' "$Y" "$warns" "$X"
+else
+  printf '%s%d problem(s)%s, %s%d warning(s)%s\n\n' "$R" "$fails" "$X" "$Y" "$warns" "$X"
+fi
+exit "$fails"

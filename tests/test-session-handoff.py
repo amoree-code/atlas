@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """tests/test-session-handoff.py — automatic new-session handoff (checkpoint pointer +
-`ai-os context --resume` + the `SessionStart` adapter).
+`atlas context --resume` + the `SessionStart` adapter).
 
 Two live files are under test, both resolved the same way the real dispatchers resolve
 them (not assumed):
 
-  ~/atlas/context/ai-os-context                    canonical since T-016 (--resume lives here)
-  ~/Documents/amir/atlas-engine/cli/ai-os-tickets   canonical — tickets are NOT cut over to
+  ~/atlas/context/atlas-context                    canonical since T-016 (--resume lives here)
+  ~/Documents/amir/atlas-engine/cli/atlas-tickets   canonical — tickets are NOT cut over to
                                                      ~/atlas yet (confirmed by
                                                      test-cli-source-drift.py); the pointer
                                                      writer lives in this repo copy, correctly
 
-Every scenario runs against a disposable AI_OS_HOME/ATLAS_HOME fixture. Nothing here
+Every scenario runs against a disposable ATLAS_HOME/ATLAS_HOME fixture. Nothing here
 touches the real workspace or the real pointer at ~/atlas/runtime/session-handoffs/.
 
 What this file does NOT cover: whether Claude Code's `SessionStart` hook actually delivers
@@ -32,7 +32,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CLI = REPO / "cli"
-LIVE_CONTEXT = Path.home() / "atlas" / "context" / "ai-os-context"
+LIVE_CONTEXT = Path.home() / "atlas" / "context" / "atlas-context"
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -53,7 +53,7 @@ def t(label):
 
 
 if not LIVE_CONTEXT.is_file():
-    print("  (skipped — no ~/atlas/context/ai-os-context found on this machine; nothing "
+    print("  (skipped — no ~/atlas/context/atlas-context found on this machine; nothing "
           "to check)")
     print("\n0 passed, 0 failed")
     sys.exit(0)
@@ -74,16 +74,16 @@ def make_ticket(home, project, ticket_id, next_action="do the thing", blockers=N
 
 
 def run_checkpoint(home, ticket_id, *args):
-    env = {"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
+    env = {"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
     return subprocess.run(
-        [str(CLI / "ai-os-tickets"), "checkpoint", ticket_id, *args],
+        [str(CLI / "atlas-tickets"), "checkpoint", ticket_id, *args],
         cwd=str(home), env=env, capture_output=True, text=True)
 
 
 def run_resume(home, *args, cwd=None):
-    # AI_OS_HOME is what actually decides where `projects` (and so the pointer's sibling
-    # `runtime/`) resolves to — matching how the writer resolves it in ai-os-tickets.
-    env = {"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
+    # ATLAS_HOME is what actually decides where `projects` (and so the pointer's sibling
+    # `runtime/`) resolves to — matching how the writer resolves it in atlas-tickets.
+    env = {"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
     return subprocess.run([sys.executable, str(LIVE_CONTEXT), "--resume", *args],
                           cwd=cwd or str(home), env=env, capture_output=True, text=True)
 
@@ -111,7 +111,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("contains the new next action", "next_action: second step" in text)
     chk("contains the ticket's blocker", "blockers: waiting on review" in text)
     chk("contains a read_with command naming the ticket",
-        "read_with: ai-os context T-900" in text)
+        "read_with: atlas context T-900" in text)
     chk("starts pending", "status: pending" in text)
     chk("does NOT duplicate ticket prose (no Objective/Verification/Log headers)",
         "Objective" not in text and "Verification" not in text and "## Log" not in text)
@@ -151,7 +151,7 @@ with tempfile.TemporaryDirectory() as tmp:
     r5 = run_resume(home)
     chk("exits 0", r5.returncode == 0)
     chk("prints the ticket id", "T-901" in r5.stdout)
-    chk("prints the exact read command", "ai-os context T-901" in r5.stdout)
+    chk("prints the exact read command", "atlas context T-901" in r5.stdout)
     chk("prints the next action", "keep going" in r5.stdout)
     chk("pointer is now consumed", "status: consumed" in p.read_text())
 
@@ -216,7 +216,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # --- credential-shaped content is refused for the POINTER, not the checkpoint --------
     # The fake key is assembled at runtime, not written as one contiguous literal, so this
-    # file itself never contains a credential-shaped string for ai-os-privacy-scan to flag
+    # file itself never contains a credential-shaped string for atlas-privacy-scan to flag
     # — only the CREDENTIAL regex, matched against the runtime value, needs to see it.
     t("a credential-shaped checkpoint note is kept out of the pointer")
     fake_key_prefix, fake_key_body = "sk-ant" + "-", "abcdefghijklmnopqrstuvwxyz123456"
@@ -234,11 +234,11 @@ with tempfile.TemporaryDirectory() as tmp:
     # --- 16-18: existing behavior stays intact --------------------------------------------
     t("existing default context / --mode planning / checkpoint-without-pointer-fields "
       "remain unaffected")
-    default_env = {"AI_OS_HOME": str(home), "ATLAS_HOME": str(home),
+    default_env = {"ATLAS_HOME": str(home), "ATLAS_HOME": str(home),
                    "PATH": os.environ["PATH"]}
     d1 = subprocess.run([sys.executable, str(LIVE_CONTEXT)], cwd=str(home),
                         env=default_env, capture_output=True, text=True)
-    chk("default `ai-os context` still runs cleanly", d1.returncode == 0)
+    chk("default `atlas context` still runs cleanly", d1.returncode == 0)
     d2 = subprocess.run([sys.executable, str(LIVE_CONTEXT), "--mode", "planning"],
                         cwd=str(home), env=default_env, capture_output=True, text=True)
     chk("`--mode planning` still runs cleanly", d2.returncode == 0)

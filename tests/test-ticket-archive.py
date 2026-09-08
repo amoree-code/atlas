@@ -42,7 +42,7 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "aios_tickets_archive_under_test", SourceFileLoader("aios_tickets_archive_under_test", str(CLI / "aios_tickets.py")))
+    "atlas_tickets_archive_under_test", SourceFileLoader("atlas_tickets_archive_under_test", str(CLI / "atlas_tickets.py")))
 tickets_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tickets_mod)
 
@@ -68,11 +68,11 @@ def make_ticket(root, project, ticket_id, state="done", archived_ns=None, extra=
 
 def run(*args, cwd, home):
     return subprocess.run(
-        [str(CLI / "ai-os-tickets"), *args], cwd=str(cwd),
+        [str(CLI / "atlas-tickets"), *args], cwd=str(cwd),
         # ATLAS_HOME isolated too — `checkpoint` also writes a session-handoff pointer
-        # under $ATLAS_HOME/runtime/ (ai-os-context --resume); without this it would fall
+        # under $ATLAS_HOME/runtime/ (atlas-context --resume); without this it would fall
         # through to the real ~/atlas instead of staying inside this fixture.
-        env={"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
+        env={"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
         capture_output=True, text=True,
     )
 

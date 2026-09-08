@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+"""atlas-privacy-scan — keep the public repository publishable.
+
+Two classes of finding, because they are two different problems (see
+internal/governance/policies/privacy-classification.yaml):
+
+  credential   a value that grants access.      Generic shapes, built in.
+  personal     a value that identifies someone. Generic shapes built in; the user's own
+               terms are read from the workspace's policies/privacy-terms.txt, which is
+               PRIVATE and never lives in this repository. A scanner that hardcoded a real
+               name, email and employer would itself be the leak it is meant to prevent.
+
+Reports. Never edits, never deletes, never rewrites history.
+
+  atlas-privacy-scan [PATH]             scan the working tree (default: this repository)
+  atlas-privacy-scan --history          also scan every blob in git history (slow)
+  atlas-privacy-scan --quiet            findings only, no progress
+  atlas-privacy-scan --include-ignored  do not exempt git-ignored files (see below)
+  atlas-privacy-scan --atlas-classify PATH
+                                         path-based publication eligibility under
+                                         $ATLAS_HOME (~/atlas) — a gate BEFORE the content
+                                         scan above, not a replacement for it. See
+                                         internal/governance/policies/
+                                         atlas-path-classification.yaml and T-004.
+
+Two narrow exceptions, both about publishability rather than about secrecy:
+
+  A file git IGNORES is not published, so personal data in it is not a publishability
+  problem — graphify-out/ is derived state rebuilt on demand and full of local paths.
+  Personal findings there are exempt; CREDENTIAL findings are not. An ignored file is a
+  common home for a real secret, and credential recall is never traded away.
+
+  A licence's copyright line is SUPPOSED to name the owner. On that line, in a licence
+  file, an owner name or email is attribution, not a leak. Nothing else in the file is
+  exempt, no other line is, and a home path there is still a finding.
+
+Both are visible in the header, never silent, and neither touches credential detection.
+
+Exit: 0 clean · 1 findings · 2 usage error.  Zero dependencies: stdlib only.
+"""
+import os, re, subprocess, sys
+from pathlib import Path, PurePosixPath
+
+G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
+if not sys.stdout.isatty():
+    G = Y = R = D = X = ""
+
+REPO = Path(__file__).resolve().parent.parent
+ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", Path.home() / "atlas")))
+ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
+# policies/ is mid-migration. Reading the terms file from a path that merely used to be
+# right would silently check nothing — the user's real name and handles would go unchecked
+# while the scan still printed "clean". So the root is asked for, never assumed.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from atlas_atlas_privacy import publication_eligibility  # noqa: E402
+from atlas_paths import private_path_or_die  # noqa: E402
+
+TERMS_FILE = private_path_or_die("policies") / "privacy-terms.txt"
+
+SKIP_DIRS = {".git", "node_modules", "dist", "build", "__pycache__", ".venv", "coverage"}
+SKIP_SUFFIX = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".gz", ".tar",
+               ".ico", ".woff", ".woff2", ".ttf", ".mp4", ".mov", ".so", ".dylib"}
+
+# --- credential shapes -------------------------------------------------------------
+# Tuned for recall: a missed credential is unrecoverable, a false positive costs a glance.
+CREDENTIAL = [
+    ("private key block",   re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----")),
+    ("AWS access key id",   re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("GitHub token",        re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{20,})")),
+    ("Slack token",         re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}")),
+    ("Anthropic API key",   re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{20,}")),
+    ("OpenAI API key",      re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9]{32,}")),
+    ("Google API key",      re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
+    ("Stripe secret key",   re.compile(r"\b[sr]k_live_[A-Za-z0-9]{16,}")),
+    ("JWT",                 re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}")),
+    ("connection string with password",
+                            re.compile(r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://[^\s:@/]+:[^\s:@/]+@")),
+    # Assigned literal, not a bare word: `api_key: "…"` with real length behind it.
+    ("assigned secret literal",
+                            re.compile(r"(?i)\b(?:api[_\-]?key|secret[_\-]?key|access[_\-]?token|auth[_\-]?token|client[_\-]?secret|password|passwd)\b\s*[:=]\s*[\"'][^\"'\s]{12,}[\"']")),
+]
+
+# --- personal shapes ---------------------------------------------------------------
+# Deliberately narrower. These are the patterns that produce noise, so each one is
+# anchored on something that is genuinely revealing rather than merely suggestive.
+PERSONAL = [
+    # A home directory path names the account holder. `/Users/you/` is allowlisted.
+    ("absolute home path",  re.compile(r"(?:/Users|/home)/(?!you\b|<)[A-Za-z0-9][A-Za-z0-9._\-]{1,31}/")),
+    ("email address",       re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")),
+    # International or grouped forms only. A bare 10-digit run is far more often an id.
+    ("phone number",        re.compile(r"(?:(?<=\s)|^)\+\d{1,3}[\s\-.]?\(?\d{1,4}\)?(?:[\s\-.]?\d{2,4}){2,4}\b")),
+    ("VCS remote URL",      re.compile(r"(?:git@[A-Za-z0-9.\-]+:|https://[A-Za-z0-9.\-]+/)[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+\.git\b")),
+]
+
+
+# --- publishability exceptions -----------------------------------------------------
+# A licence names its owner by design. Narrow by construction: only these filenames,
+# only a line that really is a copyright notice, and only the two shapes that constitute
+# attribution. See internal/governance/policies/privacy-classification.yaml.
+LICENSE_FILES = {"LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "LICENCE.md",
+                 "COPYING", "COPYING.md", "NOTICE"}
+COPYRIGHT_LINE = re.compile(r"^\s*(?:[#*/]{1,2}\s*)?Copyright\s*(?:\([cC]\)|©)?\s*\d{4}")
+ATTRIBUTION_LABELS = {"user term", "email address"}
+
+
+def license_attribution(rel, line):
+    """Is this the copyright line of a licence file, where naming the owner is the point?
+
+    Deliberately NOT an allowlist entry: putting the owner's real name in
+    internal/governance/policies/privacy-allowlist.txt would ship that name in the public
+    repository, which is the exact failure this scanner exists to prevent. A context rule
+    carries no name.
+    """
+    name = rel.split("history:", 1)[-1]
+    if PurePosixPath(name).name not in LICENSE_FILES:
+        return False
+    return bool(COPYRIGHT_LINE.match(line))
+
+
+def ignored_paths(root: Path):
+    """Paths git ignores under root, relative to root. Empty when root is not a repo.
+
+    An ignored file is never published, so personal data in it cannot leak by
+    publication — that is the whole claim, and it is why credentials are still scanned
+    there (see scan_text). Uses --exclude-standard, so .gitignore, .git/info/exclude and
+    the user's core.excludesFile all count.
+    """
+    if not (root / ".git").exists():
+        return set()
+    r = subprocess.run(["git", "-C", str(root), "ls-files", "-o", "-i",
+                        "--exclude-standard", "--directory", "-z"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return set()
+    return {n for n in r.stdout.split("\0") if n}
+
+
+def is_ignored(rel, ignored):
+    """True when `rel` is an ignored file, or sits under an ignored directory.
+
+    git names an ignored DIRECTORY rather than its contents whenever it will not descend
+    into it — an excluded directory listed with --directory, and always a nested
+    repository or worktree, whose files it cannot enumerate at all. Comparing whole file
+    paths against that set therefore misses everything inside one. A Claude Code worktree
+    under .claude/worktrees/ is exactly that case: excluded in .git/info/exclude, reported
+    as one directory entry, and every file beneath it was being treated as publishable —
+    which failed the scan, and the doctor and contract suites with it, on a path that can
+    never be published because it is not in the repository at all.
+
+    Credentials are still scanned inside ignored paths; only the personal-data exemption
+    follows from being unpublishable. That property is unchanged by this fix.
+    """
+    if rel in ignored:
+        return True
+    return any(rel.startswith(d) for d in ignored if d.endswith("/"))
+
+
+def load_allowlist():
+    f = REPO / "internal" / "governance" / "policies" / "privacy-allowlist.txt"
+    if not f.exists():
+        return []
+    return [l.strip() for l in f.read_text().splitlines()
+            if l.strip() and not l.startswith("#")]
+
+
+def load_user_terms():
+    """The user's own identifying strings. Private, optional, never in this repository."""
+    f = TERMS_FILE
+    if not f.exists():
+        return None
+    terms = []
+    for line in f.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if len(line) >= 3:              # 1-2 char "terms" would match everything
+            terms.append(line)
+    return terms
+
+
+def scannable(path: Path):
+    if path.suffix.lower() in SKIP_SUFFIX:
+        return False
+    try:
+        chunk = path.open("rb").read(4096)
+    except OSError:
+        return False
+    return b"\0" not in chunk           # crude but reliable binary test
+
+
+def walk(root: Path):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for name in filenames:
+            p = Path(dirpath) / name
+            if p.is_symlink() or not scannable(p):
+                continue
+            yield p
+
+
+def scan_text(text, rel, allow, user_terms, findings, personal=True):
+    """Scan one document.
+
+    personal=False reports CREDENTIAL findings only — used for files git ignores, which
+    cannot be published but can still hold a real secret.
+    """
+    allowed_files = [a for a in allow if "/" in a]
+    if any(rel == a or rel.endswith(a) for a in allowed_files):
+        return                                    # the files that define the patterns
+    for n, line in enumerate(text.splitlines(), 1):
+        if any(a in line for a in allow):
+            continue
+        for label, rx in CREDENTIAL:
+            m = rx.search(line)
+            if m:
+                findings.append(("credential", label, rel, n, m.group(0)))
+        if not personal:
+            continue                              # ignored file: not publishable, so
+                                                  # nothing here identifies anyone TO anyone
+        attribution = license_attribution(rel, line)
+        for label, rx in PERSONAL:
+            m = rx.search(line)
+            if m:
+                if attribution and label in ATTRIBUTION_LABELS:
+                    continue
+                findings.append(("personal", label, rel, n, m.group(0)))
+        if attribution:
+            continue                              # the owner's name belongs on this line
+        for term in (user_terms or []):
+            if term.lower() in line.lower():
+                findings.append(("personal", "user term", rel, n, term))
+
+
+def redact(s, cls):
+    s = s.strip()
+    if cls == "credential":                       # never print a secret in full
+        return s[:6] + "…" + f"[{len(s)} chars]"
+    return s if len(s) <= 72 else s[:72] + "…"
+
+
+def cmd_atlas_classify(path):
+    """Path-based publication eligibility under $ATLAS_HOME — a gate BEFORE the content
+    scan, never a replacement for it. Prints and exits 0 (eligible) or 1 (not)."""
+    cls, eligible, reason = publication_eligibility(path, ATLAS_HOME)
+    verdict = f"{G}ELIGIBLE{X}" if eligible else f"{Y}NOT ELIGIBLE{X}"
+    print(f"  {path}")
+    print(f"  class: {cls or 'unrecognized'}   {verdict}")
+    print(f"  {D}{reason}{X}")
+    if eligible:
+        print(f"\n  {D}still requires: content/credential scan, owner approval{X}")
+    return 0 if eligible else 1
+
+
+def main(argv):
+    if "--atlas-classify" in argv:
+        i = argv.index("--atlas-classify")
+        target = [a for a in argv[i + 1:] if not a.startswith("-")]
+        if not target:
+            print("atlas-privacy-scan: --atlas-classify needs a PATH", file=sys.stderr)
+            return 2
+        return cmd_atlas_classify(target[0])
+
+    args = [a for a in argv if not a.startswith("-")]
+    flags = {a for a in argv if a.startswith("-")}
+    if flags - {"--history", "--quiet", "-q", "--include-ignored"}:
+        print(__doc__); return 2
+    quiet = bool(flags & {"--quiet", "-q"})
+    root = Path(args[0]).resolve() if args else REPO
+
+    allow = load_allowlist()
+    user_terms = load_user_terms()
+    findings = []
+    ignored = set() if "--include-ignored" in flags else ignored_paths(root)
+
+    if not quiet:
+        print(f"\n  privacy scan  {root}")
+        print(f"  {D}allowlist{X} {len(allow)} entries   "
+              f"{D}user terms{X} " + (f"{len(user_terms)} from {TERMS_FILE}"
+                                      if user_terms is not None else f"{Y}none{X}"))
+        if ignored:
+            print(f"  {D}git-ignored{X} {len(ignored)} file(s) — not publishable, so personal "
+                  f"findings there are exempt; credentials are still checked")
+
+    n_files = 0
+    n_ignored = 0
+    for p in walk(root):
+        n_files += 1
+        rel = str(p.relative_to(root))
+        publishable = not is_ignored(rel, ignored)
+        if not publishable:
+            n_ignored += 1
+        try:
+            scan_text(p.read_text(errors="replace"), rel,
+                      allow, user_terms, findings, personal=publishable)
+        except OSError:
+            pass
+
+    if "--history" in flags and (root / ".git").is_dir():
+        if not quiet:
+            print(f"  {D}scanning git history…{X}")
+        blobs = subprocess.run(["git", "-C", str(root), "rev-list", "--objects", "--all"],
+                               capture_output=True, text=True).stdout.splitlines()
+        for entry in blobs:
+            sha, _, name = entry.partition(" ")
+            if not name or Path(name).suffix.lower() in SKIP_SUFFIX:
+                continue
+            blob = subprocess.run(["git", "-C", str(root), "cat-file", "-p", sha],
+                                  capture_output=True, text=True, errors="replace")
+            if blob.returncode == 0:
+                scan_text(blob.stdout, f"history:{name}", allow, user_terms, findings)
+
+    creds = [f for f in findings if f[0] == "credential"]
+    pers = [f for f in findings if f[0] == "personal"]
+
+    if not quiet:
+        print()
+    for cls, group in (("credential", creds), ("personal", pers)):
+        seen = set()
+        for _, label, rel, line, match in group:
+            key = (label, rel, redact(match, cls))
+            if key in seen:
+                continue
+            seen.add(key)
+            colour = R if cls == "credential" else Y
+            print(f"  {colour}{cls.upper():<10}{X} {label:<28} {rel}:{line}  {D}{redact(match, cls)}{X}")
+
+    if user_terms is None and not quiet:
+        print(f"\n  {Y}note{X} no {TERMS_FILE} — generic patterns only.")
+        print(f"       Names, handles, employers and private repo names are NOT being checked.")
+
+    if not quiet:
+        print(f"\n  {n_files} file(s) scanned"
+              + (f", {n_ignored} git-ignored (credentials only)" if n_ignored else ""))
+    if findings:
+        print(f"  {R}{len(creds)} credential{X} · {Y}{len(pers)} personal{X} finding(s)\n")
+        return 1
+    print(f"  {G}clean{X} — no credential or personal data found\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

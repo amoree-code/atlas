@@ -33,7 +33,7 @@ it targets is present and healthy.
 
 An adapter may declare where it writes **only inside its own client's configuration
 domain** — `~/.claude/`, `~/.codex/`, `~/.gemini/`, `~/.cursor/`,
-`~/.config/opencode/` — and never under `$AI_OS_HOME`. `ai-os doctor` rejects any manifest
+`~/.config/opencode/` — and never under `$ATLAS_HOME`. `atlas doctor` rejects any manifest
 that tries. When an adapter needs workspace data, it asks core for it by name (a resolved
 path, a rendered bundle) rather than reaching in itself.
 
@@ -49,6 +49,6 @@ adapter states *how* its client makes that true — implementing the policy, nev
 restating or relaxing it.
 
 ```bash
-ai-os adapter list
-ai-os adapter doctor
+atlas adapter list
+atlas adapter doctor
 ```

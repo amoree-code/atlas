@@ -32,10 +32,10 @@ not here.
 | File | States | How it is honoured |
 |---|---|---|
 | `policies/git.yaml` | `git.push` requires explicit approval, always | implemented by hand in `adapters/claude-code/ai-guard-push`, which does not parse this file |
-| `policies/public-private-contract.yaml` | the public/private boundary, as machine-readable policy | implemented by hand in `ai-os init` and `ai-os doctor`, which do not parse this file |
-| `policies/privacy-classification.yaml` | what counts as a credential versus personal data | implemented by hand in `ai-os privacy-scan`, which does not parse this file |
+| `policies/public-private-contract.yaml` | the public/private boundary, as machine-readable policy | implemented by hand in `atlas init` and `atlas doctor`, which do not parse this file |
+| `policies/privacy-classification.yaml` | what counts as a credential versus personal data | implemented by hand in `atlas privacy-scan`, which does not parse this file |
 | `policies/workspace-privacy.yaml` | what requires approval at the boundary | not honoured by any code yet |
-| `policies/handoff-transports.yaml` | which handoff transports are verified, and their pinned read-only modes | read at runtime by `ai-os handoff` |
+| `policies/handoff-transports.yaml` | which handoff transports are verified, and their pinned read-only modes | read at runtime by `atlas handoff` |
 
 Read that column carefully, because it is the honest one. **No command in this repository
 parses a policy file** — with `handoff-transports.yaml` as the one exception, which is a
@@ -45,7 +45,7 @@ answer to — which is what makes drift between them a real risk rather than an 
 one.
 
 `policies/privacy-allowlist.txt` is the other file here that *is* loaded at runtime, and it
-is scan input rather than a policy: the strings `ai-os privacy-scan` is allowed to ignore.
+is scan input rather than a policy: the strings `atlas privacy-scan` is allowed to ignore.
 
 ## Still not a policy engine
 

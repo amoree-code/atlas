@@ -4,7 +4,7 @@
 `AIOS-###` (historical, frozen at AIOS-020) and `T-###` (Atlas-native, starting at T-001)
 are unrelated identities that must both work everywhere the ticket tooling touches an id:
 parsing, sorting, `list`, `index`, `doctor`, `log`/`checkpoint` lookup. Nothing here touches
-the real workspace — every scenario runs against a throwaway `AI_OS_HOME`.
+the real workspace — every scenario runs against a throwaway `ATLAS_HOME`.
 """
 import importlib.util, subprocess, sys, tempfile
 from importlib.machinery import SourceFileLoader
@@ -32,13 +32,13 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "aios_tickets_under_test", SourceFileLoader("aios_tickets_under_test", str(CLI / "aios_tickets.py")))
+    "atlas_tickets_under_test", SourceFileLoader("atlas_tickets_under_test", str(CLI / "atlas_tickets.py")))
 tickets_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tickets_mod)
 
 sys.path.insert(0, str(CLI))
 spec2 = importlib.util.spec_from_loader(
-    "ai_os_tickets_cli_under_test", SourceFileLoader("ai_os_tickets_cli_under_test", str(CLI / "ai-os-tickets")))
+    "atlas_tickets_cli_under_test", SourceFileLoader("atlas_tickets_cli_under_test", str(CLI / "atlas-tickets")))
 cli_mod = importlib.util.module_from_spec(spec2)
 spec2.loader.exec_module(cli_mod)
 
@@ -76,13 +76,13 @@ def make_atlas_ticket(root, project, ticket_id, state="done", checklist=None,
 
 def run_tickets(home, *args):
     return subprocess.run(
-        [str(CLI / "ai-os-tickets"), *args], cwd=str(home),
+        [str(CLI / "atlas-tickets"), *args], cwd=str(home),
         # ATLAS_HOME is isolated too: `checkpoint` also generates a session-handoff
-        # pointer under $ATLAS_HOME/runtime/ (see ai-os-context --resume) — without this,
+        # pointer under $ATLAS_HOME/runtime/ (see atlas-context --resume) — without this,
         # every checkpoint call in this file would silently fall through to the real
         # ~/atlas and write a real pointer from fixture data. Caught by running this
         # exact suite after that feature was added, not by inspection.
-        env={"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
+        env={"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
         capture_output=True, text=True,
     )
 
@@ -137,7 +137,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("T-001 read its own frontmatter correctly", by_id["T-001"]["title"] == "fixture T-001")
 
 # =========================================================================================
-t("ai-os-tickets list — mixed generations")
+t("atlas-tickets list — mixed generations")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_ticket(home, "demo", "AIOS-001")
@@ -150,14 +150,14 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("list orders AIOS- before T-, both listed", order == ["AIOS-001", "AIOS-020", "T-001"])
 
 # =========================================================================================
-t("ai-os-tickets doctor — backward compatible, T-* valid, id format stays unenforced")
+t("atlas-tickets doctor — backward compatible, T-* valid, id format stays unenforced")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_ticket(home, "demo", "AIOS-001", state="done", next_action="")
     make_ticket(home, "demo", "AIOS-020", state="done", next_action="")
     make_atlas_ticket(home, "demo", "T-001")
     (home / "projects" / "demo" / "index.md").write_text(
-        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+        "# demo\n\n<!-- atlas:tickets:begin -->\n<!-- atlas:tickets:end -->\n")
     r = run_tickets(home, "doctor")
     chk("doctor exits nonzero before index is written (stale table)", r.returncode != 0)
     run_tickets(home, "index", "--write")
@@ -174,7 +174,7 @@ with tempfile.TemporaryDirectory() as tmp:
     make_atlas_ticket(home, "demo", "T-001")
     make_ticket(home, "demo", "DEMO-CUSTOM-1", state="done", next_action="")
     (home / "projects" / "demo" / "index.md").write_text(
-        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+        "# demo\n\n<!-- atlas:tickets:begin -->\n<!-- atlas:tickets:end -->\n")
     r = run_tickets(home, "doctor")
     chk("doctor exits nonzero only because the index is stale, not the id shape",
         r.returncode != 0 and "not a recognized" not in r.stdout)
@@ -184,13 +184,13 @@ with tempfile.TemporaryDirectory() as tmp:
         r.returncode == 0 and "0 error" in r.stdout)
 
 # =========================================================================================
-t("ai-os-tickets checkpoint/log — T-* lookup works exactly like AIOS-*")
+t("atlas-tickets checkpoint/log — T-* lookup works exactly like AIOS-*")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_atlas_ticket(home, "demo", "T-001", state="active",
                        updated_at="2020-01-01 1:00 AM", next_action="original action")
     (home / "projects" / "demo" / "index.md").write_text(
-        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+        "# demo\n\n<!-- atlas:tickets:begin -->\n<!-- atlas:tickets:end -->\n")
     r = run_tickets(home, "log", "T-001", "progress noted")
     chk("log accepts a T-* id", r.returncode == 0)
     r = run_tickets(home, "checkpoint", "T-001", "--note", "landed a slice", "--next", "next slice")
@@ -217,7 +217,7 @@ with tempfile.TemporaryDirectory() as tmp:
                                           "requirement: REQ-040\n"),
                        next_action="")
     (home / "projects" / "demo" / "index.md").write_text(
-        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+        "# demo\n\n<!-- atlas:tickets:begin -->\n<!-- atlas:tickets:end -->\n")
     run_tickets(home, "index", "--write")
     r = run_tickets(home, "doctor")
     chk("doctor accepts a parent ticket and optional child relation",
@@ -242,7 +242,7 @@ with tempfile.TemporaryDirectory() as tmp:
                        extra_frontmatter="class: small\nrelation: optional\n",
                        next_action="")
     (home / "projects" / "demo" / "index.md").write_text(
-        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+        "# demo\n\n<!-- atlas:tickets:begin -->\n<!-- atlas:tickets:end -->\n")
     run_tickets(home, "index", "--write")
     r = run_tickets(home, "doctor")
     chk("doctor rejects an optional child with no parent",
@@ -255,12 +255,12 @@ with tempfile.TemporaryDirectory() as tmp:
     make_ticket(home, "demo", "AIOS-001", state="active", next_action="historical action")
     make_ticket(home, "demo", "T-001", state="active", next_action="atlas action")
     (home / "projects" / "demo" / "index.md").write_text(
-        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+        "# demo\n\n<!-- atlas:tickets:begin -->\n<!-- atlas:tickets:end -->\n")
     r = run_tickets(home, "checkpoint", "T-001", "--note", "touch only T-001")
     chk("checkpoint exits 0", r.returncode == 0)
-    aios_text = (home / "projects" / "demo" / "tickets" / "AIOS-001" / "task.md").read_text()
-    chk("AIOS-001's record is untouched by a T-001 checkpoint", "touch only T-001" not in aios_text)
-    chk("AIOS-001 keeps its own next action", "historical action" in aios_text)
+    atlas_text = (home / "projects" / "demo" / "tickets" / "AIOS-001" / "task.md").read_text()
+    chk("AIOS-001's record is untouched by a T-001 checkpoint", "touch only T-001" not in atlas_text)
+    chk("AIOS-001 keeps its own next action", "historical action" in atlas_text)
 
 # =========================================================================================
 t("required_fields_for — AIOS-* keeps opened/updated, T-* requires opened_at/updated_at")
@@ -276,7 +276,7 @@ chk("an unrecognized id (e.g. DEMO-*) falls back to the legacy pair, unchanged",
 # =========================================================================================
 t("atlas_metadata_issues — the canonical T-001 shape is clean")
 GOOD_ATLAS = (
-    "---\nid: T-900\ntitle: x\nstate: done\nproject: ai-os\n\n"
+    "---\nid: T-900\ntitle: x\nstate: done\nproject: atlas\n\n"
     "opened_at: 2026-09-05 2:00 PM\nupdated_at: 2026-09-05 2:39 PM\n\n"
     "artifacts: []\nclass: small\n\n"
     "checklist:\n  - \"[x] did the thing\"\n  - \"[x] verified it\"\n\n"
@@ -290,7 +290,7 @@ t("atlas_metadata_issues — catches each rule it's supposed to")
 
 
 def issues_for(frontmatter_body, state="done"):
-    text = f"---\nid: T-901\ntitle: x\nstate: {state}\nproject: ai-os\n{frontmatter_body}---\n\nbody\n"
+    text = f"---\nid: T-901\ntitle: x\nstate: {state}\nproject: atlas\n{frontmatter_body}---\n\nbody\n"
     meta, _ = tickets_mod.parse_frontmatter(text)
     return tickets_mod.atlas_metadata_issues(text, meta, "T-901")
 
@@ -323,6 +323,11 @@ chk("a bare, unquoted checklist line is flagged",
         "opened_at: 2026-09-05 2:00 PM\nupdated_at: 2026-09-05 2:00 PM\n"
         "checklist:\n  - [x] a\n"
         "checkpoint:\n  current: completed\n  updated_at: 2026-09-05 2:00 PM\n")))
+
+chk("single-quoted historical checklist is accepted",
+    not issues_for("opened_at: 2026-09-05 2:00 PM\nupdated_at: 2026-09-05 2:00 PM\n"
+                   "checklist:\n  - '[x] completed'\n"
+                   "checkpoint:\n  current: completed\n  updated_at: 2026-09-05 2:00 PM\n"))
 
 chk("state: done with an unchecked item is flagged",
     any("is unchecked" in i for i in issues_for(

@@ -10,16 +10,16 @@ That is a sanctioned transition state, not a bug — but it only stays safe as l
      wrapper's own comments declare, including under a custom `ATLAS_HOME`;
   2. every file that is supposed to be a byte-identical mirror of its canonical source
      (T-012's "Phase D1 copy... byte-identical, untouched" invariant for `~/atlas/core/
-     cli/`, and its "co-located" copy of `aios_lifecycle.py` under `~/atlas/context/`)
+     cli/`, and its "co-located" copy of `atlas_lifecycle.py` under `~/atlas/context/`)
      actually still is one, so a fix to the canonical file cannot silently stop applying
      to the copy a live, dispatched command reads.
 
 (2) is exactly the failure this file exists to catch: T-024 edited the canonical
-`aios_tickets.py` and did not know a second, live-imported copy existed, breaking
-`ai-os context <archived-id>` until the drift was found and fixed by hand. This test makes
+`atlas_tickets.py` and did not know a second, live-imported copy existed, breaking
+`atlas context <archived-id>` until the drift was found and fixed by hand. This test makes
 that class of failure a loud, fast, sub-second check instead of a manual discovery.
 
-Nothing here touches ~/.ai-os or ~/atlas — it only reads them.
+Nothing here touches ~/atlas or ~/atlas — it only reads them.
 """
 import os
 import subprocess
@@ -62,13 +62,13 @@ if not HAVE_ATLAS:
     sys.exit(0)
 
 # --- 1. CORE_SHARED / CONTEXT_MECHANISM python libraries: declared byte-identical -------
-# T-012 classified aios_paths.py/aios_tickets.py as CORE_SHARED ("stays core/cli/,
+# T-012 classified atlas_paths.py/atlas_tickets.py as CORE_SHARED ("stays core/cli/,
 # unduplicated" — i.e. the atlas placement is supposed to be one file, not a drifting
-# fork) and aios_lifecycle.py as CONTEXT_MECHANISM ("copied to context/, co-located").
+# fork) and atlas_lifecycle.py as CONTEXT_MECHANISM ("copied to context/, co-located").
 # Both classes carry the same real invariant this test checks: whatever the repo's copy
 # says is what every dispatched command — repo-side or Atlas-side — actually reads.
 t("CORE_SHARED python libraries stay byte-identical across every copy that must agree")
-CORE_SHARED = ("aios_paths.py", "aios_tickets.py")
+CORE_SHARED = ("atlas_paths.py", "atlas_tickets.py")
 for name in CORE_SHARED:
     repo_f = CLI / name
     atlas_f = ATLAS / "core" / "cli" / name
@@ -78,7 +78,7 @@ for name in CORE_SHARED:
         chk(f"{name}: repo and atlas/core/cli are byte-identical",
             sha(repo_f) == sha(atlas_f))
 
-CONTEXT_MECHANISM = "aios_lifecycle.py"
+CONTEXT_MECHANISM = "atlas_lifecycle.py"
 repo_f = CLI / CONTEXT_MECHANISM
 core_f = ATLAS / "core" / "cli" / CONTEXT_MECHANISM
 ctx_f = ATLAS / "context" / CONTEXT_MECHANISM
@@ -94,7 +94,7 @@ if repo_f.is_file() and core_f.is_file() and ctx_f.is_file():
 # --- 1b. T-048 handoff identity: core is intentionally not byte-identical to engine
 # during the migration, but the live dispatched copy must carry the same approved
 # identity behavior. This catches the exact failure where the engine copy was updated
-# while `ai-os handoff` still ran an older core copy.
+# while `atlas handoff` still ran an older core copy.
 t("T-048 handoff identity exists in both engine and the live core copy")
 HANDOFF_IDENTITY_MARKERS = (
     "--source-client",
@@ -104,15 +104,15 @@ HANDOFF_IDENTITY_MARKERS = (
     "IDENTITY_UNSPECIFIED",
     "def identity_display",
 )
-engine_handoff = CLI / "ai-os-handoff"
-atlas_handoff = ATLAS / "core" / "cli" / "ai-os-handoff"
-chk("ai-os-handoff engine copy exists", engine_handoff.is_file())
-chk("ai-os-handoff atlas/core/cli copy exists", atlas_handoff.is_file())
+engine_handoff = CLI / "atlas-handoff"
+atlas_handoff = ATLAS / "core" / "cli" / "atlas-handoff"
+chk("atlas-handoff engine copy exists", engine_handoff.is_file())
+chk("atlas-handoff atlas/core/cli copy exists", atlas_handoff.is_file())
 if engine_handoff.is_file() and atlas_handoff.is_file():
     engine_text = engine_handoff.read_text(errors="replace")
     atlas_text = atlas_handoff.read_text(errors="replace")
     for marker in HANDOFF_IDENTITY_MARKERS:
-        chk(f"ai-os-handoff identity marker {marker!r} is present in both copies",
+        chk(f"atlas-handoff identity marker {marker!r} is present in both copies",
             marker in engine_text and marker in atlas_text)
 
 # --- 2. Dispatch tracing: the wrapper sends each representative command to the copy it --
@@ -124,28 +124,28 @@ def run(cmd, env_extra=None, cwd=None):
     env = dict(os.environ)
     if env_extra:
         env.update(env_extra)
-    return subprocess.run([str(CLI / "ai-os"), *cmd], capture_output=True, text=True,
+    return subprocess.run([str(CLI / "atlas"), *cmd], capture_output=True, text=True,
                           env=env, cwd=cwd or str(CLI))
 
 
 with tempfile.TemporaryDirectory() as tmp:
     fake_atlas = Path(tmp) / "fake-atlas"
     (fake_atlas / "context").mkdir(parents=True)
-    for name in ("ai-os-context", "ai-os-usage", "ai-os-lifecycle", "ai-os-observe"):
+    for name in ("atlas-context", "atlas-usage", "atlas-lifecycle", "atlas-observe"):
         stub = fake_atlas / "context" / name
         stub.write_text(f'#!/bin/sh\necho "STUB:{name}: $@"\n')
         stub.chmod(0o755)
 
-    for cmd, marker in (("context", "ai-os-context"), ("usage", "ai-os-usage"),
-                        ("lifecycle", "ai-os-lifecycle"), ("observe", "ai-os-observe")):
+    for cmd, marker in (("context", "atlas-context"), ("usage", "atlas-usage"),
+                        ("lifecycle", "atlas-lifecycle"), ("observe", "atlas-observe")):
         r = run([cmd] if cmd != "observe" else ["observe", "--", "true"],
                 env_extra={"ATLAS_HOME": str(fake_atlas)})
-        chk(f"'ai-os {cmd}' honors a custom ATLAS_HOME (was the T-025 bug for 'observe')",
+        chk(f"'atlas {cmd}' honors a custom ATLAS_HOME (was the T-025 bug for 'observe')",
             f"STUB:{marker}" in r.stdout)
 
     r = run(["tickets", "list", "--project", "__no_such_project__"],
             env_extra={"ATLAS_HOME": str(fake_atlas)})
-    chk("'ai-os tickets' ignores ATLAS_HOME and still runs the repo's own copy "
+    chk("'atlas tickets' ignores ATLAS_HOME and still runs the repo's own copy "
         "(not yet cut over — must not accidentally start resolving into a fake atlas)",
         "STUB:" not in r.stdout and "STUB:" not in r.stderr)
 
@@ -154,7 +154,7 @@ with tempfile.TemporaryDirectory() as tmp:
 # ($SELF_DIR) or the Atlas context tree (${ATLAS_HOME:-...}/context/). A third root
 # appearing here would mean a new independent implementation location was introduced.
 t("the wrapper still resolves to exactly the two known trees — no third implementation")
-wrapper_text = (CLI / "ai-os").read_text()
+wrapper_text = (CLI / "atlas").read_text()
 exec_lines = [l for l in wrapper_text.splitlines() if "exec \"" in l]
 chk("at least one exec line found to check", len(exec_lines) > 0)
 allowed = ('exec "$SELF_DIR/', 'exec "${ATLAS_HOME:-$HOME/atlas}/context/')

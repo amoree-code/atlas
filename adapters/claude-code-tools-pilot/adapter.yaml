@@ -6,7 +6,7 @@
 # argv (`--restricted --strict-mcp-config --tools Read,Edit --permission-mode acceptEdits
 # --permission-prompts none --max-budget-usd 0.10 --add-dir <one AIOS-012 directory>`)
 # being claimed, relaxed, or restated here. This manifest exists only so
-# `cli/ai-os-handoff`'s own `known_clients()` — which lists `adapters/*/adapter.yaml`
+# `cli/atlas-handoff`'s own `known_clients()` — which lists `adapters/*/adapter.yaml`
 # directories — recognizes this identity as a known destination; it changes nothing about
 # what the transport entry is allowed to do.
 #

@@ -6,7 +6,7 @@ name: Software
 contract: 1
 
 # Capability ids only — ids, never paths. No resolver exists and none is needed.
-# Neither of these capabilities is built yet, so `ai-os domain doctor` reports a warning
+# Neither of these capabilities is built yet, so `atlas domain doctor` reports a warning
 # rather than a failure: declaring a domain before its capabilities exist is legitimate,
 # the same treatment an unsatisfied capability dependency already gets.
 requires: [filesystem, terminal]

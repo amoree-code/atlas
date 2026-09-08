@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""Provider-neutral Atlas integration records.
+
+  atlas integration detect --client <id> [--surface <surface>] [--channel <channel>]
+  atlas integration register --client <id> --surface <surface> --channel <channel>
+  atlas integration inventory
+  atlas integration list
+
+Detection reads only declared client paths and adapter manifests. It never reads client
+conversations, history, credentials, or private workspace content.
+"""
+import json, os, re, sys, time
+from pathlib import Path
+from importlib.machinery import SourceFileLoader
+import importlib.util
+
+HERE = Path(__file__).resolve().parent
+HOME = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
+ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+SURFACES = {"cli", "ide", "terminal", "desktop", "extension", "file", "clipboard", "api"}
+CHANNELS = SURFACES | {"obsidian"}
+
+def load_adapter():
+    spec = importlib.util.spec_from_loader("atlas_adapter", SourceFileLoader(
+        "atlas_adapter", str(HERE / "atlas-adapter")))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+adapter = load_adapter()
+
+def die(msg, code=2):
+    print(f"integration: {msg}", file=sys.stderr)
+    raise SystemExit(code)
+
+def safe_id(value):
+    if not ID_RE.fullmatch(value or ""):
+        die(f"invalid client id {value!r}")
+    return value
+
+def find_manifest(client):
+    for pid, manifest, error in adapter.load_all():
+        if pid == client:
+            return manifest, error
+    return None, None
+
+def status_for(client):
+    manifest, error = find_manifest(client)
+    if manifest is None:
+        return "detected", "unsupported", None
+    if error:
+        return "detected", "unsupported", error
+    paths = (manifest.get("client") or {}).get("detect") or []
+    installed = any(Path(os.path.expanduser(str(p))).exists() for p in paths)
+    return "detected", "supported" if installed else "unavailable", None
+
+def parse(args, required):
+    values = {}
+    i = 0
+    while i < len(args):
+        if args[i].startswith("--") and i + 1 < len(args):
+            key = args[i][2:]
+            if key not in required and key not in {"surface", "channel"}:
+                die(f"unknown argument {args[i]!r}")
+            if key in values:
+                die(f"--{key} was given more than once")
+            values[key] = args[i + 1]
+            i += 2
+        else:
+            die(f"unknown or incomplete argument {args[i]!r}")
+    for key in required:
+        if not values.get(key):
+            die(f"--{key} is required")
+    return values
+
+def record_path(client, surface, channel):
+    return HOME / "runtime" / "integrations" / f"{client}--{surface}--{channel}.json"
+
+def save(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(value, indent=2) + "\n")
+    tmp.replace(path)
+
+def cmd_detect(args):
+    values = parse(args, {"client"})
+    client = safe_id(values["client"])
+    surface = values.get("surface", "cli")
+    channel = values.get("channel", surface)
+    if surface not in SURFACES or channel not in CHANNELS:
+        die("unknown surface or channel")
+    detection, support, error = status_for(client)
+    result = {"client": client, "surface": surface, "channel": channel,
+              "detection": detection, "support": support}
+    if error:
+        result["reason"] = error
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+def cmd_register(args):
+    values = parse(args, {"client", "surface", "channel"})
+    client, surface, channel = safe_id(values["client"]), values["surface"], values["channel"]
+    if surface not in SURFACES:
+        die(f"unknown surface {surface!r}")
+    if channel not in CHANNELS:
+        die(f"unknown channel {channel!r}")
+    detection, support, error = status_for(client)
+    manifest, _ = find_manifest(client)
+    rec = {"client": client, "surface": surface, "channel": channel,
+           "detection": detection, "support": support,
+           "registered_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+           "adapter": client if manifest is not None else None}
+    if error:
+        rec["reason"] = error
+    save(record_path(client, surface, channel), rec)
+    print(json.dumps(rec, sort_keys=True))
+    return 0
+
+def cmd_inventory(args):
+    if args:
+        die("inventory takes no arguments")
+    rows = []
+    for client, manifest, error in adapter.load_all():
+        if error or manifest is None:
+            rows.append({"client": client, "detection": "declared",
+                         "support": "unsupported", "manifest_valid": False,
+                         "reason": error or "manifest unavailable"})
+            continue
+        declared = (manifest.get("client") or {}).get("detect") or []
+        installed = any(Path(os.path.expanduser(str(p))).exists() for p in declared)
+        rows.append({"client": client,
+                     "name": manifest.get("name", client),
+                     "detection": "declared",
+                     "support": "supported" if installed else "unavailable",
+                     "manifest_valid": True,
+                     "declared_detection_sources": len(declared),
+                     "writes": list(manifest.get("writes") or []),
+                     "enforces": list(manifest.get("enforces") or [])})
+    result = {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+              "clients": rows, "privacy": "metadata-only"}
+    save(HOME / "runtime" / "integrations" / "inventory.json", result)
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+def cmd_list(_args):
+    rows = []
+    root = HOME / "runtime" / "integrations"
+    for path in sorted(root.glob("*.json")) if root.is_dir() else []:
+        try:
+            rows.append(json.loads(path.read_text()))
+        except (OSError, json.JSONDecodeError):
+            continue
+    print(json.dumps(rows, sort_keys=True))
+    return 0
+
+CMDS = {"detect": cmd_detect, "register": cmd_register, "inventory": cmd_inventory,
+        "list": cmd_list}
+if __name__ == "__main__":
+    if len(sys.argv) < 2 or sys.argv[1] not in CMDS:
+        print(__doc__)
+        raise SystemExit(2)
+    raise SystemExit(CMDS[sys.argv[1]](sys.argv[2:]))

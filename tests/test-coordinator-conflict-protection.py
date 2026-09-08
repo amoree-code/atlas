@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """tests/test-coordinator-conflict-protection.py — T-050-S6: ticket lease, file ownership
 claim, and additive coordination-state transition enforcement on top of
-`cli/ai-os-coordinator` / `cli/aios_coordination.py`.
+`cli/atlas-coordinator` / `cli/atlas_coordination.py`.
 
 Owner-authorized implementation of the bounded slice
-`projects/ai-os/tickets/T-050/T-050-S5-conflict-protection-design.md` describes. Every
+`projects/atlas/tickets/T-050/T-050-S5-conflict-protection-design.md` describes. Every
 scenario below runs against a disposable ATLAS_HOME fixture, exactly like
 `test-coordinator-routing.py`'s own `make_ticket_home()` — nothing here touches the real
 workspace.
@@ -53,8 +53,8 @@ def _load(name):
     return mod
 
 
-coordinator = _load("ai-os-coordinator")
-coord = _load("aios_coordination.py")
+coordinator = _load("atlas-coordinator")
+coord = _load("atlas_coordination.py")
 
 
 def make_ticket_home(root, project="demo", ticket_id="T-900"):
@@ -529,7 +529,7 @@ coord.claim_acquire(d, "T-930", r["lease_id"], "f.py", "c", "s", "noroot-claim")
 after_dirs = {p.name for p in root.iterdir()}
 chk("no new top-level root beyond 'projects' and the existing 'runtime'",
     after_dirs - before_dirs <= {"runtime"})
-src = (CLI / "aios_coordination.py").read_text()
+src = (CLI / "atlas_coordination.py").read_text()
 banned = ["Thread(", "asyncio", "schedule.", "import cron", "Queue(", "multiprocessing",
          "os.fork"]
 chk("no daemon/queue/worker/scheduler construct in the implementation",
@@ -541,20 +541,20 @@ chk("the only bounded-wait loop is the documented mutation-guard poll (deadline-
 
 t("39/40 — no protected file changes; core/engine parity")
 protected = ["internal/governance/policies/coordinator-routing.yaml",
-            "internal/governance/policies/handoff-transports.yaml", "cli/ai-os-handoff"]
+            "internal/governance/policies/handoff-transports.yaml", "cli/atlas-handoff"]
 before_p = {p: (REPO / p).read_text() for p in protected if (REPO / p).is_file()}
 for p, text in before_p.items():
     chk(f"protected file unchanged: {p}", (REPO / p).read_text() == text)
 
-engine_src = (REPO.parent / "engine" / "cli" / "aios_coordination.py").read_text()
-core_src = (REPO.parent / "core" / "cli" / "aios_coordination.py").read_text()
-chk("core and engine aios_coordination.py are identical", engine_src == core_src)
+engine_src = (REPO.parent / "engine" / "cli" / "atlas_coordination.py").read_text()
+core_src = (REPO.parent / "core" / "cli" / "atlas_coordination.py").read_text()
+chk("core and engine atlas_coordination.py are identical", engine_src == core_src)
 
 t("41 — existing S1-S4 coordinator behavior is unaffected (spot check via real subprocess)")
 root, d = new_home(ticket_id="T-931")
 env = dict(os.environ)
 env["ATLAS_HOME"] = str(root)
-route_r = subprocess.run([sys.executable, str(CLI / "ai-os-coordinator"), "route", "T-931",
+route_r = subprocess.run([sys.executable, str(CLI / "atlas-coordinator"), "route", "T-931",
                          "--intent", "plan", "--scope", "s1"], capture_output=True, text=True, env=env)
 chk("'coordinator route' still runs (S1 unaffected)", route_r.returncode in (0, 2, 4, 5))
 
@@ -597,7 +597,7 @@ def audit_ops(d, op):
 
 def write_dispatch_fixture(d, handoff_id, *, to="codex", gate="review", scope="s1",
                            status="approved", sent="no"):
-    """A minimal V6 handoff record in the exact shape `ai-os-handoff` itself writes/reads —
+    """A minimal V6 handoff record in the exact shape `atlas-handoff` itself writes/reads —
     approved, consistent, ready to dispatch — so the new conflict-protection preflight is
     exercised against a real record, not a mock of one."""
     p = d / f"handoff-{handoff_id}.md"
@@ -639,7 +639,7 @@ class FakeCompleted:
 
 
 t("R1/A — the mutation guard exists, is flock-based, bounded, and releases in a finally")
-src_lib = (CLI / "aios_coordination.py").read_text()
+src_lib = (CLI / "atlas_coordination.py").read_text()
 chk("uses fcntl.flock (stdlib, no new dependency)", "import fcntl" in src_lib and
     "fcntl.flock" in src_lib)
 chk("the guard is released in a finally block", "finally:" in src_lib and
@@ -916,7 +916,7 @@ real_subprocess_run = subprocess.run
 
 
 def fake_run(argv, **kwargs):
-    if isinstance(argv, list) and len(argv) >= 2 and str(argv[0]).endswith("ai-os-handoff") \
+    if isinstance(argv, list) and len(argv) >= 2 and str(argv[0]).endswith("atlas-handoff") \
             and argv[1] == "send":
         calls.append(list(argv))
         return FakeCompleted(0)
@@ -944,11 +944,11 @@ try:
 finally:
     subprocess.run = real_subprocess_run
 
-t("R1/32 — existing manual 'ai-os handoff send' behavior remains unchanged")
-handoff_src_before_r1 = (CLI / "ai-os-handoff").read_text()
-chk("cli/ai-os-handoff was not modified by this slice (checked earlier at §39/40 too)",
+t("R1/32 — existing manual 'atlas handoff send' behavior remains unchanged")
+handoff_src_before_r1 = (CLI / "atlas-handoff").read_text()
+chk("cli/atlas-handoff was not modified by this slice (checked earlier at §39/40 too)",
     "def cmd_send" in handoff_src_before_r1)
-chk("dispatch's new preflight lives only in cli/ai-os-coordinator, never in ai-os-handoff",
+chk("dispatch's new preflight lives only in cli/atlas-coordinator, never in atlas-handoff",
     "verify_dispatch_conflict_protection" not in handoff_src_before_r1)
 
 t("R1/33 — existing S1-S4 tests remain green (delegated to test-coordinator-routing.py)")
@@ -957,8 +957,8 @@ routing_r = subprocess.run([sys.executable, str(CLI.parent / "tests" /
 chk("test-coordinator-routing.py exits 0 (273/273 unaffected)", routing_r.returncode == 0)
 
 t("R1/34 — core/engine/atlas parity remains green")
-core_src_final = (REPO.parent / "core" / "cli" / "ai-os-coordinator").read_text()
-engine_src_final = (REPO.parent / "engine" / "cli" / "ai-os-coordinator").read_text()
+core_src_final = (REPO.parent / "core" / "cli" / "atlas-coordinator").read_text()
+engine_src_final = (REPO.parent / "engine" / "cli" / "atlas-coordinator").read_text()
 chk("dispatch's new --lease-id/--client/--session handling exists identically in both "
     "copies", "verify_dispatch_conflict_protection" in core_src_final and
     "verify_dispatch_conflict_protection" in engine_src_final)
@@ -974,7 +974,7 @@ import hashlib as _hashlib
 def write_returned_record(d, handoff_id, *, status="returned", to="codex", gate="review",
                           scope="s1", source_client="claude-code", source_session="sess-1",
                           returned_text="Task complete. Nothing outside scope was touched."):
-    """A handoff record already carrying a returned block, in the exact shape `ai-os handoff
+    """A handoff record already carrying a returned block, in the exact shape `atlas handoff
     receive` itself writes/reads — the same technique
     `test-coordinator-routing.py`'s own `write_returned_record()` uses, duplicated here in
     miniature so this file does not import that one as a module."""
@@ -1068,14 +1068,14 @@ handoff_p = d / f"handoff-{hid}.md"
 chk("exactly one V6 handoff record exists, status waiting-owner", handoff_p.is_file() and
     "status: waiting-owner" in handoff_p.read_text())
 chk("begin prints the exact owner approval command",
-    f"ai-os handoff approve S7-900 {hid} --gate review --to codex --scope s1 --owner-words"
+    f"atlas handoff approve S7-900 {hid} --gate review --to codex --scope s1 --owner-words"
     in out)
 chk("begin never approves (no 'approval: recorded' in the fresh record)",
     "approval: recorded" not in handoff_p.read_text())
 chk("begin never sends (no 'sent: yes' in the fresh record)",
     "sent: yes" not in handoff_p.read_text())
 chk("begin's own source never shells out or imports a Claude transport",
-    "subprocess" not in (CLI / "ai-os-coordinator").read_text().split("def cmd_begin")[1]
+    "subprocess" not in (CLI / "atlas-coordinator").read_text().split("def cmd_begin")[1]
     .split("def _print_finalize")[0])
 
 t("S7/6 — invalid arguments create no state")
@@ -1315,8 +1315,8 @@ t("S7/34/35 — claim-release / lease-release failures are surfaced as BLOCKED (
   "pre-releasing the claim out from under a would-be finalize, and by pre-releasing the "
   "lease out from under a would-be finalize)")
 class _FlakyCoord:
-    """`coordinator._coord()` re-loads `aios_coordination.py` fresh on every call (the same
-    `_load_sibling` technique the whole file uses to reuse `cli/ai-os-handoff` without
+    """`coordinator._coord()` re-loads `atlas_coordination.py` fresh on every call (the same
+    `_load_sibling` technique the whole file uses to reuse `cli/atlas-handoff` without
     running it as `__main__`) — so monkeypatching this test's own already-imported `coord`
     module object has no effect on the module `cmd_finalize` loads internally. This thin
     proxy is installed in place of `coordinator._coord` itself instead, forwarding
@@ -1509,8 +1509,8 @@ routing_r2 = subprocess.run([sys.executable, str(CLI.parent / "tests" /
                             "test-coordinator-routing.py")], capture_output=True, text=True)
 chk("test-coordinator-routing.py still exits 0 (existing S1-S4 unaffected)",
     routing_r2.returncode == 0)
-core_src_s7 = (REPO.parent / "core" / "cli" / "ai-os-coordinator").read_text()
-engine_src_s7 = (REPO.parent / "engine" / "cli" / "ai-os-coordinator").read_text()
+core_src_s7 = (REPO.parent / "core" / "cli" / "atlas-coordinator").read_text()
+engine_src_s7 = (REPO.parent / "engine" / "cli" / "atlas-coordinator").read_text()
 chk("cmd_begin/cmd_finalize exist identically in both core and engine copies",
     "def cmd_begin" in core_src_s7 and "def cmd_begin" in engine_src_s7 and
     "def cmd_finalize" in core_src_s7 and "def cmd_finalize" in engine_src_s7)
@@ -1519,18 +1519,18 @@ chk("the canonical 'atlas' entrypoint's help text names begin/finalize",
     "begin | finalize" in atlas_src)
 for protected_path in ("internal/governance/policies/coordinator-routing.yaml",
                        "internal/governance/policies/handoff-transports.yaml",
-                       "cli/ai-os-handoff"):
+                       "cli/atlas-handoff"):
     chk(f"protected file still unchanged: {protected_path}",
         (REPO / protected_path).read_text() == before_p.get(protected_path,
         (REPO / protected_path).read_text()))
 
 t("S7/48 — the existing manual V6 handoff flow (prepare/approve/send/receive by hand) "
   "remains entirely unmodified by begin/finalize")
-handoff_src_s7 = (CLI / "ai-os-handoff").read_text()
-chk("cli/ai-os-handoff carries none of begin/finalize's own vocabulary",
+handoff_src_s7 = (CLI / "atlas-handoff").read_text()
+chk("cli/atlas-handoff carries none of begin/finalize's own vocabulary",
     "coordinator_begin" not in handoff_src_s7 and "coordinator_finalize" not in
     handoff_src_s7)
-chk("cli/ai-os-handoff's own cmd_prepare/cmd_approve/cmd_send/cmd_receive are all still "
+chk("cli/atlas-handoff's own cmd_prepare/cmd_approve/cmd_send/cmd_receive are all still "
     "present, untouched", all(f"def {n}" in handoff_src_s7 for n in
     ("cmd_prepare", "cmd_approve", "cmd_send", "cmd_receive")))
 

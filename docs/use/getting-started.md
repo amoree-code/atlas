@@ -2,14 +2,14 @@
 
 The fast path. Each step links to where to go deeper.
 
-**Naming note (T-031):** `atlas` is the canonical command; `ai-os` remains a temporary
+**Naming note (T-031):** `atlas` is the canonical command; `atlas` remains a temporary
 compatibility alias, resolving identically during the transition window.
 
 ## 1. Install
 
 ```bash
-git clone <this-repo> ~/ai-os
-export PATH="$HOME/ai-os/cli:$PATH"     # add to ~/.zshrc or ~/.config/fish/config.fish
+git clone <this-repo> ~/atlas
+export PATH="$HOME/atlas/cli:$PATH"     # add to ~/.zshrc or ~/.config/fish/config.fish
 ```
 
 Requires `bash`, `git`, `python3`. Nothing else — no package manager, no dependencies, no
@@ -39,7 +39,7 @@ Already have a populated workspace? `atlas onboard --adopt` instead. Detail: `do
 
 Atlas is two layers: this repository (public, reusable, publishable) and your workspace
 (`$ATLAS_HOME`, default `~/atlas`, private, never published — compatibility fallback
-`$AI_OS_HOME` for any root Atlas has not yet cut over). `atlas doctor` checks the
+`$ATLAS_HOME` for any root Atlas has not yet cut over). `atlas doctor` checks the
 boundary holds on every run. The full contract: `docs/design/public-private.md`.
 
 ## 5. Pick a client

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """tests/test-usage-guard-large-results.py — AIOS-017: name the offender, not just the count.
 
-`ai-os usage --guard`'s `large_results` finding already told you a session admitted N raw
+`atlas usage --guard`'s `large_results` finding already told you a session admitted N raw
 tool results over the reporting threshold and how many characters total — but not which
 tool call was the biggest one, so acting on "run large or repetitive commands through
-`ai-os observe --`" meant re-reading the whole session by hand to find what to wrap. Each
+`atlas observe --`" meant re-reading the whole session by hand to find what to wrap. Each
 session report already computes `large_results.top` (the biggest offenders, tool + chars),
 it just was not surfaced in the guard finding text. This test proves the finding now names
 the largest offending tool and its size, and still fires under exactly the same trigger
 condition (>= 5 large results) as before — no threshold, no other finding, changed.
 
 Like `test-context-next-mode.py`, this exercises the live, dispatched Atlas copy directly
-(`~/atlas/context/ai-os-usage` — usage's canonical implementation since T-017; the
-`engine/cli/ai-os-usage` copy is historical and no longer invoked), and is skipped, not
+(`~/atlas/context/atlas-usage` — usage's canonical implementation since T-017; the
+`engine/cli/atlas-usage` copy is historical and no longer invoked), and is skipped, not
 failed, on a machine where that copy does not exist.
 """
 import json
@@ -23,7 +23,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-LIVE_USAGE = Path(os.environ.get("ATLAS_HOME", str(Path.home() / "atlas"))) / "context" / "ai-os-usage"
+LIVE_USAGE = Path(os.environ.get("ATLAS_HOME", str(Path.home() / "atlas"))) / "context" / "atlas-usage"
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -44,7 +44,7 @@ def t(label):
 
 
 if not LIVE_USAGE.is_file():
-    print("  (skipped — no ~/atlas/context/ai-os-usage found on this machine; nothing "
+    print("  (skipped — no ~/atlas/context/atlas-usage found on this machine; nothing "
           "to check)")
     print("\n0 passed, 0 failed")
     sys.exit(0)
@@ -73,7 +73,7 @@ def result_line(n, chars):
 
 def run(transcripts_dir, *args):
     env = dict(os.environ)
-    env.pop("AI_OS_HOME", None)
+    env.pop("ATLAS_HOME", None)
     return subprocess.run([sys.executable, str(LIVE_USAGE), "--transcripts",
                           str(transcripts_dir), *args], capture_output=True, text=True, env=env)
 
@@ -99,7 +99,7 @@ with tempfile.TemporaryDirectory() as tmp:
         or "5 tool results" in out.stdout)
     chk("names Bash as the largest offender", "largest was Bash" in out.stdout)
     chk("reports its exact size", "50,000 chars" in out.stdout)
-    chk("still recommends `ai-os observe --`", "ai-os observe --" in out.stdout)
+    chk("still recommends `atlas observe --`", "atlas observe --" in out.stdout)
     chk("points at the offending tool specifically",
         "start with the Bash calls" in out.stdout)
 

@@ -22,8 +22,8 @@ everywhere except the manifest key, and every old spelling still works for one v
 |---|---|---|
 | directory | `capabilities/` | `plugins/`, still read if pointed at |
 | manifest file | `capability.yaml` | `plugin.yaml`, still accepted |
-| CLI | `ai-os capability` | `ai-os plugin`, an alias |
-| env var | `AI_OS_CAPABILITIES` | `AI_OS_PLUGINS`, honoured as a fallback |
+| CLI | `atlas capability` | `atlas plugin`, an alias |
+| env var | `ATLAS_CAPABILITIES` | `ATLAS_PLUGINS`, honoured as a fallback |
 | **manifest key** | **`plugin:`** | **unchanged — see below** |
 
 **The manifest key stays `plugin:` under contract 1.** Renaming it to `capability:` would
@@ -38,8 +38,8 @@ it is reported, and nothing is merged. Identical content resolves to `capability
 ## Status
 
 **One capability ships today:** `browser`, in `capabilities/browser/`. Discovery and
-validation are implemented (`ai-os capability list|doctor`). **Invocation exists but is
-deliberately narrow** — `ai-os capability invoke` runs one declared operation through
+validation are implemented (`atlas capability list|doctor`). **Invocation exists but is
+deliberately narrow** — `atlas capability invoke` runs one declared operation through
 `available -> allowed -> invocable -> executed -> verified`, and nothing in this repository
 chains those calls into a plan, a workflow or an agent loop.
 
@@ -69,7 +69,7 @@ operations:
 
 ### Layout
 
-The manifest parser is the one `cli/ai-os-adapter` owns — one parser, not two. A flow
+The manifest parser is the one `cli/atlas-adapter` owns — one parser, not two. A flow
 collection may sit on its key's line or on the line(s) below it, because a code formatter
 moves it and the document is unchanged either way; a collection that never closes is still
 an error. See **Layout** in `schemas/adapter.schema.md`, and `.prettierignore`.
@@ -175,7 +175,7 @@ verification and must never be recorded as one.
 
 - **Name a client.** No capability may contain `claude`, `codex`, `cursor`, `gemini` or
   `opencode`. Client integration is an adapter's job. This is mechanically checked.
-- **Reach into `$AI_OS_HOME`.** A `command:` is a bare filename inside its own
+- **Reach into `$ATLAS_HOME`.** A `command:` is a bare filename inside its own
   `capabilities/<id>/` directory — never a path, never an escape. Also checked.
 - **Invent an authority rung.** The five above are the whole ladder.
 - **Declare itself verified.** Only a `verify:` command's exit status does that.

@@ -1,6 +1,6 @@
 # Atlas policy — path-based privacy classification and publication eligibility.
 #
-# The two-root boundary (workspace-privacy.yaml: "$AI_OS_HOME is private, the repo is
+# The two-root boundary (workspace-privacy.yaml: "$ATLAS_HOME is private, the repo is
 # public") assumed the physical root already told you which side of the line a file was
 # on. That assumption breaks once $ATLAS_HOME holds private and publishable material in
 # one tree (personal/knowledge/decisions/atlas-one-project-architecture.md item 2). This
@@ -73,7 +73,7 @@ roots:
 # scoped to `governance/`. T-029 extends the same mechanism to `extensions/` (the Phase D3
 # merge of the public skills/ + private internal/extensions/{agents,capabilities,mcp,
 # skills}). `adapters` and `integration` still get no promotion table by either change;
-# both stay exactly as default-deny as before. Enforced in `cli/aios_atlas_privacy.py`'s
+# both stay exactly as default-deny as before. Enforced in `cli/atlas_atlas_privacy.py`'s
 # `GOVERNANCE_FILE_CLASSES` / `EXTENSIONS_FILE_CLASSES` tables, which this section mirrors
 # for human review.
 promotions:
@@ -146,7 +146,7 @@ promotions:
 # --- publication model -----------------------------------------------------------------
 publication_model: >
   candidate path -> path classification (this policy, default-deny) -> [if publishable]
-  content/credential scan (ai-os-privacy-scan) -> verification -> owner approval -> publish.
+  content/credential scan (atlas-privacy-scan) -> verification -> owner approval -> publish.
   Path classification is a gate, not a pipeline: it only ever narrows what reaches the
   scan. Nothing here performs a scan or a publish; both stay exactly where they are today.
 
@@ -154,18 +154,18 @@ default: deny   # an unrecognized root, or any path not resolving under a known 
 
 # --- relationship to existing mechanisms (KEEP / ADAPT / SUPERSEDE LATER) --------------
 # Nothing below is deleted or weakened by this policy. The old two-root guarantees stay
-# fully in force for as long as ~/.ai-os and the public repo both still hold real content
-# (transition period — all three paths coexist: ~/.ai-os, ~/Documents/amir/atlas-engine, ~/atlas).
+# fully in force for as long as ~/atlas and the public repo both still hold real content
+# (transition period — all three paths coexist: ~/atlas, ~/Documents/amir/atlas-engine, ~/atlas).
 relationship:
   workspace-privacy.yaml:            { verdict: KEEP,             why: "still the live, enforced boundary for the two current physical roots; not superseded until they stop existing" }
   privacy-classification.yaml:       { verdict: KEEP,             why: "credential/personal CONTENT classification is orthogonal to path classification — both layers stay" }
   privacy-allowlist.txt:             { verdict: KEEP,             why: "content-level false-positive suppression; unrelated concern to path-level publication eligibility" }
   public-private-contract.yaml:      { verdict: ADAPT-LATER,      why: "its principle (access is not ownership) survives; its two-physical-layers framing is what this policy starts replacing — adapting it is a later slice, not this one" }
   ai-guard-push / owner approval:    { verdict: KEEP,             why: "remote/push/publish approval gates are unchanged; this policy adds a check BEFORE that gate, never removes it" }
-  ai-os-privacy-scan (content scan): { verdict: ADAPT,            why: "gained one additive path-classification entry point (--atlas-classify); its existing content-scan behavior for the two current roots is untouched" }
+  atlas-privacy-scan (content scan): { verdict: ADAPT,            why: "gained one additive path-classification entry point (--atlas-classify); its existing content-scan behavior for the two current roots is untouched" }
 
 # --- enforcement -------------------------------------------------------------------------
 enforcement:
-  module: cli/aios_atlas_privacy.py   # the enforced version of the `roots` table above
-  command: ai-os privacy-scan --atlas-classify <path>
+  module: cli/atlas_atlas_privacy.py   # the enforced version of the `roots` table above
+  command: atlas privacy-scan --atlas-classify <path>
   destructive: false   # classifies; never scans content, never publishes, never edits

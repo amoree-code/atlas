@@ -6,12 +6,12 @@ passing. Expect breaking changes before a tagged release.
 
 A portable operating layer for AI coding agents — not a Claude Code configuration.
 
-**Naming note (T-031/T-032):** the product was renamed from AI-OS to **Atlas**. The
-canonical CLI command is `atlas`; `ai-os` remains a temporary compatibility alias,
+**Naming note (T-031/T-032):** the product was renamed from Atlas to **Atlas**. The
+canonical CLI command is `atlas`; `atlas` remains a temporary compatibility alias,
 resolving identically during the deprecation window. The canonical private workspace
-root is `$ATLAS_HOME` (default `~/atlas`); `$AI_OS_HOME` (default `~/.ai-os`) remains a
+root is `$ATLAS_HOME` (default `~/atlas`); `$ATLAS_HOME` (default `~/atlas`) remains a
 compatibility fallback for any root that has not yet cut over. Historical tickets and
-records below keep the name "AI OS"/"AI-OS" where that is what actually happened —
+records below keep the name "AI OS"/"Atlas" where that is what actually happened —
 this is a forward-only rename, not a rewrite of history.
 
 Atlas separates the parts of an AI development setup that are genuinely reusable (memory
@@ -25,7 +25,7 @@ never leaves your machine.
 | | Lives | Owns |
 |---|---|---|
 | **Public** (this repo) | wherever you clone it | code, CLI, adapters, capabilities, domain declarations, policies, schemas, public skills, templates, docs, tests |
-| **Private** (your workspace) | `$ATLAS_HOME`, default `~/atlas` (compatibility fallback `$AI_OS_HOME`, default `~/.ai-os`) | your memory, projects, knowledge, daily records, and `internal/` for system config, session records and transient generated state |
+| **Private** (your workspace) | `$ATLAS_HOME`, default `~/atlas` (compatibility fallback `$ATLAS_HOME`, default `~/atlas`) | your memory, projects, knowledge, daily records, and `internal/` for system config, session records and transient generated state |
 
 **Access is not ownership.** The CLI reads and writes your workspace constantly — that is
 its job. It does not follow that this repository owns, tracks, or may publish any of it.
@@ -56,8 +56,8 @@ Full contract, including the four invariants `atlas doctor` checks:
 ## Install
 
 ```bash
-git clone <this-repo> ~/ai-os
-export PATH="$HOME/ai-os/cli:$PATH"
+git clone <this-repo> ~/atlas
+export PATH="$HOME/atlas/cli:$PATH"
 atlas init --dry-run     # see exactly what would happen
 atlas init               # create ~/atlas — never overwrites anything
 atlas doctor             # verify the contract holds
@@ -113,18 +113,18 @@ everything above is checked against. Detail on each: `docs/design/core.md`,
 ## Layout
 
 ```
-ai-os/                      the public repository — software only (Atlas is the product name)
+atlas/                      the public repository — software only (Atlas is the product name)
 ├── cli/                    atlas, one entry point: init · onboard · doctor · status ·
 │                           workspace · adapter · capability · domain · run · render ·
 │                           memory · privacy-scan — plus the hook launcher and ai-sync
-│                           (ai-os remains a compatibility alias for atlas)
+│                           (atlas remains a compatibility alias for atlas)
 ├── adapters/<client>/      client integrations — manifest, hooks, policy enforcement
 ├── capabilities/<id>/      what Atlas can do — browser control ships today
 ├── domains/                areas of work, declared and inert — nothing executes one
 ├── schemas/                the contracts: adapter · capability · domain · run
-├── skills/                 public skills — yours in ~/.ai-os/skills override these
+├── skills/                 public skills — yours in ~/atlas/skills override these
 ├── templates/
-│   ├── workspace/          seeds for a new ~/.ai-os — placeholder data only
+│   ├── workspace/          seeds for a new ~/atlas — placeholder data only
 │   └── runtime/            operational scripts, kept public and never seeded
 ├── docs/
 │   └── examples/           worked examples — placeholder until real ones land
@@ -145,7 +145,7 @@ configuration you own rather than software this repository ships.
 
 > **Renamed 2026-09-03.** The capability surface was spelled `plugin` until then. Every
 > old spelling still works for one version and is compatibility only: `plugins/`,
-> `plugin.yaml`, `ai-os plugin`, `AI_OS_PLUGINS`. The manifest key stays `plugin:` under
+> `plugin.yaml`, `atlas plugin`, `ATLAS_PLUGINS`. The manifest key stays `plugin:` under
 > contract 1, so no existing manifest needs editing. Details:
 > [docs/use/capabilities.md](docs/use/capabilities.md).
 

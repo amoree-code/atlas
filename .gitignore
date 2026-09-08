@@ -1,13 +1,13 @@
-# ai-os — PUBLIC repository. No private user data, ever.
+# atlas — PUBLIC repository. No private user data, ever.
 #
-# The private user workspace lives at ~/.ai-os and is a separate, local-only git
+# The private user workspace lives at ~/atlas and is a separate, local-only git
 # repository. It must never appear here. These entries are a safety net, not the
 # mechanism — the real separation is that the two live in different trees, and
-# `ai-os workspace status` / `ai-os-doctor` check for violations.
+# `atlas workspace status` / `atlas-doctor` check for violations.
 
 # --- private workspace, if it is ever copied or symlinked in by mistake ---
-.ai-os/
-**/.ai-os/
+.atlas/
+**/.atlas/
 
 # --- credentials ---
 .env
@@ -55,5 +55,5 @@ __pycache__/
 
 # --- NOT ignored, deliberately ---
 # Nested .git directories are NOT ignored. Ignoring one would hide it; we want a nested
-# repository to be found and reported, not silently excluded. ai-os-doctor fails loudly
+# repository to be found and reported, not silently excluded. atlas-doctor fails loudly
 # on any unexpected nested repository.

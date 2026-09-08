@@ -15,11 +15,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 # T-019: must resolve the same RUNTIME as capabilities/browser/browser (its own
-# session.json is what this reconnects to) — Atlas-canonical, AI_OS_BROWSER_RUNTIME
+# session.json is what this reconnects to) — Atlas-canonical, ATLAS_BROWSER_RUNTIME
 # still overrides explicitly.
 ATLAS_HOME = Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
     else Path.home() / "atlas"
-RUNTIME = Path(os.environ.get("AI_OS_BROWSER_RUNTIME",
+RUNTIME = Path(os.environ.get("ATLAS_BROWSER_RUNTIME",
                                ATLAS_HOME / "runtime" / "workspaces" / "browser"))
 SESSION = RUNTIME / "session.json"
 # The default provider name lives in providers/default, so this file names no

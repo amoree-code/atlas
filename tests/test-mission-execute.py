@@ -89,13 +89,13 @@ def uniq_key(prefix):
     return f"{prefix}-{time.time_ns()}"
 
 
-for _var in ("ATLAS_HOME", "AI_OS_ADAPTERS", "AI_OS_HANDOFF_TRANSPORTS"):
+for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
     os.environ.pop(_var, None)
 
-mission = _load(CLI, "aios_mission.py")
-core_mission = _load(CORE_CLI, "aios_mission.py")
-mission_cli = _load(CLI, "ai-os-mission")
-core_mission_cli = _load(CORE_CLI, "ai-os-mission")
+mission = _load(CLI, "atlas_mission.py")
+core_mission = _load(CORE_CLI, "atlas_mission.py")
+mission_cli = _load(CLI, "atlas-mission")
+core_mission_cli = _load(CORE_CLI, "atlas-mission")
 
 FAKE_EXECUTOR_SCRIPT = '''#!/usr/bin/env python3
 import json, os, sys, time
@@ -228,8 +228,8 @@ def new_fixture():
         "    evidence: deliberately unverified — proves the pre-subprocess refusal gate\n")
 
     os.environ["ATLAS_HOME"] = str(tmp)
-    os.environ["AI_OS_ADAPTERS"] = str(adapters_dir)
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(transports_path)
+    os.environ["ATLAS_ADAPTERS"] = str(adapters_dir)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(transports_path)
     return tmp
 
 
@@ -405,7 +405,7 @@ counter_file = str(ROOT / "unverified-counter.txt")
 os.environ["FAKE_EXECUTOR_COUNTER_FILE"] = counter_file
 os.environ["FAKE_EXECUTOR_MODE"] = "pass"
 ctx5 = full_setup(ROOT, "T-980-B", executor="fake-executor")
-transports_path = Path(os.environ["AI_OS_HANDOFF_TRANSPORTS"])
+transports_path = Path(os.environ["ATLAS_HANDOFF_TRANSPORTS"])
 transports_before = transports_path.read_text()
 fake_bin_path = ROOT / "bin" / "fake-executor"
 tampered = transports_before.replace(
@@ -703,7 +703,7 @@ t("26. mission execute never approves, never creates a lease/claim, never dispat
 os.environ["FAKE_EXECUTOR_MODE"] = "pass"
 ctx26 = full_setup(ROOT, "T-980-W")
 task_dir26 = mission.resolve_task_dir("T-980-W")
-# Conflict protection (coordinator claims, cli/aios_coordination.py) was added after this
+# Conflict protection (coordinator claims, cli/atlas_coordination.py) was added after this
 # test was first written: execute now legitimately acquires a per-file claim under
 # runtime/coordination/claims/ on the scope file it is about to touch, so a second mission
 # can't be executed against the same file concurrently — that IS the point of the T-057
@@ -754,15 +754,15 @@ rc, out, err = do_continue(ctx28["ticket_id"], ctx28["mission_id"], ctx28["hando
 chk("continuation after an executed PASS succeeds", rc == 0)
 
 t("29. engine/core parity")
-chk("engine and core aios_mission.py are byte-identical",
-   (CLI / "aios_mission.py").read_bytes() == (CORE_CLI / "aios_mission.py").read_bytes())
-chk("engine and core ai-os-mission are byte-identical",
-   (CLI / "ai-os-mission").read_bytes() == (CORE_CLI / "ai-os-mission").read_bytes())
+chk("engine and core atlas_mission.py are byte-identical",
+   (CLI / "atlas_mission.py").read_bytes() == (CORE_CLI / "atlas_mission.py").read_bytes())
+chk("engine and core atlas-mission are byte-identical",
+   (CLI / "atlas-mission").read_bytes() == (CORE_CLI / "atlas-mission").read_bytes())
 chk("core module also exposes mission_execute", hasattr(core_mission, "mission_execute"))
 chk("core CLI also exposes cmd_execute", hasattr(core_mission_cli, "cmd_execute"))
 
 os.environ_backup = dict(os.environ)
-for _var in ("ATLAS_HOME", "AI_OS_ADAPTERS", "AI_OS_HANDOFF_TRANSPORTS"):
+for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
     os.environ.pop(_var, None)
 core_ctx = None
 os.environ.update(os.environ_backup)
@@ -770,7 +770,7 @@ os.environ.update(os.environ_backup)
 t("30. no T-050/AIOS-011/AIOS-012/AIOS-017/T-049 file or record touched by this fixture root")
 chk("no real AIOS-011, AIOS-012, AIOS-017, T-049 or T-050 ticket directory exists under this "
    "disposable fixture root", not any(
-       (ROOT / "projects" / "ai-os" / "tickets" / tid).exists()
+       (ROOT / "projects" / "atlas" / "tickets" / tid).exists()
        for tid in ("AIOS-011", "AIOS-012", "AIOS-017", "T-049", "T-050")))
 REAL_TRANSPORTS = REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml"
 real_before = REAL_TRANSPORTS.read_text()
@@ -794,7 +794,7 @@ if not CLAUDE_BINARY:
 else:
     chk("the `claude` binary is on PATH", True)
 
-    for _var in ("ATLAS_HOME", "AI_OS_ADAPTERS", "AI_OS_HANDOFF_TRANSPORTS"):
+    for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
         os.environ.pop(_var, None)
     real_root = Path(tempfile.mkdtemp(prefix="t051-exec-real-"))
     new_ticket(real_root, "T-981-A")
@@ -833,8 +833,8 @@ else:
         "    evidence: disposable fixture, mirrors the real (still verified:false) entry\n")
 
     os.environ["ATLAS_HOME"] = str(real_root)
-    os.environ["AI_OS_ADAPTERS"] = str(real_adapters)
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(real_transports)
+    os.environ["ATLAS_ADAPTERS"] = str(real_adapters)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(real_transports)
 
     def live_setup(ticket_id, rel_dir, content_instruction):
         scope_dir = real_root / rel_dir
@@ -934,19 +934,19 @@ else:
     live_c = live_setup("T-981-C", "pilot-exec-c",
                        "This file must never be edited by this fixture.\n")
     gamma_before = live_c["scope_path"].read_text()
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(real_transports_unverified)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(real_transports_unverified)
     rc_c, out_c, err_c = do_execute(live_c["ticket_id"], live_c["mission_id"],
                                     live_c["handoff_id"], "claude-code-mission-pilot",
                                     live_c["session"], live_c["invocation"])
     chk("mission execute refuses for the unverified real pilot transport", rc_c != 0)
     chk("mission C's own file was never touched", live_c["scope_path"].read_text() == gamma_before)
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(real_transports)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(real_transports)
 
     t("36. no production file was touched by the real-invocation section")
     chk("the REAL registry file was never touched", REAL_TRANSPORTS.read_text() == real_before)
     chk("no real AIOS-011/AIOS-012/AIOS-017/T-049/T-050 ticket directory exists under the "
        "real-invocation fixture root", not any(
-           (real_root / "projects" / "ai-os" / "tickets" / tid).exists()
+           (real_root / "projects" / "atlas" / "tickets" / tid).exists()
            for tid in ("AIOS-011", "AIOS-012", "AIOS-017", "T-049", "T-050")))
 
 

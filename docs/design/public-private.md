@@ -1,16 +1,16 @@
 # The Public / Private Contract
 
 Atlas is two layers, and there is no third. Everything else in the system rests on
-keeping them apart, so the boundary is written down here and checked by `ai-os doctor`.
+keeping them apart, so the boundary is written down here and checked by `atlas doctor`.
 
 ```
-  PUBLIC — the ai-os repository
+  PUBLIC — the atlas repository
   reusable software · publishable · owns no user data
         │
         │  seeds a new workspace, once, at init.  Never reads back.
         │  reads and writes your data forever after.  Access, not ownership.
         ▼
-  PRIVATE — $AI_OS_HOME, default ~/.ai-os
+  PRIVATE — $ATLAS_HOME, default ~/atlas
   personal/ memory · knowledge · daily      projects/ registry · work
         │
         └─ internal/  config · governance · schemas · extensions · sessions
@@ -24,7 +24,7 @@ not a layer with an owner of its own.
 
 **Access is not ownership.**
 
-The CLI reaches into `$AI_OS_HOME/personal/memory` constantly — that is its job.
+The CLI reaches into `$ATLAS_HOME/personal/memory` constantly — that is its job.
 A symlink, an environment variable, or a hook that grants it that reach does not
 reclassify the data it reaches. Memory read through a client's own per-project memory
 directory is still private-workspace data, owned by you, and still may not be copied into
@@ -36,29 +36,29 @@ Every confusion this contract prevents is a version of forgetting that sentence.
 
 | | Root | Owns |
 |---|---|---|
-| **Public** | the `ai-os` repo, wherever you clone it | code · CLI · adapters · capabilities · domain declarations · policies · schemas · public skills · templates · docs · tests |
-| **Private** | `$AI_OS_HOME`, default `~/.ai-os` | memory · knowledge · projects and their work · daily records · session records · personal config · personal skills · identity · preferences · transient runtime state |
+| **Public** | the `atlas` repo, wherever you clone it | code · CLI · adapters · capabilities · domain declarations · policies · schemas · public skills · templates · docs · tests |
+| **Private** | `$ATLAS_HOME`, default `~/atlas` | memory · knowledge · projects and their work · daily records · session records · personal config · personal skills · identity · preferences · transient runtime state |
 
 The public repository must never contain personal memory or knowledge, project or session
 history, identity, names, emails, phone numbers, credentials, private repository names,
-absolute user paths, or user-specific configuration values. `ai-os privacy-scan` checks
-this, and `ai-os doctor` runs it for you.
+absolute user paths, or user-specific configuration values. `atlas privacy-scan` checks
+this, and `atlas doctor` runs it for you.
 
 ## Where the third layer went
 
 Atlas grew up in a runtime directory at `~/.ai`, which held the live hooks, the scripts
 and the client integration. That layer is retired. Its engine became this repository's
 `cli/`, its client integration became `adapters/<client>/`, the user's own data moved into
-the private workspace, and its transient state became `$AI_OS_HOME/internal/runtime/`.
+the private workspace, and its transient state became `$ATLAS_HOME/internal/runtime/`.
 
-`ai-os doctor` now treats `~/.ai` as a **legacy** location rather than a live layer. It
+`atlas doctor` now treats `~/.ai` as a **legacy** location rather than a live layer. It
 passes when the directory is absent or inert, and **fails** when it still holds active
 Atlas components, or when symlinks still resolve out of it. Nothing should be built
 against that path, and no document should describe it as a place where Atlas executes.
 
 ## The invariants
 
-`ai-os doctor` checks all four.
+`atlas doctor` checks all four.
 
 **Distinct roots.** No two layers share a directory, and none is nested inside another.
 A nested layer looks like content of its host, which is how private data ends up staged
@@ -68,7 +68,7 @@ for a public commit.
 one without you saying so explicitly. The public repository may have a remote. They are
 never the same repository and never share history. Versioning is not publishing.
 
-**Flow is one-directional.** Public → private happens once, at `ai-os init`, when
+**Flow is one-directional.** Public → private happens once, at `atlas init`, when
 templates seed a new workspace. Private → public is never automatic; it requires explicit
 per-item approval, and in practice means *rewriting* content generically rather than
 copying it. Copying preserves the names, paths and phrasing that identify you — which is
@@ -78,7 +78,7 @@ exactly what the boundary exists to stop.
 
 ## Ownership classes
 
-Everything `ai-os init` creates falls into one of four classes. The class decides what a
+Everything `atlas init` creates falls into one of four classes. The class decides what a
 future update is allowed to do to it.
 
 | Class | Meaning | On update |
@@ -94,7 +94,7 @@ alone. It does not merge, does not back up and replace, does not ask. Deciding i
 
 ## Versioning is not publishing
 
-Versioning the private workspace is the user's own choice — `ai-os init` creates neither
+Versioning the private workspace is the user's own choice — `atlas init` creates neither
 a git repository nor a remote, so an unversioned workspace is a supported state. Once a
 user runs `git init` there, the rule is **no remote, and it must stay that way**: local
 git gives history, rollback and audit; a remote gives distribution, collaboration and
@@ -107,7 +107,7 @@ file does not remove it from history) and every commit carries the configured
 `user.email`, whether or not that address appears in the tree. Neither is a problem while
 the repository is local. Both become one the instant a remote exists — and by then it is
 too late to undo cheaply. That is the whole argument for making local-only the enforced
-default rather than a convention. The operational guards — hooks, `ai-os workspace
+default rather than a convention. The operational guards — hooks, `atlas workspace
 status`, the snapshot model — are in `docs/use/safety.md`.
 
 ## What is deliberately not built yet

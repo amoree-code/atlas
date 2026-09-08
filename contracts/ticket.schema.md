@@ -1,10 +1,21 @@
-# Ticket contract — draft
+# Ticket contract
 
 ```text
-Status:    DRAFT
-Authority: non-canonical during Phase A
-Current live contract remains under existing schemas/, internal/schemas/task.md and
-ticket-doctor behavior. Promotion requires a later migration slice (Phase E).
+Status:    ACCEPTED as of Phase E2 (AIOS-020/migration-plan.md) — documentation contract.
+Authority: describes behavior already enforced by cli/atlas_tickets.py
+           (required_fields_for, atlas_metadata_issues); reviewed against that code and
+           confirmed accurate at acceptance. Nothing here is itself executable — the code
+           remains the actual enforcement, this file the written-down source it answers to.
+Runtime:   internal/schemas/task.md and existing schemas/ remain the legacy documentation
+           of the same enforced behavior; both stay live until an explicit later cutover
+           retires one in favor of the other. No CLI resolution changed by acceptance.
+Reconciled 2026-09-08 (T-105): this file and the private workspace's copy at
+`contracts/ticket.schema.md` had byte-diverged, differing only in this status header —
+the private copy had already been promoted to ACCEPTED (Phase E2) while this one was left
+at the earlier DRAFT/Phase-A wording. Re-verified against current code
+(engine/cli/atlas_tickets.py still defines both functions named above) before adopting the
+ACCEPTED header here. This is now the canonical copy; the private root's copy is retained
+as a historical record of the acceptance decision, not edited by this reconciliation.
 ```
 
 Context loading: load only for ticket create/update/validation work. Not always-on.
@@ -13,7 +24,7 @@ Context loading: load only for ticket create/update/validation work. Not always-
 
 - `internal/schemas/task.md` (private) — the live historical contract.
 - `T-001` — the actual Atlas-native frontmatter shape, in production.
-- `cli/aios_tickets.py` / `cli/ai-os-tickets` — doctor's real enforced behavior.
+- `cli/atlas_tickets.py` / `cli/atlas-tickets` — doctor's real enforced behavior.
 
 ## Future relationship
 
@@ -62,7 +73,7 @@ asked, never a stored pointer).
 
 **Historical compatibility:** a historical ticket keeps `opened`/`updated` (date-only) and
 carries no `kind`/`namespace`/`checklist`/`checkpoint` — none of this is retrofitted onto it.
-`required_fields_for(id)` in `cli/aios_tickets.py` already picks the right pair per
+`required_fields_for(id)` in `cli/atlas_tickets.py` already picks the right pair per
 generation; this draft only writes down the rule the code enforces.
 
 ## 3. Metadata ordering

@@ -2,10 +2,10 @@
 """Persistent sync data belongs to the private workspace, not the runtime layer.
 
 V0.1.5 moved ai-sync's state record and its pre-overwrite backups out of
-~/.ai/sync/{state,backups} and into $AI_OS_HOME/internal/runtime/{state,backups}. T-020
-later moved them again, off the AI_OS_HOME-compat resolver entirely, onto
+~/.ai/sync/{state,backups} and into $ATLAS_HOME/internal/runtime/{state,backups}. T-020
+later moved them again, off the ATLAS_HOME-compat resolver entirely, onto
 $ATLAS_HOME/runtime/{caches/state,backups} — Atlas-canonical, deliberately not shared
-with the 13+ other commands still reading AI_OS_HOME as before. These tests exercise
+with the 13+ other commands still reading ATLAS_HOME as before. These tests exercise
 that relocation against a throwaway HOME — nothing here reads or writes the real
 workspace, the real runtime, or any real client configuration.
 
@@ -38,20 +38,20 @@ def chk(desc, ok):
 
 
 def load_sync(home: Path, ws: Path):
-    """Import ai-sync with HOME, AI_OS_HOME and ATLAS_HOME pointed at a scratch tree.
+    """Import ai-sync with HOME, ATLAS_HOME and ATLAS_HOME pointed at a scratch tree.
 
     Paths are module-level constants computed at import, so the environment has to be in
     place first and the module has to be loaded fresh for every scenario. RULES/PROFILE
-    still resolve through AI_OS_HOME (untouched by T-020); RUNTIME/CACHES/STATE/BACKUPS
+    still resolve through ATLAS_HOME (untouched by T-020); RUNTIME/CACHES/STATE/BACKUPS
     resolve through ATLAS_HOME only — both must point at the same scratch tree.
     """
     os.environ["HOME"] = str(home)
-    os.environ["AI_OS_HOME"] = str(ws)
     os.environ["ATLAS_HOME"] = str(ws)
-    os.environ["AI_OS_REPO"] = str(REPO)
-    for mod in [m for m in sys.modules if m.startswith("aios_sync")]:
+    os.environ["ATLAS_HOME"] = str(ws)
+    os.environ["ATLAS_REPO"] = str(REPO)
+    for mod in [m for m in sys.modules if m.startswith("atlas_sync")]:
         del sys.modules[mod]
-    name = f"aios_sync_{id(home)}"
+    name = f"atlas_sync_{id(home)}"
     spec = importlib.util.spec_from_loader(name, SourceFileLoader(name, str(SYNC)))
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
@@ -84,7 +84,7 @@ def scratch(tmp, label, legacy_state=None, legacy_backups=None, new_state=None,
 
 def main():
     real_home = os.environ.get("HOME")
-    tmp = Path(tempfile.mkdtemp(prefix="ai-os-relocation."))
+    tmp = Path(tempfile.mkdtemp(prefix="atlas-relocation."))
     try:
         # --- 1, 2, 11: a fresh installation writes only to the new canonical location ---
         print(f"\n{D}— fresh installation uses the private workspace{X}")

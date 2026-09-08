@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""Read-only, provider-neutral capability router.
+
+Given a declared set of available providers (with the capabilities each one
+supports), decides which single provider (if any) should handle a requested
+capability for a project/task/role, honoring an optional preference and an
+explicit fallback opt-in. Performs no I/O beyond emitting one JSON decision
+object to stdout.
+"""
+
+import argparse
+import json
+import re
+import sys
+
+REQUIRED_APPROVAL_VALUE = "approved"
+SAFE_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        prog="atlas-capability-route",
+        description="Route a requested capability to a declared available provider.",
+        add_help=True,
+    )
+    parser.add_argument("--project", default=None)
+    parser.add_argument("--task", default=None)
+    parser.add_argument("--role", default=None)
+    parser.add_argument("--capability", default=None)
+    parser.add_argument("--approval", default=None)
+    parser.add_argument("--budget-usd", dest="budget_usd", default=None)
+    parser.add_argument(
+        "--available",
+        dest="available",
+        action="append",
+        default=None,
+        help="Repeatable. Format: name:cap1,cap2[;name2:cap3,cap4]",
+    )
+    parser.add_argument("--preference", default=None)
+    parser.add_argument(
+        "--fallback",
+        default=None,
+        help="Must be exactly 'true' to permit falling back off --preference.",
+    )
+    # Parse leniently: never let argparse crash the process without emitting JSON.
+    try:
+        return parser.parse_args(argv), None
+    except SystemExit:
+        return None, "argument_parse_error"
+
+
+def parse_available(raw_values):
+    """Parse repeated --available entries into {provider: {capabilities}}.
+
+    Returns (providers_dict, error_reason). On any malformed entry, the whole
+    input is treated as unsafe and rejected (error_reason is set).
+    """
+    providers = {}
+    for raw in raw_values:
+        for entry in raw.split(";"):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if ":" not in entry:
+                return None, "malformed_available_entry"
+            name, _, caps_raw = entry.partition(":")
+            name = name.strip()
+            caps = [c.strip() for c in caps_raw.split(",") if c.strip()]
+            if not name or not caps:
+                return None, "malformed_available_entry"
+            if not SAFE_TOKEN.fullmatch(name) or any(not SAFE_TOKEN.fullmatch(cap) for cap in caps):
+                return None, "invalid_available_token"
+            providers.setdefault(name, set()).update(caps)
+    if not providers:
+        return None, "no_available_providers"
+    return providers, None
+
+
+def refuse(base, reason):
+    decision = dict(base)
+    decision.update(
+        {
+            "selected_provider": None,
+            "decision": "refused",
+            "refusal_reason": reason,
+            "fallback_used": False,
+        }
+    )
+    return decision
+
+
+def main(argv):
+    args, parse_error = parse_args(argv)
+    if parse_error:
+        print(json.dumps({"decision": "refused", "selected_provider": None, "refusal_reason": parse_error}))
+        return 1
+
+    base = {
+        "project_id": args.project,
+        "task_id": args.task,
+        "role": args.role,
+        "capability": args.capability,
+        "approval": args.approval,
+        "budget_usd": args.budget_usd,
+        "preference": args.preference,
+    }
+
+    for field in ("project", "task", "role", "capability", "approval", "budget_usd"):
+        if not getattr(args, field):
+            output_name = {"project": "project_id", "task": "task_id"}.get(field, field)
+            print(json.dumps(refuse(base, "missing_required_field:%s" % output_name)))
+            return 1
+
+    for field in ("project", "task", "role", "capability", "approval"):
+        value = getattr(args, field)
+        output_name = {"project": "project_id", "task": "task_id"}.get(field, field)
+        if not SAFE_TOKEN.fullmatch(value):
+            print(json.dumps(refuse(base, "invalid_token:%s" % output_name)))
+            return 1
+
+    if not args.available:
+        print(json.dumps(refuse(base, "missing_required_field:available")))
+        return 1
+
+    if args.approval != REQUIRED_APPROVAL_VALUE:
+        print(json.dumps(refuse(base, "approval_not_granted")))
+        return 1
+
+    try:
+        budget_usd = float(args.budget_usd)
+    except (TypeError, ValueError):
+        print(json.dumps(refuse(base, "invalid_budget")))
+        return 1
+    if budget_usd <= 0:
+        print(json.dumps(refuse(base, "invalid_budget")))
+        return 1
+    base["budget_usd"] = budget_usd
+
+    fallback_allowed = args.fallback == "true"
+    if args.fallback is not None and args.fallback not in ("true", "false"):
+        print(json.dumps(refuse(base, "invalid_fallback_value")))
+        return 1
+
+    providers, error_reason = parse_available(args.available)
+    if error_reason:
+        print(json.dumps(refuse(base, error_reason)))
+        return 1
+
+    capable_providers = sorted(
+        name for name, caps in providers.items() if args.capability in caps
+    )
+    if not capable_providers:
+        print(json.dumps(refuse(base, "no_provider_for_capability")))
+        return 1
+
+    fallback_used = False
+
+    if args.preference:
+        if not SAFE_TOKEN.fullmatch(args.preference):
+            print(json.dumps(refuse(base, "invalid_token:preference")))
+            return 1
+        if args.preference in capable_providers:
+            chosen = args.preference
+        elif fallback_allowed:
+            remaining = [p for p in capable_providers if p != args.preference]
+            if not remaining:
+                print(json.dumps(refuse(base, "no_provider_for_capability")))
+                return 1
+            chosen = remaining[0]
+            fallback_used = True
+        else:
+            print(json.dumps(refuse(base, "preferred_provider_unavailable")))
+            return 1
+    else:
+        if len(capable_providers) != 1:
+            print(json.dumps(refuse(base, "ambiguous_provider_selection")))
+            return 1
+        chosen = capable_providers[0]
+
+    decision = dict(base)
+    decision.update(
+        {
+            "selected_provider": chosen,
+            "decision": "routed",
+            "refusal_reason": None,
+            "fallback_used": fallback_used,
+        }
+    )
+    print(json.dumps(decision))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

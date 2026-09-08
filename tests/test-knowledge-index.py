@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 
-CLI = Path(__file__).resolve().parents[1] / "cli" / "ai-os-knowledge-index"
+CLI = Path(__file__).resolve().parents[1] / "cli" / "atlas-knowledge-index"
 
 
 def run(source, db, *extra):
@@ -28,13 +28,13 @@ def main():
         root.mkdir()
         first = root / "first.md"
         second = root / "second.md"
-        first.write_text("---\ntags: [alpha]\nproject_id: ai-os\nticket_id: T-056\n---\n#alpha [[second]]\n", encoding="utf-8")
+        first.write_text("---\ntags: [alpha]\nproject_id: atlas\nticket_id: T-056\n---\n#alpha [[second]]\n", encoding="utf-8")
         second.write_text("# Second\n", encoding="utf-8")
 
         source_before = first.read_bytes(), second.read_bytes()
         assert run(root, db)["notes_created"] == 2
         assert run(root, db)["notes_unchanged"] == 2
-        first.write_text("---\nproject_id: ai-os\nticket_id: T-056\n---\n#alpha #changed [[second]]\n", encoding="utf-8")
+        first.write_text("---\nproject_id: atlas\nticket_id: T-056\n---\n#alpha #changed [[second]]\n", encoding="utf-8")
         changed_source = first.read_bytes()
         assert run(root, db)["notes_updated"] == 1
         second.unlink()

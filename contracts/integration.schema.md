@@ -1,11 +1,21 @@
 # Integration contract — draft
 
 ```text
-Status:    DRAFT
-Authority: non-canonical during Phase A
-No current live contract exists for this concept — it is new. Nothing under this draft is
-built: no queue, no runtime directory, no orchestrator. Promotion (and first real use)
-requires a later migration slice, no earlier than Phase G (`AIOS-020/migration-plan.md`).
+Status:    DRAFT — BOUNDARY-DEFINED (Phase G, T-022)
+Authority: non-canonical
+Runtime consumers: 0
+`integration/` (Phase G, T-022) now exists as the reserved root this draft is the
+contract for, with its own doorway doc restating the shape below. Nothing under this
+draft is built: no queue, no runtime directory beyond the empty reserved root, no
+orchestrator, no conflict-resolution logic. Promotion to a live, canonical contract
+requires a real runtime consumer — not scheduled by this or any phase to date.
+Reconciled 2026-09-08 (T-105): this file and the private workspace's copy at
+`contracts/integration.schema.md` had byte-diverged (wording only — both still DRAFT,
+non-canonical, zero consumers). Adopted the private copy's wording here because the
+private root's own `integration/README.md` (a real file, part of the T-022 reserved
+root) references this contract directly, making that the more currently-accurate
+narrative. This is now the canonical copy; the private root's copy is retained as a
+historical record, not edited by this reconciliation.
 ```
 
 Context loading: load only when designing or reasoning about how isolated concurrent
@@ -38,10 +48,10 @@ separate, unstarted schema-rename slice, not part of this draft.
 ## Future relationship
 
 This is the draft contract for data that would eventually live under the reserved
-`integration/` root (`integration/attempts/`, per `candidate-tree.md`). No such directory
-is created by this ticket. Promotion is gated on Phase G (concurrency-ready boundaries) at
-the earliest — this draft exists so that phase has a shape to build against, not so it can
-start sooner.
+`integration/` root. Phase G (`T-022`) created that root and its doorway doc, but not
+`integration/attempts/` itself (per `candidate-tree.md`) — still deliberately absent, no
+earlier than a future ticket with a real runtime consumer. This draft exists so that
+future work has a shape to build against, not so it starts sooner.
 
 ---
 

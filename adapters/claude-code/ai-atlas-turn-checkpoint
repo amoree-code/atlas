@@ -5,7 +5,7 @@ entry per completed Claude response, without inventing semantic task state.
 ## Why this exists
 
 `ai-atlas-resume` (SessionStart) discovers a *manually* written checkpoint
-(`ai-os tickets checkpoint`) at the start of a new session. This file is the other half:
+(`atlas tickets checkpoint`) at the start of a new session. This file is the other half:
 an automatic, per-turn safety net that fires even when nobody remembered to run that
 command, so a session that ends abruptly (crash, closed terminal, hit a usage limit)
 still leaves *something* behind — honestly labeled as a turn-boundary record, not
@@ -34,14 +34,14 @@ required for that situation: record the boundary and whatever metadata is genuin
 available, automatically, every time — and never guess a ticket, a next action, or a
 verification result to fill the gap. `$ATLAS_HOME/runtime/session-handoffs/latest.md`
 (the SessionStart pointer) is read here, never written — a real semantic checkpoint
-written by `ai-os tickets checkpoint` always stays authoritative and is never overwritten
+written by `atlas tickets checkpoint` always stays authoritative and is never overwritten
 by an automatic, semantic-free turn record.
 
 ## What this does NOT do
 
 - Does not write, touch, or rotate `latest.md`. `SessionStart`'s `ai-atlas-resume` reads
   only that file and is unaffected by this one's existence.
-- Does not call `catch-up`, `ai-os context`, or any ticket-mutating command.
+- Does not call `catch-up`, `atlas context`, or any ticket-mutating command.
 - Does not execute, approve, commit, or publish anything named in the transcript.
 - Does not read the transcript file itself — only the hook's own stdin JSON. Reading and
   interpreting the transcript would be exactly the kind of state invention this file is
@@ -89,14 +89,14 @@ def now_readable():
 
 def load_credential_patterns():
     """Best-effort reuse of the one real scanner. Unavailable -> no patterns -> never
-    blocks a turn record on an import failure alone (same fallback shape ai-os-tickets
+    blocks a turn record on an import failure alone (same fallback shape atlas-tickets
     already uses for the same reason)."""
     try:
         import importlib.util
         from importlib.machinery import SourceFileLoader
         repo = Path(__file__).resolve().parent.parent.parent
-        scan_path = repo / "cli" / "ai-os-privacy-scan"
-        loader = SourceFileLoader("ai_os_privacy_scan_patterns", str(scan_path))
+        scan_path = repo / "cli" / "atlas-privacy-scan"
+        loader = SourceFileLoader("atlas_privacy_scan_patterns", str(scan_path))
         spec = importlib.util.spec_from_loader(loader.name, loader)
         mod = importlib.util.module_from_spec(spec)
         loader.exec_module(mod)
@@ -187,7 +187,7 @@ def build_record(event):
         "state": redact_if_credential_shaped(pointer.get("state")) if have_ticket
                  else "unavailable — automatic turn boundary, no semantic checkpoint yet",
         "next_action": redact_if_credential_shaped(pointer.get("next_action")) if have_ticket
-                 else "unavailable — run `ai-os tickets checkpoint` for a real next action",
+                 else "unavailable — run `atlas tickets checkpoint` for a real next action",
         "blockers": redact_if_credential_shaped(pointer.get("blockers")) if have_ticket else None,
         "verification": "unavailable — the Stop/PreCompact hook payload carries no "
                         "verification result",

@@ -8,7 +8,7 @@ updated: 2026-08-01
 
 This board and the ticket records under `tickets/` are authoritative. Cold start reads
 this file, then a ticket's own `task.md`. Resolve a bare id with
-`ai-os-paths ticket <ID>`.
+`atlas-paths ticket <ID>`.
 
 ```
 a-project/
@@ -19,12 +19,12 @@ a-project/
 
 ## Tickets
 
-<!-- ai-os:tickets:begin -->
-<!-- Generated from tickets/*/task.md by `ai-os tickets index --write`.
+<!-- atlas:tickets:begin -->
+<!-- Generated from tickets/*/task.md by `atlas tickets index --write`.
      The records are authoritative; this table is a view. Do not hand-edit. -->
 
 | ID | State | Class | Role | Title | Next action | Record |
 |---|---|---|---|---|---|---|
 | EXMPL-001 | `active` | small | — | Add CSV export to the reports page | Wire the export button to the existing `/reports/export` endpoint | [`task.md`](tickets/EXMPL-001/task.md) |
 
-<!-- ai-os:tickets:end -->
+<!-- atlas:tickets:end -->

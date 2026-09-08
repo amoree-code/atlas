@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only workspace health check. Never modifies anything. Exit 1 if any FAIL.
 set -uo pipefail
-W="${AI_OS_HOME:-$HOME/.ai-os}"
+W="${ATLAS_HOME:-$HOME/atlas}"
 fail=0
 ok()   { printf '  \033[32mok\033[0m    %s\n' "$1"; }
 warn() { printf '  \033[33mwarn\033[0m  %s\n' "$1"; }

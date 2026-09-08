@@ -65,12 +65,12 @@ exists and must be rebuilt after significant changes (`graphify ./src --code-onl
 
 ## 5. Register
 
-Add or update the row in `~/.ai-os/projects/registry.md`: path, stack, repo,
+Add or update the row in `~/atlas/projects/registry.md`: path, stack, repo,
 status, last commit date, real next action. Add any obvious follow-ups to
-`~/.ai-os/projects/tasks.md`.
+`~/atlas/projects/tasks.md`.
 
 If the analysis produced project-local state worth keeping — standing decisions,
-domain knowledge, operating rules — create `~/.ai-os/projects/<project>/` with
+domain knowledge, operating rules — create `~/atlas/projects/<project>/` with
 only the parts that have content (`memory/`, `rules/`, `knowledge/`, `context/`, per
 its README). Do not scaffold empty directories, and never copy global memory into it.
 

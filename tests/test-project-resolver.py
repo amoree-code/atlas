@@ -5,12 +5,12 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PATHS = ROOT / "engine" / "cli" / "ai-os-paths"
+PATHS = ROOT / "engine" / "cli" / "atlas-paths"
 
 
 def run(home, *args):
     env = os.environ.copy()
-    env["AI_OS_HOME"] = str(home)
+    env["ATLAS_HOME"] = str(home)
     return subprocess.run([str(PATHS), "project", *args], env=env,
                           text=True, capture_output=True)
 

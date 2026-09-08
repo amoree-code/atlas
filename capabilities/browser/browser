@@ -15,12 +15,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 # T-019: the workspace/profile this launches is Atlas-canonical (runtime/workspaces/
-# browser), not the legacy AI_OS_HOME-rooted default this used to compute — no other
-# runtime store's ownership changed. AI_OS_BROWSER_RUNTIME still overrides explicitly.
+# browser), not the legacy ATLAS_HOME-rooted default this used to compute — no other
+# runtime store's ownership changed. ATLAS_BROWSER_RUNTIME still overrides explicitly.
 ATLAS_HOME = Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
     else Path.home() / "atlas"
 # Ephemeral by design: a browser session is runtime state, never durable task truth.
-RUNTIME = Path(os.environ.get("AI_OS_BROWSER_RUNTIME",
+RUNTIME = Path(os.environ.get("ATLAS_BROWSER_RUNTIME",
                                ATLAS_HOME / "runtime" / "workspaces" / "browser"))
 SESSION = RUNTIME / "session.json"
 # The default provider name lives in providers/default, so this file names no
@@ -49,7 +49,7 @@ def fail(msg, code=1):
 
 def read_session():
     if not SESSION.exists():
-        fail("no browser session — run: ai-os capability invoke browser.open")
+        fail("no browser session — run: atlas capability invoke browser.open")
     return json.loads(SESSION.read_text())
 
 

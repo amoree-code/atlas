@@ -3,9 +3,9 @@
 Early software. `atlas init` assumes a single-user local setup and has been exercised
 against one machine. Treat it as a working sketch.
 
-**Naming note (T-031):** `atlas` is the canonical command; `ai-os` remains a temporary
+**Naming note (T-031):** `atlas` is the canonical command; `atlas` remains a temporary
 compatibility alias that resolves identically during the transition window. Examples
-below use `atlas`; anywhere you read `ai-os`, it still works the same way.
+below use `atlas`; anywhere you read `atlas`, it still works the same way.
 
 ## What you are installing
 
@@ -16,8 +16,8 @@ Two things live in two places, and only one of them is this repository.
 | **Public** — the software | wherever you clone it | `git clone` |
 | **Private** — your data | `$ATLAS_HOME`, default `~/atlas` | `atlas init` |
 
-Compatibility fallback: `$AI_OS_HOME`, default `~/.ai-os`, still resolves for any root Atlas
-does not yet hold — see `cli/ai-os-paths`. Atlas is never bypassed when it already has the
+Compatibility fallback: `$ATLAS_HOME`, default `~/atlas`, still resolves for any root Atlas
+does not yet hold — see `cli/atlas-paths`. Atlas is never bypassed when it already has the
 requested resource.
 
 Client integration is not a third place: each client reaches Atlas through its adapter in
@@ -29,8 +29,8 @@ before you run anything, because the separation is the product.
 ## Install
 
 ```bash
-git clone <this-repo> ~/ai-os
-export PATH="$HOME/ai-os/cli:$PATH"     # add to ~/.zshrc or ~/.config/fish/config.fish
+git clone <this-repo> ~/atlas
+export PATH="$HOME/atlas/cli:$PATH"     # add to ~/.zshrc or ~/.config/fish/config.fish
 ```
 
 Requirements: `bash`, `git`, `python3`. Nothing else — no package manager, no
@@ -56,7 +56,7 @@ copy public skills into your workspace. It also asks you nothing — that is `at
 onboard`, below.
 
 Put the workspace somewhere else with `ATLAS_HOME` (or, as a compatibility fallback,
-`AI_OS_HOME` for roots Atlas has not cut over):
+`ATLAS_HOME` for roots Atlas has not cut over):
 
 ```bash
 ATLAS_HOME=~/work/atlas-data atlas init
@@ -131,7 +131,7 @@ atlas workspace status        # local versioning of your private data
 
 Two things worth doing once:
 
-1. **Fill in `~/.ai-os/internal/governance/policies/privacy-terms.txt`** — your name, handles, emails,
+1. **Fill in `~/atlas/internal/governance/policies/privacy-terms.txt`** — your name, handles, emails,
    employers, private repository names. Without it `privacy-scan` runs generic patterns
    only and cannot catch a name or a client repo. The file stays private.
 
@@ -139,7 +139,7 @@ Two things worth doing once:
    commit bakes in the committer email permanently:
 
    ```bash
-   git -C ~/ai-os config user.email <a public address>
+   git -C ~/atlas config user.email <a public address>
    ```
 
    `doctor` warns when this is unset. It will not set it for you, and it never touches
@@ -147,6 +147,6 @@ Two things worth doing once:
 
 ## Uninstalling
 
-Delete the clone. Your workspace at `~/atlas` (compatibility fallback: `~/.ai-os`) is untouched by that — it is yours, it was
+Delete the clone. Your workspace at `~/atlas` (compatibility fallback: `~/atlas`) is untouched by that — it is yours, it was
 never owned by the repository, and nothing in the repository is needed to read it. It is
 plain Markdown and YAML on disk.

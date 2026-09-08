@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Adopt and verify the Atlas workspace layout without relocating user data."""
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+
+ROOTS = ("personal/profile", "personal/memory", "personal/knowledge", "personal/daily",
+         "personal/inbox", "projects", "sessions", "clients", "runtime/dispatch-inbox",
+         "runtime/backups", "governance/rules", "governance/policies", "config")
+MARKER = ".atlas-workspace.json"
+COMPAT = {"config": "internal/config", "runtime": "internal/runtime",
+          "sessions": "internal/sessions", "governance/rules": "internal/governance/rules",
+          "governance/policies": "internal/governance/policies"}
+
+
+def document():
+    return {"schema": 1, "product": "Atlas", "roots": list(ROOTS),
+            "config": "config", "config_view": "system/config",
+            "ticket_authority": "projects/<project>/tickets/<id>/task.md",
+            "archive": "projects/<project>/tickets/archive/<namespace>/<id>",
+            "profile_sources": ["config/profile.yaml", "config/identity.md",
+                                "personal/professional"],
+            "client_homes": "adapter-managed", "backup_pruning": "disabled"}
+
+
+def problems(root, require_marker=True):
+    errors = []
+    for canonical, previous in COMPAT.items():
+        current, old = root / canonical, root / previous
+        if old.exists() or old.is_symlink():
+            if not old.is_dir() or not old.resolve().is_relative_to(root.resolve()):
+                errors.append(f"invalid compatibility store: {previous}")
+            elif current.exists() and current.resolve() != old.resolve():
+                errors.append(f"distinct stores conflict: {canonical} and {previous}")
+    for rel in (*ROOTS, "system"):
+        path = root / rel
+        if not path.resolve().is_relative_to(root.resolve()):
+            errors.append(f"root escapes workspace: {rel}")
+        if path.exists() and not path.is_dir():
+            errors.append(f"expected directory: {rel}")
+        elif require_marker and not path.is_dir():
+            errors.append(f"missing directory: {rel}")
+    view = root / "system/config"
+    if view.exists() or view.is_symlink():
+        if view.resolve() != (root / "config").resolve():
+            errors.append("system/config conflicts with the authoritative config store")
+    elif require_marker:
+        errors.append("missing system/config view")
+    marker = root / MARKER
+    if marker.is_symlink():
+        errors.append("workspace marker must not be a symlink")
+    elif marker.exists():
+        try:
+            if json.loads(marker.read_text()) != document():
+                errors.append("workspace marker does not match the supported layout")
+        except (OSError, ValueError):
+            errors.append("workspace marker is unreadable or malformed")
+    elif require_marker:
+        errors.append("workspace has not been adopted; run atlas structure apply --approve")
+    return errors
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="atlas structure")
+    parser.add_argument("command", choices=("plan", "apply", "check"))
+    parser.add_argument("--approve", action="store_true")
+    parser.add_argument("--quiet", action="store_true")
+    args = parser.parse_args()
+    root = Path(os.environ.get("ATLAS_HOME", str(Path.home() / "atlas"))).expanduser().resolve()
+    engine = Path(__file__).resolve().parents[1]
+    if root == engine or root.is_relative_to(engine):
+        parser.error("private workspace cannot be inside the public engine")
+    if args.command == "plan":
+        print(json.dumps({"root": str(root), "layout": document(),
+                          "conflicts": problems(root, False)}, indent=2))
+        return 0
+    if args.command == "apply":
+        if not args.approve:
+            parser.error("apply requires --approve")
+        errors = problems(root, False)
+        if errors:
+            print("\n".join(errors), file=sys.stderr)
+            return 2
+        for canonical, previous in COMPAT.items():
+            current, old = root / canonical, root / previous
+            if old.is_dir() and not current.exists():
+                current.parent.mkdir(parents=True, exist_ok=True)
+                current.symlink_to(os.path.relpath(old, current.parent), target_is_directory=True)
+        for rel in (*ROOTS, "system"):
+            (root / rel).mkdir(parents=True, exist_ok=True)
+        view = root / "system/config"
+        if not view.is_symlink():
+            view.symlink_to("../config", target_is_directory=True)
+        marker = root / MARKER
+        if not marker.exists():
+            with marker.open("x") as stream:
+                json.dump(document(), stream, indent=2)
+                stream.write("\n")
+    errors = problems(root)
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+        return 2
+    if not args.quiet:
+        print(f"Atlas workspace ready: {root}")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except OSError as error:
+        print(f"atlas structure: {error}", file=sys.stderr)
+        raise SystemExit(2)

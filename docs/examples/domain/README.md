@@ -15,4 +15,4 @@ fields" section for the full refusal table and why each rejected key is rejected
 A domain is **inert**: no command, no verifier, no provider, no authority rung, and no
 ordering. This file declares vocabulary — outcome *kinds* — and nothing that runs.
 `garden-planning.yaml` ships nowhere except here; it is not registered in `domains/` and
-`ai-os domain list` will never see it.
+`atlas domain list` will never see it.

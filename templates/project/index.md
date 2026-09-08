@@ -8,7 +8,7 @@ updated: <YYYY-MM-DD>
 
 This board and the ticket records under `tickets/` are authoritative. Cold start reads
 this file, then a ticket's own `task.md`. Resolve a bare id with
-`ai-os-paths ticket <ID>`.
+`atlas-paths ticket <ID>`.
 
 ```
 <project>/
@@ -19,11 +19,11 @@ this file, then a ticket's own `task.md`. Resolve a bare id with
 
 ## Tickets
 
-<!-- ai-os:tickets:begin -->
-<!-- Generated from tickets/*/task.md by `ai-os tickets index --write`.
+<!-- atlas:tickets:begin -->
+<!-- Generated from tickets/*/task.md by `atlas tickets index --write`.
      The records are authoritative; this table is a view. Do not hand-edit. -->
 
 | ID | State | Class | Role | Title | Next action | Record |
 |---|---|---|---|---|---|---|
 
-<!-- ai-os:tickets:end -->
+<!-- atlas:tickets:end -->

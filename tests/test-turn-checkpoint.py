@@ -83,7 +83,7 @@ def write_pointer(home, ticket="T-900", state="did X", next_action="do Y",
     p = home / "runtime" / "session-handoffs" / "latest.md"
     p.write_text(
         "ticket: {}\ncheckpointed_at: 2026-09-06 3:00 AM\nstate: {}\n"
-        "next_action: {}\nblockers: {}\nread_with: ai-os context {}\nstatus: {}\n"
+        "next_action: {}\nblockers: {}\nread_with: atlas context {}\nstatus: {}\n"
         .format(ticket, state, next_action, blockers, ticket, status))
 
 
@@ -302,7 +302,7 @@ def test_real_multi_turn_session():
             if journal_p.is_file() else []
         chk("at least one automatic turn record now exists for the real session",
             len(recs) >= 1)
-        chk("no manual `ai-os tickets checkpoint` was run, yet records exist anyway",
+        chk("no manual `atlas tickets checkpoint` was run, yet records exist anyway",
             True)  # by construction — no such command was invoked above
     finally:
         if pre_journal is not None:

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """tests/test-coordinator-routing.py — T-050-S1: deterministic route, owner-gated dispatch.
 
-`cli/ai-os-coordinator` adds exactly two things on top of the existing AIOS-011 handoff
+`cli/atlas-coordinator` adds exactly two things on top of the existing AIOS-011 handoff
 records and the AIOS-012 verified transport registry: `route` (resolve who a task's intent
 belongs to, from a declared policy, and print the decision) and `dispatch` (verify an
 existing, explicit owner approval matches a handoff record exactly, then call the existing
-`ai-os handoff send`). Neither is a scheduler, a lease, a lock, a queue or a daemon — most of
+`atlas handoff send`). Neither is a scheduler, a lease, a lock, a queue or a daemon — most of
 the scenarios below check an *absence*, not just a presence.
 
 Every scenario runs against a disposable ATLAS_HOME fixture built by `make_ticket_home()`,
-matching the shape `ai-os-paths ticket <id>` actually resolves (`projects/<proj>/tickets/
+matching the shape `atlas-paths ticket <id>` actually resolves (`projects/<proj>/tickets/
 <id>/task.md`) — the same fixture shape `test-agent-handoff-identity.py` already uses.
 Nothing here touches the real workspace, the real routing policy's *effect*, or any real
 ticket; the real `coordinator-routing.yaml` and `handoff-transports.yaml` are read read-only
@@ -68,9 +68,9 @@ def _load(name):
     return mod
 
 
-handoff = _load("ai-os-handoff")
-coordinator = _load("ai-os-coordinator")
-coord = _load("aios_coordination.py")
+handoff = _load("atlas-handoff")
+coordinator = _load("atlas-coordinator")
+coord = _load("atlas_coordination.py")
 
 # T-050-S6-R1: `coordinator dispatch` now requires --lease-id/--client/--session and verifies
 # them before it ever reaches the pre-existing approval-tuple checks these S1-S3 dispatch
@@ -97,7 +97,7 @@ def write_handoff(d, handoff_id, *, to="codex", gate="review", scope="s1",
                    status="approved", approval="recorded", sent="no",
                    approved_to=None, approved_gate=None, approved_scope=None,
                    owner_words="approved for the test"):
-    """A handoff record written directly, in the exact shape `ai-os-handoff` itself
+    """A handoff record written directly, in the exact shape `atlas-handoff` itself
     writes and reads — the same technique `test-agent-handoff-identity.py`'s
     `write_legacy_record()` uses, so dispatch's preflight is exercised against a record,
     not against a mock of one."""
@@ -145,7 +145,7 @@ def write_returned_record(d, handoff_id, *, status="returned", to="codex", gate=
                           returned_text="Task complete. Nothing outside scope was touched.",
                           owner_action_required="resume", next_holder="undecided"):
     """A handoff record already carrying a returned block, in the exact shape
-    `ai-os handoff receive` itself writes and reads: frontmatter through `sent`/`approved`,
+    `atlas handoff receive` itself writes and reads: frontmatter through `sent`/`approved`,
     then `returned`/`received_*`/`returned_sha256`, then a '## 5. Returned block' section
     with the reply verbatim between the real RETURNED_BEGIN/RETURNED_END markers — the same
     technique `write_handoff()` above uses for the approve/dispatch tuple."""
@@ -270,13 +270,13 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     chk("duplicate --intent refused", rc == 2 and "more than once" in err)
 
     # --- 5: unverified / undeclared transport refusal (fixture policy + fixture registry) -
-    # `cmd_route`/`cmd_dispatch` each reload `cli/ai-os-handoff` fresh, as its own module
+    # `cmd_route`/`cmd_dispatch` each reload `cli/atlas-handoff` fresh, as its own module
     # instance, on every call (`_load_sibling`) — so a fixture transport registry has to be
-    # handed to it the same way the real one is: via `AI_OS_HANDOFF_TRANSPORTS`, read at
+    # handed to it the same way the real one is: via `ATLAS_HANDOFF_TRANSPORTS`, read at
     # that fresh module's own load time, not by mutating this test's already-loaded copy.
     t("route: a client with no verified transport is refused")
     real_policy = coordinator.POLICY
-    real_transports_env = os.environ.get("AI_OS_HANDOFF_TRANSPORTS")
+    real_transports_env = os.environ.get("ATLAS_HANDOFF_TRANSPORTS")
     try:
         fixture_policy = root / "coordinator-routing-fixture.yaml"
         fixture_policy.write_text("contract: 1\nroles:\n  stager: flaky\nintents:\n  stage: stager\n")
@@ -286,7 +286,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
             "    name: unverified fixture transport\n    binary: true\n"
             "    argv: [x]\n    stdin: packet\n    timeout: 5\n    verified: false\n")
         coordinator.POLICY = fixture_policy
-        os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(fixture_transports)
+        os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(fixture_transports)
         rc, out, err = run(coordinator.cmd_route, ["T-900", "--intent", "stage", "--scope", "s1"])
         chk("verified: false -> exit 2 (fail closed)", rc == 2)
         chk("refusal names the client and 'not verified'", "flaky" in err and "not verified" in err)
@@ -307,9 +307,9 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     finally:
         coordinator.POLICY = real_policy
         if real_transports_env is None:
-            os.environ.pop("AI_OS_HANDOFF_TRANSPORTS", None)
+            os.environ.pop("ATLAS_HANDOFF_TRANSPORTS", None)
         else:
-            os.environ["AI_OS_HANDOFF_TRANSPORTS"] = real_transports_env
+            os.environ["ATLAS_HANDOFF_TRANSPORTS"] = real_transports_env
 
     # --- 9: route never sends, never approves, never writes -------------------------------
     t("route: never sends, never approves, never writes to the ticket or a handoff record")
@@ -357,24 +357,24 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     chk("refusal says already sent", "already sent" in err)
 
     t("dispatch: refuses when the destination has no verified transport")
-    real_transports_env = os.environ.get("AI_OS_HANDOFF_TRANSPORTS")
+    real_transports_env = os.environ.get("ATLAS_HANDOFF_TRANSPORTS")
     try:
         fixture_transports = root / "handoff-transports-fixture2.yaml"
         fixture_transports.write_text("contract: 1\nroles: {}\ntransports: {}\n")
-        os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(fixture_transports)
+        os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(fixture_transports)
         write_handoff(d, "no-transport", to="codex")
         rc, out, err = run(coordinator.cmd_dispatch, ["T-900", "no-transport"] + DISPATCH_LEASE_FLAGS)
         chk("exit 2", rc == 2)
         chk("refusal names the missing transport", "cannot dispatch to 'codex'" in err)
     finally:
         if real_transports_env is None:
-            os.environ.pop("AI_OS_HANDOFF_TRANSPORTS", None)
+            os.environ.pop("ATLAS_HANDOFF_TRANSPORTS", None)
         else:
-            os.environ["AI_OS_HANDOFF_TRANSPORTS"] = real_transports_env
+            os.environ["ATLAS_HANDOFF_TRANSPORTS"] = real_transports_env
 
-    # --- 11/12: dispatch calls the existing 'ai-os handoff send', once, in the foreground --
+    # --- 11/12: dispatch calls the existing 'atlas handoff send', once, in the foreground --
     # `subprocess` is one shared module object — `task_dir()` (inside the freshly reloaded
-    # `ai-os-handoff`) also calls `subprocess.run` to resolve the ticket path, via that same
+    # `atlas-handoff`) also calls `subprocess.run` to resolve the ticket path, via that same
     # object. A fake that intercepts *every* call would break ticket resolution itself, so
     # this only intercepts the one call shaped like the real send invocation and delegates
     # everything else (the ticket resolver included) to the real `subprocess.run` — nothing
@@ -395,7 +395,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     real_subprocess_run = subprocess.run
 
     def fake_run(argv, **kwargs):
-        if isinstance(argv, list) and len(argv) >= 2 and str(argv[0]).endswith("ai-os-handoff") \
+        if isinstance(argv, list) and len(argv) >= 2 and str(argv[0]).endswith("atlas-handoff") \
                 and argv[1] == "send":
             calls.append((list(argv), kwargs))
             return FakeCompleted(0)
@@ -407,7 +407,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
         chk("exit 0 (the mocked send reported success)", rc == 0)
         chk("dispatch called the send path exactly once", len(calls) == 1)
         argv = calls[0][0] if calls else []
-        chk("the call targets the existing ai-os-handoff binary", argv and argv[0].endswith("ai-os-handoff"))
+        chk("the call targets the existing atlas-handoff binary", argv and argv[0].endswith("atlas-handoff"))
         chk("the call reuses the existing 'send' subcommand", len(argv) >= 4 and argv[1] == "send")
         chk("the call passes through the exact task id and handoff id",
             argv[-2:] == ["T-900", "good"] if len(argv) >= 2 else False)
@@ -424,10 +424,10 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
 
     # --- 12: no background process ---------------------------------------------------------
     t("no background process: the coordinator source contains no daemonizing construct")
-    src = (CLI / "ai-os-coordinator").read_text()
+    src = (CLI / "atlas-coordinator").read_text()
     banned_constructs = ["Popen(", "os.fork(", "nohup", "crontab", "daemon=True",
                           "threading.Thread(", "multiprocessing.", "while True"]
-    chk("no daemonizing construct appears in cli/ai-os-coordinator",
+    chk("no daemonizing construct appears in cli/atlas-coordinator",
         not any(b in src for b in banned_constructs))
     chk("dispatch's one subprocess call is a single blocking subprocess.run, not Popen",
         "subprocess.run(" in src and "subprocess.Popen(" not in src)
@@ -453,7 +453,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     runtime_dir = root / "runtime"
     # T-050-S6-R1: the "good" dispatch scenario's real claim now legitimately lives under
     # `runtime/coordination/claims/` (the existing runtime root, reused, never a new one —
-    # see aios_coordination.runtime_claims_dir()). That is the one allowed subtree; nothing
+    # see atlas_coordination.runtime_claims_dir()). That is the one allowed subtree; nothing
     # named like a daemon/queue/worker/scheduler artifact is tolerated anywhere under it.
     unexpected_runtime_entries = [
         str(p.relative_to(runtime_dir)) for p in runtime_dir.rglob("*")
@@ -482,10 +482,10 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     # =====================================================================================
     protected_before = {
         "coordinator-routing.yaml": coordinator.POLICY.read_text(),
-        "ai-os-handoff": (CLI / "ai-os-handoff").read_text(),
+        "atlas-handoff": (CLI / "atlas-handoff").read_text(),
     }
     handoff_transports_path = Path(os.environ.get(
-        "AI_OS_HANDOFF_TRANSPORTS",
+        "ATLAS_HANDOFF_TRANSPORTS",
         REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml"))
     protected_before["handoff-transports.yaml"] = handoff_transports_path.read_text()
 
@@ -523,7 +523,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     chk("stdout says nothing was sent", "not sent" in out)
 
     t("prepare: never auto-approves — dispatch is never called from inside prepare")
-    src_all = (CLI / "ai-os-coordinator").read_text()
+    src_all = (CLI / "atlas-coordinator").read_text()
     src_prepare = src_all[src_all.index("def cmd_prepare"):src_all.index("def cmd_dispatch")]
     chk("cmd_prepare's own body never calls cmd_approve or cmd_dispatch",
         "cmd_approve" not in src_prepare and "cmd_dispatch(" not in src_prepare)
@@ -616,16 +616,16 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
 
     t("prepare: protected files remain byte-for-byte unchanged")
     chk("coordinator-routing.yaml unchanged", coordinator.POLICY.read_text() == protected_before["coordinator-routing.yaml"])
-    chk("cli/ai-os-handoff unchanged", (CLI / "ai-os-handoff").read_text() == protected_before["ai-os-handoff"])
+    chk("cli/atlas-handoff unchanged", (CLI / "atlas-handoff").read_text() == protected_before["atlas-handoff"])
     chk("handoff-transports.yaml unchanged", handoff_transports_path.read_text() == protected_before["handoff-transports.yaml"])
 
     # =====================================================================================
     # --- T-050-S2 adapter reconciliation: 'claude-code-tools-pilot' is now a known client --
-    # `engine/adapters/claude-code-tools-pilot/adapter.yaml` was added so `ai-os-handoff`'s
+    # `engine/adapters/claude-code-tools-pilot/adapter.yaml` was added so `atlas-handoff`'s
     # own `known_clients()` (unmodified) recognizes the destination `coordinator-routing.yaml`
     # already resolves `execute` to, and whose transport is already `verified: true` in
     # `handoff-transports.yaml` (also unmodified). Nothing below touches either registry file,
-    # `cli/ai-os-handoff`, or the coordinator's own route/dispatch code.
+    # `cli/atlas-handoff`, or the coordinator's own route/dispatch code.
     # =====================================================================================
     adapter_manifest_path = REPO / "adapters" / "claude-code-tools-pilot" / "adapter.yaml"
     adapter_manifest_before = adapter_manifest_path.read_text()
@@ -638,7 +638,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
         {"claude-code", "codex", "cursor", "gemini", "opencode"} <= set(handoff.known_clients()))
 
     t("adapter reconciliation: the manifest itself parses and validates with zero errors")
-    adapter_mod = _load("ai-os-adapter")
+    adapter_mod = _load("atlas-adapter")
     manifest_doc = adapter_mod.parse(adapter_manifest_before, str(adapter_manifest_path))
     manifest_errors, manifest_warnings = adapter_mod.validate("claude-code-tools-pilot", manifest_doc)
     chk("adapter id matches its directory name", manifest_doc.get("adapter") == "claude-code-tools-pilot")
@@ -693,8 +693,8 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     chk("the real transport spec for claude-code-tools-pilot is still verified: true",
         handoff.resolve_transport("claude-code-tools-pilot")[2] is None)
 
-    t("adapter reconciliation: cli/ai-os-handoff and coordinator-routing.yaml remain unchanged")
-    chk("cli/ai-os-handoff unchanged", (CLI / "ai-os-handoff").read_text() == protected_before["ai-os-handoff"])
+    t("adapter reconciliation: cli/atlas-handoff and coordinator-routing.yaml remain unchanged")
+    chk("cli/atlas-handoff unchanged", (CLI / "atlas-handoff").read_text() == protected_before["atlas-handoff"])
     chk("coordinator-routing.yaml unchanged", coordinator.POLICY.read_text() == protected_before["coordinator-routing.yaml"])
     chk("the adapter manifest itself was not modified by any of the calls above",
         adapter_manifest_path.read_text() == adapter_manifest_before)
@@ -702,7 +702,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     # =====================================================================================
     # --- T-050-S3: review — read-only report of an already-returned handoff --------------
     # `cmd_review` adds nothing to the handoff format: it reads the record with the
-    # existing, unmodified `ai-os-handoff.load_record()` and prints what is already there.
+    # existing, unmodified `atlas-handoff.load_record()` and prints what is already there.
     # =====================================================================================
     t("review: a successful review of a returned fixture handoff")
     before_files_review = sorted(p.name for p in d.iterdir())
@@ -823,7 +823,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
 
     t("review: protected files remain byte-for-byte unchanged")
     chk("coordinator-routing.yaml unchanged", coordinator.POLICY.read_text() == protected_before["coordinator-routing.yaml"])
-    chk("cli/ai-os-handoff unchanged", (CLI / "ai-os-handoff").read_text() == protected_before["ai-os-handoff"])
+    chk("cli/atlas-handoff unchanged", (CLI / "atlas-handoff").read_text() == protected_before["atlas-handoff"])
     chk("handoff-transports.yaml unchanged", handoff_transports_path.read_text() == protected_before["handoff-transports.yaml"])
 
     # =====================================================================================
@@ -1112,14 +1112,14 @@ fixture packet
 
     t("cost: protected files remain byte-for-byte unchanged")
     chk("coordinator-routing.yaml unchanged", coordinator.POLICY.read_text() == protected_before["coordinator-routing.yaml"])
-    chk("cli/ai-os-handoff unchanged", (CLI / "ai-os-handoff").read_text() == protected_before["ai-os-handoff"])
+    chk("cli/atlas-handoff unchanged", (CLI / "atlas-handoff").read_text() == protected_before["atlas-handoff"])
     chk("handoff-transports.yaml unchanged", handoff_transports_path.read_text() == protected_before["handoff-transports.yaml"])
 
 print(f"\n{passed} passed, {failed} failed")
 
 # =========================================================================================
-# --- 14: core/cli/ai-os and engine/cli/ai-os coordinator parity, as real subprocesses -----
-t("core and engine 'ai-os coordinator route' resolve identically, as real subprocesses")
+# --- 14: core/cli/atlas and engine/cli/atlas coordinator parity, as real subprocesses -----
+t("core and engine 'atlas coordinator route' resolve identically, as real subprocesses")
 
 
 def real_ticket_env():
@@ -1133,10 +1133,10 @@ def real_ticket_env():
     # engine/internal/governance/policies/handoff-transports.yaml is product code (lives
     # in the repo, not the private workspace) — core/ is a separate, still-partial
     # skeleton tree (AIOS-020) with no internal/ directory of its own yet, so its own
-    # copy of ai-os-handoff would otherwise fall back to a path that doesn't exist there.
+    # copy of atlas-handoff would otherwise fall back to a path that doesn't exist there.
     # Point both processes at the SAME current registry so this section proves route
     # decisions agree, not tree completeness of an admittedly unfinished skeleton.
-    env["AI_OS_HANDOFF_TRANSPORTS"] = str(REPO / "internal" / "governance" / "policies" /
+    env["ATLAS_HANDOFF_TRANSPORTS"] = str(REPO / "internal" / "governance" / "policies" /
                                           "handoff-transports.yaml")
     return env
 
@@ -1150,14 +1150,14 @@ def normalize(text):
 
 env = real_ticket_env()
 parity_root = Path(env["ATLAS_HOME"])
-core_ai_os = REPO.parent / "core" / "cli" / "ai-os"
-engine_ai_os = CLI / "ai-os"
+core_atlas = REPO.parent / "core" / "cli" / "atlas"
+engine_atlas = CLI / "atlas"
 results = {}
 for intent in ("plan", "execute", "review"):
-    core_r = subprocess.run([str(core_ai_os), "coordinator", "route", "T-900",
+    core_r = subprocess.run([str(core_atlas), "coordinator", "route", "T-900",
                             "--intent", intent, "--scope", "s1"],
                            capture_output=True, text=True, env=env)
-    engine_r = subprocess.run([str(engine_ai_os), "coordinator", "route", "T-900",
+    engine_r = subprocess.run([str(engine_atlas), "coordinator", "route", "T-900",
                               "--intent", intent, "--scope", "s1"],
                              capture_output=True, text=True, env=env)
     results[intent] = (core_r, engine_r)
@@ -1167,7 +1167,7 @@ for intent in ("plan", "execute", "review"):
         normalize(core_r.stdout) == normalize(engine_r.stdout))
 
 # --- 15: the canonical `atlas` entry point dispatches coordinator too, as a real subprocess
-t("canonical 'engine/cli/atlas coordinator route' works, not just the ai-os alias")
+t("canonical 'engine/cli/atlas coordinator route' works, not just the atlas alias")
 atlas_bin = CLI / "atlas"
 before_entries = sorted(p.name for p in (parity_root / "projects" / "demo" / "tickets" / "T-900").iterdir())
 runtime_before = (parity_root / "runtime")
@@ -1187,27 +1187,27 @@ chk("no runtime/ state directory was created by this call",
     (not runtime_before.exists()) if not runtime_existed_before
     else not any(runtime_before.rglob("*")))
 execute_core_r, execute_engine_r = results["execute"]
-chk("core, engine ai-os, and the canonical atlas entry point all agree for intent=execute",
+chk("core, engine atlas, and the canonical atlas entry point all agree for intent=execute",
     normalize(atlas_r.stdout) == normalize(execute_engine_r.stdout) == normalize(execute_core_r.stdout))
 
-# --- 16: coordinator review parity across core, engine ai-os, and canonical atlas ---------
-t("core, engine ai-os, and canonical atlas 'coordinator review' agree, as real subprocesses")
+# --- 16: coordinator review parity across core, engine atlas, and canonical atlas ---------
+t("core, engine atlas, and canonical atlas 'coordinator review' agree, as real subprocesses")
 parity_ticket_dir = parity_root / "projects" / "demo" / "tickets" / "T-900"
 parity_entries_before = sorted(p.name for p in parity_ticket_dir.iterdir())
 write_returned_record(parity_ticket_dir, "parity-review", status="returned", to="codex",
                       gate="review", scope="s1", source_client="claude-code",
                       source_session="sess-parity-1",
                       returned_text="Parity check complete. Cost: $0.010.")
-core_review_r = subprocess.run([str(core_ai_os), "coordinator", "review", "T-900", "parity-review"],
+core_review_r = subprocess.run([str(core_atlas), "coordinator", "review", "T-900", "parity-review"],
                                capture_output=True, text=True, env=env)
-engine_review_r = subprocess.run([str(engine_ai_os), "coordinator", "review", "T-900", "parity-review"],
+engine_review_r = subprocess.run([str(engine_atlas), "coordinator", "review", "T-900", "parity-review"],
                                  capture_output=True, text=True, env=env)
 atlas_review_r = subprocess.run([str(atlas_bin), "coordinator", "review", "T-900", "parity-review"],
                                 capture_output=True, text=True, env=env)
-chk("core 'ai-os coordinator review' exits 0", core_review_r.returncode == 0)
-chk("engine 'ai-os coordinator review' exits 0", engine_review_r.returncode == 0)
+chk("core 'atlas coordinator review' exits 0", core_review_r.returncode == 0)
+chk("engine 'atlas coordinator review' exits 0", engine_review_r.returncode == 0)
 chk("canonical 'atlas coordinator review' exits 0", atlas_review_r.returncode == 0)
-chk("core, engine ai-os, and canonical atlas print the identical review report",
+chk("core, engine atlas, and canonical atlas print the identical review report",
     core_review_r.stdout == engine_review_r.stdout == atlas_review_r.stdout)
 chk("the report shows the explicit reported cost",
     "cost:                 $0.010" in core_review_r.stdout)
@@ -1226,23 +1226,23 @@ chk("review of a 'waiting-owner' handoff is refused (exit 2) through the canonic
 chk("the refusal names 'returned' or 'reviewed' as required",
     "'returned' or 'reviewed'" in atlas_review_bad.stderr)
 
-# --- 17: coordinator cost parity across core, engine ai-os, and canonical atlas -----------
-t("core, engine ai-os, and canonical atlas 'coordinator cost' agree, as real subprocesses")
+# --- 17: coordinator cost parity across core, engine atlas, and canonical atlas -----------
+t("core, engine atlas, and canonical atlas 'coordinator cost' agree, as real subprocesses")
 parity_entries_before_cost = sorted(p.name for p in parity_ticket_dir.iterdir())
 write_returned_record(parity_ticket_dir, "parity-cost", status="returned", to="codex",
                       gate="review", scope="s1", source_client="claude-code",
                       source_session="sess-parity-cost",
                       returned_text="Parity check complete. Cost: $0.015.")
-core_cost_r = subprocess.run([str(core_ai_os), "coordinator", "cost", "T-900", "--handoff", "parity-cost"],
+core_cost_r = subprocess.run([str(core_atlas), "coordinator", "cost", "T-900", "--handoff", "parity-cost"],
                              capture_output=True, text=True, env=env)
-engine_cost_r = subprocess.run([str(engine_ai_os), "coordinator", "cost", "T-900", "--handoff", "parity-cost"],
+engine_cost_r = subprocess.run([str(engine_atlas), "coordinator", "cost", "T-900", "--handoff", "parity-cost"],
                                capture_output=True, text=True, env=env)
 atlas_cost_r = subprocess.run([str(atlas_bin), "coordinator", "cost", "T-900", "--handoff", "parity-cost"],
                               capture_output=True, text=True, env=env)
-chk("core 'ai-os coordinator cost' exits 0", core_cost_r.returncode == 0)
-chk("engine 'ai-os coordinator cost' exits 0", engine_cost_r.returncode == 0)
+chk("core 'atlas coordinator cost' exits 0", core_cost_r.returncode == 0)
+chk("engine 'atlas coordinator cost' exits 0", engine_cost_r.returncode == 0)
 chk("canonical 'atlas coordinator cost' exits 0", atlas_cost_r.returncode == 0)
-chk("core, engine ai-os, and canonical atlas print the identical cost report",
+chk("core, engine atlas, and canonical atlas print the identical cost report",
     core_cost_r.stdout == engine_cost_r.stdout == atlas_cost_r.stdout)
 chk("the report shows the explicit reported cost",
     "actual cost:          $0.015" in core_cost_r.stdout)
@@ -1252,11 +1252,11 @@ parity_entries_after_cost = sorted(p.name for p in parity_ticket_dir.iterdir())
 chk("cost wrote no file beyond the one fixture record created by the test itself",
     set(parity_entries_after_cost) - set(parity_entries_before_cost) == {"handoff-parity-cost.md"})
 
-t("core, engine ai-os, and canonical atlas 'coordinator cost --json' agree, as real subprocesses")
-core_cost_json_r = subprocess.run([str(core_ai_os), "coordinator", "cost", "T-900",
+t("core, engine atlas, and canonical atlas 'coordinator cost --json' agree, as real subprocesses")
+core_cost_json_r = subprocess.run([str(core_atlas), "coordinator", "cost", "T-900",
                                    "--handoff", "parity-cost", "--json"],
                                   capture_output=True, text=True, env=env)
-engine_cost_json_r = subprocess.run([str(engine_ai_os), "coordinator", "cost", "T-900",
+engine_cost_json_r = subprocess.run([str(engine_atlas), "coordinator", "cost", "T-900",
                                      "--handoff", "parity-cost", "--json"],
                                     capture_output=True, text=True, env=env)
 atlas_cost_json_r = subprocess.run([str(atlas_bin), "coordinator", "cost", "T-900",
