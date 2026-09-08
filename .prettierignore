@@ -44,7 +44,7 @@ tests/
 
 # Markdown carrying ```yaml fences that document the exact on-disk layout. Prettier
 # reformats inside fenced code blocks, so the documented form drifts from the real one.
-schemas/
+contracts/
 docs/
 skills/
 README.md

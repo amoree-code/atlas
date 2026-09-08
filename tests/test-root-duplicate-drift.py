@@ -185,12 +185,19 @@ for name, marker in RECONCILED_CONTRACTS.items():
         chk(f"{name}: engine copy documents the reconciliation (T-105)",
             "Reconciled 2026-09-08 (T-105)" in engine_f.read_text(errors="replace"))
 
-t("contracts: adapter/capability/domain/run — root originals moved, engine/schemas canonical")
+t("contracts: adapter/capability/domain/run — root originals moved, engine/contracts canonical")
+# T-105 landed these at engine/schemas/ (a separate directory from engine/contracts/,
+# where the other reconciled schemas lived); T-116's owner-approved merge folded
+# engine/schemas/ into engine/contracts/ since the target tree has no separate schemas/
+# slot, so "canonical" now means engine/contracts/, not engine/schemas/.
 for name in ("adapter.schema.md", "capability.schema.md", "domain.schema.md", "run.schema.md"):
     chk(f"{name}: no longer present at root contracts/ (moved to the backup)",
         not (ATLAS / "contracts" / name).is_file())
     chk(f"{name}: preserved in the T-105 backup", (BACKUP_ROOT / "contracts" / name).is_file())
-    chk(f"{name}: canonical at engine/schemas/", (REPO / "schemas" / name).is_file())
+    chk(f"{name}: canonical at engine/contracts/ (T-116 merged engine/schemas/ into it)",
+        (REPO / "contracts" / name).is_file())
+chk("engine/schemas/ no longer exists as a separate directory (T-116 merge)",
+    not (REPO / "schemas").exists())
 
 t("integration/README.md: repointed by T-105, then removed outright by T-116")
 # T-105 repointed this file's one real reference away from the removed root

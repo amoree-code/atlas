@@ -2,7 +2,7 @@
 """atlas-domain — the domain registry. Reads declarations; enforces the contract.
 
   atlas domain list      what domains exist, what they require, what outcomes they name
-  atlas domain doctor    validate every declaration against schemas/domain.schema.md
+  atlas domain doctor    validate every declaration against contracts/domain.schema.md
 
 A DOMAIN is an area of work. It names the outcome kinds that area recognizes and the
 capabilities delivering them needs. A CAPABILITY is something Atlas can do and lives in

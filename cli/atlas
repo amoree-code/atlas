@@ -65,8 +65,8 @@ Two layers, two owners:
 The runtime layer at ~/.ai is retired: its engine is this cli/, its client integration is
 adapters/<client>/, and its transient state is \$ATLAS_HOME/runtime/.
 
-See docs/design/public-private.md, schemas/adapter.schema.md,
-schemas/capability.schema.md, schemas/domain.schema.md and schemas/run.schema.md.
+See docs/design/public-private.md, contracts/adapter.schema.md,
+contracts/capability.schema.md, contracts/domain.schema.md and contracts/run.schema.md.
 EOF
 }
 

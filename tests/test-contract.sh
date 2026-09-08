@@ -753,7 +753,7 @@ t "the formatter that broke the registry is fenced off"
 grep -q '^adapters/' "$REPO/.prettierignore";        chk "  ...covering adapters/" $?
 grep -q '^capabilities/' "$REPO/.prettierignore";     chk "  ...covering capabilities/" $?
 grep -q '^governance/' "$REPO/.prettierignore";      chk "  ...covering governance/" $?
-grep -q '^schemas/' "$REPO/.prettierignore";         chk "  ...covering the yaml fences in schemas/" $?
+grep -q '^contracts/' "$REPO/.prettierignore";         chk "  ...covering the yaml fences in contracts/" $?
 [ -f "$REPO/.vscode/settings.json" ];                chk "repo-level editor settings disable format-on-save" $?
 grep -q '"editor.formatOnSave": false' "$REPO/.vscode/settings.json"
 chk "  ...for anyone who clones it, not just this machine" $?
@@ -1304,11 +1304,11 @@ done
 # Exactly one canonical location — a copy in both would be two sources of truth.
 dup=$(find "$REPO/capabilities" \( -name 'capability.yaml' -o -name 'plugin.yaml' \) -path '*claude*' 2>/dev/null | wc -l | tr -d ' ')
 [ "$dup" -eq 0 ];                        chk "no compatibility duplicate was left behind" $?
-[ -f "$REPO/schemas/adapter.schema.md" ]; chk "adapter contract has its own schema" $?
-[ -f "$REPO/schemas/capability.schema.md" ];  chk "capability contract has its own schema" $?
-grep -q 'adapter.*connects.*one AI client' "$REPO/schemas/adapter.schema.md"
+[ -f "$REPO/contracts/adapter.schema.md" ]; chk "adapter contract has its own schema" $?
+[ -f "$REPO/contracts/capability.schema.md" ];  chk "capability contract has its own schema" $?
+grep -q 'adapter.*connects.*one AI client' "$REPO/contracts/adapter.schema.md"
 chk "the adapter schema describes clients" $?
-grep -qi 'capability' "$REPO/schemas/capability.schema.md"
+grep -qi 'capability' "$REPO/contracts/capability.schema.md"
 chk "the plugin schema describes capabilities" $?
 
 # =====================================================================================
@@ -1535,7 +1535,7 @@ grep -Eqi '\b(software|customer-support|mobile-app|resolved-ticket|web-applicati
 # and one manifest set it — so one word now has exactly one meaning.
 grep -Eq '^\s*domain:' "$REPO/capabilities/browser/capability.yaml"
 [ $? -ne 0 ];                             chk "the browser capability declares no domain field" $?
-grep -Eq '^\s+domain: ' "$REPO/schemas/capability.schema.md"
+grep -Eq '^\s+domain: ' "$REPO/contracts/capability.schema.md"
 [ $? -ne 0 ];                             chk "the capability contract's example declares no domain field" $?
 
 # =====================================================================================
@@ -1543,7 +1543,7 @@ t "domain contract: a domain is inert"
 DD="$TMP/domains"; mkdir -p "$DD"
 dom() { rm -f "$DD"/*.yaml; cat > "$DD/$1.yaml"; }
 
-[ -f "$REPO/schemas/domain.schema.md" ];  chk "the domain contract has its own schema" $?
+[ -f "$REPO/contracts/domain.schema.md" ];  chk "the domain contract has its own schema" $?
 [ -x "$CLI/atlas-domain" ];               chk "the domain registry is executable" $?
 out=$("$CLI/atlas" domain list 2>&1)
 echo "$out" | grep -q 'domains'
@@ -1737,9 +1737,9 @@ rm -rf "$CF/x"
 
 # =====================================================================================
 t "boundary: executed is not verified, and invoke is not wired"
-grep -q 'executed' "$REPO/schemas/capability.schema.md" && grep -q 'verified' "$REPO/schemas/capability.schema.md"
+grep -q 'executed' "$REPO/contracts/capability.schema.md" && grep -q 'verified' "$REPO/contracts/capability.schema.md"
 chk "the contract distinguishes executed from verified" $?
-grep -q 'never implies' "$REPO/schemas/capability.schema.md"
+grep -q 'never implies' "$REPO/contracts/capability.schema.md"
 chk "  ...explicitly, as a stated rule" $?
 # Superseded by AIOS-007: invoke is wired. What must still hold is that it refuses
 # cleanly for anything it cannot actually run, and writes no state while doing so.
@@ -1808,7 +1808,7 @@ for f in atlas atlas-capability atlas-adapter ai-sync atlas-memory atlas-doctor 
   grep -Eqi 'playwright|chromium|webkit|querySelector|page\.goto' "$CLI/$f"
   [ $? -ne 0 ];                           chk "Core tool $f names no browser technology" $?
 done
-grep -Eqi 'playwright|chromium' "$REPO/schemas/capability.schema.md"
+grep -Eqi 'playwright|chromium' "$REPO/contracts/capability.schema.md"
 [ $? -ne 0 ];                             chk "the capability contract names no engine" $?
 # And the capability never learns a client.
 grep -Eqi '\bclaude\b|\bcodex\b|\bgemini\b|\bcursor\b|opencode' "$BR/browser" "$BR/browser-verify" "$BR/capability.yaml" "$BR/providers/playwright_provider.py"
@@ -2077,8 +2077,8 @@ t "run: dispatcher and schema exist and are wired"
 # now a thin compatibility alias (single exec line) with no banner text of its own.
 grep -q 'atlas run' "$CLI/atlas";          chk "atlas run is a documented subcommand" $?
 grep -q '|run|' "$CLI/atlas";              chk "  ...and dispatches to atlas-run" $?
-[ -f "$REPO/schemas/run.schema.md" ];      chk "schemas/run.schema.md exists" $?
-grep -q 'not an agent' "$REPO/schemas/run.schema.md"
+[ -f "$REPO/contracts/run.schema.md" ];      chk "contracts/run.schema.md exists" $?
+grep -q 'not an agent' "$REPO/contracts/run.schema.md"
 chk "  ...and states the boundary: not an agent/orchestrator/planner" $?
 
 # =====================================================================================
@@ -2896,8 +2896,8 @@ chk "atlas capability doctor works" $?
 [ -d "$REPO/capabilities" ];               chk "the capability registry is capabilities/" $?
 [ -f "$REPO/capabilities/browser/capability.yaml" ]
 chk "  ...and the shipped manifest is capability.yaml" $?
-[ -f "$REPO/schemas/capability.schema.md" ]
-chk "the capability contract is schemas/capability.schema.md" $?
+[ -f "$REPO/contracts/capability.schema.md" ]
+chk "the capability contract is contracts/capability.schema.md" $?
 [ -x "$CLI/atlas-capability" ];            chk "cli/atlas-capability is the real command" $?
 
 # --- the compatibility names ----------------------------------------------------------

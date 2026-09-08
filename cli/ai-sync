@@ -34,6 +34,7 @@ ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", HOME
 # move from splitting the rules Core reads away from the rules the user edits.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from atlas_paths import private_path_or_die  # noqa: E402
+import atlas_extensions  # noqa: E402
 
 RULES = private_path_or_die("rules")
 # The rules root as it is shown to a human: in the generated block that every client
@@ -164,10 +165,32 @@ def sha(text):
 def canonical_rules():
     return "\n".join(p.read_text().rstrip() for p in sorted(RULES.glob("*.md")))
 
+def user_skills():
+    """{name: Path to SKILL.md} for every private skill under extensions/skills/, or {}
+    if extensions/ doesn't exist on this workspace. T-029 built the discovery mechanism;
+    this is the cutover that actually wires it into sync (previously deliberately not
+    wired in, per atlas_extensions.py's own module docstring)."""
+    try:
+        return atlas_extensions.discover_skills()
+    except FileNotFoundError:
+        return {}
+
+def skill_source_dir(name):
+    """The resolved source directory for skill `name`: the private extensions/skills/
+    override if one exists — it wins by name, matching atlas-init's own documented intent
+    ("your own skills go in extensions/skills and win on name") — else the canonical
+    public engine/skills/<name>."""
+    u = user_skills().get(name)
+    return u.parent if u else SKILLS / name
+
 def canonical_skills():
-    """Canonical skill NAMES. The bodies live in the public repo and are rendered
-    per client; each client renders its own copy."""
-    return sorted(p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists())
+    """Skill NAMES to sync: every public engine skill, plus any private-only skill that
+    exists solely under extensions/skills/ (a user-authored net-new skill, not an override
+    of a public one). The bodies are rendered per client from skill_source_dir(name); each
+    client renders its own copy."""
+    public = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").exists()}
+    private_only = set(user_skills()) - public
+    return sorted(public | private_only)
 
 def header(client, src_hash):
     return (f"{MARK_BEGIN}\n"
@@ -378,7 +401,8 @@ def cmd_sync(args):
                         r'|-----BEGIN [A-Z ]*PRIVATE KEY|xox[baprs]-[A-Za-z0-9-]{10})')
     # The profile is injected into every skill, so a secret there would propagate to
     # every client. It is scanned for the same reason the rules and skills are.
-    for src in sorted(RULES.glob("*.md")) + sorted(SKILLS.glob("*/SKILL.md")) \
+    for src in sorted(RULES.glob("*.md")) \
+            + [skill_source_dir(s) / "SKILL.md" for s in skills] \
             + ([PROFILE] if PROFILE.exists() else []):
         if secret.search(src.read_text()):
             say("ABORT", "credential pattern in {} — nothing written. "
@@ -414,7 +438,7 @@ def cmd_sync(args):
         # a client's own skills are never touched, only the canonical names.
         cfg["skills"].mkdir(parents=True, exist_ok=True)
         for s in skills:
-            src, dst = SKILLS / s, cfg["skills"] / s
+            src, dst = skill_source_dir(s), cfg["skills"] / s
             want = resolve((src / "SKILL.md").read_text(), profile, cfg["conv"])
             if dst.exists() and (dst / "SKILL.md").exists() \
                     and sha((dst / "SKILL.md").read_text()) == sha(want):
@@ -463,7 +487,7 @@ def cmd_verify(_):
         else: say("ok", f"{name}: all {len(sk)} skills present", "g")
         stale = [s for s in sk if (cfg["skills"]/s/"SKILL.md").exists()
                  and (cfg["skills"]/s/"SKILL.md").read_text()
-                     != resolve((SKILLS/s/"SKILL.md").read_text(), _vp, cfg["conv"])]
+                     != resolve((skill_source_dir(s)/"SKILL.md").read_text(), _vp, cfg["conv"])]
         if stale: say("FAIL", f"{name}: skills differ from the canonical render {stale}", "r"); fail = 1
     # secrets must never reach a generated file
     pat = re.compile(r'(sk-[A-Za-z0-9]{20}|ghp_[A-Za-z0-9]{30}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY)')

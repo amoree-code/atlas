@@ -20,7 +20,7 @@
   atlas agentic approve <run_id> --owner-words "…"   record approval evidence, exactly once
 
 An Agentic run is one bounded, generated execution record — see
-schemas/agentic-run.schema.md for the full contract. It is NOT a ticket, a mission, or a
+contracts/agentic-run.schema.md for the full contract. It is NOT a ticket, a mission, or a
 workflow engine, and it is not a second source of truth: `goal.ticket` is stored and
 validated only as an opaque identifier (format-checked against the same T-###/AIOS-###
 patterns `atlas_tickets` already recognizes) — this file never opens, reads, or copies a
@@ -30,7 +30,7 @@ authoritative for all of that.
 Persistence is one JSON file per run under `$ATLAS_HOME/runtime/agentic/<run_id>.json`,
 written atomically (tmp file + rename), exactly like `atlas run`'s own `runtime/runs/`
 records — same pattern, separate directory, because an Agentic run and a capability-
-invocation Run are different bounded objects (see schemas/run.schema.md for that one).
+invocation Run are different bounded objects (see contracts/run.schema.md for that one).
 
 `validate` and the validation `create` runs internally before ever writing a file are the
 same function, `validate_envelope` — every field, lifecycle value, identifier, timestamp,
@@ -132,7 +132,7 @@ def _int(v):
 
 
 def validate_envelope(rec):
-    """Every contract rule in schemas/agentic-run.schema.md, checked deterministically.
+    """Every contract rule in contracts/agentic-run.schema.md, checked deterministically.
     Returns a list of human-readable errors — empty means the envelope is valid. Never
     raises on malformed input; a wrong type is reported like any other violation."""
     errors = []

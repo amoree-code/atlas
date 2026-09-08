@@ -2,7 +2,7 @@
 """atlas-adapter — the adapter registry. Reads manifests; enforces the contract.
 
   atlas adapter list             what is declared, what is installed, what gets written
-  atlas adapter doctor           validate every manifest against schemas/adapter.schema.md
+  atlas adapter doctor           validate every manifest against contracts/adapter.schema.md
   atlas adapter init [tool]      AIOS-016: detect the active AI CLI, approval-gated local
                                   draft scaffold only — never writes adapters/<id>/
   atlas adapter enable  <id>     not wired yet — see below
@@ -420,7 +420,7 @@ def _onboarding_text():
         p = home / "projects" / "atlas" / "tickets" / "AIOS-016" / "onboarding.md"
         if p.is_file():
             return p.read_text()
-    return ("# onboarding.md not found on this machine — see schemas/adapter.schema.md "
+    return ("# onboarding.md not found on this machine — see contracts/adapter.schema.md "
             "and projects/atlas/tickets/AIOS-016/ for the AI CLI onboarding contract.\n")
 
 
@@ -533,7 +533,7 @@ def cmd_init(args):
     print(f"\n  detected: {tool} ({confidence})\n"
           f"  approved — draft created at {draft_dir}\n\n"
           f"  Fill in client.detect / provides / requires / enforces per "
-          f"schemas/adapter.schema.md, then run `atlas adapter init {tool}` again to\n"
+          f"contracts/adapter.schema.md, then run `atlas adapter init {tool}` again to\n"
           f"  validate. Promotion to adapters/{tool}/ is a hand commit by the owner — "
           f"this command never writes there.\n")
     return 0
