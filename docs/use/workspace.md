@@ -1,10 +1,10 @@
 # Your workspace
 
-`~/.ai-os` is yours. Atlas writes into it at `init` and reads from it forever after; it
+`~/atlas` is yours. Atlas writes into it at `init` and reads from it forever after; it
 never owns it, never publishes it, and never overwrites what you have put there.
 
 ```
-~/.ai-os/
+~/atlas/
 ├── personal/             your long-lived information
 │   ├── daily/               daily logs
 │   ├── memory/              the 8-section memory store
@@ -31,11 +31,11 @@ never owns it, never publishes it, and never overwrites what you have put there.
 ```
 
 `personal/` is the human-facing durable layer, `projects/` is project-owned work, and
-`internal/` is the machine-facing layer. Set `AI_OS_HOME` to put the workspace somewhere
+`internal/` is the machine-facing layer. Set `ATLAS_HOME` to put the workspace somewhere
 else. Why the shape is split this way is in `docs/design/workspace-structure.md`.
 
 `mcp/` and `plugins/` are reserved names with ownership rules rather than directories that
-exist on a fresh workspace: `ai-os init` creates everything above them and neither of
+exist on a fresh workspace: `atlas init` creates everything above them and neither of
 those two, because there is nothing yet to put in either.
 
 > The workspace's reserved `plugins/` keeps that spelling for now, while the *public*
@@ -79,13 +79,13 @@ Atlas defaults  <  your configuration  <  project configuration
 
 Your values win over defaults; a project's win over yours. A future update **may add** a
 key you do not have, but **never changes** one you have set, and a key removed from the
-defaults is left alone — deleting it is your call. `ai-os doctor` reports which new
+defaults is left alone — deleting it is your call. `atlas doctor` reports which new
 default keys exist that your config lacks; it adds nothing. There is no schema validation
 and no migration system yet, deliberately.
 
 ## Templates are seeds, not a sync
 
-`ai-os init` copies a template only where nothing exists at the destination. After that,
+`atlas init` copies a template only where nothing exists at the destination. After that,
 the template and your file are two unrelated documents. **Divergence is the expected
 steady state, not a defect.** Once you edit a seeded file it is yours; changing a template
 in the public repository has no effect on any existing workspace, and nothing ever
@@ -98,13 +98,13 @@ workspace — `init` only walks `templates/workspace/`.
 ## Skills: yours win
 
 ```
-resolution order:  ~/.ai-os/internal/extensions/skills   →   <ai-os>/skills
+resolution order:  ~/atlas/internal/extensions/skills   →   <atlas>/skills
 ```
 
 Public skills stay in the public repository and are **not** copied into your workspace at
 init — copying would turn software into your files and make it impossible to update. When
 a skill name exists in both places, **yours wins**, and nothing will ever overwrite,
-modify or delete it. `ai-os doctor` lists which of your skills are shadowing a public one.
+modify or delete it. `atlas doctor` lists which of your skills are shadowing a public one.
 
 ## Versioning and privacy
 

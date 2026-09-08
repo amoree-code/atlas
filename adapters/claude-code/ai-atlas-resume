@@ -23,7 +23,7 @@ whenever the contract needs re-proving on a new Claude Code version.
 
 ## What this hook does, exactly
 
-Runs `ai-os context --resume --json` through the standard launcher (the same one every
+Runs `atlas context --resume --json` through the standard launcher (the same one every
 other Claude Code hook in this adapter uses) and, only when it reports a pending handoff,
 emits that information as `additionalContext` for the new session's first turn. Emits
 nothing when there is no pending handoff, when the pointer is malformed, or when Atlas
@@ -32,10 +32,10 @@ block a session from starting.
 
 Reads nothing from stdin. `SessionStart`'s own payload (session id, source: startup /
 resume / clear / compact) is not needed — a pending handoff is checked unconditionally on
-every trigger, the same way a human running `ai-os context --resume` by hand would not
+every trigger, the same way a human running `atlas context --resume` by hand would not
 care why the session just started.
 
-Read-only with respect to project work: this is the exact same read `ai-os context
+Read-only with respect to project work: this is the exact same read `atlas context
 --resume` performs for a human, run automatically instead of by request. It does not run,
 approve, or commit anything, and it never executes any value found inside the pointer
 (ticket id, next action, blockers, read_with) — those are only ever interpolated into a
@@ -52,7 +52,7 @@ TIMEOUT_SECONDS = 5
 
 
 def resume_argv():
-    launcher = Path.home() / ".claude" / "ai-os-hook"
+    launcher = Path.home() / ".claude" / "atlas-hook"
     if not launcher.is_file():
         return None
     return [str(launcher), "cli/atlas", "context", "--resume", "--json"]
@@ -87,7 +87,7 @@ def build_context(data):
         lines.append(f"Next action: {data['next_action']}")
     if data.get("blockers"):
         lines.append(f"Blockers: {data['blockers']}")
-    read_with = data.get("read_with") or f"ai-os context {ticket}"
+    read_with = data.get("read_with") or f"atlas context {ticket}"
     lines.append(f"Read the full ticket with: {read_with}")
     return "\n".join(lines)
 

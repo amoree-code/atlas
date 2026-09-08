@@ -15,7 +15,7 @@ checks · bounds · records · verifies state · refuses · terminates
 ## Why this exists
 
 A model can already perform `observe → decide → invoke → verify → continue` through
-`ai-os capability invoke` alone — no new execution model was needed for that. What was
+`atlas capability invoke` alone — no new execution model was needed for that. What was
 missing was a bound: nothing stopped the same operation from being invoked indefinitely
 inside a single granted authority rung. A Run is that bound, and nothing more.
 
@@ -28,7 +28,7 @@ convention-only; a Run's own state lives entirely in `runtime/`, and the two nev
 
 ## Relationship to the capability contract
 
-A Run **wraps** `ai-os capability invoke` (`schemas/capability.schema.md`); it does not
+A Run **wraps** `atlas capability invoke` (`schemas/capability.schema.md`); it does not
 duplicate or bypass it. Every invocation a Run performs goes through the same
 `available -> allowed -> invocable -> executed -> verified` pipeline, with the same
 authority ladder and the same rule that `executed` never implies `verified`. A Run can
@@ -39,11 +39,11 @@ effective authority  =  capability authority  ∩  user grant  ∩  run scope
 ```
 
 Run scope can shrink what a step may attempt. It cannot grant anything invoke itself
-would refuse, and there is no code path in `ai-os-run` that writes to
+would refuse, and there is no code path in `atlas-run` that writes to
 `internal/config/authority.yaml` or otherwise elevates a grant.
 
 **Approval is never manufactured.** Every invocation a Run makes runs with stdin closed
-(`subprocess.DEVNULL`), regardless of how `ai-os run` itself was invoked. An
+(`subprocess.DEVNULL`), regardless of how `atlas run` itself was invoked. An
 `execute-with-approval` operation therefore always resolves to "no terminal" inside a
 Run and the Run transitions to `needs-approval` — it can never silently approve itself,
 on purpose.
@@ -83,14 +83,14 @@ that produced it, recorded by the model, not by Run.
 order, was it allowed, was it executed, was it verified, why did the run stop* — nothing
 more. It never stores credentials, secrets, full page contents, or large output; the
 underlying capability's own stdout is already summarized to a handful of lines by
-`ai-os-capability`, and Run does not expand on that.
+`atlas-capability`, and Run does not expand on that.
 
 ## Budget
 
-`max_steps` is set once, at `ai-os run create`, and is required — there is no implicit
+`max_steps` is set once, at `atlas run create`, and is required — there is no implicit
 unlimited mode and no `--unlimited`/`--no-limit`/`autonomous=true` equivalent anywhere in
 this contract. `steps_used` increments only when a step actually reaches
-`ai-os capability invoke` (a Run-local refusal — out of scope, run already terminal, budget
+`atlas capability invoke` (a Run-local refusal — out of scope, run already terminal, budget
 already exhausted — costs nothing, because nothing was attempted). There is no verb that
 edits `max_steps` after creation: a running Run cannot extend or reset its own budget
 through this CLI. Starting a new Run always starts a new budget.
@@ -137,7 +137,7 @@ scope.
 ## What a Run may not do
 
 - Read or write anything under `tasks/`.
-- Grant, elevate, or bypass an authority rung `ai-os capability invoke` would refuse.
+- Grant, elevate, or bypass an authority rung `atlas capability invoke` would refuse.
 - Approve an `execute-with-approval` operation on the caller's behalf.
 - Reset, extend, or otherwise self-modify its own `max_steps`.
 - Decide which capability or operation to invoke next — that stays the caller's job.

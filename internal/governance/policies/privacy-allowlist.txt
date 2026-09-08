@@ -1,4 +1,4 @@
-# Known-benign strings for `ai-os privacy-scan`.
+# Known-benign strings for `atlas privacy-scan`.
 # One literal substring per line. A line matching means: this finding is noise.
 # Keep this short. Every entry is a hole in the scan — justify it in a comment.
 
@@ -19,7 +19,7 @@ users.noreply.github.com
 # their own text must not count as a finding.
 internal/governance/policies/privacy-classification.yaml
 internal/governance/policies/privacy-allowlist.txt
-cli/ai-os-privacy-scan
+cli/atlas-privacy-scan
 
 # These tests deliberately feed credential-shaped fixtures (fake AWS key id, fake
 # Anthropic key) into the mission/coordinator "refuse credential-shaped input" checks —

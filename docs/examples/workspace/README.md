@@ -1,8 +1,8 @@
 # Example: a workspace
 
-What `templates/workspace/` looks like after `ai-os init` has seeded it **and** its owner
+What `templates/workspace/` looks like after `atlas init` has seeded it **and** its owner
 has actually used it for a while — not the empty seed itself (that is
-`templates/workspace/`, applied automatically by `ai-os init`), a small slice of it
+`templates/workspace/`, applied automatically by `atlas init`), a small slice of it
 filled in by hand.
 
 Four files, each the filled-in counterpart of the matching template:
@@ -19,7 +19,7 @@ Four files, each the filled-in counterpart of the matching template:
 Everything else a fresh workspace gets — the full memory/knowledge section tree, the
 policy text (`internal/governance/policies/privacy-terms.txt`), the model-routing file
 (`internal/config/models.yaml`) — is unchanged from `templates/workspace/` and is not
-repeated here; read that directory for the rest. Directories `ai-os init` creates but
+repeated here; read that directory for the rest. Directories `atlas init` creates but
 that ship no static content of their own (`internal/helpers/`, `internal/runtime/`,
 `internal/schemas/`) aren't part of the static template either, so they aren't part of
 this example.

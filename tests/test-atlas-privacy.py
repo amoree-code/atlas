@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """tests/test-atlas-privacy.py — T-004: path-based publication eligibility for $ATLAS_HOME.
 
-Before any of ~/.ai-os/personal/** ever moves into $ATLAS_HOME, this proves the boundary
+Before any of ~/atlas/personal/** ever moves into $ATLAS_HOME, this proves the boundary
 that would reject it deterministically. Nothing here scans content, publishes anything, or
 touches a real workspace — classification runs against a throwaway fixture tree, and the
 old-root content scanner is exercised against this repo (read-only) to prove it still works
@@ -33,8 +33,8 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "aios_atlas_privacy_under_test",
-    SourceFileLoader("aios_atlas_privacy_under_test", str(CLI / "aios_atlas_privacy.py")))
+    "atlas_atlas_privacy_under_test",
+    SourceFileLoader("atlas_atlas_privacy_under_test", str(CLI / "atlas_atlas_privacy.py")))
 priv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(priv)
 
@@ -131,22 +131,22 @@ with tempfile.TemporaryDirectory() as tmp:
     (atlas / "core").mkdir(parents=True)
     (atlas / "personal").mkdir(parents=True)
     env = {"ATLAS_HOME": str(atlas), "PATH": "/usr/bin:/bin"}
-    r_ok = subprocess.run([str(CLI / "ai-os-privacy-scan"), "--atlas-classify",
+    r_ok = subprocess.run([str(CLI / "atlas-privacy-scan"), "--atlas-classify",
                           str(atlas / "core" / "x.md")], env=env, capture_output=True, text=True)
     chk("publishable path -> exit 0", r_ok.returncode == 0)
     chk("output names the class", "publishable" in r_ok.stdout)
-    r_bad = subprocess.run([str(CLI / "ai-os-privacy-scan"), "--atlas-classify",
+    r_bad = subprocess.run([str(CLI / "atlas-privacy-scan"), "--atlas-classify",
                            str(atlas / "personal" / "x.md")], env=env, capture_output=True, text=True)
     chk("private path -> exit 1", r_bad.returncode == 1)
-    r_missing = subprocess.run([str(CLI / "ai-os-privacy-scan"), "--atlas-classify"],
+    r_missing = subprocess.run([str(CLI / "atlas-privacy-scan"), "--atlas-classify"],
                               env=env, capture_output=True, text=True)
     chk("missing PATH argument -> usage error, exit 2", r_missing.returncode == 2)
 
 # =========================================================================================
 t("credential scanning (content layer) is untouched by this ticket")
 spec2 = importlib.util.spec_from_loader(
-    "ai_os_privacy_scan_under_test",
-    SourceFileLoader("ai_os_privacy_scan_under_test", str(CLI / "ai-os-privacy-scan")))
+    "atlas_privacy_scan_under_test",
+    SourceFileLoader("atlas_privacy_scan_under_test", str(CLI / "atlas-privacy-scan")))
 scan_mod = importlib.util.module_from_spec(spec2)
 spec2.loader.exec_module(scan_mod)
 findings = []
@@ -160,23 +160,23 @@ chk("a fake Anthropic-shaped key is still caught by the untouched content scanne
 
 # =========================================================================================
 t("the old-root privacy scan (this repo) still runs clean during the transition")
-r = subprocess.run([str(CLI / "ai-os-privacy-scan"), "--quiet"], cwd=str(REPO),
+r = subprocess.run([str(CLI / "atlas-privacy-scan"), "--quiet"], cwd=str(REPO),
                    capture_output=True, text=True)
-chk("`ai-os-privacy-scan --quiet` on the public repo still exits 0", r.returncode == 0)
+chk("`atlas-privacy-scan --quiet` on the public repo still exits 0", r.returncode == 0)
 
 # =========================================================================================
 t("$ATLAS_HOME=~/atlas path resolution, no hardcoded username")
-source = (CLI / "aios_atlas_privacy.py").read_text() + (CLI / "ai-os-privacy-scan").read_text()
+source = (CLI / "atlas_atlas_privacy.py").read_text() + (CLI / "atlas-privacy-scan").read_text()
 # Read dynamically, never typed as a literal in this test file — a literal real username
 # in a tracked file is exactly what the repo's own privacy scan exists to catch (see the
 # section above), so this check must not introduce one of its own.
 real_username = Path.home().name
 chk("the current real username never appears in either file",
     real_username not in source)
-chk("aios_atlas_privacy.py has no hardcoded absolute home path",
-    "/Users/" not in (CLI / "aios_atlas_privacy.py").read_text())
+chk("atlas_atlas_privacy.py has no hardcoded absolute home path",
+    "/Users/" not in (CLI / "atlas_atlas_privacy.py").read_text())
 env_default = {"PATH": "/usr/bin:/bin"}
-r = subprocess.run([str(CLI / "ai-os-privacy-scan"), "--atlas-classify",
+r = subprocess.run([str(CLI / "atlas-privacy-scan"), "--atlas-classify",
                    str(Path.home() / "atlas" / "core" / "README.md")],
                   env=env_default, capture_output=True, text=True)
 chk("with no ATLAS_HOME override, defaults to ~/atlas and classifies the real skeleton",

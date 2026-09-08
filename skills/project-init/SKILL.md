@@ -71,11 +71,11 @@ Ask before creating a remote. If yes: `gh repo create <name> --private --source=
 
 ## 6. Register
 
-Add a row to `~/.ai-os/projects/registry.md` under the right org, status
+Add a row to `~/atlas/projects/registry.md` under the right org, status
 `active`, with today's date and the real next action. Add the first tasks to
-`~/.ai-os/projects/tasks.md`. If founding decisions worth keeping were made
+`~/atlas/projects/tasks.md`. If founding decisions worth keeping were made
 (stack choices, constraints), record them in
-`~/.ai-os/projects/<project>/memory/` — created on first use, never scaffolded
+`~/atlas/projects/<project>/memory/` — created on first use, never scaffolded
 empty (see that directory's README).
 
 ## 7. Report

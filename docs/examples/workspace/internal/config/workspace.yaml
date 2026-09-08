@@ -4,7 +4,7 @@
 #
 # This is the filled-in counterpart of
 # `templates/workspace/internal/config/workspace.yaml` — see that file for the full
-# explanation of the mechanism. Here, `ai-os onboard` has actually run to completion.
+# explanation of the mechanism. Here, `atlas onboard` has actually run to completion.
 
 schema: 1
 

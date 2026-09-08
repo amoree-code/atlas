@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""First-run Atlas setup with a readable preview and explicit approval."""
+import os, subprocess, sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ATLAS = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
+
+def run(name, *args):
+    return subprocess.run([str(HERE / name), *args], text=True, capture_output=True,
+                          env=os.environ.copy())
+
+def plan():
+    print(f"Atlas setup preview\n  root: {ATLAS}\n  writes: init structure and integration metadata only")
+    print("  preserves: existing files, client homes, conversations, and credentials")
+    print("  approval: required for apply")
+    return 0
+
+def apply():
+    if "--approve" not in sys.argv[2:]:
+        print("setup apply requires explicit --approve", file=sys.stderr); return 2
+    init = run("atlas-init")
+    sys.stdout.write(init.stdout); sys.stderr.write(init.stderr)
+    if init.returncode != 0: return init.returncode
+    structure = subprocess.run([sys.executable, str(HERE / "atlas-structure"),
+                                "apply", "--approve"], env=os.environ.copy())
+    if structure.returncode != 0:
+        return structure.returncode
+    for adapter_dir in sorted((HERE.parent / "adapters").iterdir()):
+        if not (adapter_dir / "adapter.yaml").is_file(): continue
+        subprocess.run([str(HERE / "atlas-integration"), "register", "--client",
+                        adapter_dir.name, "--surface", "cli", "--channel", "cli"],
+                       env=os.environ.copy(), check=False)
+    onboard = run("atlas-onboard", "--adopt")
+    sys.stdout.write(onboard.stdout); sys.stderr.write(onboard.stderr)
+    doctor = run("atlas-doctor", "--quiet")
+    sys.stdout.write(doctor.stdout); sys.stderr.write(doctor.stderr)
+    return onboard.returncode if onboard.returncode else doctor.returncode
+
+if len(sys.argv) < 2 or sys.argv[1] not in ("plan", "apply"):
+    print("usage: atlas setup plan | apply --approve", file=sys.stderr); raise SystemExit(2)
+raise SystemExit(plan() if sys.argv[1] == "plan" else apply())

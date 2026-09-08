@@ -51,8 +51,8 @@ version, and each is compatibility only — not a second supported way of doing 
 |---|---|---|
 | directory | `capabilities/` | `plugins/`, still read if pointed at |
 | manifest file | `capability.yaml` | `plugin.yaml`, still accepted |
-| CLI | `ai-os capability` | `ai-os plugin`, an alias |
-| env var | `AI_OS_CAPABILITIES` | `AI_OS_PLUGINS`, a fallback |
+| CLI | `atlas capability` | `atlas plugin`, an alias |
+| env var | `ATLAS_CAPABILITIES` | `ATLAS_PLUGINS`, a fallback |
 | **manifest key** | **`plugin:`** | unchanged — renaming it is a contract 2 change |
 
 The manifest key is the deliberate exception: `capability:` is already the authority block

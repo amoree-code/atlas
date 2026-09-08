@@ -12,7 +12,7 @@ not invented priorities.
 
 1. Create the folder and stubs:
    ```bash
-   ~/.ai-os/internal/helpers/day-start.sh
+   ~/atlas/internal/helpers/day-start.sh
    ```
    It prints the path and never overwrites existing files. If `brief.md` already has
    content beyond the stub headings, the day has started — offer to update it instead of
@@ -20,10 +20,10 @@ not invented priorities.
 
 2. Gather state — one call:
    ```bash
-   ~/.ai-os/internal/helpers/context.sh
+   ~/atlas/internal/helpers/context.sh
    ```
 
-3. Read `~/.ai-os/projects/registry.md` (the `active` rows only) and, if the
+3. Read `~/atlas/projects/registry.md` (the `active` rows only) and, if the
    last session record names a project, that project's `.claude/memory/context.md`.
 
 4. Write `brief.md`. Sections: **Focus today** · **Active projects** · **Unfinished from

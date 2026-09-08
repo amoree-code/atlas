@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Build and check the generated Atlas Environment guidance."""
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CATALOG = ROOT / "docs" / "atlas-catalog.json"
+OUTPUT = ROOT / "docs" / "atlas-environment.generated.md"
+BEGIN = "<!-- atlas:generated:begin -->"
+END = "<!-- atlas:generated:end -->"
+
+
+def load():
+    return json.loads(CATALOG.read_text())
+
+
+def render(data):
+    lines = [BEGIN, "# Atlas Environment", "", data["architecture"], ""]
+    for key, title in (("features", "Features"), ("commands", "Commands"),
+                       ("clients", "Clients"), ("surfaces", "Surfaces"),
+                       ("channels", "Channels")):
+        lines += [f"## {title}", ""]
+        lines += [f"- `{item}`" if key == "commands" else f"- {item}"
+                  for item in data[key]]
+        lines.append("")
+    lines += ["## Ownership", "", "- Public reusable code: `engine/`.",
+              "- Private data and generated runtime state: `$ATLAS_HOME`.",
+              "- Client homes remain client-owned; Atlas stores bridge metadata only.", "", END, ""]
+    return "\n".join(lines)
+
+
+def main(argv):
+    if len(argv) != 2 or argv[1] not in {"check", "build", "sync"}:
+        print("usage: atlas docs check|build|sync", file=sys.stderr)
+        return 2
+    expected = render(load())
+    if argv[1] in {"build", "sync"}:
+        OUTPUT.write_text(expected)
+        print(f"wrote {OUTPUT.relative_to(ROOT)}")
+        return 0
+    if not OUTPUT.exists():
+        print("atlas docs check: generated guidance is missing", file=sys.stderr)
+        return 1
+    if OUTPUT.read_text() != expected:
+        print("atlas docs check: generated guidance is stale", file=sys.stderr)
+        return 1
+    print("atlas docs check: current")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

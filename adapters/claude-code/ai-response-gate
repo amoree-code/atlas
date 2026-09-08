@@ -2,7 +2,7 @@
 """ai-response-gate — UserPromptSubmit hook. Deterministic trigger for the response policy.
 
 core.md's routing table ("`response` — a substantial report, or bilingual output beyond a
-sentence") depends on the model noticing it should run `ai-os policy response`. That is a
+sentence") depends on the model noticing it should run `atlas policy response`. That is a
 prose suggestion, not a guarantee, and the one case in it that is NOT a judgement call is
 whether the user just wrote in Arabic — the literal bytes either are Arabic script or they
 are not. This hook decides that one case deterministically instead of asking a model to
@@ -31,7 +31,7 @@ ARABIC_RE = re.compile(r"[؀-ۿݐ-ݿ]")
 
 def policy_text():
     try:
-        from aios_paths import private_path_or_die
+        from atlas_paths import private_path_or_die
         return (private_path_or_die("policies") / "response.md").read_text()
     except Exception:
         return None

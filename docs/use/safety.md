@@ -7,20 +7,20 @@ accident. The reasoning behind these guards is in `docs/design/public-private.md
 ## Versioning your workspace
 
 ```bash
-ai-os workspace status              # tracked state + safety checks
-ai-os workspace snapshot "<what the task did>"
+atlas workspace status              # tracked state + safety checks
+atlas workspace snapshot "<what the task did>"
 ```
 
-`ai-os init` does not create a git repository or a remote — that is your call. If you run
-`git init` in `$AI_OS_HOME` yourself, the one rule is **no remote, ever**. History and
+`atlas init` does not create a git repository or a remote — that is your call. If you run
+`git init` in `$ATLAS_HOME` yourself, the one rule is **no remote, ever**. History and
 recovery use git directly:
 
 ```bash
-git -C ~/.ai-os log --oneline
-git -C ~/.ai-os diff
-git -C ~/.ai-os restore <path>              # undo an uncommitted edit
-git -C ~/.ai-os checkout <sha> -- <path>    # recover one file from a snapshot
-git -C ~/.ai-os revert <sha>                # undo a snapshot, keeping history
+git -C ~/atlas log --oneline
+git -C ~/atlas diff
+git -C ~/atlas restore <path>              # undo an uncommitted edit
+git -C ~/atlas checkout <sha> -- <path>    # recover one file from a snapshot
+git -C ~/atlas revert <sha>                # undo a snapshot, keeping history
 ```
 
 `reset --hard` is never used by Atlas tooling. `restore` and `revert` are additive and
@@ -36,7 +36,7 @@ session-end commit hook: it would fire mid-work and snapshot an incoherent state
 workspace data is touched:
 
 ```bash
-rm -rf ~/.ai-os/.git ~/.ai-os/.gitignore
+rm -rf ~/atlas/.git ~/atlas/.gitignore
 ```
 
 ## The guards, and what each is actually worth
@@ -47,7 +47,7 @@ rm -rf ~/.ai-os/.git ~/.ai-os/.gitignore
 | `pre-push` hook | a push after a remote was added | `--no-verify` bypasses it — **and you must write the hook: none ships here** |
 | `pre-commit` hook | credential-shaped strings entering history | pattern-based, not PII-aware by design — **and you must write the hook: none ships here** |
 | Agent-level command guard | an agent running push/remote commands | adapter-specific |
-| `ai-os workspace status` | remotes, nested repos, missing hooks | reports; does not block |
+| `atlas workspace status` | remotes, nested repos, missing hooks | reports; does not block |
 
 Only the first is a guarantee. The rest are defense-in-depth: they turn a silent accident
 into a loud one. Treat the hooks as smoke alarms, not locks — this repository ships
@@ -68,11 +68,11 @@ which is strictly worse.
 ## Keeping the public repository publishable
 
 ```bash
-ai-os privacy-scan            # is this repository still publishable?
-ai-os privacy-scan docs       # the same check, scoped to docs/
+atlas privacy-scan            # is this repository still publishable?
+atlas privacy-scan docs       # the same check, scoped to docs/
 ```
 
-Fill in `~/.ai-os/internal/governance/policies/privacy-terms.txt` with your name, handles, emails,
+Fill in `~/atlas/internal/governance/policies/privacy-terms.txt` with your name, handles, emails,
 employers and private repository names once, early. Without it `privacy-scan` runs only
 generic patterns and cannot catch a name or a client repository — the file itself stays
 private and is never read by anything in the public repository.

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """tests/test-ticket-priority.py — T-041: the Smart Dynamic Ticket System.
 
-Proves the deterministic recommendation engine (`aios_tickets.classify_and_rank`/
-`explain_ticket`/`render_recommendation`) and the `ai-os tickets next` /
-`ai-os tickets doctor` surfaces built on it: priority ordering, parent/required
+Proves the deterministic recommendation engine (`atlas_tickets.classify_and_rank`/
+`explain_ticket`/`render_recommendation`) and the `atlas tickets next` /
+`atlas tickets doctor` surfaces built on it: priority ordering, parent/required
 relationships, owner decisions, blockers, future candidates, quick wins, goal matching,
 unblocks scoring, invalid-metadata rejection, JSON output, and empty/incomplete ticket
 sets. Nothing here touches the real workspace — every scenario runs against a throwaway
-AI_OS_HOME/ATLAS_HOME, exactly like tests/test-tickets.py.
+ATLAS_HOME/ATLAS_HOME, exactly like tests/test-tickets.py.
 
 The one thing this file deliberately never does: assert that a *specific* score number is
 correct. Scores are an internal ranking detail, not a contract — the contract is bucket
@@ -41,7 +41,7 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "aios_tickets_priority_under_test", SourceFileLoader("aios_tickets_priority_under_test", str(CLI / "aios_tickets.py")))
+    "atlas_tickets_priority_under_test", SourceFileLoader("atlas_tickets_priority_under_test", str(CLI / "atlas_tickets.py")))
 tickets_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tickets_mod)
 
@@ -63,13 +63,13 @@ def make_atlas_ticket(root, project, ticket_id, state="active", extra_frontmatte
 
 def make_index(root, project):
     (root / "projects" / project / "index.md").write_text(
-        "# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+        "# demo\n\n<!-- atlas:tickets:begin -->\n<!-- atlas:tickets:end -->\n")
 
 
 def run_tickets(home, *args):
     return subprocess.run(
-        [str(CLI / "ai-os-tickets"), *args], cwd=str(home),
-        env={"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
+        [str(CLI / "atlas-tickets"), *args], cwd=str(home),
+        env={"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
         capture_output=True, text=True,
     )
 
@@ -301,7 +301,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("warns that a level_5 ticket is active", "priority is level_5 (future) but state is 'active'" in r.stdout)
 
 # =========================================================================================
-t("JSON output — ai-os tickets next --json carries every required field, all five buckets")
+t("JSON output — atlas tickets next --json carries every required field, all five buckets")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_atlas_ticket(home, "demo", "T-090", extra_frontmatter="priority: level_2\nrelation: parent\n")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """tests/test-lifecycle-engagement.py — T-023: lifecycle is engaged, not just present.
 
-`aios_lifecycle.decide()` has been correct and pure since before this ticket. What T-023
+`atlas_lifecycle.decide()` has been correct and pure since before this ticket. What T-023
 adds is *engagement* at boundaries (task completion, session end) and a portable
 `session-handoff` output — neither of which decide() can prove by itself. This file:
 
@@ -23,13 +23,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 CLI = REPO / "cli"
 SKILLS = REPO / "skills"
-# Resolver-driven, not hardcoded to the legacy $AI_OS_HOME path — policies has been
-# Atlas-cut-over since T-030, and hardcoding here only ever worked because ~/.ai-os
+# Resolver-driven, not hardcoded to the legacy $ATLAS_HOME path — policies has been
+# Atlas-cut-over since T-030, and hardcoding here only ever worked because ~/atlas
 # happened to still exist too (T-046 proved that live by quarantining it).
 import subprocess as _subprocess
-_policies_out = _subprocess.run([str(CLI / "ai-os-paths"), "get", "policies"],
+_policies_out = _subprocess.run([str(CLI / "atlas-paths"), "get", "policies"],
                                  capture_output=True, text=True).stdout.strip()
-POLICIES = Path(_policies_out) if _policies_out else (Path.home() / ".ai-os" / "internal" / "governance" / "policies")
+POLICIES = Path(_policies_out) if _policies_out else (Path.home() / "atlas" / "internal" / "governance" / "policies")
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -50,7 +50,7 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "aios_lifecycle_under_test", SourceFileLoader("aios_lifecycle_under_test", str(CLI / "aios_lifecycle.py")))
+    "atlas_lifecycle_under_test", SourceFileLoader("atlas_lifecycle_under_test", str(CLI / "atlas_lifecycle.py")))
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 
@@ -106,21 +106,21 @@ chk("identical evidence always yields an identical decision", LC.decide(ev_a) ==
 t("Boundary wiring — TASK_COMPLETED fires from the existing 'on completion' checklist")
 task_policy = (POLICIES / "task.md").read_text() if (POLICIES / "task.md").exists() else ""
 chk("task.md policy exists to check", bool(task_policy))
-chk("'On completion' calls ai-os lifecycle, not just task-scribe/memory-curator",
-    "ai-os lifecycle" in task_policy and "TASK_COMPLETED" in task_policy)
+chk("'On completion' calls atlas lifecycle, not just task-scribe/memory-curator",
+    "atlas lifecycle" in task_policy and "TASK_COMPLETED" in task_policy)
 chk("a HANDOFF reading routes to session-handoff, not silently ignored",
     "session-handoff" in task_policy)
 
 t("Boundary wiring — SESSION_END_REQUEST fires from session-end")
 session_end = (SKILLS / "session-end" / "SKILL.md").read_text()
-chk("session-end calls ai-os lifecycle before its own cleanup steps",
-    "ai-os lifecycle" in session_end)
+chk("session-end calls atlas lifecycle before its own cleanup steps",
+    "atlas lifecycle" in session_end)
 chk("session-end routes HANDOFF to session-handoff", "session-handoff" in session_end)
 
 t("catch-up prefers the derived packet over stale session records")
 catch_up = (SKILLS / "catch-up" / "SKILL.md").read_text()
-chk("catch-up reads ai-os context before falling back to legacy session records",
-    "ai-os context" in catch_up)
+chk("catch-up reads atlas context before falling back to legacy session records",
+    "atlas context" in catch_up)
 chk("catch-up can consume a pasted session-handoff packet directly",
     "session-handoff" in catch_up)
 

@@ -22,15 +22,15 @@ the result was verified).
 ## Where Core actually lives today
 
 There is no separate, executable Core directory. Core is implemented across `cli/` —
-one entry point, `ai-os`, dispatching to `ai-os-adapter`, `ai-os-capability`, `ai-os-domain`,
-`ai-os-run`, `ai-os-memory`, `ai-os-doctor` and the rest — and specified by `schemas/`.
+one entry point, `atlas`, dispatching to `atlas-adapter`, `atlas-capability`, `atlas-domain`,
+`atlas-run`, `atlas-memory`, `atlas-doctor` and the rest — and specified by `schemas/`.
 `internal/core/README.md` exists only as a pointer to this document, because the concept and the
 implementation are not yet in the same place, and pretending otherwise would be exactly
 the kind of stale claim `AGENTS.md` warns against.
 
 ## The rule this produces
 
-An adapter never reaches into `$AI_OS_HOME` itself; it asks Core for a resolved path or a
+An adapter never reaches into `$ATLAS_HOME` itself; it asks Core for a resolved path or a
 rendered bundle. A capability never learns a client's name; Core's discovery and
 invocation path is the only thing that touches both a capability and an adapter in the
 same call. This is what keeps adding a sixth adapter, or a second capability, from

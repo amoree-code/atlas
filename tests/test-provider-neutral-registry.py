@@ -35,7 +35,7 @@ assert "provides: {}" in fixture
 assert "writes: []" in fixture
 assert "consumer_verified: false" in fixture
 
-spec = importlib.util.spec_from_file_location("atlas_mission", ROOT / "engine/cli/aios_mission.py")
+spec = importlib.util.spec_from_file_location("atlas_mission", ROOT / "engine/cli/atlas_mission.py")
 mission = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mission)
 assert mission.MISSION_PILOT_BUDGET_PLACEHOLDER == "__MISSION_BUDGET_USD__"

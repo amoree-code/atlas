@@ -35,13 +35,13 @@ system rules → global memory → project rules → project memory
 
 ## How your client reaches your memory
 
-One canonical store, `~/.ai-os/personal/memory`, and every client points at it.
+One canonical store, `~/atlas/personal/memory`, and every client points at it.
 
 Some AI clients scope their own native memory tool to the current working directory —
 Claude Code does, at `~/.claude/projects/<cwd-slug>/memory/` — which means memory written
 in one project folder is invisible from another. The fix is a symlink per project
 directory, all pointing at the single store, not a copy per client and not asking you to
-repeat yourself per folder. `ai-os doctor` verifies every one of them and fails on: a
+repeat yourself per folder. `atlas doctor` verifies every one of them and fails on: a
 broken link, a target outside the workspace, a link to a stale pre-cutover store, a real
 directory where a link should be (that is a second, invisible memory store), a recursive
 link, and links that disagree about where memory lives.
@@ -49,7 +49,7 @@ link, and links that disagree about where memory lives.
 The links are **access**. The memory itself is still yours, still private, still outside
 the public repository. See `docs/design/public-private.md`.
 
-The engine behind this is core and client-agnostic: `cli/ai-os-memory` owns the store, the
+The engine behind this is core and client-agnostic: `cli/atlas-memory` owns the store, the
 validation, and the non-destructive attach. An adapter with the working-directory quirk
 declares one integration point in its manifest — `integrates: { memory.mounts: ... }` —
 and answers a single question: *where does my client keep its memory directories?* Core
@@ -63,5 +63,5 @@ a task actually needs. Loading the whole store for every request defeats the pur
 memory and knowledge exist specifically to avoid re-deriving what's already known, which
 only works if retrieval stays targeted.
 
-> Project memory is a **documented layer**, not yet an engine feature: `ai-os memory
+> Project memory is a **documented layer**, not yet an engine feature: `atlas memory
 > doctor` validates the global store. Skills and agents follow the doctrine above.

@@ -4,11 +4,11 @@
 
 | Layer | Answers | Lives | Lifespan |
 |---|---|---|---|
-| **Memory** | *what is true about you and your world?* | `~/.ai-os/personal/memory/<section>/` | years |
-| **Knowledge** | *what did work teach us that saves effort next time?* | `~/.ai-os/personal/knowledge/<kind>/` | until superseded |
-| **Session** | *what are we doing right now?* | `~/.ai-os/internal/sessions/` | one session |
-| **Daily** | *what happened today?* | `~/.ai-os/personal/daily/YYYY/MM/YYYY-MM-DD/` | one day |
-| **Project memory** | *what is true about ONE project?* | `~/.ai-os/projects/<project>/memory/` | life of the project |
+| **Memory** | *what is true about you and your world?* | `~/atlas/personal/memory/<section>/` | years |
+| **Knowledge** | *what did work teach us that saves effort next time?* | `~/atlas/personal/knowledge/<kind>/` | until superseded |
+| **Session** | *what are we doing right now?* | `~/atlas/internal/sessions/` | one session |
+| **Daily** | *what happened today?* | `~/atlas/personal/daily/YYYY/MM/YYYY-MM-DD/` | one day |
+| **Project memory** | *what is true about ONE project?* | `~/atlas/projects/<project>/memory/` | life of the project |
 
 Global memory is client-independent and project-independent: one store, every client
 reaches it through its adapter's mounts. Project memory is scoped to its project and
@@ -50,7 +50,7 @@ which means memory written in one folder can be invisible from another. If your 
 has this quirk, the fix is one canonical store plus symlinks into it per project
 directory — not copies, and not asking the user to repeat themselves per folder.
 
-The engine that does this is core and client-agnostic: `cli/ai-os-memory` owns the store,
+The engine that does this is core and client-agnostic: `cli/atlas-memory` owns the store,
 the validation, and the non-destructive attach. It contains no client name. An adapter
 with the quirk declares one integration point in its manifest —
 

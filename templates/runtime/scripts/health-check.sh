@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only workspace health check. Never modifies anything. Exit 1 if any FAIL.
 set -uo pipefail
-W="${AI_OS_HOME:-$HOME/.ai-os}"
+W="${ATLAS_HOME:-$HOME/atlas}"
 fail=0
 ok()   { printf '  \033[32mok\033[0m    %s\n' "$1"; }
 warn() { printf '  \033[33mwarn\033[0m  %s\n' "$1"; }
@@ -60,13 +60,6 @@ for s in "$W/$HELPERS"/*.sh; do
   [ -x "$s" ] && ok "$(basename "$s") executable" || bad "$(basename "$s") not executable"
   bash -n "$s" 2>/dev/null || bad "$(basename "$s") has a syntax error"
 done
-
-echo "== graphify (optional) =="
-if command -v graphify >/dev/null 2>&1; then
-  ok "graphify $(graphify --version 2>/dev/null | awk '{print $2}') installed"
-else
-  warn "graphify not on PATH (optional; needed only for large-codebase navigation)"
-fi
 
 echo "== registry =="
 if grep -oE '`~?/[^`]*`' "$W/$PROJECTS/registry.md" 2>/dev/null | tr -d '`' | while read -r p; do

@@ -1,7 +1,7 @@
-# Your identifying terms — PRIVATE. Used by `ai-os privacy-scan` to check that the public
+# Your identifying terms — PRIVATE. Used by `atlas privacy-scan` to check that the public
 # Atlas repository does not contain anything that identifies you.
 #
-# This file never leaves ~/.ai-os. The public repository ships only generic patterns
+# This file never leaves ~/atlas. The public repository ships only generic patterns
 # (key shapes, email shapes, home-path shapes) — a scanner that hardcoded your real name
 # and employer would itself be the leak it exists to prevent. That is why the terms live
 # here instead.

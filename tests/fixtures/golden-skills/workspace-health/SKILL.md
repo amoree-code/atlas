@@ -10,16 +10,16 @@ Read-only. Diagnose; never fix without being asked.
 ## Steps
 
 1. ```bash
-   ~/.ai-os/internal/helpers/health-check.sh
+   ~/atlas/internal/helpers/health-check.sh
    ```
-   (script — unmoved; it checks the live data workspace at `~/.ai-os` internally)
+   (script — unmoved; it checks the live data workspace at `~/atlas` internally)
    Covers structure, Claude Code config, skill validity, script syntax, today's folder,
    global gitignore, SSH perms, and credential patterns.
 
 2. **Memory and knowledge health:**
    ```bash
-   ai-os memory doctor
-   ai-os memory status
+   atlas memory doctor
+   atlas memory status
    ```
    `doctor` covers the mechanical checks: the 8 main memory sections and 7 knowledge
    sections present, memory-dir scoping unified across every project directory, frontmatter
@@ -38,7 +38,7 @@ Read-only. Diagnose; never fix without being asked.
    - **Knowledge quality** — a `knowledge/` entry that is long, narrative, or transcript-like
      has failed its purpose. Flag it for compression.
 
-3. **Registry drift** — checked against `~/.ai-os/projects/registry.md`; the script can't judge this:
+3. **Registry drift** — checked against `~/atlas/projects/registry.md`; the script can't judge this:
    ```bash
    find ~/Documents -maxdepth 6 -type d -name .git -not -path "*/node_modules/*" | sed 's|/.git$||'
    ```

@@ -10,7 +10,7 @@ This file runs the FULL mission pipeline (create -> approve -> handoff -> verify
 tickets with non-overlapping approved scopes, distinct mission ids, distinct executor
 sessions, and distinct invocation ids — exactly as the S7 pilot rules require. Every fixture
 here (adapter manifests, transport registry) is disposable, pointed at via
-AI_OS_ADAPTERS / AI_OS_HANDOFF_TRANSPORTS / ATLAS_HOME overrides, exactly like every prior
+ATLAS_ADAPTERS / ATLAS_HANDOFF_TRANSPORTS / ATLAS_HOME overrides, exactly like every prior
 T-051 mission test file. Nothing here reads or writes the real `adapters/`, the real
 `internal/governance/policies/handoff-transports.yaml`, T-050, T-051, AIOS-011, AIOS-012,
 AIOS-017, or any production ticket.
@@ -18,7 +18,7 @@ AIOS-017, or any production ticket.
 **The one thing this file does NOT do is invoke a live Claude CLI process**, and it says so
 explicitly (test 1). The only currently-registered bounded Claude Code CLI transport
 (`claude-code-tools-pilot` in the real `internal/governance/policies/handoff-transports.yaml`)
-has its `--add-dir` hard-coded to the real `projects/ai-os/tickets/AIOS-012` directory — a
+has its `--add-dir` hard-coded to the real `projects/atlas/tickets/AIOS-012` directory — a
 production ticket this pilot is explicitly forbidden from touching. Editing that transport
 file to point at a disposable fixture directory is forbidden (it is a protected file for this
 slice); inventing a second transport registry to work around that is explicitly forbidden;
@@ -84,10 +84,10 @@ def _load(cli_dir, name):
     return mod
 
 
-mission_cli = _load(CLI, "ai-os-mission")
-mission = _load(CLI, "aios_mission.py")
-core_mission_cli = _load(CORE_CLI, "ai-os-mission")
-core_mission = _load(CORE_CLI, "aios_mission.py")
+mission_cli = _load(CLI, "atlas-mission")
+mission = _load(CLI, "atlas_mission.py")
+core_mission_cli = _load(CORE_CLI, "atlas-mission")
+core_mission = _load(CORE_CLI, "atlas_mission.py")
 
 
 @contextlib.contextmanager
@@ -115,7 +115,7 @@ t("1. real Claude CLI invocation — explicit disclosure (read this before anyth
 PILOT_REAL_AI_INVOKED = False
 PILOT_BLOCKED_REASON = (
     "the only registered bounded Claude Code CLI transport (claude-code-tools-pilot) has its "
-    "--add-dir hard-coded to the real projects/ai-os/tickets/AIOS-012 directory, a production "
+    "--add-dir hard-coded to the real projects/atlas/tickets/AIOS-012 directory, a production "
     "ticket this pilot may not touch; handoff-transports.yaml is a protected file for this "
     "slice and may not be edited to retarget it; a second transport registry is explicitly "
     "forbidden; and an unregistered ad-hoc `claude -p` invocation would be a real, live, "
@@ -228,8 +228,8 @@ def new_pilot_fixture():
                      plain_clients=["codex"])
 
     os.environ["ATLAS_HOME"] = str(tmp)
-    os.environ["AI_OS_ADAPTERS"] = str(adapters_dir)
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(transports_path)
+    os.environ["ATLAS_ADAPTERS"] = str(adapters_dir)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(transports_path)
     return tmp, ticket_a, ticket_b, alpha, beta
 
 
@@ -612,21 +612,21 @@ rc_c, out_c, _ = do_handoff("T-960-A", mid_parity_c, "pilot-a/alpha-parity-core.
                            "inv-parity-c", m=core_mission_cli, key=uniq_key("parity-ch"))
 chk("engine and core produce equivalent handoff outcomes for the same pilot shape",
     rc_e == 0 and rc_c == 0)
-engine_py = CLI / "aios_mission.py"
-core_py = CORE_CLI / "aios_mission.py"
-chk("engine/cli/aios_mission.py and core/cli/aios_mission.py remain byte-identical",
+engine_py = CLI / "atlas_mission.py"
+core_py = CORE_CLI / "atlas_mission.py"
+chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
     engine_py.read_bytes() == core_py.read_bytes())
-engine_cli_file = CLI / "ai-os-mission"
-core_cli_file = CORE_CLI / "ai-os-mission"
-chk("engine/cli/ai-os-mission and core/cli/ai-os-mission remain byte-identical",
+engine_cli_file = CLI / "atlas-mission"
+core_cli_file = CORE_CLI / "atlas-mission"
+chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
     engine_cli_file.read_bytes() == core_cli_file.read_bytes())
 
 # =============================================================================================
 t("19. protected T-050/T-051 files and tickets untouched")
 PROTECTED = [
-    CLI / "ai-os-coordinator", CORE_CLI / "ai-os-coordinator",
-    CLI / "aios_coordination.py", CORE_CLI / "aios_coordination.py",
-    CLI / "ai-os-handoff", CORE_CLI / "ai-os-handoff",
+    CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
+    CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
+    CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
     REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml",
     REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml",
 ]
@@ -651,8 +651,8 @@ chk("no handoff-*.md V6 record exists anywhere under the pilot fixture root",
     not list(root.rglob("handoff-*.md")))
 chk("no claims/ or leases/ directory exists anywhere under the pilot fixture root",
     not any(p.name in ("claims", "leases") for p in root.rglob("*") if p.is_dir()))
-src_mission = (CLI / "aios_mission.py").read_text()
-chk("the only subprocess.run call in aios_mission.py targets ai-os-paths (pre-existing, S1) "
+src_mission = (CLI / "atlas_mission.py").read_text()
+chk("the only subprocess.run call in atlas_mission.py targets atlas-paths (pre-existing, S1) "
     "— nothing in the pilot flow invoked a real client binary",
     src_mission.count("subprocess.run(") == 1 and "PATHS_RESOLVER" in src_mission)
 

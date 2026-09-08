@@ -2,9 +2,9 @@
 """ai-sync — propagate the canonical AI environment to installed AI clients.
 
 Sources of truth:
-  rules   <private workspace>/rules/*.md   resolved by cli/ai-os-paths, never hardcoded
-  skills  <ai-os>/skills/*/SKILL.md   canonical bodies, with {{profile.*}}/{{client.*}}
-  clients <ai-os>/adapters/*/adapter.yaml  the registry — no client is hardcoded here
+  rules   <private workspace>/rules/*.md   resolved by cli/atlas-paths, never hardcoded
+  skills  <atlas>/skills/*/SKILL.md   canonical bodies, with {{profile.*}}/{{client.*}}
+  clients <atlas>/adapters/*/adapter.yaml  the registry — no client is hardcoded here
 
 Which clients exist, where each writes, what it is allowed to write, and how its rules
 block is titled all come from the adapter manifests. A surface marked verified:false is
@@ -22,7 +22,7 @@ import hashlib, json, os, re, shutil, subprocess, sys, time
 from pathlib import Path
 
 HOME = Path.home()
-AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", HOME / ".ai-os"))
+ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", HOME / "atlas")))
 
 # Everything this tool owns now lives in the user's private workspace.
 #
@@ -33,7 +33,7 @@ AI_OS_HOME = Path(os.environ.get("AI_OS_HOME", HOME / ".ai-os"))
 # Both roots are mid-migration. Asking rather than assuming is what keeps a half-finished
 # move from splitting the rules Core reads away from the rules the user edits.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from aios_paths import private_path_or_die  # noqa: E402
+from atlas_paths import private_path_or_die  # noqa: E402
 
 RULES = private_path_or_die("rules")
 # The rules root as it is shown to a human: in the generated block that every client
@@ -41,7 +41,7 @@ RULES = private_path_or_die("rules")
 # instruction "edit <path>" pointing at a directory that no longer exists.
 RULES_DISP = str(RULES).replace(str(HOME), "~")
 # T-020: RULES/PROFILE above are durable user data and stay on private_path_or_die
-# (aios_paths itself is untouched — 13+ other commands still resolve "runtime" through
+# (atlas_paths itself is untouched — 13+ other commands still resolve "runtime" through
 # it exactly as before). Everything below is this tool's own generated/local state —
 # backups (recovery artifacts) and cache (regenerable sync/environment status) — which
 # is Atlas-canonical as of T-020, using the same destination names T-014 verified.
@@ -69,13 +69,13 @@ PROFILE = private_path_or_die("config") / "profile.yaml"
 def _find_repo():
     """This file lives in the repository, so the repository is its own parent.
 
-    ATLAS_REPO wins first when set (canonical, T-032); AI_OS_REPO is the deprecated
+    ATLAS_REPO wins first when set (canonical, T-032); ATLAS_REPO is the deprecated
     fallback that still works, which is what lets a test point the engine at a fixture
-    tree. The configured atlas_repo:/ai_os_repo: is deliberately NOT consulted here: a copy
+    tree. The configured atlas_repo:/atlas_repo: is deliberately NOT consulted here: a copy
     of core resolving some *other* checkout as canonical would sync from a tree nobody
     is looking at.
     """
-    env = os.environ.get("ATLAS_REPO") or os.environ.get("AI_OS_REPO")
+    env = os.environ.get("ATLAS_REPO") or os.environ.get("ATLAS_REPO")
     if env and (Path(env) / "adapters").is_dir():
         return Path(env)
     here = Path(__file__).resolve().parent.parent
@@ -83,13 +83,13 @@ def _find_repo():
         return here
     raise SystemExit(
         "ai-sync: cannot locate the Atlas repository (needed for the adapter registry).\n"
-        "         Run it from inside the repository, or point ATLAS_REPO (or AI_OS_REPO) at one.")
+        "         Run it from inside the repository, or point ATLAS_REPO (or ATLAS_REPO) at one.")
 
 
 REPO = _find_repo()
-_pl = {"__file__": str(REPO / "cli" / "ai-os-adapter")}
-exec(compile((REPO / "cli" / "ai-os-adapter").read_text().split("if __name__")[0],
-             "ai-os-adapter", "exec"), _pl)
+_pl = {"__file__": str(REPO / "cli" / "atlas-adapter")}
+exec(compile((REPO / "cli" / "atlas-adapter").read_text().split("if __name__")[0],
+             "atlas-adapter", "exec"), _pl)
 parse_manifest, validate_manifest = _pl["parse"], _pl["validate"]
 TOKEN = re.compile(r"\{\{\s*(profile|client)\.([a-z0-9_.]+)\s*\}\}", re.I)
 SKILLS = REPO / "skills"          # canonical skill bodies live in the public repo
@@ -225,7 +225,7 @@ def _identical(a, b):
 def migrate_runtime():
     """Relocate persistent sync data out of the runtime layer, once.
 
-    ~/.ai/sync/{state,backups} -> $AI_OS_HOME/internal/runtime/{state,backups}
+    ~/.ai/sync/{state,backups} -> $ATLAS_HOME/internal/runtime/{state,backups}
 
     Idempotent: with nothing at the legacy paths this returns immediately, which is the
     steady state after the first run. It moves rather than copies, so the old location
@@ -501,14 +501,14 @@ def write_manifest(rules, skills, st):
     m = CACHES / "environment.yaml"; m.parent.mkdir(parents=True, exist_ok=True)
     lines = ["# GENERATED by ai-sync — do not edit. Reflects reality at last sync.",
              "environment:", "  name: shared-ai-environment",
-             "  source_of_truth: ai-os", f"  canonical_root: ~/.ai",
+             "  source_of_truth: atlas", f"  canonical_root: ~/atlas/engine",
              f"  generated_at: {time.strftime('%Y-%m-%d %H:%M:%S')}",
              f"  rules_hash: {sha(rules)}", "", "rules:"]
     lines += [f"  - {p.name}" for p in sorted(RULES.glob('*.md'))]
     lines += ["", "skills:"] + [f"  - {s}" for s in skills]
-    lines += ["", "memory:", "  provider: files", "  root: ~/.ai-os",
+    lines += ["", "memory:", "  provider: files", "  root: ~/atlas",
               f"  shared_by: [{', '.join(list(CLIENTS) + PROJECT_ONLY)}]", "",
-              "# Resolved from <ai-os>/adapters/*/adapter.yaml — no client is hardcoded.",
+              "# Resolved from <atlas>/adapters/*/adapter.yaml — no client is hardcoded.",
               "clients:"]
     for n in list(CLIENTS) + PROJECT_ONLY:
         rec = st["clients"].get(n, {})

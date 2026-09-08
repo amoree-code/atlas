@@ -3,7 +3,7 @@
 (`mission route` / `mission validate`) on top of the T-051-S1 mission contract layer.
 
 Every scenario runs against a disposable ATLAS_HOME, plus a disposable adapter registry
-and a disposable transport registry (via AI_OS_ADAPTERS / AI_OS_HANDOFF_TRANSPORTS), exactly
+and a disposable transport registry (via ATLAS_ADAPTERS / ATLAS_HANDOFF_TRANSPORTS), exactly
 like `test-mission-contract.py`'s own `make_ticket_home()` fixture pattern. Nothing here
 reads or writes the real `adapters/`, the real
 `internal/governance/policies/handoff-transports.yaml`, or any real mission record.
@@ -55,10 +55,10 @@ def _load(cli_dir, name):
     return mod
 
 
-mission_cli = _load(CLI, "ai-os-mission")
-mission = _load(CLI, "aios_mission.py")
-core_mission_cli = _load(CORE_CLI, "ai-os-mission")
-core_mission = _load(CORE_CLI, "aios_mission.py")
+mission_cli = _load(CLI, "atlas-mission")
+mission = _load(CLI, "atlas_mission.py")
+core_mission_cli = _load(CORE_CLI, "atlas-mission")
+core_mission = _load(CORE_CLI, "atlas_mission.py")
 
 
 @contextlib.contextmanager
@@ -194,8 +194,8 @@ def new_fixture(ticket_id="T-910"):
     ])
 
     os.environ["ATLAS_HOME"] = str(tmp)
-    os.environ["AI_OS_ADAPTERS"] = str(adapters_dir)
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(transports_path)
+    os.environ["ATLAS_ADAPTERS"] = str(adapters_dir)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(transports_path)
     return tmp, d, adapters_dir, transports_path
 
 
@@ -472,29 +472,29 @@ chk("engine and core mission validate agree on valid/findings shape",
     rc_e == rc_c == 0 and view_e["valid"] == view_c["valid"] == True and
     view_e["findings"] == view_c["findings"] == [])
 
-engine_py = CLI / "aios_mission.py"
-core_py = CORE_CLI / "aios_mission.py"
-chk("engine/cli/aios_mission.py and core/cli/aios_mission.py remain byte-identical",
+engine_py = CLI / "atlas_mission.py"
+core_py = CORE_CLI / "atlas_mission.py"
+chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
     engine_py.read_bytes() == core_py.read_bytes())
-engine_cli_file = CLI / "ai-os-mission"
-core_cli_file = CORE_CLI / "ai-os-mission"
-chk("engine/cli/ai-os-mission and core/cli/ai-os-mission remain byte-identical",
+engine_cli_file = CLI / "atlas-mission"
+core_cli_file = CORE_CLI / "atlas-mission"
+chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
     engine_cli_file.read_bytes() == core_cli_file.read_bytes())
 
 # =============================================================================================
 t("28. canonical atlas parity")
 atlas_text = (CLI / "atlas").read_text()
-core_ai_os_text = (CORE_CLI / "ai-os").read_text()
+core_atlas_text = (CORE_CLI / "atlas").read_text()
 chk("'mission' still sits in engine/cli/atlas's generic exec-by-name case arm",
     "|mission|" in atlas_text or "mission|" in atlas_text)
-chk("'mission' still sits in core/cli/ai-os's generic exec-by-name case arm",
-    "|mission|" in core_ai_os_text or "mission|" in core_ai_os_text)
+chk("'mission' still sits in core/cli/atlas's generic exec-by-name case arm",
+    "|mission|" in core_atlas_text or "mission|" in core_atlas_text)
 
 # A clean environment for the subprocess checks below: this file's own fixtures override
-# ATLAS_HOME / AI_OS_ADAPTERS / AI_OS_HANDOFF_TRANSPORTS in-process for the tests above, and
+# ATLAS_HOME / ATLAS_ADAPTERS / ATLAS_HANDOFF_TRANSPORTS in-process for the tests above, and
 # those must never leak into another suite's subprocess, which expects the real workspace.
 _CLEAN_ENV = {k: v for k, v in os.environ.items()
-             if k not in ("ATLAS_HOME", "AI_OS_ADAPTERS", "AI_OS_HANDOFF_TRANSPORTS")}
+             if k not in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS")}
 
 # =============================================================================================
 t("29. all T-051-S1 tests remain green")

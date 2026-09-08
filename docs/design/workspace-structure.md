@@ -32,7 +32,7 @@ seven actually are.
 
 ## Ownership classes, and why an update never overwrites
 
-Every file `ai-os init` creates is `system-default`, `user-owned`, `generated`, or
+Every file `atlas init` creates is `system-default`, `user-owned`, `generated`, or
 `runtime` — a class that decides what a future update may do to it. The rule that follows
 from all four: **an existing file is never overwritten automatically.** A workspace that
 silently rewrote your files on `init` re-run would not be a workspace you could trust

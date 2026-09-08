@@ -33,7 +33,7 @@ summary, nothing more.
 ## What a domain is not
 
 A domain has **no command, no verifier, no provider, no authority rung, and no ordering.**
-There is no verb that could run one: `ai-os domain` has exactly `list` and `doctor`, both
+There is no verb that could run one: `atlas domain` has exactly `list` and `doctor`, both
 read-only. An outcome *kind* (`mobile-app`, the vocabulary) is not the same thing as an
 outcome *instance* (a specific app, for a specific client, this quarter) — the instance is
 named by a task in your workspace, and it never appears in a declaration.
@@ -41,6 +41,6 @@ named by a task in your workspace, and it never appears in a declaration.
 ## Commands
 
 ```bash
-ai-os domain list
-ai-os domain doctor
+atlas domain list
+atlas domain doctor
 ```

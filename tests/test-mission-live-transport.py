@@ -14,14 +14,14 @@ file directly and invoke no client.
 Section 4 runs the REAL T-051 pipeline (create -> approve -> handoff -> execute -> verify ->
 continue/finalize) against TWO disposable fixture tickets, and — for exactly one bounded
 call per fixture mission — invokes the REAL, installed `claude` binary as a real subprocess,
-using the exact argv `aios_mission.build_mission_pilot_argv`/`resolve_mission_pilot_directory`
+using the exact argv `atlas_mission.build_mission_pilot_argv`/`resolve_mission_pilot_directory`
 derive from each mission's own approved scope. This is a genuine, live, costed API call
 (bounded to $0.10 per the transport's own `--max-budget-usd` flag, and to `Read`/`Edit`-only
 tools via `--tools`/`--restricted`), not a mock and not a fixture standing in for one.
 
 To satisfy the T-051 pipeline's own role-routing gate (`mission_route` correctly refuses any
 `verified: false` transport — a real, sound safety check this file does not weaken), the
-DISPOSABLE fixture transport registry these pipeline tests point `AI_OS_HANDOFF_TRANSPORTS`
+DISPOSABLE fixture transport registry these pipeline tests point `ATLAS_HANDOFF_TRANSPORTS`
 at declares its own `claude-code-mission-pilot` entry as `verified: true`, with the identical
 argv template the REAL (still `verified: false`) registry entry declares. This is the same
 convention every prior T-051 test file already uses (disposable fixture transports are
@@ -109,25 +109,25 @@ def uniq_key(prefix):
 
 
 # =============================================================================================
-# SECTIONS 1-3: inspect the REAL registry file directly. No AI_OS_HANDOFF_TRANSPORTS
+# SECTIONS 1-3: inspect the REAL registry file directly. No ATLAS_HANDOFF_TRANSPORTS
 # override yet — these read internal/governance/policies/handoff-transports.yaml exactly as
-# ai-os-handoff would by default.
+# atlas-handoff would by default.
 # =============================================================================================
-for _var in ("ATLAS_HOME", "AI_OS_ADAPTERS", "AI_OS_HANDOFF_TRANSPORTS"):
+for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
     os.environ.pop(_var, None)
 
-mission = _load(CLI, "aios_mission.py")
-core_mission = _load(CORE_CLI, "aios_mission.py")
-mission_cli = _load(CLI, "ai-os-mission")
-core_mission_cli = _load(CORE_CLI, "ai-os-mission")
-hoff_real = _load(CLI, "ai-os-handoff")
+mission = _load(CLI, "atlas_mission.py")
+core_mission = _load(CORE_CLI, "atlas_mission.py")
+mission_cli = _load(CLI, "atlas-mission")
+core_mission_cli = _load(CORE_CLI, "atlas-mission")
+hoff_real = _load(CLI, "atlas-handoff")
 
 t("1. old claude-code-tools-pilot entry preserved byte-for-byte")
 real_transports = hoff_real.load_transports()
 old_pilot = real_transports.get("claude-code-tools-pilot")
 chk("claude-code-tools-pilot still exists in the real registry", old_pilot is not None)
 EXPECTED_OLD_ARGV = ["-p", "--no-session-persistence", "--restricted", "--strict-mcp-config",
-                     "--add-dir", "projects/ai-os/tickets/AIOS-012", "--tools", "Read",
+                     "--add-dir", "projects/atlas/tickets/AIOS-012", "--tools", "Read",
                      "Edit", "--permission-mode", "acceptEdits", "--permission-prompts",
                      "none", "--max-budget-usd", "0.10", "--"]
 chk("its argv is byte-for-byte the same list this slice found before editing the file",
@@ -136,7 +136,7 @@ chk("it is still verified: true (this slice never touched it)", old_pilot.get("v
 chk("its binary is still 'claude'", old_pilot.get("binary") == "claude")
 raw_transports_text = REAL_TRANSPORTS_PATH.read_text()
 chk("the real file still contains the exact original AIOS-012 add-dir line, unmodified",
-    "--add-dir, projects/ai-os/tickets/AIOS-012," in raw_transports_text)
+    "--add-dir, projects/atlas/tickets/AIOS-012," in raw_transports_text)
 
 # =============================================================================================
 t("2. claude-code-mission-pilot entry: promoted, correctly shaped")
@@ -173,21 +173,19 @@ chk("evidence text discloses the owner-approved promotion",
     "owner-approved promotion" in (new_pilot.get("evidence") or "").lower())
 
 # =============================================================================================
-t("3. governance/product mirror and other transports unaffected")
+t("3. other transports unaffected")
+# The governance/product/** private-root mirror assertion that used to live here (does the
+# root mirror still exist, and does it correctly NOT carry the pilot-only entries) moved to
+# engine/tests/test-root-duplicate-drift.py (T-113), which already owns every other root-vs-
+# engine drift check and already reads ATLAS_HOME for exactly this purpose. This file only
+# reads the engine-owned REAL_TRANSPORTS_PATH registry above it, never the private root, so
+# T-105's public-engine consolidation no longer has this file as a blocker.
 codex_spec = real_transports.get("codex")
 claude_code_spec = real_transports.get("claude-code")
 chk("the pre-existing codex transport is unaffected", codex_spec is not None and
     codex_spec.get("argv") == ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "-"])
 chk("the pre-existing claude-code transport is unaffected", claude_code_spec is not None and
     claude_code_spec.get("verified") is True)
-product_mirror = REPO.parent / "governance" / "product" / "handoff-transports.yaml"
-chk("governance/product/handoff-transports.yaml still exists", product_mirror.is_file())
-product_text = product_mirror.read_text()
-chk("governance/product/handoff-transports.yaml does not mirror the pilot-only entries "
-    "(same established precedent as claude-code-tools-pilot, which was never mirrored "
-    "there either)",
-    "claude-code-mission-pilot" not in product_text and
-    "claude-code-tools-pilot" not in product_text)
 
 
 # =============================================================================================
@@ -449,8 +447,8 @@ def new_pilot_fixture():
         "      remains verified: false and is never written by this file.\n")
 
     os.environ["ATLAS_HOME"] = str(tmp)
-    os.environ["AI_OS_ADAPTERS"] = str(adapters_dir)
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(transports_path)
+    os.environ["ATLAS_ADAPTERS"] = str(adapters_dir)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(transports_path)
     return tmp, ticket_a, ticket_b, ticket_c, alpha, beta, gamma
 
 
@@ -802,9 +800,9 @@ chk("after the entire live pilot run, the REAL claude-code-tools-pilot entry is 
     "byte-for-byte its original argv",
     real_transports_after.get("claude-code-tools-pilot", {}).get("argv") == EXPECTED_OLD_ARGV)
 PROTECTED = [
-    CLI / "ai-os-coordinator", CORE_CLI / "ai-os-coordinator",
-    CLI / "aios_coordination.py", CORE_CLI / "aios_coordination.py",
-    CLI / "ai-os-handoff", CORE_CLI / "ai-os-handoff",
+    CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
+    CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
+    CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
     REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml",
 ]
 for p in PROTECTED:
@@ -826,13 +824,13 @@ scope_parity = mission.canonicalize_scope("pilot-a/alpha.txt")
 argv_engine = mission.build_mission_pilot_argv("claude", template, scope_parity)
 argv_core = core_mission.build_mission_pilot_argv("claude", template, scope_parity)
 chk("engine and core build_mission_pilot_argv agree byte-for-byte", argv_engine == argv_core)
-engine_py = CLI / "aios_mission.py"
-core_py = CORE_CLI / "aios_mission.py"
-chk("engine/cli/aios_mission.py and core/cli/aios_mission.py remain byte-identical",
+engine_py = CLI / "atlas_mission.py"
+core_py = CORE_CLI / "atlas_mission.py"
+chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
     engine_py.read_bytes() == core_py.read_bytes())
-engine_cli_file = CLI / "ai-os-mission"
-core_cli_file = CORE_CLI / "ai-os-mission"
-chk("engine/cli/ai-os-mission and core/cli/ai-os-mission remain byte-identical",
+engine_cli_file = CLI / "atlas-mission"
+core_cli_file = CORE_CLI / "atlas-mission"
+chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
     engine_cli_file.read_bytes() == core_cli_file.read_bytes())
 
 

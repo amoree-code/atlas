@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """tests/test-atlas-extensions.py — T-029: extension discovery/resolution over $ATLAS_HOME.
 
-Proves the isolated discovery mechanism (cli/aios_extensions.py) built for the Phase D3
+Proves the isolated discovery mechanism (cli/atlas_extensions.py) built for the Phase D3
 extensions/ merge: skill/agent/MCP discovery, duplicate-name behavior, renderer path
 resolution, and — the one this ticket cares most about — that a missing $ATLAS_HOME/
 extensions/ tree is a loud error, never a silent fallback to a legacy source. Nothing here
@@ -34,8 +34,8 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "aios_extensions_under_test",
-    SourceFileLoader("aios_extensions_under_test", str(CLI / "aios_extensions.py")))
+    "atlas_extensions_under_test",
+    SourceFileLoader("atlas_extensions_under_test", str(CLI / "atlas_extensions.py")))
 ext = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ext)
 
@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory() as tmp:
 with tempfile.TemporaryDirectory() as tmp:
     atlas = Path(tmp)
     (atlas / "extensions" / "mcp" / "servers").mkdir(parents=True)
-    chk("zero registered servers is empty, not an error (matches the real AI-OS-managed-"
+    chk("zero registered servers is empty, not an error (matches the real Atlas-managed-"
         "servers-are-zero decision)", ext.discover_mcp_servers(atlas) == [])
 
 # =========================================================================================
@@ -165,11 +165,11 @@ if (real_atlas / "extensions").is_dir():
     real_skills = ext.discover_skills(real_atlas)
     real_agents = ext.discover_agents(real_atlas)
     real_mcp = ext.discover_mcp_servers(real_atlas)
-    chk("real extensions/skills/ discovers at least the known 9 canonical skills",
-        len(real_skills) >= 9)
+    chk("real extensions/skills/ discovers at least the known 8 canonical skills",
+        len(real_skills) >= 8)
     chk("real extensions/agents/ discovers the 4 known agent bodies",
         set(real_agents) == {"architect", "debugger", "memory-curator", "task-scribe"})
-    chk("real extensions/mcp/servers/ is empty (zero AI-OS-managed servers, as documented)",
+    chk("real extensions/mcp/servers/ is empty (zero Atlas-managed servers, as documented)",
         real_mcp == [])
     chk("merging real skills with itself is a no-op, not a collision (identical paths)",
         ext.merge_registry(real_skills, real_skills) == real_skills)

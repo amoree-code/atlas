@@ -53,5 +53,5 @@ arriving as a flag instead of a deliberate version. Detail: `docs/use/capabiliti
 The one policy every part of this system already depends on: pushing to a remote requires
 explicit approval, always — `internal/governance/policies/git.yaml`, implemented by hand in
 `adapters/claude-code/ai-guard-push`. The public/private boundary itself is also governance
-in this sense: `docs/design/public-private.md` is the policy, in prose; `ai-os doctor` is
+in this sense: `docs/design/public-private.md` is the policy, in prose; `atlas doctor` is
 the enforcement.

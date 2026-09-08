@@ -27,7 +27,7 @@ For env: list **key names only**, from `.env.example` or by `grep -oE` on variab
 
 ## 2. Write the context pack
 
-- `<repo>/AGENTS.md` from `~/.ai-os/personal/templates/project-claude.md` (template —
+- `<repo>/AGENTS.md` from `~/atlas/personal/templates/project-claude.md` (template —
   unmoved). **Use `AGENTS.md`, not `CLAUDE.md`** — it is the AAIF standard read by Claude
   Code, Codex, Cursor, Gemini, and opencode alike, so the project needs one file rather
   than one per tool. Then `ln -s AGENTS.md CLAUDE.md` so Claude's native name resolves to
@@ -47,34 +47,18 @@ printf 'CLAUDE.md\n.claude/\n' >> <repo>/.git/info/exclude
 `.git/info/exclude` is local-only and never travels to the remote. For the user's own
 repos, leave the files committable and mention it.
 
-## 4. Build a code graph — only if the repo is large
+## 4. Register
 
-Count first: `find <repo>/src -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' \) | wc -l`
-
-**Under ~150 source files: skip this.** Reading files directly is faster and cheaper.
-
-At ~150+ files, from the repo root:
-```bash
-graphify ./src --code-only --out .
-```
-`--code-only` is **mandatory** — the default mode sends docs, PDFs, and images to an
-external LLM API. `--code-only` is pure local AST: no key, no network.
-
-`graph-out` is covered by the global gitignore. Note in `CLAUDE.md` that the graph
-exists and must be rebuilt after significant changes (`graphify ./src --code-only --out . --update`).
-
-## 5. Register
-
-Add or update the row in `~/.ai-os/projects/registry.md`: path, stack, repo,
+Add or update the row in `~/atlas/projects/registry.md`: path, stack, repo,
 status, last commit date, real next action. Add any obvious follow-ups to
-`~/.ai-os/projects/tasks.md`.
+`~/atlas/projects/tasks.md`.
 
 If the analysis produced project-local state worth keeping — standing decisions,
-domain knowledge, operating rules — create `~/.ai-os/projects/<project>/` with
+domain knowledge, operating rules — create `~/atlas/projects/<project>/` with
 only the parts that have content (`memory/`, `rules/`, `knowledge/`, `context/`, per
 its README). Do not scaffold empty directories, and never copy global memory into it.
 
-## 6. Report
+## 5. Report
 
 What it is, its actual state (branch, uncommitted files, staleness), anything that looked
 wrong, and the files you created. Flag rather than fix.

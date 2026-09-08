@@ -2,7 +2,7 @@
 
 ```text
 Status:    implemented, verified
-Authority: describes real code — cli/ai-os-tickets, ~/atlas/context/ai-os-context,
+Authority: describes real code — cli/atlas-tickets, ~/atlas/context/atlas-context,
            adapters/claude-code/ai-atlas-resume, adapters/claude-code/ai-atlas-turn-checkpoint,
            tests/test-session-handoff.py, tests/test-turn-checkpoint.py, T-035
 ```
@@ -24,19 +24,19 @@ There are two layers, and they are deliberately kept from merging into one:
 
 ## What creates a checkpoint
 
-`ai-os tickets checkpoint <ID> --note "..." --next "..." [--blockers "..."]`. This is the
+`atlas tickets checkpoint <ID> --note "..." --next "..." [--blockers "..."]`. This is the
 **only** writer. There is no automatic trigger: Claude Code exposes `SessionEnd`, `Stop`
 and `PreCompact` hook events, but none of them carry the semantic judgment a checkpoint
 needs (what actually landed, what the next action concretely is) — that judgment stays
-with whoever is closing out the work, model or owner, informed by `ai-os lifecycle`'s
-CONTINUE/CHECKPOINT/COMPACT/FRESH/HANDOFF read. `ai-os lifecycle` prints the exact
+with whoever is closing out the work, model or owner, informed by `atlas lifecycle`'s
+CONTINUE/CHECKPOINT/COMPACT/FRESH/HANDOFF read. `atlas lifecycle` prints the exact
 checkpoint command it recommends; it does not run it. This is a documented limitation,
 not an oversight — see [Unsupported by the current runtime](#unsupported-by-the-current-runtime).
 
 A successful checkpoint write also calls `write_handoff_pointer()`, which regenerates
 `$ATLAS_HOME/runtime/session-handoffs/latest.md` as its last step, after the ticket write
 already succeeded. If the note/next-action/blockers text looks credential-shaped (reusing
-`ai-os-privacy-scan`'s own detector), the pointer write is skipped and reported on
+`atlas-privacy-scan`'s own detector), the pointer write is skipped and reported on
 stderr — the ticket itself is still written normally.
 
 ## The pointer — what is authoritative, what is not
@@ -62,7 +62,7 @@ Safe to delete at any time; the next checkpoint regenerates it.
 
 `~/.claude/settings.json` registers `adapters/claude-code/ai-atlas-resume` as a
 `SessionStart` hook. On every new session (startup, resume, clear, or after compaction)
-it runs `ai-os context --resume --json` through the standard launcher and, only if a
+it runs `atlas context --resume --json` through the standard launcher and, only if a
 pending handoff exists, emits it as `hookSpecificOutput.additionalContext` — text folded
 into the new session's first turn, not a tool result the model has to go read.
 
@@ -90,7 +90,7 @@ Checkpointed: <timestamp>
 State: <one line>
 Next action: <one line>
 Blockers: <one line, if any>
-Read the full ticket with: ai-os context <ticket>
+Read the full ticket with: atlas context <ticket>
 ```
 
 It never claims the previous conversation was restored. It never runs the next action.
@@ -127,12 +127,12 @@ are this system, none of them were modified to build this system, and this syste
 not call any of them:
 
 - **`catch-up` (skill)** — a user- or model-invoked read of "where did we leave off,"
-  built from `ai-os context`, session records and git log. It is pull-based and requires
+  built from `atlas context`, session records and git log. It is pull-based and requires
   the skill to be invoked. It has zero code dependency on the pointer, the checkpoint
   writer, or the `SessionStart` adapter, and nothing here calls it. Automatic handoff
   works identically whether `catch-up` exists, is disabled, is outdated, or is never
   invoked.
-- **`ai-os-handoff` (CLI)** — agent-to-agent task delegation with an owner-approval gate
+- **`atlas-handoff` (CLI)** — agent-to-agent task delegation with an owner-approval gate
   and a declared transport (`prepare`/`approve`/`send`/`receive`). Unrelated concern:
   moving a task between AI clients with explicit consent, not a session discovering its
   own continuation point.
@@ -141,14 +141,14 @@ not call any of them:
   documents that it is not for routine checkpoint/continue — that is this system's job.
 
 The separation is architectural, not incidental: the pointer writer
-(`cli/ai-os-tickets`), the pointer reader (`ai-os context --resume`), and the
+(`cli/atlas-tickets`), the pointer reader (`atlas context --resume`), and the
 `SessionStart` adapter (`ai-atlas-resume`) do not import, shell out to, or reference any
 of the three above, and none of those three were touched while building this.
 
 ## Unsupported by the current runtime
 
 - **No context-percentage or usage-limit event.** Claude Code does not expose a signal
-  for "context is about to run out" or "the usage limit was just hit." `ai-os lifecycle`
+  for "context is about to run out" or "the usage limit was just hit." `atlas lifecycle`
   approximates this with heuristics (turn count, cache-read ratio) and recommends a
   checkpoint; it cannot trigger one, because the runtime gives it no hook for that
   moment. Not invented here.

@@ -1,0 +1,765 @@
+#!/usr/bin/env python3
+"""atlas-agentic — the Agentic run envelope (T-101) and permission boundary (T-102).
+
+  atlas agentic create --ticket <ID> --summary "…" [envelope flags below]
+  atlas agentic show <run_id>                       print the persisted envelope
+  atlas agentic validate <run_id>                    re-check a persisted envelope
+  atlas agentic list                                 every run under runtime/agentic/
+  atlas agentic transition <run_id> --status <state> --reason <text> \
+        [--stage <name>] [--workflow <name>]
+  atlas agentic capture <run_id> --kind <context|artifact> --ref <path> \
+        --classification <label>
+  atlas agentic check <run_id> --capability <id>.<op> --scope <target> [--execute]
+                                                     decide allow/deny for one capability
+                                                     action against the run's effective
+                                                     permissions; --execute only ever runs
+                                                     `atlas capability invoke ... --dry-run`,
+                                                     and only when allowed
+  atlas agentic check <run_id> --permission-change   decide allow/deny for an admin-only
+                                                     permission-management action
+  atlas agentic approve <run_id> --owner-words "…"   record approval evidence, exactly once
+
+An Agentic run is one bounded, generated execution record — see
+schemas/agentic-run.schema.md for the full contract. It is NOT a ticket, a mission, or a
+workflow engine, and it is not a second source of truth: `goal.ticket` is stored and
+validated only as an opaque identifier (format-checked against the same T-###/AIOS-###
+patterns `atlas_tickets` already recognizes) — this file never opens, reads, or copies a
+ticket's title, checklist, status, or any other durable content. Ticket records remain
+authoritative for all of that.
+
+Persistence is one JSON file per run under `$ATLAS_HOME/runtime/agentic/<run_id>.json`,
+written atomically (tmp file + rename), exactly like `atlas run`'s own `runtime/runs/`
+records — same pattern, separate directory, because an Agentic run and a capability-
+invocation Run are different bounded objects (see schemas/run.schema.md for that one).
+
+`validate` and the validation `create` runs internally before ever writing a file are the
+same function, `validate_envelope` — every field, lifecycle value, identifier, timestamp,
+budget and stop-condition rule in the schema doc is checked here, deterministically,
+against the Python standard library only.
+
+## Permission boundary (T-102)
+
+`check`/`approve` make client authority explicit and enforceable instead of relying on a
+prompt or a transport flag. There is exactly one authority mechanism in this repository —
+`engine/cli/atlas-capability`'s `AUTHORITY` ladder and `granted_rung()` (the private grant
+ledger, `governance/authority.yaml`) — and this file imports and calls that mechanism
+directly rather than re-implementing or duplicating it; see `_cap` below. Five profiles are
+recognized (owner decision, T-102 D1): `observer/planner/executor/reviewer` are direct
+aliases of four of the five existing authority rungs (`observe/propose/execute/
+execute-with-approval`); `admin` is deliberately NOT an alias of `autonomous` — it names a
+permission-management role that may never invoke a capability at all, and every
+permission-management action it takes needs recorded approval evidence, same as any other
+approval. Every decision — allow or deny — is appended to the run's own `permission_log`
+with the reason; a denied action never reaches `atlas capability invoke`, not even in
+`--dry-run`, because `check` returns before ever constructing that subprocess call.
+
+Zero non-stdlib dependencies.
+"""
+import json, os, re, subprocess, sys, time
+from pathlib import Path
+from importlib.machinery import SourceFileLoader
+import importlib.util
+
+CLI_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(CLI_DIR))
+from atlas_tickets import parse_ticket_id
+
+
+def _load_sibling(name):
+    """Import another cli/ script as a library, the same way atlas-capability already
+    borrows atlas-adapter's manifest parser — one implementation, imported, never copied."""
+    src = CLI_DIR / name
+    spec = importlib.util.spec_from_loader(f"_{name.replace('-', '_')}",
+                                           SourceFileLoader(f"_{name.replace('-', '_')}", str(src)))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# The one authority mechanism this repository has: AUTHORITY (the fixed 5-rung ladder),
+# granted_rung() (the private grant ledger), CAPS/manifest_path/parse/validate (the same
+# manifest reader `capability doctor`/`capability invoke` use). Nothing below re-derives
+# any of these — every comparison uses these exact objects, so a change to the ladder or
+# the ledger can never silently diverge between `capability invoke` and `agentic check`.
+_cap = _load_sibling("atlas-capability")
+
+_ATLAS_HOME = Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
+    else Path.home() / "atlas"
+RUNTIME_DIR = _ATLAS_HOME / "runtime" / "agentic"
+
+LIFECYCLE = ("active", "paused", "blocked", "completed", "failed", "stopped")
+TERMINAL = {"completed", "failed", "stopped"}
+TRANSITIONS = {
+    "active": {"active", "paused", "blocked", "completed", "failed", "stopped"},
+    "paused": {"active", "stopped"},
+    "blocked": {"active", "stopped"},
+    "completed": set(), "failed": set(), "stopped": set(),
+}
+RUN_ID_RE = re.compile(r"^agentic-\d{8}-\d{6}-[0-9a-f]{6}$")
+TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+
+# T-102 D1: profile -> the ONE existing authority rung it may request, at most. Direct
+# aliases of 4 of the 5 AUTHORITY rungs — never a new rung, never a new ladder. 'admin' is
+# deliberately absent: it is not a capability-invoking profile at all (see ADMIN_PROFILE).
+PROFILE_MAX_RUNG = {
+    "observer": "observe",
+    "planner": "propose",
+    "executor": "execute",
+    "reviewer": "execute-with-approval",
+}
+ADMIN_PROFILE = "admin"
+PROFILES = tuple(PROFILE_MAX_RUNG) + (ADMIN_PROFILE,)
+# A run may declare 'inherit' instead of naming a rung: D2's "no lower maximum declared"
+# case. Any other value must be a real AUTHORITY rung — never a new vocabulary.
+GRANT_VALUES = _cap.AUTHORITY + ["inherit"]
+
+G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
+if not sys.stdout.isatty():
+    G = Y = R = D = X = ""
+
+
+def die(msg, code=2):
+    print(f"  {R}ERROR{X} {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def _nonempty_str(v):
+    return isinstance(v, str) and bool(v.strip())
+
+
+def _int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def validate_envelope(rec):
+    """Every contract rule in schemas/agentic-run.schema.md, checked deterministically.
+    Returns a list of human-readable errors — empty means the envelope is valid. Never
+    raises on malformed input; a wrong type is reported like any other violation."""
+    errors = []
+    if not isinstance(rec, dict):
+        return ["envelope must be a JSON object"]
+
+    run_id = rec.get("run_id")
+    if not (isinstance(run_id, str) and RUN_ID_RE.match(run_id)):
+        errors.append(f"run_id {run_id!r} must match 'agentic-YYYYMMDD-HHMMSS-<6 hex>'")
+
+    goal = rec.get("goal")
+    if not isinstance(goal, dict):
+        errors.append("'goal' is required and must be an object")
+    else:
+        ticket = goal.get("ticket")
+        if not (isinstance(ticket, str) and parse_ticket_id(ticket) is not None):
+            errors.append(f"goal.ticket {ticket!r} must be a valid opaque ticket id "
+                          f"(T-### or AIOS-###) — it is never resolved or read here")
+        if not _nonempty_str(goal.get("summary")):
+            errors.append("goal.summary is required and must be a non-empty string")
+
+    actor = rec.get("actor")
+    if not isinstance(actor, dict):
+        errors.append("'actor' is required and must be an object")
+    else:
+        if not _nonempty_str(actor.get("client")):
+            errors.append("actor.client is required and must be a non-empty string")
+        if not _nonempty_str(actor.get("session_id")):
+            errors.append("actor.session_id is required and must be a non-empty string")
+
+    if "surface" in rec and not _nonempty_str(rec.get("surface")):
+        errors.append("'surface' must be a non-empty string when present")
+
+    if not _nonempty_str(rec.get("stage")):
+        errors.append("'stage' is required and must be a non-empty string")
+    if not _nonempty_str(rec.get("workflow")):
+        errors.append("'workflow' is required and must be a non-empty string")
+
+    packet = rec.get("packet")
+    if not isinstance(packet, dict):
+        errors.append("'packet' is required and must be an object")
+    else:
+        if not _nonempty_str(packet.get("id")):
+            errors.append("packet.id is required and must be a non-empty string")
+        if not _nonempty_str(packet.get("kind")):
+            errors.append("packet.kind is required and must be a non-empty string")
+        if not (_int(packet.get("revision")) and packet.get("revision") >= 1):
+            errors.append("packet.revision must be an integer >= 1")
+
+    budget = rec.get("budget")
+    if not isinstance(budget, dict):
+        errors.append("'budget' is required and must be an object")
+    else:
+        steps_max, steps_used = budget.get("steps_max"), budget.get("steps_used")
+        if not (_int(steps_max) and steps_max >= 1):
+            errors.append("budget.steps_max must be an integer >= 1")
+        if not (_int(steps_used) and steps_used >= 0):
+            errors.append("budget.steps_used must be an integer >= 0")
+        if _int(steps_max) and _int(steps_used) and steps_used > steps_max:
+            errors.append("budget.steps_used must not exceed budget.steps_max")
+
+    permissions = rec.get("permissions")
+    if not isinstance(permissions, dict):
+        errors.append("'permissions' is required and must be an object")
+    else:
+        profile = permissions.get("profile")
+        if profile not in PROFILES:
+            errors.append(f"permissions.profile {profile!r} must be one of {PROFILES} — "
+                          f"an unknown profile is denied, never guessed")
+        grant = permissions.get("grant")
+        if grant not in GRANT_VALUES:
+            errors.append(f"permissions.grant {grant!r} must be one of {GRANT_VALUES} "
+                          f"('inherit' = no lower ceiling declared)")
+
+    claims = rec.get("claims")
+    if not isinstance(claims, dict):
+        errors.append("'claims' is required and must be an object")
+    else:
+        if not _nonempty_str(claims.get("scope")):
+            errors.append("claims.scope is required and must be a non-empty string")
+        lease = claims.get("lease")
+        if not (lease is None or _nonempty_str(lease)):
+            errors.append("claims.lease must be null or a non-empty string")
+
+    stop_conditions = rec.get("stop_conditions")
+    if not (isinstance(stop_conditions, list) and stop_conditions
+           and all(_nonempty_str(s) for s in stop_conditions)):
+        errors.append("'stop_conditions' must be a non-empty list of non-empty strings")
+
+    status = rec.get("status")
+    if status not in LIFECYCLE:
+        errors.append(f"'status' {status!r} must be one of {LIFECYCLE}")
+
+    for field in ("created_at", "updated_at"):
+        v = rec.get(field)
+        if not (isinstance(v, str) and TIMESTAMP_RE.match(v)):
+            errors.append(f"'{field}' {v!r} must match 'YYYY-MM-DD HH:MM:SS'")
+
+    # T-102: optional, but checked if present — an envelope written before T-102 (no
+    # 'approval'/'permission_log' at all) is still valid; one that names either field
+    # must get its shape right. Same evidence shape atlas_mission.py already uses:
+    # approval: none|recorded, approved_at: ISO timestamp or null, owner_words: non-empty
+    # text or null — reused, not reinvented.
+    if "approval" in rec:
+        approval = rec.get("approval")
+        if not isinstance(approval, dict):
+            errors.append("'approval' must be an object when present")
+        else:
+            if approval.get("approval") not in ("none", "recorded"):
+                errors.append(f"approval.approval {approval.get('approval')!r} must be "
+                              f"'none' or 'recorded'")
+            approved_at = approval.get("approved_at")
+            if not (approved_at is None or isinstance(approved_at, str)):
+                errors.append("approval.approved_at must be null or a string timestamp")
+            if approval.get("approval") == "recorded":
+                if approved_at is None:
+                    errors.append("approval.approved_at is required once approval is "
+                                  "'recorded'")
+                if not _nonempty_str(approval.get("owner_words")):
+                    errors.append("approval.owner_words is required and non-empty once "
+                                  "approval is 'recorded' — never inferred")
+            owner_words = approval.get("owner_words")
+            if not (owner_words is None or isinstance(owner_words, str)):
+                errors.append("approval.owner_words must be null or a string")
+
+    if "permission_log" in rec:
+        log = rec.get("permission_log")
+        if not isinstance(log, list):
+            errors.append("'permission_log' must be a list when present")
+        else:
+            for i, entry in enumerate(log):
+                if not isinstance(entry, dict):
+                    errors.append(f"permission_log[{i}] must be an object")
+                    continue
+                if not (isinstance(entry.get("at"), str) and TIMESTAMP_RE.match(entry["at"])):
+                    errors.append(f"permission_log[{i}].at must match "
+                                  f"'YYYY-MM-DD HH:MM:SS'")
+                if entry.get("decision") not in ("allow", "deny"):
+                    errors.append(f"permission_log[{i}].decision must be 'allow' or 'deny'")
+                if not _nonempty_str(entry.get("reason")):
+                    errors.append(f"permission_log[{i}].reason is required and non-empty "
+                                  f"— a decision without a reason is not explainable")
+
+    routing = rec.get("routing", [])
+    if not isinstance(routing, list):
+        errors.append("'routing' must be a list when present")
+    else:
+        for i, entry in enumerate(routing):
+            if not isinstance(entry, dict):
+                errors.append(f"routing[{i}] must be an object")
+                continue
+            if entry.get("kind") not in ("context", "artifact"):
+                errors.append(f"routing[{i}].kind must be 'context' or 'artifact'")
+            if not _nonempty_str(entry.get("ref")):
+                errors.append(f"routing[{i}].ref is required and non-empty")
+            if not _nonempty_str(entry.get("classification")):
+                errors.append(f"routing[{i}].classification is required and non-empty")
+
+    return errors
+
+
+def run_path(run_id):
+    if not re.match(r"^[a-z0-9-]+$", run_id or ""):
+        die(f"not a run id: {run_id!r}")
+    return RUNTIME_DIR / f"{run_id}.json"
+
+
+def load_run(run_id):
+    p = run_path(run_id)
+    if not p.exists():
+        die(f"no such run: {run_id}", code=4)
+    try:
+        return json.loads(p.read_text()), p
+    except json.JSONDecodeError as e:
+        die(f"{run_id}: not valid JSON — {e}", code=1)
+
+
+def save_run(rec, p):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(rec, indent=2) + "\n")
+    tmp.replace(p)  # atomic — a run record never leaves a half-written file behind
+
+
+# --- T-102 permission boundary -----------------------------------------------------------
+def load_capability_op(capability_id, operation_name):
+    """(manifest, operation, error) for one `<capability>.<operation>` — reusing
+    `atlas-capability`'s own manifest_path/parse/validate exactly, so a capability id or
+    operation this rejects is rejected identically here. `error` is set, and the other two
+    are None, for: unknown capability, an unreadable/invalid manifest, or an undeclared
+    operation — all three are 'unknown ... must be denied' cases."""
+    d = _cap.CAPS / capability_id
+    f, conflict = _cap.manifest_path(d) if d.is_dir() else (None, None)
+    if conflict:
+        return None, None, f"unknown capability {capability_id!r}: {conflict}"
+    if not f:
+        return None, None, f"unknown capability {capability_id!r}"
+    raw = f.read_text()
+    try:
+        m = _cap.parse(raw, f"capabilities/{capability_id}")
+    except _cap.ManifestError as e:
+        return None, None, f"capability {capability_id!r} manifest unreadable: {e}"
+    errs, _ = _cap.validate(capability_id, m, raw)
+    if errs:
+        return None, None, f"capability {capability_id!r} manifest invalid: {errs[0]}"
+    op = (m.get("operations") or {}).get(operation_name)
+    if not isinstance(op, dict):
+        return None, None, f"unknown action {capability_id}.{operation_name}"
+    return m, op, None
+
+
+def effective_ceiling(declared_grant, cap_max):
+    """T-102 D2: a run's declared grant may only LOWER a capability's own public maximum
+    (`capability.authority` in its manifest), never raise it. 'inherit'/None means no
+    override — the ceiling is exactly the capability's own maximum. A declared grant above
+    the capability's maximum is refused outright (returns None), never silently capped —
+    same treatment this codebase already gives an ungrantable rung: named and rejected,
+    not quietly downgraded."""
+    if not declared_grant or declared_grant == "inherit":
+        return cap_max
+    if _cap.AUTHORITY.index(declared_grant) > _cap.AUTHORITY.index(cap_max):
+        return None
+    return declared_grant
+
+
+def _log_entry(kind, decision, reason, capability=None, target_scope=None, profile=None):
+    return {
+        "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "kind": kind,
+        "capability": capability,
+        "target_scope": target_scope,
+        "profile": profile,
+        "decision": decision,
+        "reason": reason,
+    }
+
+
+def check_capability_action(rec, capability_id, operation_name, target_scope):
+    """T-102's main gate for one `<capability>.<operation>` action. Returns
+    (allowed: bool, reason: str, log_entry: dict). Never invokes anything — a caller
+    decides what to do with `allowed`; a denied result is not accompanied by any means to
+    proceed anyway."""
+    permissions = rec.get("permissions") or {}
+    profile = permissions.get("profile")
+    capop = f"{capability_id}.{operation_name}"
+
+    def deny(reason):
+        return False, reason, _log_entry("capability-action", "deny", reason,
+                                         capop, target_scope, profile)
+
+    if profile == ADMIN_PROFILE:
+        return deny("profile 'admin' may not invoke a capability directly — admin is a "
+                    "permission-management role only")
+    if profile not in PROFILE_MAX_RUNG:
+        return deny(f"unknown profile {profile!r}")
+
+    scope = (rec.get("claims") or {}).get("scope")
+    if not target_scope or target_scope != scope:
+        return deny(f"scope escalation: action target {target_scope!r} does not exactly "
+                    f"equal the run's claims.scope {scope!r}")
+
+    m, op, err = load_capability_op(capability_id, operation_name)
+    if err:
+        return deny(err)
+
+    cap_max = (m.get("capability") or {}).get("authority")
+    need = op.get("authority", cap_max)
+    if need not in _cap.AUTHORITY:
+        return deny(f"unknown authority rung {need!r} declared by {capop}")
+
+    # Profile ceiling first — it is the most human-facing constraint (D1), checked before
+    # the run's own declared ceiling or the private ledger so a denial always leads with
+    # the reason a person set up front, not an incidental config detail underneath it.
+    profile_max = PROFILE_MAX_RUNG[profile]
+    if _cap.AUTHORITY.index(need) > _cap.AUTHORITY.index(profile_max):
+        return deny(f"action escalation: {capop} needs {need!r}; profile {profile!r} may "
+                    f"request at most {profile_max!r}")
+
+    declared_grant = permissions.get("grant")
+    if declared_grant not in GRANT_VALUES:
+        return deny(f"unknown grant {declared_grant!r} declared on the run")
+
+    ceiling = effective_ceiling(declared_grant, cap_max)
+    if ceiling is None:
+        return deny(f"the run's declared ceiling {declared_grant!r} exceeds "
+                    f"{capability_id}'s public maximum {cap_max!r} — refused, never "
+                    f"silently lowered for you")
+    if _cap.AUTHORITY.index(need) > _cap.AUTHORITY.index(ceiling):
+        return deny(f"action escalation: {capop} needs {need!r}; the run's effective "
+                    f"ceiling is {ceiling!r}")
+
+    # T-102 D3/D5: the SAME comparison `atlas capability invoke` makes, against the SAME
+    # private-grant ledger — no second grant surface, no re-derived rung ordering.
+    have = _cap.granted_rung(capability_id)
+    if _cap.AUTHORITY.index(need) > _cap.AUTHORITY.index(have):
+        return deny(f"action escalation: {capop} needs {need!r}; granted {have!r} "
+                    f"(see {_cap.AUTHORITY_FILE})")
+
+    if need == "execute-with-approval":
+        appr = rec.get("approval") or {}
+        if appr.get("approval") != "recorded" or not (appr.get("owner_words") or "").strip():
+            return deny(f"missing approval evidence for {capop} — execute-with-approval "
+                        f"is never inferred as approved")
+
+    reason = f"allowed: {capop} needs {need!r}; profile {profile!r} (max {profile_max!r}), " \
+            f"ceiling {ceiling!r}, granted {have!r}"
+    return True, reason, _log_entry("capability-action", "allow", reason, capop,
+                                    target_scope, profile)
+
+
+def check_permission_change(rec):
+    """T-102 D1: only 'admin' may attempt a permission-management action, and it must
+    never be auto-approved — recorded approval evidence is required every time, with no
+    exception for 'admin' itself."""
+    profile = (rec.get("permissions") or {}).get("profile")
+
+    def deny(reason):
+        return False, reason, _log_entry("permission-change", "deny", reason,
+                                         profile=profile)
+
+    if profile != ADMIN_PROFILE:
+        return deny(f"profile {profile!r} may not perform a permission-management action "
+                    f"— only {ADMIN_PROFILE!r} may")
+    appr = rec.get("approval") or {}
+    if appr.get("approval") != "recorded" or not (appr.get("owner_words") or "").strip():
+        return deny("permission changes must never be auto-approved — missing recorded "
+                    "approval evidence")
+    reason = "allowed: admin permission-management action, approval evidence recorded"
+    return True, reason, _log_entry("permission-change", "allow", reason, profile=profile)
+
+
+# ---------------------------------------------------------------------------------------
+def cmd_create(args):
+    opts = {
+        "ticket": None, "summary": None, "client": "atlas", "session-id": None,
+        "stage": "planning", "workflow": "plan", "packet-id": "pkt-001",
+        "packet-kind": "plan", "packet-revision": "1", "steps-max": "5",
+        "profile": "planner", "grant": "observe", "scope": None, "lease": None,
+        "surface": "cli",
+        "stop-conditions": "goal-complete,budget-exhausted,conflict", "status": "active",
+    }
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith("--") and a[2:] in opts and i + 1 < len(args):
+            opts[a[2:]] = args[i + 1]; i += 2
+        else:
+            die(f"unknown or incomplete argument {a!r}")
+
+    if not opts["ticket"]:
+        die("--ticket is required — an Agentic run must name the ticket it serves")
+    if parse_ticket_id(opts["ticket"]) is None:
+        die(f"--ticket {opts['ticket']!r} is not a valid T-### or AIOS-### id")
+    if not (opts["summary"] or "").strip():
+        die("--summary is required")
+    try:
+        packet_revision = int(opts["packet-revision"])
+        steps_max = int(opts["steps-max"])
+    except ValueError:
+        die("--packet-revision and --steps-max must be integers")
+
+    session_id = opts["session-id"] or f"session-{time.strftime('%Y%m%d-%H%M%S')}"
+    scope = opts["scope"] or opts["ticket"]
+    stop_conditions = [s.strip() for s in opts["stop-conditions"].split(",") if s.strip()]
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    run_id = f"agentic-{time.strftime('%Y%m%d-%H%M%S')}-{os.urandom(3).hex()}"
+
+    rec = {
+        "run_id": run_id,
+        # Opaque reference only — this command never opens the ticket record itself.
+        "goal": {"ticket": opts["ticket"], "summary": opts["summary"]},
+        "actor": {"client": opts["client"], "session_id": session_id},
+        "surface": opts["surface"],
+        "stage": opts["stage"],
+        "workflow": opts["workflow"],
+        "packet": {"id": opts["packet-id"], "kind": opts["packet-kind"],
+                  "revision": packet_revision},
+        "budget": {"steps_max": steps_max, "steps_used": 0},
+        "permissions": {"profile": opts["profile"], "grant": opts["grant"]},
+        "claims": {"scope": scope, "lease": opts["lease"]},
+        "stop_conditions": stop_conditions,
+        "status": opts["status"],
+        "created_at": ts,
+        "updated_at": ts,
+        # T-102: no approval exists until 'approve' records one, explicitly, every time.
+        "approval": {"approval": "none", "approved_at": None, "owner_words": None},
+        "permission_log": [],
+    }
+
+    errors = validate_envelope(rec)
+    if errors:
+        for e in errors:
+            print(f"  ✗ {e}")
+        print(f"\n  atlas agentic create: refused — {len(errors)} problem(s), nothing "
+              f"written")
+        return 1
+
+    save_run(rec, run_path(run_id))
+    print(f"  {G}created{X}  {run_id}")
+    print(f"  goal: {opts['ticket']}  {D}(opaque reference — never read){X}")
+    print(f"  stage: {rec['stage']}  workflow: {rec['workflow']}  status: {rec['status']}")
+    print(f"  budget: {steps_max} step(s)")
+    return 0
+
+
+def cmd_show(args):
+    if not args:
+        die("usage: atlas agentic show <run_id>")
+    rec, _ = load_run(args[0])
+    print(json.dumps(rec, indent=2))
+    return 0
+
+
+def cmd_validate(args):
+    if not args:
+        die("usage: atlas agentic validate <run_id>")
+    rec, p = load_run(args[0])
+    errors = validate_envelope(rec)
+    if errors:
+        for e in errors:
+            print(f"  ✗ {e}")
+        print(f"\n  {args[0]}: invalid — {len(errors)} problem(s)")
+        return 1
+    print(f"  {G}valid{X}  {args[0]}  {D}({p}){X}")
+    return 0
+
+
+def cmd_list(_args):
+    if not RUNTIME_DIR.is_dir() or not any(RUNTIME_DIR.glob("*.json")):
+        print(f"\n  no Agentic runs in {RUNTIME_DIR}\n")
+        return 0
+    print(f"\n  {D}{RUNTIME_DIR}{X}\n")
+    print(f"  {'RUN ID':<34} {'STATUS':<12} {'STAGE':<12} GOAL.TICKET")
+    for f in sorted(RUNTIME_DIR.glob("*.json")):
+        try:
+            r = json.loads(f.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        print(f"  {r.get('run_id', f.stem):<34} {r.get('status', '?'):<12} "
+              f"{r.get('stage', '?'):<12} {r.get('goal', {}).get('ticket', '?')}")
+    print()
+    return 0
+
+
+def cmd_transition(args):
+    if not args:
+        die("usage: atlas agentic transition <run_id> --status <state> --reason <text> "
+            "[--stage <name>] [--workflow <name>]")
+    run_id = args[0]
+    status, reason, stage, workflow = None, None, None, None
+    i = 1
+    while i < len(args):
+        if args[i] in ("--status", "--reason", "--stage", "--workflow") and i + 1 < len(args):
+            key = args[i][2:]
+            if {"status": status, "reason": reason, "stage": stage,
+                "workflow": workflow}[key] is not None:
+                die(f"{args[i]} was given more than once")
+            if key == "status": status = args[i + 1]
+            elif key == "reason": reason = args[i + 1]
+            elif key == "stage": stage = args[i + 1]
+            else: workflow = args[i + 1]
+            i += 2
+        else:
+            die(f"unknown or incomplete argument {args[i]!r}")
+    if status not in LIFECYCLE:
+        die(f"--status must be one of {LIFECYCLE}")
+    if not _nonempty_str(reason):
+        die("--reason is required and must be non-empty")
+    rec, p = load_run(run_id)
+    current = rec.get("status")
+    if status not in TRANSITIONS.get(current, set()):
+        die(f"invalid lifecycle transition {current!r} -> {status!r}", code=5)
+    rec["status"] = status
+    if stage is not None:
+        if not _nonempty_str(stage):
+            die("--stage must be non-empty")
+        rec["stage"] = stage.strip()
+    if workflow is not None:
+        if not _nonempty_str(workflow):
+            die("--workflow must be non-empty")
+        rec["workflow"] = workflow.strip()
+    rec["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    rec.setdefault("events", []).append({"kind": "transition", "from": current,
+        "to": status, "reason": reason.strip(), "at": rec["updated_at"]})
+    save_run(rec, p)
+    print(f"  {G}transitioned{X}  {run_id}: {current} -> {status}")
+    return 0
+
+
+def _safe_routing_ref(value):
+    if not _nonempty_str(value) or value.startswith("/"):
+        return False
+    parts = Path(value).parts
+    return ".." not in parts and not value.startswith("personal/inbox/")
+
+
+def cmd_capture(args):
+    if not args:
+        die("usage: atlas agentic capture <run_id> --kind <context|artifact> --ref <path> "
+            "--classification <label>")
+    run_id = args[0]
+    opts = {"kind": None, "ref": None, "classification": None}
+    i = 1
+    while i < len(args):
+        if args[i].startswith("--") and args[i][2:] in opts and i + 1 < len(args):
+            key = args[i][2:]
+            if opts[key] is not None:
+                die(f"{args[i]} was given more than once")
+            opts[key] = args[i + 1]
+            i += 2
+        else:
+            die(f"unknown or incomplete argument {args[i]!r}")
+    if opts["kind"] not in ("context", "artifact"):
+        die("--kind must be 'context' or 'artifact'")
+    if not _safe_routing_ref(opts["ref"]):
+        die("--ref must be a non-absolute, contained path and may not target personal/inbox")
+    if not _nonempty_str(opts["classification"]):
+        die("--classification is required and must be non-empty")
+    rec, p = load_run(run_id)
+    if rec.get("status") in TERMINAL:
+        die(f"cannot capture into terminal run {run_id}", code=5)
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    rec.setdefault("routing", []).append({"kind": opts["kind"], "ref": opts["ref"],
+        "classification": opts["classification"].strip(), "at": ts})
+    rec["updated_at"] = ts
+    save_run(rec, p)
+    print(f"  {G}captured{X}  {opts['kind']} reference in {run_id}")
+    return 0
+
+
+def cmd_check(args):
+    if not args:
+        die("usage: atlas agentic check <run_id> [--capability <id>.<op> --scope <target> "
+            "[--execute]] | [--permission-change]")
+    run_id = args[0]
+    opts = {"capability": None, "scope": None, "permission-change": False, "execute": False}
+    i = 1
+    while i < len(args):
+        a = args[i]
+        if a == "--capability" and i + 1 < len(args):
+            opts["capability"] = args[i + 1]; i += 2
+        elif a == "--scope" and i + 1 < len(args):
+            opts["scope"] = args[i + 1]; i += 2
+        elif a == "--permission-change":
+            opts["permission-change"] = True; i += 1
+        elif a == "--execute":
+            opts["execute"] = True; i += 1
+        else:
+            die(f"unknown argument {a!r}")
+
+    if bool(opts["capability"]) == bool(opts["permission-change"]):
+        die("pass exactly one of --capability <id>.<op> or --permission-change")
+
+    rec, p = load_run(run_id)
+
+    if opts["permission-change"]:
+        if opts["execute"]:
+            die("--execute has no meaning with --permission-change — this command never "
+                "performs a permission change itself, only decides whether one may proceed")
+        allowed, reason, entry = check_permission_change(rec)
+    else:
+        if "." not in (opts["capability"] or ""):
+            die("--capability must be '<capability>.<operation>'")
+        if not opts["scope"]:
+            die("--scope is required with --capability — an action with no declared "
+                "target scope cannot be checked against the run's claims.scope")
+        cap_id, _, op_name = opts["capability"].partition(".")
+        allowed, reason, entry = check_capability_action(rec, cap_id, op_name, opts["scope"])
+
+    rec.setdefault("permission_log", []).append(entry)
+    rec["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    save_run(rec, p)
+
+    if not allowed:
+        print(f"  {R}denied{X}  {reason}")
+        return 5
+
+    print(f"  {G}allowed{X}  {reason}")
+    if opts["execute"]:
+        # The one and only place this file ever reaches toward execution — and only after
+        # `allowed` is already True. Always --dry-run: this boundary decides; it never
+        # performs the action itself, verified or not.
+        proc = subprocess.run([str(CLI_DIR / "atlas-capability"), "invoke",
+                              opts["capability"], "--dry-run"], capture_output=True, text=True)
+        print(proc.stdout.rstrip("\n"))
+        return proc.returncode
+    return 0
+
+
+def cmd_approve(args):
+    if not args:
+        die("usage: atlas agentic approve <run_id> --owner-words \"…\"")
+    run_id = args[0]
+    owner_words = None
+    i = 1
+    while i < len(args):
+        if args[i] == "--owner-words" and i + 1 < len(args):
+            owner_words = args[i + 1]; i += 2
+        else:
+            die(f"unknown argument {args[i]!r}")
+    if not (owner_words or "").strip():
+        die("--owner-words is required and must be non-empty — approval is never inferred")
+
+    rec, p = load_run(run_id)
+    approval = rec.get("approval") or {"approval": "none", "approved_at": None,
+                                       "owner_words": None}
+    if approval.get("approval") == "recorded":
+        die(f"{run_id} already has recorded approval evidence — approval is recorded at "
+            f"most once; a second attempt after approval is refused, not overwritten",
+            code=1)
+
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    rec["approval"] = {"approval": "recorded", "approved_at": ts,
+                       "owner_words": owner_words.strip()}
+    rec["updated_at"] = ts
+    save_run(rec, p)
+    print(f"  {G}recorded{X}  approval evidence for {run_id}")
+    print(f"  owner words: {owner_words.strip()}")
+    return 0
+
+
+CMDS = {"create": cmd_create, "show": cmd_show, "validate": cmd_validate, "list": cmd_list,
+       "transition": cmd_transition, "capture": cmd_capture, "check": cmd_check,
+       "approve": cmd_approve}
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    if not a or a[0] not in CMDS:
+        print(__doc__)
+        sys.exit(0 if a and a[0] in ("-h", "--help") else 2)
+    sys.exit(CMDS[a[0]](a[1:]))

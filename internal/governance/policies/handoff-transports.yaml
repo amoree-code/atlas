@@ -1,6 +1,6 @@
 # Handoff transports — how an approved packet actually reaches a destination client.
 #
-# `ai-os handoff send` never invents a transport. It reads this file, and if the entry for
+# `atlas handoff send` never invents a transport. It reads this file, and if the entry for
 # the destination client is missing, unverified, or its binary is absent, the send is
 # REFUSED and a blocker is written into the handoff record. There is no flag, environment
 # variable or argument that raises a transport's privileges or bypasses `verified`.
@@ -11,7 +11,7 @@
 # `--help` proving a flag exists is not proof that handing that client a real packet works,
 # is safe, and returns something a human wants. Only a real, owner-run trial is — and that
 # trial is V6 of AIOS-011. Until then every transport here is declared and disabled, and
-# `ai-os handoff send` records a blocker rather than pretending.
+# `atlas handoff send` records a blocker rather than pretending.
 #
 # ## What a transport may be
 #
@@ -96,7 +96,7 @@ transports:
   claude-code-tools-pilot:
     name: Claude Code CLI, bounded non-interactive Read/Edit pilot
     binary: claude
-    argv: [-p, --no-session-persistence, --restricted, --strict-mcp-config, --add-dir, projects/ai-os/tickets/AIOS-012, --tools, Read,Edit, --permission-mode, acceptEdits, --permission-prompts, none, --max-budget-usd, "0.10", --]
+    argv: [-p, --no-session-persistence, --restricted, --strict-mcp-config, --add-dir, projects/atlas/tickets/AIOS-012, --tools, Read,Edit, --permission-mode, acceptEdits, --permission-prompts, none, --max-budget-usd, "0.10", --]
     stdin: packet
     timeout: 300
     verified: true
@@ -109,7 +109,7 @@ transports:
   # T-051-S7 live pilot transport. Unlike claude-code-tools-pilot above (hard-coded to one
   # historical AIOS-012 trial directory, left untouched here), this entry's --add-dir value
   # is the single fixed placeholder `__MISSION_SCOPE_DIR__`. It is never read literally: a
-  # caller must resolve it through `cli/aios_mission.build_mission_pilot_argv`, which
+  # caller must resolve it through `cli/atlas_mission.build_mission_pilot_argv`, which
   # substitutes it — and only it, exactly once — with the canonical, symlink-resolved
   # directory derived from ONE T-051 mission handoff's own already-approved single-file
   # scope (see `resolve_mission_pilot_directory`). That function refuses an absolute or
@@ -132,12 +132,12 @@ transports:
       mission slice budget into the spend flag,
       edited only its own approved file, and passed mission verification. T-051-S7-R1 also
       confirmed lease/claim acquisition and release around the bounded subprocess call.
-      See projects/ai-os/tickets/T-051/T-051-S7-live-pilot-implementation.md and
-      projects/ai-os/tickets/T-051/T-051-S7-R1-implementation.md for the recorded evidence.
+      See projects/atlas/tickets/T-051/T-051-S7-live-pilot-implementation.md and
+      projects/atlas/tickets/T-051/T-051-S7-R1-implementation.md for the recorded evidence.
 
   # Provider-neutral Gemini pilot candidate. Explicitly unverified: no owner-run trial has
   # happened against this argv. Per this file's own contract, `verified: false` means
-  # `ai-os handoff send` REFUSES to invoke it — declared and disabled, not guessed and
+  # `atlas handoff send` REFUSES to invoke it — declared and disabled, not guessed and
   # live, exactly like every other transport before its first owner-run trial. Its `tools`
   # scope is read-only only (Read), so it cannot mutate anything even after verification.
   # It reuses the same __MISSION_SCOPE_DIR__ / __MISSION_BUDGET_USD__ placeholder contract

@@ -5,7 +5,7 @@ One complete, valid `capability.yaml`
 provider-interface reference, for a fictional capability, `weather-lookup` — invented to
 pair with the fictional `garden-planning` domain in [`../domain/`](../domain/)
 (`requires: [weather-lookup]`), purely as illustration. It is not registered in
-`capabilities/` and `ai-os capability list` will never see it.
+`capabilities/` and `atlas capability list` will never see it.
 
 ```
 weather-lookup/

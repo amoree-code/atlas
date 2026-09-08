@@ -1,10 +1,20 @@
-# Handoff contract — draft
+# Handoff contract
 
 ```text
-Status:    DRAFT
-Authority: non-canonical during Phase A
-Current live contract remains under internal/templates/agent-handoff.md and the actual
-cli/ai-os-handoff behavior. Promotion requires a later migration slice.
+Status:    ACCEPTED as of Phase E2 (AIOS-020/migration-plan.md) — documentation contract.
+Authority: describes behavior already enforced by cli/atlas-handoff (GATES, statuses);
+           reviewed against that code and confirmed accurate at acceptance. Nothing here
+           is itself executable.
+Runtime:   internal/templates/agent-handoff.md remains the live, free-text template — no
+           schema validates a handoff today, and acceptance here does not introduce one.
+           Both stay live until an explicit later cutover.
+Reconciled 2026-09-08 (T-105): this file and the private workspace's copy at
+`contracts/handoff.schema.md` had byte-diverged, differing only in this status header —
+the private copy had already been promoted to ACCEPTED (Phase E2) while this one was left
+at the earlier DRAFT/Phase-A wording. Re-verified against current code
+(engine/cli/atlas-handoff still defines GATES/statuses) before adopting the ACCEPTED
+header here. This is now the canonical copy; the private root's copy is retained as a
+historical record of the acceptance decision, not edited by this reconciliation.
 ```
 
 Context loading: load only when preparing, approving, sending or reviewing a handoff. Not
@@ -13,7 +23,7 @@ always-on.
 ## Current source(s)
 
 - `internal/templates/agent-handoff.md` — the manual, human-readable template in production.
-- `cli/ai-os-handoff` — the real enforced gates (`plan-scope`, `execute`, `review`,
+- `cli/atlas-handoff` — the real enforced gates (`plan-scope`, `execute`, `review`,
   `next-step`, `remote-or-destructive`, `resume`) and statuses (`draft`, `waiting-owner`,
   `returned`, `reviewed`, …).
 - AIOS-010 (design), AIOS-011 (owner-approved implementation), AIOS-012 (low-cost CLI
@@ -104,14 +114,14 @@ Unchanged from current policy: **a missing approval is a refusal.** Silence, the
 being offline, and a previous approval are not approval. One approval covers one gate and
 one scope; remote, destructive, credential, install, publish, push, delete and migration
 actions always need their own line. An AI may write the request; only the owner grants it.
-This draft does not redesign the approval architecture (`GATES` in `cli/ai-os-handoff`) —
+This draft does not redesign the approval architecture (`GATES` in `cli/atlas-handoff`) —
 it only names where approval state sits in the record.
 
 ## 5. Compatibility
 
 The current template (`internal/templates/agent-handoff.md`) stays exactly as it is —
 free text, nothing parses it, no schema validates it today. This draft does not require any
-existing handoff record to be rewritten, and the current `ai-os handoff` CLI behavior
+existing handoff record to be rewritten, and the current `atlas handoff` CLI behavior
 (gates, statuses) is unchanged by this ticket.
 
 ## 6. Naming note

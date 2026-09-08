@@ -18,7 +18,7 @@ capability declares no domain of its own.
 
 This is the whole contract in one line. A declaration has **no command, no verifier, no
 provider, no authority rung, and no ordering.** Nothing about a domain executes, and there
-is deliberately no verb that could: `ai-os domain` has exactly `list` and `doctor`, both
+is deliberately no verb that could: `atlas domain` has exactly `list` and `doctor`, both
 read-only.
 
 Execution stays `Task + Capability + Run + Verification`, unchanged. A declaration able to
@@ -113,7 +113,7 @@ stays visible rather than fatal.
 ## What Core may not do
 
 Core validates the **shape** of a declaration and never interprets its **meaning**. There
-is no branch anywhere in `cli/ai-os-domain` on a domain id or an outcome name — asserted by
+is no branch anywhere in `cli/atlas-domain` on a domain id or an outcome name — asserted by
 test, as an absence.
 
 This is what makes a domain additive: **adding one must not require editing Core.** The

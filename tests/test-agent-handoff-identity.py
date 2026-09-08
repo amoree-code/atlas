@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """tests/test-agent-handoff-identity.py — T-048: source_client/source_session_id on the
-existing V6 agent-handoff record (cli/ai-os-handoff).
+existing V6 agent-handoff record (cli/atlas-handoff).
 
 T-048 is a minimal, additive extension only, owner-approved after AIOS-011 and AIOS-012
 were found to already hold this territory closed. Nothing here is a lease, a lock, a
@@ -8,7 +8,7 @@ daemon, a queue or an automatic claim/archive — every scenario below that says
 checking an *absence*, not just a presence.
 
 Every scenario runs against a disposable ATLAS_HOME fixture built by `make_ticket_home()`,
-matching the shape `ai-os-paths ticket <id>` actually resolves (`projects/<proj>/tickets/
+matching the shape `atlas-paths ticket <id>` actually resolves (`projects/<proj>/tickets/
 <id>/task.md`). Nothing here touches the real workspace or any real ticket.
 """
 import contextlib
@@ -40,7 +40,7 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "ai_os_handoff_under_test", SourceFileLoader("ai_os_handoff_under_test", str(CLI / "ai-os-handoff")))
+    "atlas_handoff_under_test", SourceFileLoader("atlas_handoff_under_test", str(CLI / "atlas-handoff")))
 handoff = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(handoff)
 

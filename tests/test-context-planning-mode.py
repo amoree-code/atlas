@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """tests/test-context-planning-mode.py — T-034: `atlas context --mode planning`.
 
-`ai-os-context`'s canonical, dispatched copy lives at ~/atlas/context/ai-os-context (cut
-over by T-016); the repo's cli/ai-os-context is historical only and is not exercised here.
-This file tests that live file directly, against a disposable AI_OS_HOME, so nothing here
+`atlas-context`'s canonical, dispatched copy lives at ~/atlas/context/atlas-context (cut
+over by T-016); the repo's cli/atlas-context is historical only and is not exercised here.
+This file tests that live file directly, against a disposable ATLAS_HOME, so nothing here
 touches the real workspace.
 
 Scope: `--mode planning` is a pure reorganization of the packet `build()` already computes
@@ -21,7 +21,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-LIVE_CONTEXT = Path.home() / "atlas" / "context" / "ai-os-context"
+LIVE_CONTEXT = Path.home() / "atlas" / "context" / "atlas-context"
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -42,7 +42,7 @@ def t(label):
 
 
 if not LIVE_CONTEXT.is_file():
-    print("  (skipped — no ~/atlas/context/ai-os-context found on this machine; nothing "
+    print("  (skipped — no ~/atlas/context/atlas-context found on this machine; nothing "
           "to check)")
     print("\n0 passed, 0 failed")
     sys.exit(0)
@@ -80,7 +80,7 @@ def registry(home, project, path):
 
 
 def run(home, *args, cwd=None):
-    env = {"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
+    env = {"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": os.environ["PATH"]}
     return subprocess.run([sys.executable, str(LIVE_CONTEXT), *args],
                           cwd=cwd or str(home), env=env, capture_output=True, text=True)
 
@@ -106,7 +106,7 @@ with tempfile.TemporaryDirectory() as tmp:
         "first line of next action" in r.stdout
         and "second line that must not appear" not in r.stdout)
     chk("blocker shown when present", "waiting on a real blocker" in r.stdout)
-    chk("read-next pointers present", "read next" in r.stdout and "ai-os tickets list" in r.stdout)
+    chk("read-next pointers present", "read next" in r.stdout and "atlas tickets list" in r.stdout)
 
     t("--mode planning: omits prose/log/artifacts")
     chk("no objective prose", "must never leak into planning output" not in r.stdout

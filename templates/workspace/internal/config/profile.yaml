@@ -5,7 +5,7 @@
 # is rendered for a client. That is why there is exactly one skill body to maintain
 # instead of one generic copy and one personalised copy drifting apart.
 #
-# This file never leaves ~/.ai-os. Nothing here is ever copied into the public repo.
+# This file never leaves ~/atlas. Nothing here is ever copied into the public repo.
 #
 # Every key is optional. An unset key renders as an explicit [[profile.<key> unset]]
 # marker — never a silent empty string, because a silently blank instruction is worse
@@ -30,7 +30,7 @@ stack:
   # A short phrase naming the technologies a recommendation must not ignore.
   summary: ""
   # Where your full stack conventions are recorded.
-  doc: ~/.ai-os/personal/memory/preferences/development.md
+  doc: ~/atlas/personal/memory/preferences/development.md
 
 code_graph:
   # A local code-graph tool, if you use one, for structural questions on large repos.
@@ -48,5 +48,5 @@ agents:
 # NOTE: these currently point into ~/.ai, the legacy runtime layer. That is a declared,
 # single-keyed dependency rather than a path hardcoded across fifteen files, and it is one
 # of the conditions gating ~/.ai's eventual removal.
-scripts_dir: ~/.ai-os/internal/helpers
-templates_dir: ~/.ai-os/personal/templates
+scripts_dir: ~/atlas/internal/helpers
+templates_dir: ~/atlas/personal/templates

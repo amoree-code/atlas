@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+"""atlas-run — the bounded execution boundary.
+
+  atlas run create --max-steps N --scope 'cap.op[,cap.op...]' [--task <id>]
+  atlas run step <run_id> <capability>.<operation> [--json '<args>'] [--complete-on-verified]
+  atlas run status <run_id>
+  atlas run list
+
+A Run is NOT an agent runtime, a workflow engine, an orchestrator or a planner. It never
+decides which capability to use or what to do next — the caller (model/agent) decides;
+Run only checks, bounds, records, verifies and refuses. See schemas/run.schema.md.
+
+It wraps `atlas capability invoke` as a subprocess and never reimplements authority or
+verification — every enforcement decision Run makes is either (a) a Run-local check
+(scope, budget, no-progress) that can only ever REFUSE a call before invoke ever runs, or
+(b) a direct read of invoke's own exit code and fixed stdout text. Run cannot elevate
+authority: it has no code path that grants anything invoke itself would not have granted.
+
+The approval prompt in `atlas capability invoke` is bypassed on purpose: every invocation Run
+makes has its stdin explicitly closed (subprocess.DEVNULL), so `execute-with-approval`
+always resolves to "no terminal" and the Run transitions to needs-approval. Run — being
+unattended-execution machinery — must never become a way to slip past that prompt.
+
+`task_id`, if given, is stored as an opaque string only. This file never opens, reads,
+lists, or writes anything under the private task record namespace — that boundary is
+asserted by test.
+
+Zero non-stdlib dependencies.
+"""
+import hashlib, json, os, re, subprocess, sys, time
+from pathlib import Path
+
+CLI_DIR = Path(__file__).resolve().parent
+ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", Path.home() / "atlas")))
+sys.path.insert(0, str(CLI_DIR))
+
+# Still runtime/runs — but which directory runtime/ is today is the resolver's answer.
+# T-021: Atlas-canonical, not the private-workspace runtime layer atlas_paths resolves
+# (that resolver is untouched — 13+ other commands still use it as before).
+_ATLAS_HOME = Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
+    else Path.home() / "atlas"
+RUNS_DIR = _ATLAS_HOME / "runtime" / "runs"
+
+# The whole lifecycle. `continue` is the only non-terminal status; everything else stops
+# the Run from taking further steps until something outside Run changes — a human editing
+# authority.yaml, a human approving out of band, or simply starting a fresh Run.
+TERMINAL = {"completed", "blocked", "failed", "needs-approval"}
+STATUSES = {"continue"} | TERMINAL
+
+# Consecutive identical (capability.operation + args) attempts with no verified progress
+# before Run calls it a loop and stops itself. Fixed and small on purpose — see
+# schemas/run.schema.md "No-progress detection" for why this is a bound, not a heuristic.
+NO_PROGRESS_LIMIT = 3
+
+G, Y, R, B, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[34m", "\033[2m", "\033[0m"
+if not sys.stdout.isatty():
+    G = Y = R = B = D = X = ""
+
+ANSI = re.compile(r"\033\[[0-9;]*m")
+
+
+def die(msg, code=2):
+    print(f"  {R}ERROR{X} {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def strip_ansi(s):
+    return ANSI.sub("", s or "")
+
+
+def run_path(run_id):
+    if not re.match(r"^[a-z0-9-]+$", run_id or ""):
+        die(f"not a run id: {run_id!r}")
+    return RUNS_DIR / f"{run_id}.json"
+
+
+def load_run(run_id):
+    p = run_path(run_id)
+    if not p.exists():
+        die(f"no such run: {run_id}", code=4)
+    return json.loads(p.read_text()), p
+
+
+def save_run(rec, p):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(rec, indent=2) + "\n")
+    tmp.replace(p)  # atomic — a step never leaves a half-written record
+
+
+def sig(cap, op, payload):
+    return hashlib.sha256(f"{cap}.{op}|{payload}".encode()).hexdigest()[:16]
+
+
+# ---------------------------------------------------------------------------------------
+def cmd_create(args):
+    max_steps, scope_raw, task_id = None, None, None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--max-steps" and i + 1 < len(args):
+            max_steps = args[i + 1]; i += 2
+        elif a == "--scope" and i + 1 < len(args):
+            scope_raw = args[i + 1]; i += 2
+        elif a == "--task" and i + 1 < len(args):
+            task_id = args[i + 1]; i += 2
+        else:
+            die(f"unknown argument {a!r}")
+    if max_steps is None:
+        die("--max-steps is required — there is no implicit unlimited mode")
+    try:
+        max_steps = int(max_steps)
+    except ValueError:
+        die(f"--max-steps must be a positive integer, got {max_steps!r}")
+    if max_steps < 1:
+        die("--max-steps must be at least 1")
+    if not scope_raw:
+        die("--scope is required — a Run with no scope can invoke nothing")
+    scope = [s.strip() for s in scope_raw.split(",") if s.strip()]
+    for s in scope:
+        if "." not in s:
+            die(f"scope entry {s!r} is not '<capability>.<operation>'")
+
+    run_id = f"run-{time.strftime('%Y%m%d-%H%M%S')}-{os.urandom(3).hex()}"
+    rec = {
+        "run_id": run_id,
+        # Opaque reference only. Core never opens the task record this id names.
+        "task_id": task_id,
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "max_steps": max_steps,
+        "steps_used": 0,
+        "scope": scope,
+        "status": "continue",
+        "terminal_reason": None,
+        "last_signature": None,
+        "repeat_count": 0,
+        "invocations": [],
+    }
+    save_run(rec, run_path(run_id))
+    print(f"  {G}created{X}  {run_id}")
+    print(f"  scope: {', '.join(scope)}")
+    print(f"  budget: {max_steps} step(s)")
+    if task_id:
+        print(f"  task: {task_id}  {D}(opaque reference — never read){X}")
+    return 0
+
+
+# ---------------------------------------------------------------------------------------
+def _classify(rc, text):
+    """Turn invoke's exit code + fixed stdout text into one deterministic outcome label.
+
+    Every string matched here is a literal invoke emits today and several are already
+    pinned by tests/test-contract.sh (e.g. "never with a flag", "NOT verified"). This
+    function makes no enforcement decision of its own — it only names what invoke already
+    decided.
+    """
+    t = strip_ansi(text)
+    if rc == 0 and "(dry run" in t:
+        return "dry-run", False
+    if rc == 0 and re.search(r"\bverified\b\s+deterministic check passed", t):
+        return "verified", True
+    if rc == 0:
+        return "executed-not-verified", True   # no verify: declared — invoke itself says so
+    if rc == 4:
+        return "unavailable", True
+    if rc == 5:
+        if re.search(r"needs 'execute-with-approval'|needs approval|not approved", t):
+            return "needs-approval", True
+        return "authority-denied", True
+    if rc == 6:
+        return "not-invocable", True
+    if rc == 7:
+        return "failed", True
+    if rc == 8:
+        return "executed-not-verified", True
+    return "unknown", True
+
+
+OUTCOME_STATUS = {
+    # outcome -> (new Run status, terminal_reason) — only outcomes that end the Run appear.
+    "unavailable": ("blocked", "capability or operation unavailable"),
+    "not-invocable": ("blocked", "capability declared but not invocable on this machine"),
+    "authority-denied": ("blocked", "granted authority is below what the operation needs"),
+    "needs-approval": ("needs-approval", "operation requires execute-with-approval; Run never supplies it"),
+    "failed": ("failed", "the capability's own invocation failed"),
+}
+
+
+def cmd_step(args):
+    if len(args) < 2 or "." not in args[1]:
+        die("usage: atlas run step <run_id> <capability>.<operation> "
+            "[--json '<args>'] [--complete-on-verified] [--dry-run]")
+    run_id, capop = args[0], args[1]
+    payload, complete_on_verified, dry = "{}", False, False
+    rest = args[2:]
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--json" and i + 1 < len(rest):
+            payload = rest[i + 1]; i += 2
+        elif rest[i] == "--complete-on-verified":
+            complete_on_verified = True; i += 1
+        elif rest[i] == "--dry-run":
+            dry = True; i += 1
+        else:
+            die(f"unknown argument {rest[i]!r}")
+
+    rec, p = load_run(run_id)
+    cap, _, op = capop.partition(".")
+
+    # --- Run-local refusals. None of these ever call invoke, so none ever consumes a step
+    # or can possibly be more permissive than invoke already is. -----------------------
+    if rec["status"] != "continue":
+        print(f"  {R}refused{X}  run {run_id} is {rec['status']!r}, not continue")
+        return 9
+    if capop not in rec["scope"]:
+        print(f"  {R}refused{X}  {capop} is outside this run's scope: {', '.join(rec['scope'])}")
+        rec["invocations"].append({
+            "seq": len(rec["invocations"]) + 1, "capability": cap, "operation": op,
+            "allowed": False, "executed": False, "verified": False,
+            "outcome": "refused-out-of-scope", "counted": False,
+            "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        save_run(rec, p)
+        return 5
+    if rec["steps_used"] >= rec["max_steps"]:
+        rec["status"], rec["terminal_reason"] = "blocked", "step budget exhausted"
+        rec["invocations"].append({
+            "seq": len(rec["invocations"]) + 1, "capability": cap, "operation": op,
+            "allowed": False, "executed": False, "verified": False,
+            "outcome": "refused-budget-exhausted", "counted": False,
+            "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        save_run(rec, p)
+        print(f"  {R}refused{X}  budget exhausted ({rec['max_steps']}/{rec['max_steps']} steps used)")
+        print(f"  {Y}blocked{X}  run {run_id} — start a new run for a new budget")
+        return 5
+
+    # --- The one and only place authority/verification is decided: invoke itself. ------
+    capability_cli = CLI_DIR / "atlas-capability"
+    cmdline = [sys.executable, str(capability_cli), "invoke", capop, "--json", payload]
+    if dry:
+        cmdline.append("--dry-run")
+    try:
+        proc = subprocess.run(cmdline, stdin=subprocess.DEVNULL, capture_output=True,
+                               text=True, timeout=310)
+    except subprocess.TimeoutExpired:
+        rc, out = 7, "  failed  invoke timed out"
+    else:
+        rc, out = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+    outcome, counted = _classify(rc, out)
+
+    if counted:
+        rec["steps_used"] += 1
+        s = sig(cap, op, payload)
+        if outcome == "verified" or s != rec.get("last_signature"):
+            rec["repeat_count"] = 1
+        else:
+            rec["repeat_count"] = rec.get("repeat_count", 0) + 1
+        rec["last_signature"] = s
+
+    entry = {
+        "seq": len(rec["invocations"]) + 1, "capability": cap, "operation": op,
+        "allowed": outcome not in ("authority-denied", "needs-approval"),
+        "executed": outcome in ("verified", "executed-not-verified", "failed"),
+        "verified": outcome == "verified",
+        "outcome": outcome, "counted": counted,
+        "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    rec["invocations"].append(entry)
+
+    # invoke already disabled its own ANSI codes (its stdout was a pipe, not a tty).
+    print(out.rstrip("\n"))
+
+    if outcome in OUTCOME_STATUS:
+        rec["status"], rec["terminal_reason"] = OUTCOME_STATUS[outcome]
+        print(f"  {Y}{rec['status']}{X}  {rec['terminal_reason']}")
+    elif outcome == "verified" and complete_on_verified:
+        rec["status"], rec["terminal_reason"] = "completed", f"{capop} verified — caller declared this the completion condition"
+        print(f"  {G}completed{X}  {rec['terminal_reason']}")
+    elif counted and rec["repeat_count"] >= NO_PROGRESS_LIMIT and outcome != "verified":
+        rec["status"] = "blocked"
+        rec["terminal_reason"] = (f"no-progress: {capop} repeated {rec['repeat_count']} times "
+                                   f"with the same arguments and no verified change")
+        print(f"  {Y}blocked{X}  {rec['terminal_reason']}")
+
+    save_run(rec, p)
+    print(f"  {D}steps {rec['steps_used']}/{rec['max_steps']} · run status: {rec['status']}{X}")
+    return {
+        "continue": 0, "completed": 0,
+        "needs-approval": 5, "blocked": 6, "failed": 7,
+    }[rec["status"]]
+
+
+# ---------------------------------------------------------------------------------------
+def cmd_status(args):
+    if not args:
+        die("usage: atlas run status <run_id>")
+    rec, _ = load_run(args[0])
+    print(json.dumps(rec, indent=2))
+    return 0
+
+
+def cmd_list(_args):
+    if not RUNS_DIR.is_dir():
+        print(f"\n  no runs in {RUNS_DIR}\n")
+        return 0
+    rows = sorted(RUNS_DIR.glob("*.json"))
+    if not rows:
+        print(f"\n  no runs in {RUNS_DIR}\n")
+        return 0
+    print(f"\n  {B}runs{X}  {D}{RUNS_DIR}{X}\n")
+    print(f"  {'RUN ID':<28} {'STATUS':<14} {'STEPS':<8} SCOPE")
+    for f in rows:
+        try:
+            r = json.loads(f.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        steps = f"{r.get('steps_used', '?')}/{r.get('max_steps', '?')}"
+        print(f"  {r.get('run_id', f.stem):<28} {r.get('status', '?'):<14} {steps:<8} "
+              f"{', '.join(r.get('scope', []))}")
+    print()
+    return 0
+
+
+CMDS = {"create": cmd_create, "step": cmd_step, "status": cmd_status, "list": cmd_list}
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    if not a or a[0] not in CMDS:
+        print(__doc__)
+        sys.exit(0 if a and a[0] in ("-h", "--help") else 2)
+    sys.exit(CMDS[a[0]](a[1:]))

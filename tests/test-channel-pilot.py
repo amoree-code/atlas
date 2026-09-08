@@ -9,11 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "cli" / "atlas"
 COMMON = [
-    "--project", "ai-os",
+    "--project", "atlas",
     "--session", "t057-s1-pilot-20260907",
     "--ticket", "T-057",
     "--mission", "mission/t057-s1-channel-pilot-20260907",
-    "--scope", "projects/ai-os/tickets/T-057/T-057-S1-channel-pilot-directive.md",
+    "--scope", "projects/atlas/tickets/T-057/T-057-S1-channel-pilot-directive.md",
     "--role", "executor",
     "--approval", "approved",
     "--budget-usd", "0.50",
@@ -47,7 +47,7 @@ def main():
     assert rc == 1 and packet["refusal_reason"] == "capability_outside_mission_boundary"
 
     bad = COMMON.copy()
-    bad[bad.index("projects/ai-os/tickets/T-057/T-057-S1-channel-pilot-directive.md")] = "../escape"
+    bad[bad.index("projects/atlas/tickets/T-057/T-057-S1-channel-pilot-directive.md")] = "../escape"
     result = subprocess.run(
         [str(CLI), "channel", "pilot", *bad, "--provider", "claude-code-mission-pilot", "--capability", "Read"],
         capture_output=True,
@@ -59,7 +59,7 @@ def main():
         rc, packet = run(["--provider", "claude-code-mission-pilot", "--capability", "Read", "--channel", channel])
         assert rc == 0 and packet["channel"] == channel and packet["execution_allowed"] is False
 
-    # --knowledge-db resolves via os.path.abspath() in ai-os-channel-pilot — i.e. relative
+    # --knowledge-db resolves via os.path.abspath() in atlas-channel-pilot — i.e. relative
     # to the CALLER's cwd, not $ATLAS_HOME. A relative path here only worked when this
     # test happened to be run with $ATLAS_HOME itself as cwd; pass the real, absolute
     # path so the check doesn't depend on incidental invocation directory.

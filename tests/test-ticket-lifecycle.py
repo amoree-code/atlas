@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """tests/test-ticket-lifecycle.py — T-043: ticket creation and promotion.
 
-Proves the entry gate for the Smart Dynamic Ticket System: `aios_tickets.lifecycle_issues`/
-`next_ticket_id`, and the `ai-os tickets new`/`ai-os tickets promote` commands built on
+Proves the entry gate for the Smart Dynamic Ticket System: `atlas_tickets.lifecycle_issues`/
+`next_ticket_id`, and the `atlas tickets new`/`atlas tickets promote` commands built on
 them. Nothing here touches the real workspace — every scenario runs against a throwaway
-AI_OS_HOME/ATLAS_HOME, exactly like tests/test-tickets.py and test-ticket-priority.py.
+ATLAS_HOME/ATLAS_HOME, exactly like tests/test-tickets.py and test-ticket-priority.py.
 
 Scope: a ticket must never be able to enter the system (via `new`) or leave the
 `future_candidate` relation (via `promote`) missing priority/goal/requirement, with an
@@ -38,8 +38,8 @@ def t(label):
 
 
 spec = importlib.util.spec_from_loader(
-    "aios_tickets_lifecycle_under_test",
-    SourceFileLoader("aios_tickets_lifecycle_under_test", str(CLI / "aios_tickets.py")))
+    "atlas_tickets_lifecycle_under_test",
+    SourceFileLoader("atlas_tickets_lifecycle_under_test", str(CLI / "atlas_tickets.py")))
 tickets_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(tickets_mod)
 
@@ -47,7 +47,7 @@ spec.loader.exec_module(tickets_mod)
 def make_index(root, project):
     d = root / "projects" / project
     d.mkdir(parents=True, exist_ok=True)
-    (d / "index.md").write_text("# demo\n\n<!-- ai-os:tickets:begin -->\n<!-- ai-os:tickets:end -->\n")
+    (d / "index.md").write_text("# demo\n\n<!-- atlas:tickets:begin -->\n<!-- atlas:tickets:end -->\n")
 
 
 def make_legacy_ticket(root, project, ticket_id, state="done"):
@@ -66,8 +66,8 @@ def make_legacy_ticket(root, project, ticket_id, state="done"):
 
 def run_tickets(home, *args):
     return subprocess.run(
-        [str(CLI / "ai-os-tickets"), *args], cwd=str(home),
-        env={"AI_OS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
+        [str(CLI / "atlas-tickets"), *args], cwd=str(home),
+        env={"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"},
         capture_output=True, text=True,
     )
 
@@ -157,7 +157,7 @@ chk("next is T-012 regardless of live/archived status",
     tickets_mod.next_ticket_id(tix) == "T-012")
 
 # =========================================================================================
-t("`ai-os tickets new` — refuses with no metadata at all, nothing written")
+t("`atlas tickets new` — refuses with no metadata at all, nothing written")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -167,7 +167,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("refused, nothing written", "refused" in r.stdout
         and not (home / "projects" / "demo" / "tickets").exists())
 
-t("`ai-os tickets new` — succeeds with complete metadata, passes doctor immediately")
+t("`atlas tickets new` — succeeds with complete metadata, passes doctor immediately")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -185,7 +185,7 @@ with tempfile.TemporaryDirectory() as tmp:
     d = run_tickets(home, "doctor")
     chk("doctor passes immediately, 0 errors", d.returncode == 0 and "0 error" in d.stdout)
 
-t("`ai-os tickets new` — --next-action is required even when everything else is present")
+t("`atlas tickets new` — --next-action is required even when everything else is present")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -194,7 +194,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("refused for missing --next-action", r.returncode != 0
         and "--next-action is required" in r.stdout)
 
-t("`ai-os tickets new` — a future_candidate ticket needs none of the three fields")
+t("`atlas tickets new` — a future_candidate ticket needs none of the three fields")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -204,7 +204,7 @@ with tempfile.TemporaryDirectory() as tmp:
     d = run_tickets(home, "doctor")
     chk("doctor is clean", d.returncode == 0 and "0 error" in d.stdout)
 
-t("`ai-os tickets new` — invalid metadata is refused (enum + relation/parent)")
+t("`atlas tickets new` — invalid metadata is refused (enum + relation/parent)")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -214,7 +214,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("required without --parent is refused by argparse-level validation path",
         r.returncode != 0 and "requires 'parent'" in r.stdout)
 
-t("`ai-os tickets new` — explicit --id collision is refused")
+t("`atlas tickets new` — explicit --id collision is refused")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -227,7 +227,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("second create with the same id is refused", r.returncode != 0
         and "already exists" in r.stderr)
 
-t("`ai-os tickets new` — refuses to create inside a project that does not exist")
+t("`atlas tickets new` — refuses to create inside a project that does not exist")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     (home / "projects").mkdir(parents=True)
@@ -237,7 +237,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("refused, does not create the project directory either", r.returncode != 0
         and not (home / "projects" / "nosuchproject").exists())
 
-t("`ai-os tickets new` — --dry-run writes nothing")
+t("`atlas tickets new` — --dry-run writes nothing")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -247,7 +247,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("exits 0", r.returncode == 0)
     chk("nothing written", not (home / "projects" / "demo" / "tickets").exists())
 
-t("`ai-os tickets new` — coexists with a legacy AIOS-* ticket; id numbering ignores it")
+t("`atlas tickets new` — coexists with a legacy AIOS-* ticket; id numbering ignores it")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -261,7 +261,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("doctor still passes with both generations present",
         d.returncode == 0 and "0 error" in d.stdout)
 
-t("`ai-os tickets new` — an empty project (no tickets at all yet) does not hit the "
+t("`atlas tickets new` — an empty project (no tickets at all yet) does not hit the "
   "'no ticket records' guard")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
@@ -272,7 +272,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("exits 0, not the 'no ticket records under' error", r.returncode == 0
         and "no ticket records" not in r.stderr)
 
-t("`ai-os tickets new` — a ticket referencing a legacy AIOS-* id as parent is accepted")
+t("`atlas tickets new` — a ticket referencing a legacy AIOS-* id as parent is accepted")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -283,7 +283,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("exits 0 — a legacy id is a valid parent reference", r.returncode == 0)
 
 # =========================================================================================
-t("`ai-os tickets promote` — refuses a ticket that is not future_candidate")
+t("`atlas tickets promote` — refuses a ticket that is not future_candidate")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -294,7 +294,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("refused — nothing to promote", r.returncode != 0
         and "nothing to promote" in r.stderr)
 
-t("`ai-os tickets promote` — refuses when required metadata is still missing after the merge")
+t("`atlas tickets promote` — refuses when required metadata is still missing after the merge")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -307,7 +307,7 @@ with tempfile.TemporaryDirectory() as tmp:
     text = read_ticket(home, "demo", "T-001")
     chk("the ticket file is completely untouched", "relation: future_candidate" in text)
 
-t("`ai-os tickets promote` — succeeds and writes only the explicitly-passed fields")
+t("`atlas tickets promote` — succeeds and writes only the explicitly-passed fields")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -331,7 +331,7 @@ with tempfile.TemporaryDirectory() as tmp:
     d = run_tickets(home, "doctor")
     chk("doctor passes after promotion", d.returncode == 0 and "0 error" in d.stdout)
 
-t("`ai-os tickets promote` — --dry-run changes nothing")
+t("`atlas tickets promote` — --dry-run changes nothing")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -347,7 +347,7 @@ with tempfile.TemporaryDirectory() as tmp:
     chk("exits 0", r.returncode == 0)
     chk("file byte-identical to before", read_ticket(home, "demo", "T-002") == before)
 
-t("`ai-os tickets promote` — refuses an id that does not exist")
+t("`atlas tickets promote` — refuses an id that does not exist")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")
@@ -356,7 +356,7 @@ with tempfile.TemporaryDirectory() as tmp:
     r = run_tickets(home, "promote", "T-999", "--relation", "optional")
     chk("refused", r.returncode != 0 and "no ticket 'T-999'" in r.stderr)
 
-t("`ai-os tickets promote` — refuses to promote a legacy AIOS-* ticket (no relation field at all)")
+t("`atlas tickets promote` — refuses to promote a legacy AIOS-* ticket (no relation field at all)")
 with tempfile.TemporaryDirectory() as tmp:
     home = Path(tmp)
     make_index(home, "demo")

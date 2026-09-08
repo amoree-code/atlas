@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """tests/test-mission-conflict-integration.py — T-051-S7-R1: `mission execute` connects to
-the real T-050 conflict-protection layer (`cli/aios_coordination.py`) before any executor
+the real T-050 conflict-protection layer (`cli/atlas_coordination.py`) before any executor
 subprocess call.
 
 This suite exercises the real, production `mission_execute` function end to end, using a
@@ -11,7 +11,7 @@ release, none of which a real LLM can be made to reproduce on demand. The fake b
 receives the exact same argv/stdin/timeout contract a real transport would, so every test
 here exercises the real lease-acquire / claim-acquire / subprocess / claim-release /
 lease-release sequence `mission_execute` now performs, through the real, unmodified
-`cli/aios_coordination.py` library — never a duplicated lease/claim implementation.
+`cli/atlas_coordination.py` library — never a duplicated lease/claim implementation.
 
 No real Claude CLI invocation happens anywhere in this file (that live-invocation coverage
 already exists, and is not duplicated here, in `test-mission-execute.py` and
@@ -85,14 +85,14 @@ def uniq_key(prefix):
     return f"{prefix}-{time.time_ns()}"
 
 
-for _var in ("ATLAS_HOME", "AI_OS_ADAPTERS", "AI_OS_HANDOFF_TRANSPORTS"):
+for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
     os.environ.pop(_var, None)
 
-mission = _load(CLI, "aios_mission.py")
-core_mission = _load(CORE_CLI, "aios_mission.py")
-mission_cli = _load(CLI, "ai-os-mission")
-core_mission_cli = _load(CORE_CLI, "ai-os-mission")
-coord = _load(CLI, "aios_coordination.py")
+mission = _load(CLI, "atlas_mission.py")
+core_mission = _load(CORE_CLI, "atlas_mission.py")
+mission_cli = _load(CLI, "atlas-mission")
+core_mission_cli = _load(CORE_CLI, "atlas-mission")
+coord = _load(CLI, "atlas_coordination.py")
 
 # The FAKE executor binary. Behavior selected by FAKE_EXECUTOR_MODE:
 #   pass          -> edits the scoped file, replies status "pass"
@@ -101,7 +101,7 @@ coord = _load(CLI, "aios_coordination.py")
 #   bad_json       -> prints non-JSON
 #   missing_field  -> prints a JSON reply missing required fields
 #   race_release   -> externally releases the SAME lease/claim (via a direct import of the
-#                     real cli/aios_coordination.py, never a second implementation) BEFORE
+#                     real cli/atlas_coordination.py, never a second implementation) BEFORE
 #                     mission_execute's own post-execution cleanup runs, then replies "pass"
 #                     as normal — the only deterministic way to reproduce a cleanup call that
 #                     finds its own lease/claim already gone.
@@ -243,9 +243,9 @@ def new_fixture():
         "    evidence: disposable fixture, never the real registry\n")
 
     os.environ["ATLAS_HOME"] = str(tmp)
-    os.environ["AI_OS_ADAPTERS"] = str(adapters_dir)
-    os.environ["AI_OS_HANDOFF_TRANSPORTS"] = str(transports_path)
-    os.environ["FAKE_EXECUTOR_COORD_PATH"] = str(CLI / "aios_coordination.py")
+    os.environ["ATLAS_ADAPTERS"] = str(adapters_dir)
+    os.environ["ATLAS_HANDOFF_TRANSPORTS"] = str(transports_path)
+    os.environ["FAKE_EXECUTOR_COORD_PATH"] = str(CLI / "atlas_coordination.py")
     return tmp
 
 
@@ -878,13 +878,13 @@ chk("mission Q's own lease/claim never reference mission P's ticket",
 
 # --- 33: engine/core parity ---------------------------------------------------------------------
 t("33. engine/core parity")
-chk("engine and core aios_mission.py are byte-identical",
-   (CLI / "aios_mission.py").read_bytes() == (CORE_CLI / "aios_mission.py").read_bytes())
-chk("engine and core aios_coordination.py are byte-identical",
-   (CLI / "aios_coordination.py").read_bytes() ==
-   (CORE_CLI / "aios_coordination.py").read_bytes())
-chk("engine and core ai-os-mission are byte-identical",
-   (CLI / "ai-os-mission").read_bytes() == (CORE_CLI / "ai-os-mission").read_bytes())
+chk("engine and core atlas_mission.py are byte-identical",
+   (CLI / "atlas_mission.py").read_bytes() == (CORE_CLI / "atlas_mission.py").read_bytes())
+chk("engine and core atlas_coordination.py are byte-identical",
+   (CLI / "atlas_coordination.py").read_bytes() ==
+   (CORE_CLI / "atlas_coordination.py").read_bytes())
+chk("engine and core atlas-mission are byte-identical",
+   (CLI / "atlas-mission").read_bytes() == (CORE_CLI / "atlas-mission").read_bytes())
 chk("core module also exposes mission_execute", hasattr(core_mission, "mission_execute"))
 chk("core CLI also exposes cmd_execute", hasattr(core_mission_cli, "cmd_execute"))
 
@@ -892,7 +892,7 @@ chk("core CLI also exposes cmd_execute", hasattr(core_mission_cli, "cmd_execute"
 t("34. no T-050/AIOS-011/AIOS-012/AIOS-017/T-049 file or record touched by this fixture root")
 chk("no real AIOS-011, AIOS-012, AIOS-017, T-049 or T-050 ticket directory exists under this "
    "disposable fixture root", not any(
-       (ROOT / "projects" / "ai-os" / "tickets" / tid).exists()
+       (ROOT / "projects" / "atlas" / "tickets" / tid).exists()
        for tid in ("AIOS-011", "AIOS-012", "AIOS-017", "T-049", "T-050")))
 REAL_TRANSPORTS = REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml"
 real_before = REAL_TRANSPORTS.read_text()
@@ -902,10 +902,10 @@ REAL_ROUTING = REPO / "internal" / "governance" / "policies" / "coordinator-rout
 real_routing_before = REAL_ROUTING.read_text()
 chk("the REAL coordinator-routing.yaml file was never touched by any test above",
    REAL_ROUTING.read_text() == real_routing_before)
-chk("cli/aios_coordination.py itself was never modified by this suite (byte-identical to the "
+chk("cli/atlas_coordination.py itself was never modified by this suite (byte-identical to the "
    "copy loaded at import time)",
-   (CLI / "aios_coordination.py").read_bytes() == coord.__loader__.get_data(
-       str(CLI / "aios_coordination.py")))
+   (CLI / "atlas_coordination.py").read_bytes() == coord.__loader__.get_data(
+       str(CLI / "atlas_coordination.py")))
 
 # --- 35: no real AI invocation anywhere in this file --------------------------------------------
 t("35. no real AI client is invoked anywhere in this suite — only the disposable fake executor")
@@ -926,7 +926,7 @@ chk("FAKE_EXECUTOR_SCRIPT never invokes claude, codex, or any network/Bash tool"
 # the one suite with no nested children at all) directly, and rely on byte-identity/parity
 # checks (section 33) plus this ticket's own directly-run "Run:" list for everything else.
 _CLEAN_ENV = {k: v for k, v in os.environ.items()
-             if k not in ("ATLAS_HOME", "AI_OS_ADAPTERS", "AI_OS_HANDOFF_TRANSPORTS",
+             if k not in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS",
                           "FAKE_EXECUTOR_MODE", "FAKE_EXECUTOR_COUNTER_FILE",
                           "FAKE_EXECUTOR_NEW_CONTENT", "FAKE_EXECUTOR_SLEEP",
                           "FAKE_EXECUTOR_COORD_PATH", "FAKE_EXECUTOR_TICKET_DIR")}

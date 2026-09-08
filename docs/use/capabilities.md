@@ -22,8 +22,8 @@ compatibility only:
 |---|---|---|
 | directory | `capabilities/` | `plugins/` |
 | manifest file | `capability.yaml` | `plugin.yaml` |
-| command | `ai-os capability` | `ai-os plugin` |
-| env var | `AI_OS_CAPABILITIES` | `AI_OS_PLUGINS` |
+| command | `atlas capability` | `atlas plugin` |
+| env var | `ATLAS_CAPABILITIES` | `ATLAS_PLUGINS` |
 | **manifest key** | **`plugin:`** | unchanged — a contract 1 manifest needs no edit |
 
 The manifest key stays `plugin:` because `capability:` already names the authority block
@@ -69,9 +69,9 @@ submitting, purchasing and deleting are never retried automatically.
 ## Commands
 
 ```bash
-ai-os capability list
-ai-os capability doctor
-ai-os capability invoke browser.read --dry-run
+atlas capability list
+atlas capability doctor
+atlas capability invoke browser.read --dry-run
 ```
 
 `invoke` runs **one** declared operation and stops, walking `available -> allowed ->

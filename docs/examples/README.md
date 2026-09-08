@@ -5,8 +5,8 @@ declaration, a capability manifest — each small enough to read in one sitting 
 from directly.
 
 Nothing is seeded from here automatically: an example is something you read and adapt,
-not something `ai-os init` applies. The closest thing that *is* applied automatically is
-`templates/workspace/`, which seeds a new `$AI_OS_HOME` — see `docs/use/install.md`.
+not something `atlas init` applies. The closest thing that *is* applied automatically is
+`templates/workspace/`, which seeds a new `$ATLAS_HOME` — see `docs/use/install.md`.
 
 - [`workspace/`](workspace/) — a filled-in slice of a seeded workspace: memory index,
   project registry, granted authority, completed onboarding

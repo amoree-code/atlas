@@ -5,7 +5,7 @@ policy: workspace-privacy
 version: 1
 
 principle: >
-  The user's workspace ($AI_OS_HOME, default ~/.ai-os) is PRIVATE BY DEFAULT. Assume it
+  The user's workspace ($ATLAS_HOME, default ~/atlas) is PRIVATE BY DEFAULT. Assume it
   contains personal information, personal memory and knowledge, private project names and
   context, session history, daily records, personal goals and preferences, and private
   configuration. Being inside the workspace is never evidence that content is safe to
@@ -48,8 +48,8 @@ rules:
       is governed by ordinary local policy.
 
 boundary:
-  private: $AI_OS_HOME            # default ~/.ai-os
-  public: the ai-os repository
+  private: $ATLAS_HOME            # default ~/atlas
+  public: the atlas repository
   invariant: >
     Neither may be nested inside the other. A nested repository is a defect, not a
     configuration — detect and report it, never hide it with .gitignore.
@@ -64,4 +64,4 @@ enforcement:
     - no remote configured on the workspace repository   # primary
     - workspace .git/hooks/pre-push refuses              # bypassable with --no-verify
     - workspace .git/hooks/pre-commit blocks credentials
-    - ai-os workspace status / ai-os-doctor report nested repositories and missing hooks
+    - atlas workspace status / atlas-doctor report nested repositories and missing hooks
