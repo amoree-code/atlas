@@ -125,16 +125,6 @@ promotions:
       # what is even eligible to reach that gate, per `publication_model` below.
       - skills/catch-up/SKILL.md
       - skills/day-start/SKILL.md
-      - skills/graphify/SKILL.md
-      - skills/graphify/.graphify_version
-      - skills/graphify/references/add-watch.md
-      - skills/graphify/references/exports.md
-      - skills/graphify/references/extraction-spec.md
-      - skills/graphify/references/github-and-merge.md
-      - skills/graphify/references/hooks.md
-      - skills/graphify/references/query.md
-      - skills/graphify/references/transcribe.md
-      - skills/graphify/references/update.md
       - skills/project-init/SKILL.md
       - skills/project-register/SKILL.md
       - skills/research/SKILL.md

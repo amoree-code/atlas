@@ -165,8 +165,8 @@ if (real_atlas / "extensions").is_dir():
     real_skills = ext.discover_skills(real_atlas)
     real_agents = ext.discover_agents(real_atlas)
     real_mcp = ext.discover_mcp_servers(real_atlas)
-    chk("real extensions/skills/ discovers at least the known 9 canonical skills",
-        len(real_skills) >= 9)
+    chk("real extensions/skills/ discovers at least the known 8 canonical skills",
+        len(real_skills) >= 8)
     chk("real extensions/agents/ discovers the 4 known agent bodies",
         set(real_agents) == {"architect", "debugger", "memory-curator", "task-scribe"})
     chk("real extensions/mcp/servers/ is empty (zero Atlas-managed servers, as documented)",

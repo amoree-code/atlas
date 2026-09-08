@@ -61,13 +61,6 @@ for s in "$W/$HELPERS"/*.sh; do
   bash -n "$s" 2>/dev/null || bad "$(basename "$s") has a syntax error"
 done
 
-echo "== graphify (optional) =="
-if command -v graphify >/dev/null 2>&1; then
-  ok "graphify $(graphify --version 2>/dev/null | awk '{print $2}') installed"
-else
-  warn "graphify not on PATH (optional; needed only for large-codebase navigation)"
-fi
-
 echo "== registry =="
 if grep -oE '`~?/[^`]*`' "$W/$PROJECTS/registry.md" 2>/dev/null | tr -d '`' | while read -r p; do
     expanded="${p/#\~/$HOME}"

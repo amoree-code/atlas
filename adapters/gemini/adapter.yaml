@@ -31,6 +31,6 @@ conventions:
   project_memory: .gemini/memory/
 
 notes: >
-  SKILL.md is byte-identical to Claude's (md5 match on graphify), so skills are a straight
-  copy, not a translation. Had 36 lines of hand-written rules, merged into canonical before
-  the first sync.
+  SKILL.md is byte-identical to Claude's (md5 match verified across the skill set), so
+  skills are a straight copy, not a translation. Had 36 lines of hand-written rules,
+  merged into canonical before the first sync.

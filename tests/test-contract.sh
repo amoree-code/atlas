@@ -809,15 +809,15 @@ t "THE SKILL GATE: 9 skills render equivalent to the committed goldens"
 # Skill count here tracks <atlas repo>/skills/*; bump it and regenerate the goldens
 # (atlas-render <skill> --client claude-code > tests/fixtures/golden-skills/<skill>/SKILL.md)
 # whenever a skill is added, removed, or its canonical body changes (T-023 added
-# session-handoff and edited catch-up/session-end — 8 -> 9).
+# session-handoff and edited catch-up/session-end — 8 -> 9; T-115 removed graphify — 9 -> 8).
 GW="$TMP/goldenws"; mkdir -p "$GW/internal/config"
 cp "$REPO/tests/fixtures/profile.yaml" "$GW/internal/config/profile.yaml"
 out=$(ATLAS_HOME="$GW" "$CLI/atlas-render" --check "$REPO/tests/fixtures/golden-skills" \
         --client claude-code 2>&1); rc=$?
-[ "$rc" -eq 0 ];                                     chk "no semantic loss across all 9 skills" $?
+[ "$rc" -eq 0 ];                                     chk "no semantic loss across all 8 skills" $?
 # Count per-skill result lines only — the summary line says "equivalent" too.
 n=$(echo "$out" | grep -cE '^  (identical|equivalent) ')
-[ "$n" -eq 9 ];                                      chk "all 9 accounted for ($n)" $?
+[ "$n" -eq 8 ];                                      chk "all 8 accounted for ($n)" $?
 echo "$out" | grep -q "DIFFERS"; [ $? -ne 0 ];       chk "no skill differs semantically" $?
 # The goldens are public artefacts and must stay that way.
 ATLAS_HOME="$GW" "$CLI/atlas-privacy-scan" "$REPO/tests/fixtures" >/dev/null 2>&1
@@ -3581,7 +3581,7 @@ chk "a path under a moved root is rewritten onto the new one" $?
 WR_OLD="$TMP/rewrite-old"; mkdir -p "$WR_OLD/system/config"
 [ "$(ATLAS_HOME="$WR_OLD" "$PA" rewrite internal/config/settings.yaml)" = "$WR_OLD/system/config/settings.yaml" ]
 chk "a new-layout template path is rewritten onto an old workspace" $?
-[ "$("$PA" rewrite graphify-out/graph.json)" = "$PW/graphify-out/graph.json" ]
+[ "$("$PA" rewrite build-out/artifact.json)" = "$PW/build-out/artifact.json" ]
 chk "a path under no moving root is left alone" $?
 # sessions used to be that example. It became a root when session records moved under
 # internal/, so the same call now has to come back rewritten rather than untouched.
