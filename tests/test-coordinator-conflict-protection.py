@@ -540,8 +540,8 @@ chk("the only bounded-wait loop is the documented mutation-guard poll (deadline-
     "if time.monotonic() >= deadline:" in src and "break" in src)
 
 t("39/40 — no protected file changes; core/engine parity")
-protected = ["internal/governance/policies/coordinator-routing.yaml",
-            "internal/governance/policies/handoff-transports.yaml", "cli/atlas-handoff"]
+protected = ["governance/policies/coordinator-routing.yaml",
+            "governance/policies/handoff-transports.yaml", "cli/atlas-handoff"]
 before_p = {p: (REPO / p).read_text() for p in protected if (REPO / p).is_file()}
 for p, text in before_p.items():
     chk(f"protected file unchanged: {p}", (REPO / p).read_text() == text)
@@ -1517,8 +1517,8 @@ chk("cmd_begin/cmd_finalize exist identically in both core and engine copies",
 atlas_src = (REPO.parent / "engine" / "cli" / "atlas").read_text()
 chk("the canonical 'atlas' entrypoint's help text names begin/finalize",
     "begin | finalize" in atlas_src)
-for protected_path in ("internal/governance/policies/coordinator-routing.yaml",
-                       "internal/governance/policies/handoff-transports.yaml",
+for protected_path in ("governance/policies/coordinator-routing.yaml",
+                       "governance/policies/handoff-transports.yaml",
                        "cli/atlas-handoff"):
     chk(f"protected file still unchanged: {protected_path}",
         (REPO / protected_path).read_text() == before_p.get(protected_path,

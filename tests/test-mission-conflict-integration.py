@@ -894,11 +894,11 @@ chk("no real AIOS-011, AIOS-012, AIOS-017, T-049 or T-050 ticket directory exist
    "disposable fixture root", not any(
        (ROOT / "projects" / "atlas" / "tickets" / tid).exists()
        for tid in ("AIOS-011", "AIOS-012", "AIOS-017", "T-049", "T-050")))
-REAL_TRANSPORTS = REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml"
+REAL_TRANSPORTS = REPO / "governance" / "policies" / "handoff-transports.yaml"
 real_before = REAL_TRANSPORTS.read_text()
 chk("the REAL transport registry file was never touched by any test above",
    REAL_TRANSPORTS.read_text() == real_before)
-REAL_ROUTING = REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml"
+REAL_ROUTING = REPO / "governance" / "policies" / "coordinator-routing.yaml"
 real_routing_before = REAL_ROUTING.read_text()
 chk("the REAL coordinator-routing.yaml file was never touched by any test above",
    REAL_ROUTING.read_text() == real_routing_before)

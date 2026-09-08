@@ -309,10 +309,10 @@ chk "a credential on the copyright line is still a finding" $?
 # — the first draft of this test did exactly that, and the repo scan caught it.
 grep -q 'COPYRIGHT_LINE = re.compile' "$CLI/atlas-privacy-scan"
 chk "licence attribution is a pattern in the scanner, not a literal name" $?
-n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/internal/governance/policies/privacy-allowlist.txt")
+n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/governance/policies/privacy-allowlist.txt")
 [ "$n" -eq 14 ]
 chk "the allowlist gained no entry — every one is a hole in the scan ($n)" $?
-grep -q "^exceptions:" "$REPO/internal/governance/policies/privacy-classification.yaml"
+grep -q "^exceptions:" "$REPO/governance/policies/privacy-classification.yaml"
 chk "both exemptions are documented as policy" $?
 # And the scan of this very repository is the real guard: if a name, a home path or an
 # email ever lands in a tracked file, the cleanliness test below fails. That is what
@@ -752,7 +752,7 @@ t "the formatter that broke the registry is fenced off"
 [ -f "$REPO/.prettierignore" ];                      chk ".prettierignore ships with the repo" $?
 grep -q '^adapters/' "$REPO/.prettierignore";        chk "  ...covering adapters/" $?
 grep -q '^capabilities/' "$REPO/.prettierignore";     chk "  ...covering capabilities/" $?
-grep -q '^internal/governance/' "$REPO/.prettierignore";      chk "  ...covering internal/governance/" $?
+grep -q '^governance/' "$REPO/.prettierignore";      chk "  ...covering governance/" $?
 grep -q '^schemas/' "$REPO/.prettierignore";         chk "  ...covering the yaml fences in schemas/" $?
 [ -f "$REPO/.vscode/settings.json" ];                chk "repo-level editor settings disable format-on-save" $?
 grep -q '"editor.formatOnSave": false' "$REPO/.vscode/settings.json"
@@ -2582,7 +2582,7 @@ chk "the destination was invoked exactly once — nothing was retried" $?
 
 # =====================================================================================
 t "handoff send: the shipped transport registry is evidence-gated"
-[ -f "$REPO/internal/governance/policies/handoff-transports.yaml" ]; chk "internal/governance/policies/handoff-transports.yaml exists" $?
+[ -f "$REPO/governance/policies/handoff-transports.yaml" ]; chk "governance/policies/handoff-transports.yaml exists" $?
 # Asserted through the repo's own manifest parser, not by grepping: the file explains in
 # prose what `verified: true` would mean, and a text search cannot tell that apart from a
 # transport actually being enabled.
@@ -2592,7 +2592,7 @@ repo = pathlib.Path(sys.argv[1])
 spec = importlib.util.spec_from_loader("_a", importlib.machinery.SourceFileLoader(
     "_a", str(repo / "cli" / "atlas-adapter")))
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-doc = mod.parse((repo / "internal" / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
+doc = mod.parse((repo / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
 transports = doc.get("transports") or {}
 bad = []
 codex = transports.get("codex") or {}
@@ -2614,11 +2614,11 @@ if bad:
     sys.exit(1)
 PYEOF
 chk "codex and claude-code are verified by owner-run evidence" $?
-grep -q 'read-only' "$REPO/internal/governance/policies/handoff-transports.yaml"
+grep -q 'read-only' "$REPO/governance/policies/handoff-transports.yaml"
 chk "  ...and the declared argv pin the client's read-only mode" $?
-grep -q 'stdin: packet' "$REPO/internal/governance/policies/handoff-transports.yaml"
+grep -q 'stdin: packet' "$REPO/governance/policies/handoff-transports.yaml"
 chk "  ...and take the packet on stdin, never in argv" $?
-grep -q 'documentation is not evidence' "$REPO/internal/governance/policies/handoff-transports.yaml"
+grep -q 'documentation is not evidence' "$REPO/governance/policies/handoff-transports.yaml"
 chk "  ...under the same evidence rule adapters/ uses" $?
 # A restriction flag has to actually restrict. `--allowed-tools ""` reads like a lockdown
 # and is not one: it is an ALLOW-list, so an empty value pre-approves nothing and removes
@@ -2630,7 +2630,7 @@ repo = pathlib.Path(sys.argv[1])
 spec = importlib.util.spec_from_loader("_a", importlib.machinery.SourceFileLoader(
     "_a", str(repo / "cli" / "atlas-adapter")))
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-doc = mod.parse((repo / "internal" / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
+doc = mod.parse((repo / "governance" / "policies" / "handoff-transports.yaml").read_text(), "transports")
 bad = []
 for name, entry in (doc.get("transports") or {}).items():
     argv = entry.get("argv") or []
@@ -2978,24 +2978,24 @@ chk "  ...and requires: [browser] still resolves to the capability" $?
 
 # =====================================================================================
 t "the governance move kept every policy reachable"
-[ -d "$REPO/internal/governance/policies" ];        chk "policies live under internal/governance/" $?
+[ -d "$REPO/governance/policies" ];        chk "policies live under governance/" $?
 [ ! -e "$REPO/policies" ];                 chk "  ...and the old policies/ root is gone" $?
 for f in git.yaml privacy-classification.yaml public-private-contract.yaml \
          workspace-privacy.yaml handoff-transports.yaml privacy-allowlist.txt; do
-  [ -f "$REPO/internal/governance/policies/$f" ] || { false; break; }
+  [ -f "$REPO/governance/policies/$f" ] || { false; break; }
 done
 chk "  ...with every policy file present" $?
-[ -f "$REPO/internal/governance/README.md" ];       chk "internal/governance/ has its own index" $?
-[ ! -d "$REPO/internal/governance/rules" ];         chk "no empty internal/governance/rules/ namespace was invented" $?
+[ -f "$REPO/governance/README.md" ];       chk "governance/ has its own index" $?
+[ ! -d "$REPO/governance/rules" ];         chk "no empty governance/rules/ namespace was invented" $?
 # The scanner's own allowlist has to be found at the new path, or the scan silently widens.
 "$CLI/atlas-privacy-scan" --quiet "$REPO" >/dev/null 2>&1
-chk "privacy-scan finds its allowlist under internal/governance/" $?
-grep -q 'internal/governance/policies/privacy-allowlist.txt' "$CLI/atlas-privacy-scan"
+chk "privacy-scan finds its allowlist under governance/" $?
+grep -q 'governance/policies/privacy-allowlist.txt' "$CLI/atlas-privacy-scan"
 chk "  ...by the new path, not the old one" $?
 # The three-layer model is retired; the policy file must not still describe it as live.
-grep -qi 'Public / Private / Runtime contract' "$REPO/internal/governance/policies/public-private-contract.yaml"
+grep -qi 'Public / Private / Runtime contract' "$REPO/governance/policies/public-private-contract.yaml"
 [ $? -ne 0 ];                              chk "the contract policy no longer claims three layers" $?
-grep -q 'legacy_runtime:' "$REPO/internal/governance/policies/public-private-contract.yaml"
+grep -q 'legacy_runtime:' "$REPO/governance/policies/public-private-contract.yaml"
 chk "  ...and records the retired runtime layer as history" $?
 
 # =====================================================================================

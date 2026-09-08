@@ -14,8 +14,8 @@ with tempfile.TemporaryDirectory() as tmp:
                               capture_output=True, text=True)
     assert run("structure", "plan").returncode == 0 and not root.exists()
     assert run("structure", "apply").returncode != 0 and not root.exists()
-    (root / "config").mkdir(parents=True)
-    owned = root / "config/owned.txt"
+    (root / "internal/config").mkdir(parents=True)
+    owned = root / "internal/config/owned.txt"
     owned.write_text("keep me")
     assert run("structure", "apply", "--approve").returncode == 0
     assert (root / "system/config/owned.txt").read_text() == "keep me"
@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert run("structure", "apply", "--approve").returncode != 0
     assert marker.read_text() == "{}"
     marker.write_bytes(before)
-    (root / "clients").rmdir()
+    (root / "system/clients").rmdir()
     assert run("root").returncode != 0
     assert run("structure", "apply", "--approve").returncode == 0
     assert run("root").returncode == 0
@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory() as tmp:
     before = profile.read_bytes()
     assert not (root / "runtime").exists()
     assert run("structure", "apply", "--approve").returncode == 0
-    assert (root / "config/profile.yaml").read_bytes() == before
+    assert (root / "system/config/profile.yaml").read_bytes() == before
     assert (root / "runtime").samefile(root / "internal/runtime")
     assert (root / "runtime/dispatch-inbox").is_dir()
     paths = subprocess.run([str(CLI.parent / "atlas-paths"), "check"], env=env,
@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp) / "conflict"
     env = dict(os.environ, ATLAS_HOME=str(root))
     (root / "internal/config").mkdir(parents=True)
-    (root / "config").mkdir()
+    (root / "system/config").mkdir(parents=True)
     assert run("structure", "apply", "--approve").returncode != 0
     assert not (root / ".atlas-workspace.json").exists()
 print("Structure adoption, init parity, idempotence, preservation, and refusal: PASS")

@@ -75,8 +75,8 @@ with tempfile.TemporaryDirectory() as tmp:
         chk(f"{root}/ (mixed) -> not eligible by default", cls == "mixed" and not eligible)
         chk(f"{root}/ (mixed) reason names the per-item requirement",
             "explicitly" in reason or "per-item" in reason)
-chk("projects/ and integration/ are grounded as private/mixed, not blanket-mixed/publishable",
-    priv.ROOTS["projects"]["class"] == "private" and priv.ROOTS["integration"]["class"] == "mixed")
+chk("projects/ and extensions/ are grounded as private/mixed, not blanket-mixed/publishable",
+    priv.ROOTS["projects"]["class"] == "private" and priv.ROOTS["extensions"]["class"] == "mixed")
 
 # =========================================================================================
 t("an unknown root defaults to deny")
@@ -98,10 +98,11 @@ chk("allowlist excludes every mixed root",
     not any(priv.ROOTS[r]["class"] == "mixed" for r in priv.PUBLICATION_ALLOWLIST))
 chk("allowlist is exactly the publishable-class roots, nothing more",
     set(priv.PUBLICATION_ALLOWLIST) == {r for r, i in priv.ROOTS.items() if i["class"] == "publishable"})
-chk("all fourteen frozen roots are classified, none missing",
-    set(priv.ROOTS) == {"core", "context", "personal", "projects", "adapters", "capabilities",
-                         "domains", "extensions", "governance", "contracts", "runtime",
-                         "integration", "docs", "tests"})
+chk("all frozen roots are classified, none missing (T-116: adapters/capabilities/contracts/"
+    "docs/integration/skills/tests removed as README-only tombstones; governance renamed "
+    "system)",
+    set(priv.ROOTS) == {"core", "context", "personal", "projects",
+                         "domains", "extensions", "system", "runtime"})
 
 # =========================================================================================
 t("path classification is independent of Git tracking/staging")
@@ -183,36 +184,39 @@ chk("with no ATLAS_HOME override, defaults to ~/atlas and classifies the real sk
     r.returncode == 0 and "publishable" in r.stdout)
 
 # =========================================================================================
-t("T-028: governance/ per-file promotion — publishable files become eligible")
+t("T-028/T-116: system/ per-file promotion — publishable files become eligible")
 with tempfile.TemporaryDirectory() as tmp:
     atlas = Path(tmp)
-    for rel, cls in priv.GOVERNANCE_FILE_CLASSES.items():
+    for rel, cls in priv.SYSTEM_FILE_CLASSES.items():
         cls_actual, eligible, reason = priv.publication_eligibility(
-            atlas / "governance" / rel, atlas)
+            atlas / "system" / rel, atlas)
         if cls == "publishable":
-            chk(f"governance/{rel} -> class=publishable, eligible",
+            chk(f"system/{rel} -> class=publishable, eligible",
                 cls_actual == "publishable" and eligible)
-            chk(f"governance/{rel} reason cites the T-028 promotion", "T-028" in reason)
+            chk(f"system/{rel} reason cites the T-028 promotion", "T-028" in reason)
         else:
-            chk(f"governance/{rel} -> class={cls}, not eligible",
+            chk(f"system/{rel} -> class={cls}, not eligible",
                 cls_actual == cls and not eligible)
 
 # =========================================================================================
-t("T-028: governance/ default-deny still holds for anything not explicitly promoted")
+t("T-028/T-116: system/ default-deny still holds for anything not explicitly promoted")
 with tempfile.TemporaryDirectory() as tmp:
     atlas = Path(tmp)
-    for rel in ("product/some-new-file-not-yet-classified.yaml",
-                "rules/some-new-private-file.md", "not-in-the-table.txt"):
-        cls, eligible, reason = priv.publication_eligibility(atlas / "governance" / rel, atlas)
-        chk(f"governance/{rel} (unlisted) -> class=mixed, not eligible",
+    # config/, clients/, permissions/, workflows/ are deliberately NOT in SYSTEM_FILE_CLASSES
+    # (see the table's own header comment) — every unlisted system/* path, whichever
+    # subdirectory it is under, stays private by the mixed root's own default.
+    for rel in ("rules/some-new-private-file.md", "not-in-the-table.txt",
+                "config/settings.yaml", "clients/whatever.yaml"):
+        cls, eligible, reason = priv.publication_eligibility(atlas / "system" / rel, atlas)
+        chk(f"system/{rel} (unlisted) -> class=mixed, not eligible",
             cls == "mixed" and not eligible)
 
 # =========================================================================================
-t("T-028: promotion is scoped to governance/ only — other mixed roots are untouched")
+t("T-028/T-116: promotion is scoped to system/ only — other mixed roots are untouched")
 with tempfile.TemporaryDirectory() as tmp:
     atlas = Path(tmp)
-    for root in ("adapters", "extensions", "integration"):
-        chk(f"{root}/ is still classified mixed (unaffected by the governance promotion table)",
+    for root in ("extensions",):
+        chk(f"{root}/ is still classified mixed (unaffected by the system promotion table)",
             priv.ROOTS[root]["class"] == "mixed")
         cls, eligible, reason = priv.publication_eligibility(
             atlas / root / "product" / "x.yaml", atlas)
@@ -220,17 +224,20 @@ with tempfile.TemporaryDirectory() as tmp:
             cls == "mixed" and not eligible)
 
 # =========================================================================================
-t("T-028: every real file under ~/atlas/governance/ has an explicit classification")
-real_governance = Path.home() / "atlas" / "governance"
-if real_governance.is_dir():
+t("T-028/T-116: every real file under ~/atlas/system/{rules,policies}/ is explicitly classified")
+# Scoped to rules/ and policies/ only — the T-028 promotion table's actual domain (per its
+# own header comment, config/clients/permissions/workflows stay unenumerated-private).
+real_system = Path.home() / "atlas" / "system"
+if real_system.is_dir():
     real_files = sorted(
-        str(p.relative_to(real_governance)) for p in real_governance.rglob("*") if p.is_file())
-    classified = set(priv.GOVERNANCE_FILE_CLASSES)
+        str(p.relative_to(real_system)) for sub in ("rules", "policies")
+        for p in (real_system / sub).rglob("*") if p.is_file())
+    classified = set(priv.SYSTEM_FILE_CLASSES)
     missing = [f for f in real_files if f not in classified]
-    chk(f"no unclassified file under the real governance/ tree (missing: {missing})",
+    chk(f"no unclassified file under the real system/{{rules,policies}}/ tree (missing: {missing})",
         not missing)
 else:
-    chk("~/atlas/governance/ not present on this machine — skipped (not a failure)", True)
+    chk("~/atlas/system/ not present on this machine — skipped (not a failure)", True)
 
 # =========================================================================================
 t("T-029: extensions/ per-file promotion — publishable files become eligible")
@@ -258,16 +265,15 @@ with tempfile.TemporaryDirectory() as tmp:
             cls == "mixed" and not eligible)
 
 # =========================================================================================
-t("T-029: extensions/ promotion does not affect governance/'s own table, or vice versa")
+t("T-029: extensions/ promotion does not affect system/'s own table, or vice versa")
 with tempfile.TemporaryDirectory() as tmp:
     atlas = Path(tmp)
     cls, eligible, reason = priv.publication_eligibility(
-        atlas / "governance" / "skills" / "README.md", atlas)
-    chk("governance/skills/README.md (not a real governance path) -> mixed, not eligible "
-        "(extensions' table does not leak into governance)", cls == "mixed" and not eligible)
-    for root in ("adapters", "integration"):
-        chk(f"{root}/ is still classified mixed (unaffected by the extensions promotion table)",
-            priv.ROOTS[root]["class"] == "mixed")
+        atlas / "system" / "skills" / "README.md", atlas)
+    chk("system/skills/README.md (not a real system path) -> mixed, not eligible "
+        "(extensions' table does not leak into system)", cls == "mixed" and not eligible)
+    chk("system/ is still classified mixed (unaffected by the extensions promotion table)",
+        priv.ROOTS["system"]["class"] == "mixed")
 
 # =========================================================================================
 t("T-029: every real file under ~/atlas/extensions/ has an explicit classification")

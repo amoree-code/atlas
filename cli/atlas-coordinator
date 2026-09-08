@@ -100,7 +100,7 @@ the routing policy resolves but this table does not cover is a **policy mismatch
 
 ## Routing policy
 
-`route` resolves an intent through `internal/governance/policies/coordinator-routing.yaml`
+`route` resolves an intent through `governance/policies/coordinator-routing.yaml`
 — structured data (`roles: {role: client}`, `intents: {intent: role}`), parsed with the same
 manifest parser `cli/atlas-handoff` already uses for the transport registry
 (`cli/atlas-adapter`'s `parse`). There is no ad-hoc string matching of intents or clients
@@ -108,7 +108,7 @@ anywhere in this file: an intent absent from the policy, or a role the policy na
 not define, is a refusal, never a guess.
 
 A client `route` resolves to is only ever as real as
-`internal/governance/policies/handoff-transports.yaml` says it is: `route` refuses any
+`governance/policies/handoff-transports.yaml` says it is: `route` refuses any
 client absent from that registry, and any transport recorded `verified: false`. Resolving a
 client is not authorizing it — the transport registry stays the one place a transport is
 declared safe to use, exactly as it is for `atlas handoff send`.
@@ -264,7 +264,7 @@ sys.path.insert(0, str(REPO / "cli"))
 # transport registry it works alongside. Overridable for tests, never synthesised.
 POLICY = Path(os.environ.get(
     "ATLAS_COORDINATOR_POLICY",
-    REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml"))
+    REPO / "governance" / "policies" / "coordinator-routing.yaml"))
 
 # prepare-only: the closed intent -> gate table described in the module docstring. Not
 # policy data — `coordinator-routing.yaml` is protected and carries no gate field — just the

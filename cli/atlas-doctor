@@ -9,7 +9,7 @@
 #   atlas-doctor            full check
 #   atlas-doctor --quiet    findings only
 #
-# Exit: number of problems (0 = clean). See internal/governance/policies/public-private-contract.yaml.
+# Exit: number of problems (0 = clean). See governance/policies/public-private-contract.yaml.
 
 set -uo pipefail
 

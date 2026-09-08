@@ -6,7 +6,7 @@ bounded handoff, and T-051-S4 structured result / verifier gate.
 Every scenario runs against a disposable ATLAS_HOME, plus a disposable adapter registry and a
 disposable transport registry (via ATLAS_ADAPTERS / ATLAS_HANDOFF_TRANSPORTS), exactly like
 `test-mission-result.py`'s own fixture pattern. Nothing here reads or writes the real
-`adapters/`, the real `internal/governance/policies/handoff-transports.yaml`, any real T-050
+`adapters/`, the real `governance/policies/handoff-transports.yaml`, any real T-050
 record, or any real mission record.
 
 This file proves the S5 scope only: `mission continue` creates at most one next bounded
@@ -609,8 +609,8 @@ PROTECTED = [
     CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
     CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
     CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
-    REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml",
-    REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml",
+    REPO / "governance" / "policies" / "handoff-transports.yaml",
+    REPO / "governance" / "policies" / "coordinator-routing.yaml",
 ]
 for p in PROTECTED:
     chk(f"protected file exists and was not deleted: {p.name}", p.is_file())

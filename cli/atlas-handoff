@@ -45,7 +45,7 @@ the whole of what exists.
     scope recorded by `approve` — a mismatch on any one of them is a refusal;
   - it never writes an approval, and nothing in it can create one;
   - the transport is not invented here. It is declared in
-    `internal/governance/policies/handoff-transports.yaml`, must be marked `verified: true`, must pin the
+    `governance/policies/handoff-transports.yaml`, must be marked `verified: true`, must pin the
     client's own read-only mode, and takes the packet on stdin — never in argv;
   - the call is a single foreground subprocess with a timeout. No shell, no retry, no
     polling, no backoff, no background, no daemon, no MCP and no connector;
@@ -112,7 +112,7 @@ ADAPTERS = Path(os.environ.get("ATLAS_ADAPTERS", REPO / "adapters"))
 # Declared transports, exactly as adapters/ and capabilities/ are declared: a registry
 # file in the public repo, overridable for tests, never synthesised at runtime.
 TRANSPORTS = Path(os.environ.get("ATLAS_HANDOFF_TRANSPORTS",
-                                 REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml"))
+                                 REPO / "governance" / "policies" / "handoff-transports.yaml"))
 
 # The canonical written form. Read for reference by a human, never parsed by this file —
 # the packet below mirrors its sections, and the private copy is where the full rules live.
@@ -535,7 +535,7 @@ The text between the markers is what a destination client is handed **if the own
 this handoff**. `prepare` does not copy, open, transmit or hand it to anything: only
 `atlas handoff send` does, only after `atlas handoff approve` has recorded the owner's own
 words for this exact id, gate, destination and scope, and only over a transport declared
-`verified` in `internal/governance/policies/handoff-transports.yaml`.
+`verified` in `governance/policies/handoff-transports.yaml`.
 
 <!-- packet:begin -->
 ### Handoff {handoff_id} — {task_id}
@@ -828,7 +828,7 @@ approval:          {_approval_ref(meta)}
 payload_sha256:    {digest}
 payload_bytes:     {len(packet.encode())}
 unblocks_when:     the owner runs that client's one-shot mode by hand against a real
-                   packet, then sets verified: true in internal/governance/policies/handoff-transports.yaml
+                   packet, then sets verified: true in governance/policies/handoff-transports.yaml
 ```
 
 Nothing was sent. Nothing was copied, printed to another process, spawned, queued or put on

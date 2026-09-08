@@ -93,15 +93,15 @@ _atlas_atlas_rel() {  # <root> -> its Atlas-relative path, or empty if not cut o
     professional) echo "personal/professional" ;;
     inbox)        echo "personal/inbox" ;;
     projects)     echo "projects" ;;
-    rules)        echo "governance/rules" ;;
-    policies)     echo "governance/policies" ;;
+    rules)        echo "system/rules" ;;
+    policies)     echo "system/policies" ;;
     runtime)      echo "runtime" ;;
-    config)       echo "config" ;;
+    config)       echo "system/config" ;;
     skills)       echo "skills" ;;
     agents)       echo "agents" ;;
     helpers)      echo "helpers" ;;
     schemas)      echo "schemas" ;;
-    sessions)     echo "sessions" ;;
+    sessions)     echo "runtime/sessions" ;;
     *) return 1 ;;
   esac
 }

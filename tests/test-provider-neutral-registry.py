@@ -10,7 +10,7 @@ def block(text, marker):
     return text[start:]
 
 
-transports = (ROOT / "engine/internal/governance/policies/handoff-transports.yaml").read_text()
+transports = (ROOT / "engine/governance/policies/handoff-transports.yaml").read_text()
 gemini_transport = block(transports, "gemini-cli-mission-pilot:")
 assert "adapter: gemini" in gemini_transport
 assert "verified: false" in gemini_transport

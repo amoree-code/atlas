@@ -133,6 +133,13 @@ for name in DOMAIN_FILES:
 # ai-memory-mounts, ai-atlas-resume, ai-atlas-turn-checkpoint) against engine/, never
 # root. Moved (not deleted) to
 # `projects/atlas/tickets/T-105/removed-duplicates-backup/{adapters,capabilities}/`.
+#
+# T-105 left the gutted root directories in place (README-only tombstones) as a landing
+# pad. T-116's owner-approved cruft sweep removed those tombstones outright (the README
+# text was pure narrative already captured here and in the T-105 backup, and a full
+# pre-T-116 tar snapshot exists under runtime/backups/ regardless) — the seven root dirs
+# these tombstones lived in (adapters, capabilities, contracts, docs, integration, skills,
+# tests) no longer exist at all, not merely emptied.
 t("adapters/, capabilities/: proven-stale duplicates are gone; engine is canonical")
 REMOVED_ROOTS = {
     "adapters": ("claude-code/ai-guard-push", "claude-code/ai-memory-mounts",
@@ -142,8 +149,8 @@ REMOVED_ROOTS = {
                      "browser/capability.yaml", "README.md"),
 }
 for root_name, files in REMOVED_ROOTS.items():
-    chk(f"{root_name}/ is empty at the root (contents moved, not deleted)",
-        list((ATLAS / root_name).iterdir()) == [(ATLAS / root_name / "README.md")])
+    chk(f"{root_name}/ no longer exists at the root (T-116 removed the gutted tombstone)",
+        not (ATLAS / root_name).exists())
     for rel in files:
         chk(f"{root_name}/{rel}: preserved in the T-105 backup",
             (BACKUP_ROOT / root_name / rel).is_file())
@@ -185,15 +192,14 @@ for name in ("adapter.schema.md", "capability.schema.md", "domain.schema.md", "r
     chk(f"{name}: preserved in the T-105 backup", (BACKUP_ROOT / "contracts" / name).is_file())
     chk(f"{name}: canonical at engine/schemas/", (REPO / "schemas" / name).is_file())
 
-t("integration/README.md's one real reference was repointed before removal")
-integration_readme = ATLAS / "integration" / "README.md"
-chk("integration/README.md exists", integration_readme.is_file())
-if integration_readme.is_file():
-    text = integration_readme.read_text(errors="replace")
-    chk("no longer references the removed root contracts/integration.schema.md",
-        "`contracts/integration.schema.md`" not in text)
-    chk("now references engine/contracts/integration.schema.md instead",
-        "engine/contracts/integration.schema.md" in text)
+t("integration/README.md: repointed by T-105, then removed outright by T-116")
+# T-105 repointed this file's one real reference away from the removed root
+# contracts/integration.schema.md, to engine/contracts/integration.schema.md, and kept
+# the (now-accurate) README as a tombstone. T-116's cruft sweep then deleted the whole
+# integration/ root — never moved to the T-105 backup (it wasn't part of that ticket's
+# scope), but captured in T-116's own pre-migration tar under runtime/backups/.
+chk("integration/ no longer exists at the root (T-116 removed the gutted tombstone)",
+    not (ATLAS / "integration").exists())
 
 # --- 5. templates/agent-handoff.md: engine copy must carry no private data --------------
 # T-105 owner ruling: "Templates must never contain private user data or credentials."
@@ -232,7 +238,7 @@ if engine_handoff_template.is_file() and root_handoff_template.is_file():
 
 # --- 6. governance: engine-side home confirmed present, reconciliation deferred --------
 # T-105 Phase 1 wrongly reported "zero engine presence" for governance/product/**; it
-# missed engine/internal/governance/policies/, which already exists, is documented as the
+# missed engine/governance/policies/, which already exists, is documented as the
 # canonical engine-side home for this material, and is read at runtime by
 # `atlas-handoff` for handoff-transports.yaml. Corrected here. The two copies' remaining
 # content divergence is NOT reconciled by this ticket: it is overwhelmingly the
@@ -247,9 +253,9 @@ GOVERNANCE_KNOWN_DIVERGED_DEFERRED_TO_T108 = (
 )
 for name in GOVERNANCE_KNOWN_DIVERGED_DEFERRED_TO_T108:
     root_f = ATLAS / "governance" / "product" / name
-    engine_f = REPO / "internal" / "governance" / "policies" / name
+    engine_f = REPO / "governance" / "policies" / name
     chk(f"governance/product/{name}: private duplicate is absent", not root_f.exists())
-    chk(f"internal/governance/policies/{name}: still present", engine_f.is_file())
+    chk(f"governance/policies/{name}: still present", engine_f.is_file())
 
 # handoff-transports.yaml is excluded from the presence-only list above because it is the
 # one file in this pair that IS read at runtime (by atlas-handoff, engine-side only) and
@@ -260,10 +266,10 @@ for name in GOVERNANCE_KNOWN_DIVERGED_DEFERRED_TO_T108:
 # purpose. Mission/coordinator behavior is unchanged — this is a test-only relocation.
 t("governance: root handoff-transports.yaml mirror does not carry the pilot-only entries")
 root_transports = ATLAS / "governance" / "product" / "handoff-transports.yaml"
-engine_transports = REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml"
+engine_transports = REPO / "governance" / "policies" / "handoff-transports.yaml"
 chk("governance/product/handoff-transports.yaml private duplicate is absent",
     not root_transports.exists())
-chk("internal/governance/policies/handoff-transports.yaml still exists",
+chk("governance/policies/handoff-transports.yaml still exists",
     engine_transports.is_file())
 chk("engine handoff-transports.yaml retains the pilot-only entries",
     "claude-code-mission-pilot" in engine_transports.read_text() and

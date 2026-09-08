@@ -753,7 +753,7 @@ def mission_view(task_dir, mission_id):
 #
 # `mission route` and `mission validate` are both entirely read-only: they load the existing
 # mission contract, resolve its declared planner/executor/verifier client against the two
-# existing registries (`adapters/*/adapter.yaml`, `internal/governance/policies/
+# existing registries (`adapters/*/adapter.yaml`, `governance/policies/
 # handoff-transports.yaml`), and report what would be used — never invoking a client,
 # acquiring a lease or claim, preparing a handoff, or writing anything. No new registry is
 # introduced; both existing ones are read with the same manifest parser and the same

@@ -32,7 +32,7 @@ def main():
 
     # T-057: "CLI channel works for Claude and a second provider" — codex is a real,
     # already owner-verified transport (unlike gemini, which has no real tool-restriction
-    # flag today; see internal/governance/policies/handoff-transports.yaml). Proving the
+    # flag today; see governance/policies/handoff-transports.yaml). Proving the
     # channel itself is provider-neutral doesn't require gemini specifically. codex holds
     # the planner/verifier roles (see handoff-transports.yaml's roles: map), not executor,
     # so this overrides --role accordingly.

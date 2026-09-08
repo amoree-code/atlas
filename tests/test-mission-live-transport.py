@@ -5,7 +5,7 @@ against it.
 
 ## What is real here, and what is not
 
-Sections 1-3 below inspect the REAL `internal/governance/policies/handoff-transports.yaml`
+Sections 1-3 below inspect the REAL `governance/policies/handoff-transports.yaml`
 (no override) to prove: `claude-code-tools-pilot` is untouched, byte-for-byte, from before
 this slice; the new `claude-code-mission-pilot` entry exists, is declared `verified: false`,
 and its argv shape matches exactly what this record documents. These sections read the real
@@ -59,7 +59,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 CLI = REPO / "cli"
 CORE_CLI = REPO.parent / "core" / "cli"
-REAL_TRANSPORTS_PATH = REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml"
+REAL_TRANSPORTS_PATH = REPO / "governance" / "policies" / "handoff-transports.yaml"
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -110,7 +110,7 @@ def uniq_key(prefix):
 
 # =============================================================================================
 # SECTIONS 1-3: inspect the REAL registry file directly. No ATLAS_HANDOFF_TRANSPORTS
-# override yet — these read internal/governance/policies/handoff-transports.yaml exactly as
+# override yet — these read governance/policies/handoff-transports.yaml exactly as
 # atlas-handoff would by default.
 # =============================================================================================
 for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
@@ -443,7 +443,7 @@ def new_pilot_fixture():
         "    evidence: >\n"
         "      Disposable fixture mirror, verified: true ONLY inside this test's own\n"
         "      disposable registry, so the pipeline's mission_route gate can be exercised.\n"
-        "      The REAL registry entry (internal/governance/policies/handoff-transports.yaml)\n"
+        "      The REAL registry entry (governance/policies/handoff-transports.yaml)\n"
         "      remains verified: false and is never written by this file.\n")
 
     os.environ["ATLAS_HOME"] = str(tmp)
@@ -803,7 +803,7 @@ PROTECTED = [
     CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
     CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
     CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
-    REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml",
+    REPO / "governance" / "policies" / "coordinator-routing.yaml",
 ]
 for p in PROTECTED:
     chk(f"protected file exists and was not deleted: {p.name}", p.is_file())

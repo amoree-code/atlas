@@ -41,8 +41,8 @@ with tempfile.TemporaryDirectory() as tmp:
     check("Atlas root is selected without legacy fallback",
           run(str(CLI / "atlas"), "root", env={"ATLAS_HOME": str(atlas)}).returncode == 0)
 
-check("engine owns reusable governance policy", 
-      (ROOT / "internal" / "governance" / "policies" / "atlas-path-classification.yaml").is_file())
+check("engine owns reusable governance policy",
+      (ROOT / "governance" / "policies" / "atlas-path-classification.yaml").is_file())
 check("private product governance is not duplicated", 
       not (ROOT.parent / "governance" / "product").exists())
 check("backup safety root exists", (ROOT.parent / "runtime" / "backups").is_dir())

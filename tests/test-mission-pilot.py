@@ -12,12 +12,12 @@ sessions, and distinct invocation ids — exactly as the S7 pilot rules require.
 here (adapter manifests, transport registry) is disposable, pointed at via
 ATLAS_ADAPTERS / ATLAS_HANDOFF_TRANSPORTS / ATLAS_HOME overrides, exactly like every prior
 T-051 mission test file. Nothing here reads or writes the real `adapters/`, the real
-`internal/governance/policies/handoff-transports.yaml`, T-050, T-051, AIOS-011, AIOS-012,
+`governance/policies/handoff-transports.yaml`, T-050, T-051, AIOS-011, AIOS-012,
 AIOS-017, or any production ticket.
 
 **The one thing this file does NOT do is invoke a live Claude CLI process**, and it says so
 explicitly (test 1). The only currently-registered bounded Claude Code CLI transport
-(`claude-code-tools-pilot` in the real `internal/governance/policies/handoff-transports.yaml`)
+(`claude-code-tools-pilot` in the real `governance/policies/handoff-transports.yaml`)
 has its `--add-dir` hard-coded to the real `projects/atlas/tickets/AIOS-012` directory — a
 production ticket this pilot is explicitly forbidden from touching. Editing that transport
 file to point at a disposable fixture directory is forbidden (it is a protected file for this
@@ -627,8 +627,8 @@ PROTECTED = [
     CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
     CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
     CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
-    REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml",
-    REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml",
+    REPO / "governance" / "policies" / "handoff-transports.yaml",
+    REPO / "governance" / "policies" / "coordinator-routing.yaml",
 ]
 for p in PROTECTED:
     chk(f"protected file exists and was not deleted: {p.name}", p.is_file())

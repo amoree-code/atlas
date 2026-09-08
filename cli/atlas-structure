@@ -7,20 +7,21 @@ import sys
 from pathlib import Path
 
 ROOTS = ("personal/profile", "personal/memory", "personal/knowledge", "personal/daily",
-         "personal/inbox", "projects", "sessions", "clients", "runtime/dispatch-inbox",
-         "runtime/backups", "governance/rules", "governance/policies", "config")
+         "personal/inbox", "projects", "runtime/sessions", "system/clients",
+         "runtime/dispatch-inbox", "runtime/backups", "system/rules", "system/policies",
+         "system/config")
 MARKER = ".atlas-workspace.json"
-COMPAT = {"config": "internal/config", "runtime": "internal/runtime",
-          "sessions": "internal/sessions", "governance/rules": "internal/governance/rules",
-          "governance/policies": "internal/governance/policies"}
+COMPAT = {"system/config": "internal/config", "runtime": "internal/runtime",
+          "runtime/sessions": "internal/sessions", "system/rules": "internal/governance/rules",
+          "system/policies": "internal/governance/policies"}
 
 
 def document():
     return {"schema": 1, "product": "Atlas", "roots": list(ROOTS),
-            "config": "config", "config_view": "system/config",
+            "config": "system/config",
             "ticket_authority": "projects/<project>/tickets/<id>/task.md",
             "archive": "projects/<project>/tickets/archive/<namespace>/<id>",
-            "profile_sources": ["config/profile.yaml", "config/identity.md",
+            "profile_sources": ["system/config/profile.yaml", "system/config/identity.md",
                                 "personal/professional"],
             "client_homes": "adapter-managed", "backup_pruning": "disabled"}
 
@@ -42,12 +43,6 @@ def problems(root, require_marker=True):
             errors.append(f"expected directory: {rel}")
         elif require_marker and not path.is_dir():
             errors.append(f"missing directory: {rel}")
-    view = root / "system/config"
-    if view.exists() or view.is_symlink():
-        if view.resolve() != (root / "config").resolve():
-            errors.append("system/config conflicts with the authoritative config store")
-    elif require_marker:
-        errors.append("missing system/config view")
     marker = root / MARKER
     if marker.is_symlink():
         errors.append("workspace marker must not be a symlink")
@@ -87,12 +82,16 @@ def main():
             current, old = root / canonical, root / previous
             if old.is_dir() and not current.exists():
                 current.parent.mkdir(parents=True, exist_ok=True)
-                current.symlink_to(os.path.relpath(old, current.parent), target_is_directory=True)
+                # current.parent may itself be a compat symlink created by an earlier
+                # entry in this same loop (e.g. "runtime" -> internal/runtime, before
+                # "runtime/sessions" -> internal/sessions is processed) — in that case the
+                # symlink for `current` is physically written inside the RESOLVED parent,
+                # so the relative target must be computed against that resolved location,
+                # never the nominal one, or it silently resolves to the wrong directory.
+                current.symlink_to(os.path.relpath(old, current.parent.resolve()),
+                                    target_is_directory=True)
         for rel in (*ROOTS, "system"):
             (root / rel).mkdir(parents=True, exist_ok=True)
-        view = root / "system/config"
-        if not view.is_symlink():
-            view.symlink_to("../config", target_is_directory=True)
         marker = root / MARKER
         if not marker.exists():
             with marker.open("x") as stream:

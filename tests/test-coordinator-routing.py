@@ -486,7 +486,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     }
     handoff_transports_path = Path(os.environ.get(
         "ATLAS_HANDOFF_TRANSPORTS",
-        REPO / "internal" / "governance" / "policies" / "handoff-transports.yaml"))
+        REPO / "governance" / "policies" / "handoff-transports.yaml"))
     protected_before["handoff-transports.yaml"] = handoff_transports_path.read_text()
 
     t("prepare: a successful call creates exactly one valid V6 handoff record")
@@ -1130,13 +1130,13 @@ def real_ticket_env():
     make_ticket_home(root)
     env = dict(os.environ)
     env["ATLAS_HOME"] = str(root)
-    # engine/internal/governance/policies/handoff-transports.yaml is product code (lives
+    # engine/governance/policies/handoff-transports.yaml is product code (lives
     # in the repo, not the private workspace) — core/ is a separate, still-partial
     # skeleton tree (AIOS-020) with no internal/ directory of its own yet, so its own
     # copy of atlas-handoff would otherwise fall back to a path that doesn't exist there.
     # Point both processes at the SAME current registry so this section proves route
     # decisions agree, not tree completeness of an admittedly unfinished skeleton.
-    env["ATLAS_HANDOFF_TRANSPORTS"] = str(REPO / "internal" / "governance" / "policies" /
+    env["ATLAS_HANDOFF_TRANSPORTS"] = str(REPO / "governance" / "policies" /
                                           "handoff-transports.yaml")
     return env
 

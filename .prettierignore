@@ -31,7 +31,7 @@ plugins/
 domains/
 
 # Governance policies — read by the same parser and by line-oriented shell.
-internal/governance/
+governance/
 # Compatibility window: the pre-move policy root, still ignored if one exists.
 policies/
 
