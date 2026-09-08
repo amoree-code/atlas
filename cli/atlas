@@ -81,56 +81,24 @@ case "$cmd" in
     ;;
 esac
 case "$cmd" in
-  context|observe|usage|lifecycle)
-    # Fresh installations have engine commands, but no historical workspace copies.
-    if [ ! -e "$ATLAS_HOME/context/atlas-$cmd" ] && [ ! -L "$ATLAS_HOME/context/atlas-$cmd" ]; then
-      exec "$SELF_DIR/atlas-$cmd" "$@"
-    fi
-    ;;
-esac
-case "$cmd" in
   structure) exec python3 "$SELF_DIR/atlas-structure" "$@" ;;
   root)
     root_path="${ATLAS_HOME:-$HOME/atlas}"
     [ -d "$root_path" ] || { echo "atlas root: canonical root is missing: $root_path" >&2; exit 4; }
     (cd "$root_path" && pwd -P)
     ;;
-  # T-015: observe's canonical implementation and write destination are now Atlas-owned
-  # (~/atlas/context/atlas-observe -> ~/atlas/runtime/observations/). This line is a thin
-  # compatibility handoff; atlas-observe under cli/ is historical only, no longer invoked.
-  # No other command's dispatch changed.
-  observe) exec "${ATLAS_HOME:-$HOME/atlas}/context/atlas-observe" "$@" ;;
-  # T-016: context's canonical implementation is now Atlas-owned
-  # (${ATLAS_HOME:-~/atlas}/context/atlas-context); durable data authority
-  # (projects/personal/governance) is unchanged — this implementation still resolves
-  # those through the same legacy sources atlas-context always has. cli/atlas-context is
-  # historical only, no longer invoked. usage and lifecycle are untouched and remain
-  # legacy canonical.
-  context) exec "${ATLAS_HOME:-$HOME/atlas}/context/atlas-context" "$@" ;;
-  # T-017: usage's canonical implementation is now Atlas-owned
-  # (${ATLAS_HOME:-~/atlas}/context/atlas-usage). It reads client transcripts and, via
-  # --baseline, caller-provided files, exactly as before — no telemetry writer was added
-  # and no data authority changed. cli/atlas-usage is historical only, no longer invoked.
-  # lifecycle remains untouched and legacy canonical; usage's import of atlas_lifecycle.py
-  # is a pure-function library (no filesystem/subprocess), not the dispatched lifecycle
-  # command, so this does not cut lifecycle over.
-  usage) exec "${ATLAS_HOME:-$HOME/atlas}/context/atlas-usage" "$@" ;;
-  # T-018: lifecycle's canonical implementation is now Atlas-owned
-  # (${ATLAS_HOME:-~/atlas}/context/atlas-lifecycle). Its sibling() loader resolves
-  # "atlas-context"/"atlas-usage" relative to its own file location, so running from
-  # context/ makes it load the Atlas atlas-context/atlas-usage (already canonical since
-  # T-016/T-017) with no legacy fallback possible — verified by direct execution, not
-  # inferred. All four context mechanisms are now Atlas canonical; durable/runtime data
-  # authority (tickets, projects, transcripts) is unchanged. cli/atlas-lifecycle is
-  # historical only, no longer invoked.
-  lifecycle) exec "${ATLAS_HOME:-$HOME/atlas}/context/atlas-lifecycle" "$@" ;;
   project) exec "$SELF_DIR/atlas-paths" project "$@" ;;
   channel) exec "$SELF_DIR/atlas-channel" "$@" ;;
   capability-route) exec "$SELF_DIR/atlas-capability-route" "$@" ;;
   knowledge-index) exec "$SELF_DIR/atlas-knowledge-index" "$@" ;;
   docs) exec "$SELF_DIR/atlas-docs" "$@" ;;
   activity) exec "$SELF_DIR/atlas-activity" "$@" ;;
-  init|onboard|doctor|status|workspace|privacy-scan|adapter|integration|migrate|setup|update|capability|domain|run|agentic|render|memory|handoff|coordinator|mission|tickets|policy) exec "$SELF_DIR/atlas-$cmd" "$@" ;;
+  # T-015/016/017/018 cut context/observe/usage/lifecycle over to a workspace-owned copy
+  # under ${ATLAS_HOME}/context/, kept in step with this repo's copy by hand until parity
+  # was proven (test-context-parity.py, T-105). T-118 retired that copy and the parity
+  # mechanism once the proof held: engine/cli/ is the sole implementation of all four now,
+  # dispatched exactly like every other command below.
+  init|onboard|doctor|status|workspace|privacy-scan|adapter|integration|migrate|setup|update|capability|domain|run|agentic|render|memory|handoff|coordinator|mission|tickets|policy|context|observe|usage|lifecycle) exec "$SELF_DIR/atlas-$cmd" "$@" ;;
   # Compatibility alias, kept for one version. `capability` is the current name.
   plugin) exec "$SELF_DIR/atlas-plugin" "$@" ;;
   version|--version|-V) echo "$VERSION" ;;

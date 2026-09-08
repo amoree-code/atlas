@@ -108,7 +108,7 @@ sys.path.insert(0, str(REPO / "cli"))
 # first, then at a record still sitting in the old one, then follows the pointer the archive
 # layer leaves behind — and reports rather than guesses when an id is claimed twice.
 RESOLVER = REPO / "cli" / "atlas-paths"
-ADAPTERS = Path(os.environ.get("ATLAS_ADAPTERS", REPO / "adapters"))
+ADAPTERS = Path(os.environ.get("ATLAS_ADAPTERS", REPO / "agentic" / "integrations" / "adapters"))
 # Declared transports, exactly as adapters/ and capabilities/ are declared: a registry
 # file in the public repo, overridable for tests, never synthesised at runtime.
 TRANSPORTS = Path(os.environ.get("ATLAS_HANDOFF_TRANSPORTS",

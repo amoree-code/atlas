@@ -32,7 +32,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 # Overridable so the test suite can point at fixtures instead of the real registry.
-ADAPTERS = Path(os.environ.get("ATLAS_ADAPTERS", REPO / "adapters"))
+ADAPTERS = Path(os.environ.get("ATLAS_ADAPTERS", REPO / "agentic" / "integrations" / "adapters"))
 ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", Path.home() / "atlas")))
 # AIOS-016: the one-project Atlas root, same default every T-016+ cutover tool uses
 # (`${ATLAS_HOME:-$HOME/atlas}` in cli/atlas; `Path(os.environ.get("ATLAS_HOME", ...))`

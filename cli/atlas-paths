@@ -48,10 +48,10 @@ _atlas_pair() {  # <root> -> "<new-rel> <old-rel>"
     knowledge) echo "personal/knowledge              user/05-knowledge" ;;
     projects)  echo "projects                        user/04-projects" ;;
     tickets)   echo "projects/*/tickets              tasks" ;;
-    rules)     echo "internal/governance/rules       system/rules" ;;
+    rules)     echo "system/governance/rules    system/rules" ;;
     runtime)   echo "internal/runtime                runtime" ;;
     config)    echo "internal/config                 system/config" ;;
-    policies)  echo "internal/governance/policies    system/policies" ;;
+    policies)  echo "system/governance/policies system/policies" ;;
     daily)     echo "personal/daily                  user/01-daily" ;;
     templates) echo "personal/templates              user/06-templates" ;;
     skills)    echo "internal/extensions/skills      skills" ;;
@@ -93,8 +93,8 @@ _atlas_atlas_rel() {  # <root> -> its Atlas-relative path, or empty if not cut o
     professional) echo "personal/professional" ;;
     inbox)        echo "personal/inbox" ;;
     projects)     echo "projects" ;;
-    rules)        echo "system/rules" ;;
-    policies)     echo "system/policies" ;;
+    rules)        echo "system/governance/rules" ;;
+    policies)     echo "system/governance/policies" ;;
     runtime)      echo "runtime" ;;
     config)       echo "system/config" ;;
     skills)       echo "skills" ;;

@@ -93,7 +93,7 @@ exec(compile((REPO / "cli" / "atlas-adapter").read_text().split("if __name__")[0
              "atlas-adapter", "exec"), _pl)
 parse_manifest, validate_manifest = _pl["parse"], _pl["validate"]
 TOKEN = re.compile(r"\{\{\s*(profile|client)\.([a-z0-9_.]+)\s*\}\}", re.I)
-SKILLS = REPO / "skills"          # canonical skill bodies live in the public repo
+SKILLS = REPO / "extensions" / "skills"  # canonical skill bodies live in the public repo
 
 
 def _dig(d, dotted):
@@ -128,7 +128,7 @@ def load_registry():
     registry and are keyed on those names.
     """
     writable, project_only = {}, []
-    for d in sorted((REPO / "adapters").iterdir()):
+    for d in sorted((REPO / "agentic" / "integrations" / "adapters").iterdir()):
         f = d / "adapter.yaml"
         if not f.exists():
             continue

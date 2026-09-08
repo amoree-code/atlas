@@ -7,13 +7,14 @@ import sys
 from pathlib import Path
 
 ROOTS = ("personal/profile", "personal/memory", "personal/knowledge", "personal/daily",
-         "personal/inbox", "projects", "runtime/sessions", "system/clients",
-         "runtime/dispatch-inbox", "runtime/backups", "system/rules", "system/policies",
-         "system/config")
+         "personal/inbox", "projects", "runtime/sessions", "system/agentic/clients",
+         "runtime/dispatch-inbox", "runtime/backups", "system/governance/rules",
+         "system/governance/policies", "system/config")
 MARKER = ".atlas-workspace.json"
 COMPAT = {"system/config": "internal/config", "runtime": "internal/runtime",
-          "runtime/sessions": "internal/sessions", "system/rules": "internal/governance/rules",
-          "system/policies": "internal/governance/policies"}
+          "runtime/sessions": "internal/sessions",
+          "system/governance/rules": "internal/governance/rules",
+          "system/governance/policies": "internal/governance/policies"}
 
 
 def document():
