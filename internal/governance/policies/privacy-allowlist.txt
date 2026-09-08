@@ -20,3 +20,9 @@ users.noreply.github.com
 internal/governance/policies/privacy-classification.yaml
 internal/governance/policies/privacy-allowlist.txt
 cli/ai-os-privacy-scan
+
+# These tests deliberately feed credential-shaped fixtures (fake AWS key id, fake
+# Anthropic key) into the mission/coordinator "refuse credential-shaped input" checks —
+# the fixture matching the same pattern the scanner looks for is the point of the test.
+tests/test-coordinator-conflict-protection.py
+tests/test-mission-contract.py

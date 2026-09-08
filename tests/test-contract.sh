@@ -310,7 +310,7 @@ chk "a credential on the copyright line is still a finding" $?
 grep -q 'COPYRIGHT_LINE = re.compile' "$CLI/ai-os-privacy-scan"
 chk "licence attribution is a pattern in the scanner, not a literal name" $?
 n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/internal/governance/policies/privacy-allowlist.txt")
-[ "$n" -eq 12 ]
+[ "$n" -eq 14 ]
 chk "the allowlist gained no entry — every one is a hole in the scan ($n)" $?
 grep -q "^exceptions:" "$REPO/internal/governance/policies/privacy-classification.yaml"
 chk "both exemptions are documented as policy" $?
@@ -332,7 +332,7 @@ t "adapter contract: the real registry"
 out=$("$CLI/ai-os-adapter" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "all shipped manifests valid" $?
 n=$(echo "$out" | grep -c '^  ok ')
-[ "$n" -eq 5 ];                                      chk "5 manifests present and parsed" $?
+[ "$n" -eq 9 ];                                      chk "9 manifests present and parsed" $?
 echo "$out" | grep -q "consumer not verified";       chk "unverified consumers are flagged, not hidden" $?
 "$CLI/ai-os-adapter" list 2>&1 | grep -q "cursor.*nothing"
 chk "an adapter that writes nothing is valid" $?
@@ -554,8 +554,12 @@ EXPECTED = {
 }
 # gemini's manifest declares writes: [] (consumer_verified: false — path confirmed,
 # consumption not observed), so load_registry() correctly places it in project_only
-# alongside cursor/opencode rather than in the writable table above.
-EXPECTED_PROJECT_ONLY = ["cursor", "gemini", "opencode"]
+# alongside cursor/opencode rather than in the writable table above. The mission-pilot
+# adapters (claude-code-mission-pilot, claude-code-tools-pilot, gemini-cli-mission-pilot)
+# and the disposable atlas-fixture registry fixture are unverified/writes-nothing too.
+EXPECTED_PROJECT_ONLY = ["atlas-fixture", "claude-code-mission-pilot",
+                         "claude-code-tools-pilot", "cursor", "gemini",
+                         "gemini-cli-mission-pilot", "opencode"]
 m = {"__name__": "notmain",
      "__file__": str(Path(os.environ["CLI"], "ai-sync"))}
 exec(compile(Path(os.environ["CLI"], "ai-sync").read_text(), "ai-sync", "exec"), m)
@@ -656,7 +660,7 @@ n=$(grep -c '^[[:space:]]*[{[]' "$FMT"/adapters/*/adapter.yaml | awk -F: '{s+=$2
 
 out=$(AI_OS_ADAPTERS="$FMT/adapters" "$CLI/ai-os-adapter" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "reflowed adapter manifests still validate" $?
-[ "$(echo "$out" | grep -c '^  ok ')" -eq 5 ];       chk "  ...all 5, none unreadable" $?
+[ "$(echo "$out" | grep -c '^  ok ')" -eq 9 ];       chk "  ...all 9, none unreadable" $?
 echo "$out" | grep -qi "flow collection"; [ $? -ne 0 ]
 chk "  ...and no flow-collection complaint" $?
 
@@ -2301,13 +2305,15 @@ grep -Eq '^[[:space:]]*(import|from)[[:space:]]+[A-Za-z0-9_, ]*\b(socket|http|ur
 [ $? -ne 0 ];                              chk "imports nothing that could open a network connection" $?
 grep -Eq 'os\.(system|popen|exec[lv]|spawn)|urlopen|pbcopy|pbpaste|osascript|xdg-open|webbrowser' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "no shell-out, clipboard or app-open call" $?
-grep -Eq 'shell[[:space:]]*=[[:space:]]*True' "$CLI/ai-os-handoff"
+grep -Eq '[,(][[:space:]]*shell[[:space:]]*=[[:space:]]*True' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "never shell=True — the packet can never be a command" $?
-# Two call sites now, and the invariant is about what they can reach, not how many there
-# are: exactly one may leave this machine, and the other is the local read-only resolver
-# that says where a ticket lives. Anything beyond those two is a new way out.
-[ "$(grep -c 'subprocess\.run(' "$CLI/ai-os-handoff")" = "2" ]
-chk "exactly two subprocess.run call sites, and no more" $?
+# Three call sites now, and the invariant is about what they can reach, not how many
+# there are: the local read-only resolver that says where a ticket lives, run_transport_
+# subprocess (T-051-S7's shared bounded-call helper, also used by `mission execute` in
+# cli/aios_mission.py), and the one that may leave this machine unmonitored (`send`'s own
+# uncaptured call). Anything beyond those three is a new way out.
+[ "$(grep -c 'subprocess\.run(' "$CLI/ai-os-handoff")" = "3" ]
+chk "exactly three subprocess.run call sites, and no more" $?
 grep -q 'subprocess.run(argv, input=packet' "$CLI/ai-os-handoff"
 chk "  ...one is the transport, taking a list argv and the packet on stdin" $?
 grep -q 'subprocess.run(\[str(RESOLVER), "ticket", task_id\]' "$CLI/ai-os-handoff"
