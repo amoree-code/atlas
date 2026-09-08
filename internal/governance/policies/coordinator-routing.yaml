@@ -1,0 +1,27 @@
+# coordinator-routing.yaml — the declared routing policy `ai-os coordinator route` resolves
+# against (T-050-S1). Structured data, parsed by the same manifest parser as
+# `handoff-transports.yaml` (see cli/ai-os-adapter's `parse`). There is no ad-hoc string
+# matching of intents or clients anywhere in `cli/ai-os-coordinator`: an intent this file
+# does not list, or a role this file names but does not define, is a refusal, not a guess.
+#
+# A role is the stable half of the flow — planning, executing, reviewing — regardless of
+# which client currently does it. Changing a client here re-points the flow and grants that
+# client no privilege of its own: `ai-os coordinator route` still refuses any client absent
+# from, or not `verified: true` in, `handoff-transports.yaml`, exactly as `ai-os handoff
+# send` already does.
+#
+# This file declares who is *routed to*. It does not authorize anything by itself — only an
+# existing explicit owner approval (`ai-os handoff approve`) can move a routed decision to an
+# actual send (`ai-os coordinator dispatch`).
+
+contract: 1
+
+roles:
+  planner: codex
+  executor: claude-code-tools-pilot
+  verifier: codex
+
+intents:
+  plan: planner
+  execute: executor
+  review: verifier

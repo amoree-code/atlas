@@ -1,0 +1,1451 @@
+#!/usr/bin/env python3
+"""ai-os-coordinator — T-050-S1/S2/S3: deterministic route, owner-gated prepare/dispatch,
+read-only review of a returned handoff.
+
+  ai-os coordinator route <task-id> --intent <intent> --scope <scope>
+  ai-os coordinator prepare <task-id> --intent <intent> --scope <scope>
+                           --source-client <client-id> --source-session <session-id>
+                           [--id <handoff-id>] [--summary <text>]
+  ai-os coordinator dispatch <task-id> <handoff-id> --lease-id <lease-id>
+                            --client <client-id> --session <session-id>
+  ai-os coordinator review <task-id> <handoff-id>
+  ai-os coordinator cost <task-id> [--handoff <handoff-id>] [--json]
+  ai-os coordinator begin <task-id> --intent <intent> --scope <relative-file-path>
+                         --source-client <client-id> --source-session <session-id>
+                         --invocation <invocation-id> --ttl-seconds <n>
+                         --idempotency-key <key> [--id <handoff-id>] [--summary <text>]
+  ai-os coordinator finalize <task-id> <handoff-id> --lease-id <lease-id>
+                            --client <client-id> --session <session-id>
+                            --invocation <invocation-id> --idempotency-key <key>
+
+This is the bounded coordinator layer on top of the existing AIOS-011 handoff records and
+the AIOS-012 verified transport registry. It adds exactly five things:
+
+  route      resolve WHO a task's intent belongs to, from a declared policy — and print
+             that decision. It never sends, never approves, never writes to a ticket or a
+             handoff record, and never creates a lease, a lock, a queue or a daemon.
+  prepare    resolve intent -> role -> destination client the same way `route` does,
+             resolve the gate that intent maps to, validate the scope, and then delegate to
+             the existing `cli/ai-os-handoff` `cmd_prepare` to write the one V6 handoff
+             record — the same record `ai-os handoff prepare` itself would write, with the
+             same fields, by the same code. prepare never approves, never sends, and never
+             calls dispatch: it prints the full approval tuple and stops, waiting on the
+             owner. Calling it twice for the same task+intent (or the same explicit --id)
+             does not overwrite anything — the second call hits the existing "record already
+             exists" refusal in `cli/ai-os-handoff`.
+  dispatch   take a handoff the owner has *already* prepared and *already* approved (via
+             the existing `ai-os handoff prepare`/`approve`), verify that approval is real,
+             complete and matches the record exactly, and — only then — call the existing
+             `ai-os handoff send` to do the one real send. dispatch never approves anything
+             itself and never invents a destination: it uses only what the record says.
+             T-050-S6-R1: dispatch additionally *requires* `--lease-id`/`--client`/
+             `--session` and verifies, read-only, before any send call: the supplied lease
+             is this ticket's exact active lease held by that exact client/session, and
+             every file the handoff's own `scope` names has an active, matching, non-
+             expired claim referencing that same lease. This enforcement applies only to
+             `coordinator dispatch` — the existing `ai-os handoff send` remains directly
+             callable by hand, unchanged, and is not the write-capable path this gate
+             protects; a direct manual write to any file is outside this slice entirely.
+  review     read a handoff whose status is already `returned` or `reviewed` — one that the
+             existing `ai-os handoff receive` has already attached a reply to — and print a
+             deterministic report of the approval tuple, the returned block verbatim, and
+             any explicit cost the returned text states. review is entirely read-only: it
+             loads the record with the existing `ai-os-handoff.load_record()`, writes
+             nothing, changes no status, and never calls approve, send, dispatch or receive.
+             It never interprets the returned text as an approval and never picks a next
+             hop — the "next owner decision" line only restates what the record's own
+             `owner_action_required`/`next_holder` fields already say.
+  cost       T-050-S4: read-only cost observability over one task's existing handoff
+             records — either the one named by `--handoff`, or every `handoff-*.md` record
+             belonging to the task, in the same deterministic order `ai-os handoff list`
+             already uses. For each record it prints the approval identity, the destination
+             transport's own declared budget (read from the existing verified transport
+             registry, never from a guess), and any cost the returned text *explicitly*
+             states — reusing the exact same narrow extraction `review` already uses, never
+             a broadened heuristic and never an estimate. It derives an invocation count of
+             0 or 1 from the record's own send audit fields alone, and refuses outright
+             (fail-closed) rather than reporting a made-up count for a record whose `sent`/
+             `status`/`sent_at` fields contradict each other. It classifies the cost as
+             exactly one of `reported`/`not_reported`/`invalid_report`, and prints a
+             conservative reduction signal (`within_budget`/`over_budget` only when both an
+             actual cost and a budget are valid numbers; `cost_unreported` when no valid
+             actual cost exists; `budget_unavailable` when a valid cost has no valid budget
+             to compare against — cost never claims a saving without that comparable
+             baseline). `cost` loads every record with the existing, unmodified
+             `ai-os-handoff.load_record()`/`resolve_transport()`, writes nothing, changes no
+             status, and — like `review` — never approves, sends, dispatches or receives.
+             `--json` prints the identical data as one JSON object with a fixed key order;
+             without it, the report prints in the same fixed field order as text.
+
+None of the five commands is a scheduler. Each runs once, in the foreground, and stops.
+There is no retry, no polling, no background process, and no new handoff format — the
+coordinator reads and reuses `cli/ai-os-handoff`'s own record and transport logic rather
+than reimplementing it, so there is exactly one place a handoff record or a transport is
+understood.
+
+## Gate mapping (prepare only)
+
+`ai-os handoff prepare` requires a `--gate` from its own closed vocabulary
+(`plan-scope`, `execute`, `review`, `next-step`, `remote-or-destructive`, `resume`) — a
+field `coordinator-routing.yaml` does not carry, and that file is not this ticket's to
+extend. So the intent -> gate mapping lives here, in this file only, as the small closed
+table `GATE_BY_INTENT` below: currently `plan -> plan-scope`, `execute -> execute`,
+`review -> review`, matching the routing policy's own three declared intents. An intent
+the routing policy resolves but this table does not cover is a **policy mismatch** refusal
+— prepare never guesses a gate.
+
+## Routing policy
+
+`route` resolves an intent through `internal/governance/policies/coordinator-routing.yaml`
+— structured data (`roles: {role: client}`, `intents: {intent: role}`), parsed with the same
+manifest parser `cli/ai-os-handoff` already uses for the transport registry
+(`cli/ai-os-adapter`'s `parse`). There is no ad-hoc string matching of intents or clients
+anywhere in this file: an intent absent from the policy, or a role the policy names but does
+not define, is a refusal, never a guess.
+
+A client `route` resolves to is only ever as real as
+`internal/governance/policies/handoff-transports.yaml` says it is: `route` refuses any
+client absent from that registry, and any transport recorded `verified: false`. Resolving a
+client is not authorizing it — the transport registry stays the one place a transport is
+declared safe to use, exactly as it is for `ai-os handoff send`.
+
+## Refusals — each writes nothing and exits non-zero
+
+  route   task id missing, malformed, or resolves to no ticket; --intent missing or given
+          more than once; --scope missing, empty, given more than once, absolute, containing
+          `..`, or otherwise not a plain relative path; the routing policy is missing,
+          unparsable, or missing/malformed `roles`/`intents`; the intent is unknown; the
+          intent's role has no client in `roles`; the resolved client is absent from, or not
+          `verified: true` in, the transport registry.
+
+  prepare   every refusal `route` has, for the same reasons, plus: --source-client or
+            --source-session missing or empty (prepare never records an unspecified
+            source — unlike `ai-os handoff prepare` itself, where identity is optional);
+            --source-client/--source-session malformed (not one token of
+            `[A-Za-z0-9._-]`); the intent has no entry in this file's own `GATE_BY_INTENT`
+            table (policy mismatch); an explicit --id, or the default id (the intent
+            itself), already names an existing handoff record for this task (refuses
+            rather than overwriting); any refusal the delegated `ai-os handoff prepare`
+            call itself raises (credential-shaped text, unknown destination client, and so
+            on) passes through unchanged.
+
+  dispatch   task id or handoff id missing, malformed, or not found; --lease-id, --client or
+             --session missing or empty; the handoff is already sent; its status is not
+             `approved`; no approval is recorded, or the approval is incomplete; the approved
+             gate/destination/scope does not exactly match the record's own gate/to/scope;
+             the record names no destination, or more than one; the destination's transport
+             is absent from, or not `verified: true` in, the transport registry;
+             the supplied --lease-id does not name the ticket's exact active lease, or that
+             lease is not held by the supplied --client/--session; the handoff's scope is
+             empty or an unsupported multi-file form; any file the scope names has no active
+             claim, a claim under a different task/lease/client/session, an expired/stale
+             claim, or a conflicted claim record; any scope path that is absolute, contains
+             traversal, resolves (after symlink resolution) outside the allowed Atlas root,
+             or resolves to a directory.
+
+  review     task id or handoff id missing, malformed, or not found; the handoff's status is
+             anything other than `returned` or `reviewed` (this refuses `draft`,
+             `waiting-owner`, `approved`, `sent`, and any other status alike — review is not
+             how a handoff gets to `returned` in the first place); the record has no
+             returned block between its own markers.
+
+  cost       task id missing, malformed, or resolves to no ticket; an explicit --handoff
+             that is malformed or does not exist; a task with no handoff records at all (or,
+             with --handoff omitted, none found) — refused clearly, before anything is
+             printed as a report; a handoff record missing `handoff_id`/`task_id`/`status`
+             in its own frontmatter (malformed — fails closed rather than reporting on a
+             record it cannot fully read); a record whose `sent`/`status`/`sent_at` fields
+             contradict each other (ambiguous invocation count — fails closed rather than
+             guessing 0 or 1); `--handoff`/`--json` given more than once.
+
+Exit: 0 ok · 2 usage or refusal · 4 not found · 5 blocked, no verified transport.
+Zero non-stdlib dependencies.
+
+## T-050-S6: ticket lease, file ownership claim, coordination-state transition
+
+Owner-authorized additive layer, `cli/aios_coordination.py` — see
+`projects/ai-os/tickets/T-050/T-050-S5-conflict-protection-design.md` for the full design and
+`projects/ai-os/tickets/T-050/T-050-S6-implementation.md` for exactly what was implemented.
+Sits above the existing V6 handoff flow; the manual flow above is unmodified.
+
+  ai-os coordinator lease acquire <task-id> --client <c> --session <s> --invocation <i>
+                                  --ttl-seconds <n> --idempotency-key <key>
+  ai-os coordinator lease renew <task-id> <lease-id> --client <c> --session <s>
+                                --invocation <i> --idempotency-key <key>
+  ai-os coordinator lease release <task-id> <lease-id> --client <c> --session <s>
+                                  --invocation <i> --idempotency-key <key>
+  ai-os coordinator lease clear-stale <task-id> <lease-id> --owner-words <text>
+
+  ai-os coordinator claim acquire <task-id> --lease-id <lid> --path <rel-path>
+                                  --client <c> --session <s> --idempotency-key <key>
+  ai-os coordinator claim release <task-id> <path> --lease-id <lid> --client <c>
+                                  --session <s> --idempotency-key <key>
+  ai-os coordinator claim clear-stale <task-id> <path> --owner-words <text>
+
+  ai-os coordinator transition <task-id> --from <state> --to <state> --lease-id <lid>
+                               --client <c> --session <s> --idempotency-key <key>
+                               [--approval-ref <value>] [--evidence <text>]
+
+None of these six commands is a scheduler, a daemon, a queue or a worker: each runs once, in
+the foreground, and stops. Every acquire/grant that can race is a single atomic filesystem
+operation (exclusive create); every renew/release/transition validates the caller's identity
+against the record's own recorded holder before writing. No stale lease or claim is ever
+auto-reclaimed, auto-reassigned or auto-archived — recovery is always the explicit
+`clear-stale` command, naming the exact lease id / path, with explicit owner words.
+
+## T-050-S7: coordinator begin / finalize — the explicit foreground coordinator workflow
+
+See `projects/ai-os/tickets/T-050/T-050-S7-implementation.md` for exactly what was
+implemented. Adds exactly two commands, both foreground, both fail-closed, neither a
+scheduler or background process:
+
+  begin      one call that acquires exactly one ticket lease, acquires exactly one file
+             claim for the declared scope, and then delegates to the existing `prepare`
+             behavior (`cli/ai-os-handoff`'s own `cmd_prepare`) to write the one V6 handoff
+             record — stopping with the lease active, the claim active, and the handoff
+             `waiting-owner`. begin never approves, never dispatches, never sends, never
+             receives, and never selects a next hop; the owner approval and the
+             `coordinator dispatch` call remain entirely manual steps after it. A failure
+             partway through is explicitly compensated: a failed claim acquisition releases
+             the lease this same call just acquired; a failed handoff prepare releases both
+             the claim and the lease this same call just acquired. If that compensation
+             itself cannot complete, begin reports BLOCKED and names the exact lease/claim
+             left behind rather than hiding the failure. A repeated identical
+             `--idempotency-key` returns the original result unchanged and touches no
+             lease/claim/handoff a second time.
+
+  finalize   the mirror image: given a handoff already `returned` or `reviewed`, and the
+             exact lease/client/session/invocation that is still this ticket's active lease,
+             it verifies (read-only, reusing the same `verify_dispatch_conflict_protection`
+             check `coordinator dispatch` already applies) that every file the handoff's
+             scope names still has a matching, unexpired claim, prints the same read-only
+             `review` report plus `cost`'s own cost-status/reduction-signal, and only then
+             explicitly releases the claim(s) and then the lease. finalize never changes the
+             handoff's status, never touches ticket state, never marks anything complete,
+             and never picks a next hop. Any failure before the release step releases
+             nothing; a failure during release is reported BLOCKED, naming exactly what
+             remains, never retried automatically. A repeated identical `--idempotency-key`
+             returns the original result unchanged rather than releasing twice.
+"""
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
+sys.path.insert(0, str(REPO / "cli"))
+
+# The routing policy: declared, structured, versioned data — the same posture as the
+# transport registry it works alongside. Overridable for tests, never synthesised.
+POLICY = Path(os.environ.get(
+    "AI_OS_COORDINATOR_POLICY",
+    REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml"))
+
+# prepare-only: the closed intent -> gate table described in the module docstring. Not
+# policy data — `coordinator-routing.yaml` is protected and carries no gate field — just the
+# small, explicit mapping this file needs to call the existing `ai-os handoff prepare` with a
+# gate from its own closed vocabulary. An intent absent here is a policy-mismatch refusal,
+# never a guess.
+GATE_BY_INTENT = {
+    "plan": "plan-scope",
+    "execute": "execute",
+    "review": "review",
+}
+
+G, Y, R, B, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[34m", "\033[2m", "\033[0m"
+if not sys.stdout.isatty():
+    G = Y = R = B = D = X = ""
+
+# A route's scope is a plain relative path expression: no absolute paths, no traversal, no
+# shell metacharacters. It is never executed, only recorded and shown — but a scope a shell
+# could reinterpret is not a scope this command will accept.
+SCOPE_SAFE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/\-]*\Z")
+
+
+def die(msg, code=2):
+    print(f"  {R}refused{X} {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def _load_sibling(name):
+    """Load a sibling CLI file as a library module, never as `__main__`.
+
+    The exact technique `cli/ai-os-handoff` already uses to load `cli/ai-os-adapter`'s
+    manifest parser: this reuses that file's own logic instead of forking a second copy of
+    it, and loading it under a name other than `__main__` means its own `if __name__ ==
+    "__main__":` dispatch block never runs — importing it never runs a command."""
+    src = Path(__file__).resolve().parent / name
+    if not src.exists():
+        die(f"cli/{name} is missing; the coordinator reuses it and cannot run without it")
+    mod_name = "_ai_os_coordinator_" + name.replace("-", "_")
+    spec = importlib.util.spec_from_loader(mod_name, importlib.machinery.SourceFileLoader(mod_name, str(src)))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def load_policy():
+    """(roles, intents) — both non-empty mappings of plain strings, or a refusal."""
+    adapter = _load_sibling("ai-os-adapter")
+    if not POLICY.is_file():
+        die(f"no routing policy at {POLICY} — the coordinator refuses to guess a route")
+    try:
+        doc = adapter.parse(POLICY.read_text(errors="replace"), str(POLICY))
+    except adapter.ManifestError as e:
+        die(f"routing policy will not parse: {e}")
+    if not isinstance(doc, dict):
+        die(f"routing policy at {POLICY} is malformed: expected a mapping at the top level")
+    roles, intents = doc.get("roles"), doc.get("intents")
+    if not isinstance(roles, dict) or not roles:
+        die(f"routing policy at {POLICY} is malformed: 'roles' must be a non-empty mapping")
+    if not isinstance(intents, dict) or not intents:
+        die(f"routing policy at {POLICY} is malformed: 'intents' must be a non-empty mapping")
+    for k, v in roles.items():
+        if not isinstance(v, str) or not v.strip():
+            die(f"routing policy at {POLICY} is malformed: role {k!r} does not name one client")
+    for k, v in intents.items():
+        if not isinstance(v, str) or not v.strip():
+            die(f"routing policy at {POLICY} is malformed: intent {k!r} does not name one role")
+    return roles, intents
+
+
+def validate_scope(scope):
+    if scope is None or not scope.strip():
+        die("--scope is required — a route with an empty scope is never resolved")
+    scope = scope.strip()
+    if scope.startswith("/") or scope.startswith("~"):
+        die(f"--scope {scope!r} is an absolute path — scope must be relative and inside the "
+            f"approved tree")
+    if any(part == ".." for part in scope.split("/")):
+        die(f"--scope {scope!r} contains '..' — a route never points outside the approved tree")
+    if not SCOPE_SAFE.fullmatch(scope):
+        die(f"--scope {scope!r} is not a safe relative path — [A-Za-z0-9._-/] only, no shell "
+            f"characters")
+    return scope
+
+
+def _parse_flags(rest, names, label):
+    """One flag-value pass shared by route and dispatch: no flag twice, nothing unknown."""
+    values, seen = {}, set()
+    i = 0
+    while i < len(rest):
+        a = rest[i]
+        if a in names:
+            if i + 1 >= len(rest):
+                die(f"{a} needs a value")
+            if a in seen:
+                die(f"{a} was given more than once — one {label} has one {a[2:]}")
+            seen.add(a)
+            values[a] = rest[i + 1]
+            i += 2
+        else:
+            die(f"unknown argument {a!r}")
+    return values
+
+
+def cmd_route(args):
+    if not args or args[0].startswith("-"):
+        die("usage: ai-os coordinator route <task-id> --intent <intent> --scope <scope>")
+    task_id, rest = args[0], args[1:]
+    values = _parse_flags(rest, ("--intent", "--scope"), "route")
+    intent = values.get("--intent")
+    scope = values.get("--scope")
+
+    hoff = _load_sibling("ai-os-handoff")
+    # Refuses (exit 4) if the task id is malformed or resolves to no ticket at all — the
+    # same resolver every other handoff command uses, so a route is bound to a real task
+    # exactly the way a handoff record is.
+    hoff.task_dir(task_id)
+
+    if not intent or not intent.strip():
+        die("--intent is required — a route with no intent is not a route")
+    intent = intent.strip()
+
+    roles, intents = load_policy()
+    if intent not in intents:
+        die(f"unknown intent {intent!r} — one of: {', '.join(sorted(intents))}")
+    role = intents[intent]
+    if role not in roles:
+        die(f"routing policy is malformed: intent {intent!r} names role {role!r}, which has "
+            f"no entry in 'roles' — refusing rather than guessing a client")
+    client = roles[role]
+
+    scope = validate_scope(scope)
+
+    spec, binary, unavailable = hoff.resolve_transport(client)
+    if unavailable:
+        die(f"cannot route to {client!r}: {unavailable}")
+
+    print(f"\n  {B}route{X}  {task_id}")
+    print(f"  intent:      {intent}")
+    print(f"  role:        {role}")
+    print(f"  client:      {client}")
+    print(f"  scope:       {scope}")
+    print(f"  transport:   {spec.get('name')} ({binary})")
+    print(f"  approval:    required — explicit owner approval via `ai-os handoff approve` "
+          f"before any dispatch; this command never approves and never sends")
+    print(f"  {D}route only: nothing was sent, nothing was approved, no ticket state changed, "
+          f"no lease/lock/queue/daemon was created{X}\n")
+    return 0
+
+
+def cmd_prepare(args):
+    if not args or args[0].startswith("-"):
+        die("usage: ai-os coordinator prepare <task-id> --intent <intent> --scope <scope> "
+            "--source-client <client-id> --source-session <session-id> "
+            "[--id <handoff-id>] [--summary <text>]")
+    task_id, rest = args[0], args[1:]
+    values = _parse_flags(rest, ("--intent", "--scope", "--source-client", "--source-session",
+                                 "--id", "--summary"), "prepare")
+    intent = values.get("--intent")
+    scope = values.get("--scope")
+    source_client = values.get("--source-client")
+    source_session = values.get("--source-session")
+    handoff_id = values.get("--id")
+    summary = values.get("--summary")
+
+    hoff = _load_sibling("ai-os-handoff")
+    # Same resolver every other coordinator/handoff command uses: refuses (exit 4) if the
+    # task id is malformed or resolves to no ticket at all.
+    d = hoff.task_dir(task_id)
+
+    if not intent or not intent.strip():
+        die("--intent is required — a prepare with no intent is not a route")
+    intent = intent.strip()
+
+    # Identity is mandatory here, unlike in `ai-os handoff prepare` itself: the coordinator
+    # exists to record who asked for the handoff, and never falls back to 'unspecified'.
+    if not source_client or not source_client.strip():
+        die("--source-client is required — the coordinator never records an unspecified "
+            "source")
+    if not source_session or not source_session.strip():
+        die("--source-session is required — the coordinator never records an unspecified "
+            "source")
+    source_client = source_client.strip()
+    source_session = source_session.strip()
+    if not hoff.IDENTITY.fullmatch(source_client):
+        die(f"not a client identifier: {source_client!r} — one token of [A-Za-z0-9._-]")
+    if not hoff.IDENTITY.fullmatch(source_session):
+        die(f"not a session identifier: {source_session!r} — one token of [A-Za-z0-9._-]")
+
+    roles, intents = load_policy()
+    if intent not in intents:
+        die(f"unknown intent {intent!r} — one of: {', '.join(sorted(intents))}")
+    role = intents[intent]
+    if role not in roles:
+        die(f"routing policy is malformed: intent {intent!r} names role {role!r}, which has "
+            f"no entry in 'roles' — refusing rather than guessing a client")
+    client = roles[role]
+
+    gate = GATE_BY_INTENT.get(intent)
+    if gate is None or gate not in hoff.GATES:
+        die(f"policy mismatch: intent {intent!r} has no known gate mapping in this "
+            f"coordinator's own GATE_BY_INTENT table — refusing rather than guessing a gate")
+
+    scope = validate_scope(scope)
+
+    spec, binary, unavailable = hoff.resolve_transport(client)
+    if unavailable:
+        die(f"cannot prepare a handoff to {client!r}: {unavailable}")
+
+    # A handoff id, chosen but never invented past this point: an explicit --id is used
+    # as-is, otherwise the intent itself is the default id — so a second `prepare` call for
+    # the same task and intent lands on the same id and is refused by the existing "record
+    # already exists" check below, rather than silently creating a second pending handoff.
+    if handoff_id is None:
+        handoff_id = intent
+    if not hoff.SAFE.fullmatch(handoff_id):
+        die(f"not a handoff id: {handoff_id!r} — [A-Za-z0-9._-], one segment")
+    existing = hoff.record_path(d, handoff_id)
+    if existing.exists():
+        die(f"handoff {handoff_id} already exists at {existing} for task {task_id} — "
+            f"prepare refuses to overwrite an existing handoff; approve it, or pass a "
+            f"different --id for a new one", code=2)
+
+    # --- delegate: the one and only place a V6 handoff record is written is
+    # `cli/ai-os-handoff`'s own `cmd_prepare`. Nothing above this line has written
+    # anything; everything below is exactly the call `ai-os handoff prepare` itself would
+    # run, with `--status waiting-owner` so the record already carries
+    # `owner_action_required: approve` the moment it exists. -------------------------------
+    prepare_args = [task_id, "--to", client, "--gate", gate, "--scope", scope,
+                    "--id", handoff_id, "--status", "waiting-owner",
+                    "--source-client", source_client, "--source-session", source_session]
+    if summary:
+        prepare_args += ["--summary", summary]
+    rc = hoff.cmd_prepare(prepare_args)
+    if rc:
+        return rc
+    # -----------------------------------------------------------------------------------
+
+    _, _, meta = hoff.load_record(d, handoff_id)
+    print(f"\n  {B}prepared{X}  {task_id} / {handoff_id}")
+    print(f"  task id:              {task_id}")
+    print(f"  handoff id:           {handoff_id}")
+    print(f"  source client:        {source_client}")
+    print(f"  source session:       {source_session}")
+    print(f"  destination client:   {client}")
+    print(f"  destination session:  n/a — not tracked by the V6 handoff record")
+    print(f"  gate:                 {gate}")
+    print(f"  scope:                {scope}")
+    print(f"  required owner action: {meta.get('owner_action_required')} "
+          f"— run `ai-os handoff approve {task_id} {handoff_id} --gate {gate} --to {client} "
+          f"--scope {scope} --owner-words <text>`")
+    print(f"  {D}prepare only: not approved, not sent, dispatch was never called{X}\n")
+    return 0
+
+
+def cmd_dispatch(args):
+    if len(args) < 2 or args[0].startswith("-") or args[1].startswith("-"):
+        die("usage: ai-os coordinator dispatch <task-id> <handoff-id> --lease-id <lease-id> "
+            "--client <client-id> --session <session-id>")
+    task_id, handoff_id, flag_args = args[0], args[1], args[2:]
+    v = _parse_flags(flag_args, ("--lease-id", "--client", "--session"), "dispatch")
+    lease_id, client, session = v.get("--lease-id"), v.get("--client"), v.get("--session")
+    # T-050-S6-R1 part D: a write-capable dispatch must prove conflict protection is in
+    # force before it may send anything — never optional, never inferred, never defaulted.
+    if not lease_id or not lease_id.strip():
+        die("--lease-id is required — coordinator dispatch never sends without proving an "
+            "active, matching ticket lease and file claims first")
+    if not client or not client.strip():
+        die("--client is required")
+    if not session or not session.strip():
+        die("--session is required")
+
+    hoff = _load_sibling("ai-os-handoff")
+    d = hoff.task_dir(task_id)
+    p, text, meta = hoff.load_record(d, handoff_id)
+
+    # --- preflight. Nothing below writes anything, and nothing runs until every one of
+    # --- these passes — a mismatch on any single field is a full refusal. ------------------
+    if meta.get("sent") == "yes" or meta.get("status") == "sent":
+        die(f"handoff {handoff_id} was already sent; dispatch never sends the same handoff "
+            f"twice")
+    if meta.get("status") != "approved":
+        die(f"handoff {handoff_id} is {meta.get('status')!r}, not 'approved'. Dispatch "
+            f"requires an existing explicit owner approval and has no code path that could "
+            f"grant one itself.")
+    if meta.get("approval") != "recorded":
+        die(f"no owner approval is recorded for {handoff_id!r}. Dispatch is refused.")
+    missing = [k for k in ("approved_at", "approved_gate", "approved_to", "approved_scope",
+                           "owner_words") if not str(meta.get(k) or "").strip()]
+    if missing:
+        die(f"the approval on {handoff_id!r} is incomplete: missing {', '.join(missing)}. "
+            f"An incomplete approval is not an approval.")
+    for approved_key, record_key, label in (("approved_gate", "gate", "gate"),
+                                            ("approved_to", "to", "destination"),
+                                            ("approved_scope", "scope", "scope")):
+        if meta.get(approved_key) != meta.get(record_key):
+            die(f"approval tuple mismatch on {label}: approved for {meta.get(approved_key)!r} "
+                f"but the record's {label} is {meta.get(record_key)!r}. Dispatch refuses on "
+                f"any mismatch between what was approved and what the record now says.")
+    to = str(meta.get("to") or "")
+    if not to or re.search(r"[,\s]", to):
+        die(f"the record names {to!r} as its destination; dispatch requires exactly one")
+    spec, binary, unavailable = hoff.resolve_transport(to)
+    if unavailable:
+        die(f"cannot dispatch to {to!r}: {unavailable}")
+    # -----------------------------------------------------------------------------------
+
+    # --- T-050-S6-R1 part D: conflict-protection preflight. Read-only, refuses before any
+    # --- send call on the first failing check — the supplied lease must be this ticket's
+    # --- exact active lease held by the exact client/session, and every file the handoff's
+    # --- own scope names must have an active, matching, non-expired claim referencing that
+    # --- same lease. Never auto-acquires a lease or claim it finds missing; never falls
+    # --- back to a different client. This gate applies only to `coordinator dispatch` — the
+    # --- existing `ai-os handoff send` is untouched and remains directly callable by hand,
+    # --- exactly as before. -----------------------------------------------------------
+    coord = _load_sibling("aios_coordination.py")
+    try:
+        coord.verify_dispatch_conflict_protection(d, task_id, meta.get("scope"), lease_id,
+                                                   client, session)
+    except coord.CoordinationError as e:
+        die(str(e), code=e.code)
+    # -----------------------------------------------------------------------------------
+
+    print(f"\n  {B}dispatch{X}  {handoff_id} -> {to}")
+    print(f"  gate:        {meta.get('gate')}")
+    print(f"  scope:       {meta.get('scope')}")
+    print(f"  approval:    recorded {meta.get('approved_at')} — owner words are on file in "
+          f"the record's own section 3")
+    print(f"  lease:       {lease_id} ({client}/{session}) — verified active, claim(s) "
+          f"verified active and matching")
+    print(f"  transport:   {spec.get('name')}")
+    print(f"  {D}calling the existing 'ai-os handoff send' — one foreground call, no retry{X}\n")
+
+    handoff_bin = Path(__file__).resolve().parent / "ai-os-handoff"
+    proc = subprocess.run([str(handoff_bin), "send", task_id, handoff_id])
+    return proc.returncode
+
+
+# review-only: an explicit-cost line inside a returned block. Deliberately narrow —
+# "cost" (or a close synonym) followed by a colon/equals and a dollar amount or a bare
+# number tagged usd/dollars. Never a guess at cost from token counts, model name or the
+# transport's own declared budget: if the returned text does not say a cost in this shape,
+# review reports "not reported" rather than inventing one.
+COST_RE = re.compile(
+    r"(?i)\b(?:actual[_ -]?cost|total[_ -]?cost|cost)\b\s*[:=]?\s*"
+    r"(\$\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s*(?:usd|dollars))"
+)
+
+
+def _extract_returned_text(text, hoff):
+    """The exact bytes between the returned-block markers. Never re-rendered, never
+    interpreted — the same posture `extract_packet` in `ai-os-handoff` itself takes for the
+    outgoing packet, applied here read-only to the reply that came back."""
+    start, end = text.find(hoff.RETURNED_BEGIN), text.find(hoff.RETURNED_END)
+    if start < 0 or end < 0 or end <= start:
+        die("handoff record has no returned block between its own markers — nothing to review")
+    return text[start + len(hoff.RETURNED_BEGIN):end].strip("\n")
+
+
+def _extract_reported_cost(returned_text):
+    """An explicit cost the returned text itself states, or None. Never estimated, never
+    inferred from token counts or a model name, and never the transport's own budget cap —
+    those are two different numbers and this file never conflates them."""
+    m = COST_RE.search(returned_text)
+    return m.group(1).strip() if m else None
+
+
+def _transport_budget(spec):
+    """The destination transport's own declared spending cap (`--max-budget-usd` in its
+    argv), if any — shown to the owner as context, and never mistaken for a reported cost.
+    A transport with no such flag, or no transport at all, is not a refusal here: review is
+    read-only and shows whatever it can find, exactly as it found it."""
+    argv = (spec or {}).get("argv") or []
+    for i, a in enumerate(argv):
+        if a == "--max-budget-usd" and i + 1 < len(argv):
+            return argv[i + 1]
+    return None
+
+
+def _build_review_report(task_id, handoff_id, text, meta, hoff):
+    """The data half of `review` — the read-only gate plus every field the report prints,
+    with no printing here. Factored out so `coordinator finalize` can run the exact same
+    read-only report as part of its own flow, without a second copy of the gate or the
+    field extraction."""
+    status = meta.get("status")
+    if status not in ("returned", "reviewed"):
+        die(f"handoff {handoff_id} is {status!r}; review is only for a handoff whose status "
+            f"is 'returned' or 'reviewed' — the existing `ai-os handoff receive` is what "
+            f"gets it there. review never approves, sends, dispatches or receives, and has "
+            f"no code path that could move a handoff to that state itself.")
+
+    returned_text = _extract_returned_text(text, hoff)
+    reported_cost = _extract_reported_cost(returned_text)
+
+    to = meta.get("to")
+    spec = None
+    if to:
+        spec, _binary, _unavailable = hoff.resolve_transport(to)
+    budget = _transport_budget(spec)
+
+    return {
+        "task_id": task_id, "handoff_id": handoff_id,
+        "source_client": meta.get("source_client") or hoff.IDENTITY_UNSPECIFIED,
+        "source_session_id": meta.get("source_session_id") or hoff.IDENTITY_UNSPECIFIED,
+        "to": to, "gate": meta.get("gate"), "approved_scope": meta.get("approved_scope"),
+        "sent_at": meta.get("sent_at"), "received_at": meta.get("received_at"),
+        "returned_sha256": meta.get("returned_sha256"),
+        "received_file": meta.get("received_file"), "budget": budget,
+        "reported_cost": reported_cost,
+        "owner_action_required": meta.get("owner_action_required"),
+        "next_holder": meta.get("next_holder"), "returned_text": returned_text,
+    }
+
+
+def _print_review_report(r):
+    print(f"\n  {B}review{X}  {r['task_id']} / {r['handoff_id']}")
+    print(f"  task id:              {r['task_id']}")
+    print(f"  handoff id:           {r['handoff_id']}")
+    print(f"  source client:        {r['source_client']}")
+    print(f"  source session:       {r['source_session_id']}")
+    print(f"  destination client:   {r['to'] or '-'}")
+    print(f"  gate:                 {r['gate'] or '-'}")
+    print(f"  approved scope:       {r['approved_scope'] or '-'}")
+    print(f"  sent timestamp:       {r['sent_at'] or '-'}")
+    print(f"  received timestamp:   {r['received_at'] or '-'}")
+    print(f"  returned hash:        {r['returned_sha256'] or '-'}")
+    print(f"  returned file:        {r['received_file'] or '-'}")
+    print(f"  transport budget:     {r['budget'] or 'not declared'}  "
+          f"{D}(the transport's own declared cap — never the reported cost){X}")
+    print(f"  cost:                 {r['reported_cost'] or 'not reported'}")
+    print(f"  next owner decision:  {r['owner_action_required'] or '-'} "
+          f"(next holder: {r['next_holder'] or '-'})")
+    print(f"\n  returned text (verbatim):")
+    print(f"  {'-' * 68}")
+    print(r["returned_text"])
+    print(f"  {'-' * 68}")
+    print(f"  {D}review only: read-only report — nothing approved, nothing sent, no status "
+          f"changed, no next hop chosen, the ticket was not marked done{X}\n")
+
+
+def cmd_review(args):
+    if len(args) != 2 or any(a.startswith("-") for a in args):
+        die("usage: ai-os coordinator review <task-id> <handoff-id>")
+    task_id, handoff_id = args
+
+    hoff = _load_sibling("ai-os-handoff")
+    d = hoff.task_dir(task_id)
+    p, text, meta = hoff.load_record(d, handoff_id)
+
+    r = _build_review_report(task_id, handoff_id, text, meta, hoff)
+    _print_review_report(r)
+    return 0
+
+
+# --- T-050-S4: cost — deterministic, read-only cost observability over a task's existing
+# --- handoff records. Reuses review's own COST_RE/_transport_budget rather than a second
+# --- copy of either. --------------------------------------------------------------------
+def _returned_text_maybe(text, hoff):
+    """Like `_extract_returned_text`, but for a handoff that has not necessarily reached
+    `returned`/`reviewed` yet: cost reports on every handoff a task has, at whatever status
+    it is in, so an absent returned block is simply "no returned text", never a refusal."""
+    start, end = text.find(hoff.RETURNED_BEGIN), text.find(hoff.RETURNED_END)
+    if start < 0 or end < 0 or end <= start:
+        return None
+    return text[start + len(hoff.RETURNED_BEGIN):end].strip("\n")
+
+
+def _cost_value(raw):
+    """A matched cost/budget string ('$0.032', '5 usd', '0.10', ...) parsed to a float, or
+    None if the digits it carries do not parse. Never a guess at a value from anything else
+    — only ever a literal parse of the exact text `COST_RE` (or the transport registry)
+    already carries."""
+    if raw is None:
+        return None
+    digits = re.sub(r"[^0-9.]", "", str(raw))
+    if not digits:
+        return None
+    try:
+        return float(digits)
+    except ValueError:
+        return None
+
+
+def _extract_cost_status(returned_text):
+    """(cost_status, raw_cost_or_None). Never estimates and never picks a "most likely"
+    number: every explicit cost-shaped match in the returned text is parsed, and cost is
+    `reported` only when there is exactly one distinct numeric value among them. Two or more
+    cost mentions that parse to different numbers is a contradictory report — `invalid_report`
+    — not a guess at which one is real; one that matches the shape but will not parse to a
+    number is `invalid_report` too, never silently dropped to `not_reported`."""
+    if not returned_text:
+        return "not_reported", None
+    matches = [m.strip() for m in COST_RE.findall(returned_text)]
+    if not matches:
+        return "not_reported", None
+    parsed = [_cost_value(m) for m in matches]
+    if any(v is None for v in parsed):
+        return "invalid_report", " / ".join(matches)
+    distinct = {round(v, 6) for v in parsed}
+    if len(distinct) > 1:
+        return "invalid_report", " / ".join(matches)
+    return "reported", matches[0]
+
+
+def _invocation_count(meta, handoff_id):
+    """0 or 1, derived only from the record's own send-audit fields — never from anything
+    else. A record whose `sent`/`status`/`sent_at` do not agree on whether a send happened
+    is refused outright (fail-closed) rather than reported as 0 or 1 by a guess."""
+    sent_flag = str(meta.get("sent") or "").strip().lower()
+    status = meta.get("status")
+    sent_at = str(meta.get("sent_at") or "").strip()
+    sent_like_status = status in ("sent", "returned", "reviewed")
+    if sent_flag in ("", "no") and not sent_like_status and not sent_at:
+        return 0
+    if sent_flag == "yes" and sent_like_status and sent_at:
+        return 1
+    die(f"handoff {handoff_id!r} has an ambiguous or contradictory send audit "
+        f"(sent={meta.get('sent')!r}, status={status!r}, sent_at={meta.get('sent_at')!r}) "
+        f"— cost refuses to guess an invocation count for it")
+
+
+def _reduction_signal(cost_status, raw_cost, budget_raw):
+    """A conservative reduction signal. `within_budget`/`over_budget` require both a valid
+    actual cost AND a valid budget number; `cost_unreported` is every case with no usable
+    actual cost (`not_reported` or `invalid_report` alike — an invalid report is not a real
+    number either); `budget_unavailable` is a valid cost with no valid budget to compare
+    against. This function never claims a saving without that comparable baseline."""
+    if cost_status != "reported":
+        return "cost_unreported"
+    budget_val = _cost_value(budget_raw)
+    if budget_val is None:
+        return "budget_unavailable"
+    cost_val = _cost_value(raw_cost)
+    return "over_budget" if cost_val > budget_val else "within_budget"
+
+
+def _require_record_shape(meta, handoff_id):
+    """Fail closed on a record missing the fields cost's own report depends on, rather than
+    reporting blanks for a handoff it cannot actually read."""
+    missing = [k for k in ("handoff_id", "task_id", "status") if not str(meta.get(k) or "").strip()]
+    if missing:
+        die(f"handoff {handoff_id!r} is malformed: missing {', '.join(missing)} in its own "
+            f"frontmatter — cost refuses to report on a record it cannot fully read")
+
+
+def _build_cost_report(task_id, handoff_id, text, meta, hoff):
+    """The one deterministic report dict for one handoff record — every key read directly
+    from the record's own parsed frontmatter, the returned text between its own markers, or
+    the existing verified transport registry. Nothing here is computed from a guess."""
+    _require_record_shape(meta, handoff_id)
+    invocation_count = _invocation_count(meta, handoff_id)
+    returned_text = _returned_text_maybe(text, hoff)
+    cost_status, raw_cost = _extract_cost_status(returned_text)
+    to = meta.get("to")
+    spec = None
+    if to:
+        spec, _binary, _unavailable = hoff.resolve_transport(to)
+    budget_raw = _transport_budget(spec)
+    reduction_signal = _reduction_signal(cost_status, raw_cost, budget_raw)
+    return {
+        "task_id": meta.get("task_id") or task_id,
+        "handoff_id": meta.get("handoff_id") or handoff_id,
+        "source_client": meta.get("source_client") or hoff.IDENTITY_UNSPECIFIED,
+        "source_session_id": meta.get("source_session_id") or hoff.IDENTITY_UNSPECIFIED,
+        "destination_client": to or None,
+        "gate": meta.get("gate") or None,
+        "status": meta.get("status") or None,
+        "sent_at": meta.get("sent_at") or None,
+        "received_at": meta.get("received_at") or None,
+        "invocation_count": invocation_count,
+        "transport_budget": budget_raw,
+        "actual_cost": raw_cost,
+        "cost_status": cost_status,
+        "reduction_signal": reduction_signal,
+    }
+
+
+def _print_cost_report(r):
+    print(f"\n  {B}cost{X}  {r['task_id']} / {r['handoff_id']}")
+    print(f"  task id:              {r['task_id']}")
+    print(f"  handoff id:           {r['handoff_id']}")
+    print(f"  source client:        {r['source_client']}")
+    print(f"  source session:       {r['source_session_id']}")
+    print(f"  destination client:   {r['destination_client'] or '-'}")
+    print(f"  gate:                 {r['gate'] or '-'}")
+    print(f"  status:               {r['status'] or '-'}")
+    print(f"  sent timestamp:       {r['sent_at'] or '-'}")
+    print(f"  received timestamp:   {r['received_at'] or '-'}")
+    print(f"  invocation count:     {r['invocation_count']}")
+    print(f"  transport budget:     {r['transport_budget'] or 'not declared'}  "
+          f"{D}(the transport's own declared cap — never the reported cost){X}")
+    print(f"  actual cost:          {r['actual_cost'] or 'not reported'}")
+    print(f"  cost status:          {r['cost_status']}")
+    print(f"  reduction signal:     {r['reduction_signal']}")
+
+
+def cmd_cost(args):
+    if not args or args[0].startswith("-"):
+        die("usage: ai-os coordinator cost <task-id> [--handoff <handoff-id>] [--json]")
+    task_id, rest = args[0], args[1:]
+    handoff_id = None
+    as_json = False
+    seen = set()
+    i = 0
+    while i < len(rest):
+        a = rest[i]
+        if a == "--handoff":
+            if i + 1 >= len(rest):
+                die("--handoff needs a value")
+            if "--handoff" in seen:
+                die("--handoff was given more than once — one report has one handoff filter")
+            seen.add("--handoff")
+            handoff_id = rest[i + 1]
+            i += 2
+        elif a == "--json":
+            if "--json" in seen:
+                die("--json was given more than once")
+            seen.add("--json")
+            as_json = True
+            i += 1
+        else:
+            die(f"unknown argument {a!r}")
+
+    hoff = _load_sibling("ai-os-handoff")
+    d = hoff.task_dir(task_id)
+
+    # --- resolve which handoff ids this report covers. Nothing below writes anything,
+    # --- ever: every value in the report is read from an existing record or the existing
+    # --- transport registry. -----------------------------------------------------------
+    if handoff_id is not None:
+        ids = [handoff_id]
+    else:
+        ids = [p.stem[len("handoff-"):] for p in hoff.records(d)]
+        if not ids:
+            die(f"no handoff records exist for task {task_id!r} — nothing to report", code=4)
+
+    reports = []
+    for hid in ids:
+        # `load_record` itself fails closed: exit 4 for a missing/unknown handoff id, and a
+        # refusal for a handoff_id mismatch between the filename and the record's own field.
+        p, text, meta = hoff.load_record(d, hid)
+        reports.append(_build_cost_report(task_id, hid, text, meta, hoff))
+
+    if as_json:
+        print(json.dumps({"task_id": task_id, "handoffs": reports}, ensure_ascii=False))
+        return 0
+
+    for r in reports:
+        _print_cost_report(r)
+    print(f"\n  {D}cost only: read-only report over {len(reports)} handoff record(s) — nothing "
+          f"approved, nothing sent, no status changed, no ticket marked done, no cost was "
+          f"estimated or invented{X}\n")
+    return 0
+
+
+# --- T-050-S6: ticket lease, file ownership claim, coordination-state transition ----------
+def _coord():
+    return _load_sibling("aios_coordination.py")
+
+
+def _sub_key(idem_key, purpose):
+    """A short, opaque, deterministic sub-key derived from a caller-supplied idempotency key
+    plus a fixed purpose label — used only by `begin`/`finalize` to give each underlying
+    lease/claim primitive its own idempotency namespace (they share the same
+    `coordination/idempotency/*.json` keyspace, keyed only by the literal string). The
+    library's own identity/token shape (`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`) forbids the `:`
+    this file would otherwise use as a separator and caps the total length at 64 — a hash
+    sidesteps both without inventing a second key format."""
+    digest = hashlib.sha256(f"{idem_key}:{purpose}".encode()).hexdigest()[:48]
+    return f"sk-{digest}"
+
+
+def _coord_call(fn, *a, **kw):
+    coord = _coord()
+    try:
+        return coord, fn(coord, *a, **kw)
+    except coord.CoordinationError as e:
+        die(str(e), code=e.code)
+
+
+def _print_kv(title, task_id, extra_id, result, fields):
+    print(f"\n  {B}{title}{X}  {task_id}" + (f" / {extra_id}" if extra_id else ""))
+    for label, key in fields:
+        print(f"  {label:<22}{result.get(key)}")
+    if result.get("replay"):
+        print(f"  {D}(duplicate idempotency key — original result returned, no second side "
+              f"effect){X}")
+    print()
+
+
+def cmd_lease(args):
+    if not args or args[0].startswith("-"):
+        die("usage: ai-os coordinator lease <acquire|renew|release|clear-stale> ...")
+    sub, rest = args[0], args[1:]
+    hoff = _load_sibling("ai-os-handoff")
+
+    if sub == "acquire":
+        if not rest or rest[0].startswith("-"):
+            die("usage: ai-os coordinator lease acquire <task-id> --client <client-id> "
+                "--session <session-id> --invocation <invocation-id> "
+                "--ttl-seconds <n> --idempotency-key <key>")
+        task_id, flag_args = rest[0], rest[1:]
+        v = _parse_flags(flag_args, ("--client", "--session", "--invocation",
+                                     "--ttl-seconds", "--idempotency-key"), "lease acquire")
+        d = hoff.task_dir(task_id)
+        coord, result = _coord_call(lambda c: c.lease_acquire(
+            d, task_id, v.get("--client"), v.get("--session"), v.get("--invocation"),
+            v.get("--ttl-seconds"), v.get("--idempotency-key")))
+        _print_kv("lease acquire", task_id, None, result,
+                  [("lease id:", "lease_id"), ("client:", "client_id"),
+                   ("session:", "session_id"), ("invocation:", "invocation_id"),
+                   ("acquired at:", "acquired_at"), ("expires at:", "expires_at")])
+        return 0
+
+    if sub == "renew":
+        if len(rest) < 2 or rest[0].startswith("-") or rest[1].startswith("-"):
+            die("usage: ai-os coordinator lease renew <task-id> <lease-id> "
+                "--client <client-id> --session <session-id> --invocation <invocation-id> "
+                "--idempotency-key <key>")
+        task_id, lease_id, flag_args = rest[0], rest[1], rest[2:]
+        v = _parse_flags(flag_args, ("--client", "--session", "--invocation",
+                                     "--idempotency-key"), "lease renew")
+        d = hoff.task_dir(task_id)
+        coord, result = _coord_call(lambda c: c.lease_renew(
+            d, task_id, lease_id, v.get("--client"), v.get("--session"),
+            v.get("--invocation"), v.get("--idempotency-key")))
+        _print_kv("lease renew", task_id, lease_id, result,
+                  [("client:", "client_id"), ("session:", "session_id"),
+                   ("heartbeat:", "heartbeat"), ("expires at:", "expires_at")])
+        return 0
+
+    if sub == "release":
+        if len(rest) < 2 or rest[0].startswith("-") or rest[1].startswith("-"):
+            die("usage: ai-os coordinator lease release <task-id> <lease-id> "
+                "--client <client-id> --session <session-id> --invocation <invocation-id> "
+                "--idempotency-key <key>")
+        task_id, lease_id, flag_args = rest[0], rest[1], rest[2:]
+        v = _parse_flags(flag_args, ("--client", "--session", "--invocation",
+                                     "--idempotency-key"), "lease release")
+        d = hoff.task_dir(task_id)
+        coord, result = _coord_call(lambda c: c.lease_release(
+            d, task_id, lease_id, v.get("--client"), v.get("--session"),
+            v.get("--invocation"), v.get("--idempotency-key")))
+        _print_kv("lease release", task_id, lease_id, result,
+                  [("released by:", "released_by"), ("released at:", "released_at")])
+        return 0
+
+    if sub == "clear-stale":
+        if len(rest) < 2 or rest[0].startswith("-") or rest[1].startswith("-"):
+            die("usage: ai-os coordinator lease clear-stale <task-id> <lease-id> "
+                "--owner-words <text>")
+        task_id, lease_id, flag_args = rest[0], rest[1], rest[2:]
+        v = _parse_flags(flag_args, ("--owner-words",), "lease clear-stale")
+        d = hoff.task_dir(task_id)
+        coord, result = _coord_call(lambda c: c.lease_clear_stale(
+            d, task_id, lease_id, v.get("--owner-words"), scan_credentials=hoff.scan_credentials))
+        _print_kv("lease clear-stale", task_id, lease_id, result,
+                  [("cleared reason:", "cleared_reason"), ("cleared at:", "cleared_at")])
+        return 0
+
+    die(f"unknown lease subcommand {sub!r} — one of: acquire, renew, release, clear-stale")
+
+
+def cmd_claim(args):
+    if not args or args[0].startswith("-"):
+        die("usage: ai-os coordinator claim <acquire|release|clear-stale> ...")
+    sub, rest = args[0], args[1:]
+    hoff = _load_sibling("ai-os-handoff")
+
+    if sub == "acquire":
+        if not rest or rest[0].startswith("-"):
+            die("usage: ai-os coordinator claim acquire <task-id> --lease-id <lease-id> "
+                "--path <relative-path> --client <client-id> --session <session-id> "
+                "--idempotency-key <key>")
+        task_id, flag_args = rest[0], rest[1:]
+        v = _parse_flags(flag_args, ("--lease-id", "--path", "--client", "--session",
+                                     "--idempotency-key"), "claim acquire")
+        d = hoff.task_dir(task_id)
+        coord, result = _coord_call(lambda c: c.claim_acquire(
+            d, task_id, v.get("--lease-id"), v.get("--path"), v.get("--client"),
+            v.get("--session"), v.get("--idempotency-key")))
+        _print_kv("claim acquire", task_id, result.get("path"), result,
+                  [("lease id:", "lease_id"), ("client:", "client_id"),
+                   ("session:", "session_id"), ("acquired at:", "acquired_at")])
+        return 0
+
+    if sub == "release":
+        if len(rest) < 2 or rest[0].startswith("-"):
+            die("usage: ai-os coordinator claim release <task-id> <path> "
+                "--lease-id <lease-id> --client <client-id> --session <session-id> "
+                "--idempotency-key <key>")
+        task_id, path, flag_args = rest[0], rest[1], rest[2:]
+        v = _parse_flags(flag_args, ("--lease-id", "--client", "--session",
+                                     "--idempotency-key"), "claim release")
+        d = hoff.task_dir(task_id)
+        coord, result = _coord_call(lambda c: c.claim_release(
+            d, task_id, v.get("--lease-id"), path, v.get("--client"), v.get("--session"),
+            v.get("--idempotency-key")))
+        _print_kv("claim release", task_id, result.get("path"), result,
+                  [("released by:", "released_by"), ("released at:", "released_at")])
+        return 0
+
+    if sub == "clear-stale":
+        if len(rest) < 2 or rest[0].startswith("-"):
+            die("usage: ai-os coordinator claim clear-stale <task-id> <path> "
+                "--owner-words <text>")
+        task_id, path, flag_args = rest[0], rest[1], rest[2:]
+        v = _parse_flags(flag_args, ("--owner-words",), "claim clear-stale")
+        d = hoff.task_dir(task_id)
+        coord, result = _coord_call(lambda c: c.claim_clear_stale(
+            d, task_id, path, v.get("--owner-words"), scan_credentials=hoff.scan_credentials))
+        _print_kv("claim clear-stale", task_id, result.get("path"), result,
+                  [("cleared reason:", "cleared_reason"), ("cleared at:", "cleared_at")])
+        return 0
+
+    die(f"unknown claim subcommand {sub!r} — one of: acquire, release, clear-stale")
+
+
+def cmd_transition(args):
+    if not args or args[0].startswith("-"):
+        die("usage: ai-os coordinator transition <task-id> --from <state> --to <state> "
+            "--lease-id <lease-id> --client <client-id> --session <session-id> "
+            "--idempotency-key <key> [--approval-ref <value>] [--evidence <text>]")
+    task_id, flag_args = args[0], args[1:]
+    v = _parse_flags(flag_args, ("--from", "--to", "--lease-id", "--client", "--session",
+                                 "--idempotency-key", "--approval-ref", "--evidence"),
+                     "transition")
+    hoff = _load_sibling("ai-os-handoff")
+    d = hoff.task_dir(task_id)
+    coord, result = _coord_call(lambda c: c.transition(
+        d, task_id, v.get("--from"), v.get("--to"), v.get("--lease-id"), v.get("--client"),
+        v.get("--session"), v.get("--idempotency-key"), approval_ref=v.get("--approval-ref"),
+        evidence=v.get("--evidence"), scan_credentials=hoff.scan_credentials))
+    _print_kv("transition", task_id, None, result,
+              [("from:", "previous_state"), ("to:", "coordination_state"),
+               ("updated at:", "updated_at")])
+    return 0
+
+
+# --- T-050-S7: coordinator begin / finalize — the explicit foreground coordination workflow.
+# begin = lease acquire + file claim acquire + handoff prepare, in one call, with explicit
+# compensation on any partial failure. finalize = read-only review + cost, then explicit
+# claim release + lease release. Neither ever approves, sends, dispatches, receives, or
+# selects a next hop — those remain manual, exactly as they are today. Both reuse the
+# existing S6/S6-R1 library (`aios_coordination.py`) and the existing V6 handoff/review/cost
+# logic above; nothing here is a second implementation of any of that.
+def _print_begin(result, replay=False):
+    print(f"\n  {B}begin{X}  {result['task_id']} / {result['handoff_id']}")
+    print(f"  task id:                {result['task_id']}")
+    print(f"  lease id:               {result['lease_id']}")
+    print(f"  claimed path:           {result['claimed_path']}")
+    print(f"  handoff id:             {result['handoff_id']}")
+    print(f"  destination:            {result['destination']}")
+    print(f"  gate:                   {result['gate']}")
+    print(f"  scope:                  {result['scope']}")
+    print(f"  owner approval command: {result['approval_command']}")
+    print(f"  next required action:   {result['next_action']}")
+    if replay:
+        print(f"  {D}(duplicate idempotency key — original begin result returned, no second "
+              f"lease/claim/handoff was created){X}")
+    print(f"  {D}begin only: lease active, claim active, handoff waiting-owner — approval "
+          f"none, sent no. Nothing was approved, dispatched, sent or received here.{X}\n")
+
+
+def cmd_begin(args):
+    if not args or args[0].startswith("-"):
+        die("usage: ai-os coordinator begin <task-id> --intent <intent> --scope <path> "
+            "--source-client <client-id> --source-session <session-id> "
+            "--invocation <invocation-id> --ttl-seconds <n> --idempotency-key <key> "
+            "[--id <handoff-id>] [--summary <text>]")
+    task_id, rest = args[0], args[1:]
+    v = _parse_flags(rest, ("--intent", "--scope", "--source-client", "--source-session",
+                            "--invocation", "--ttl-seconds", "--idempotency-key", "--id",
+                            "--summary"), "begin")
+    intent = v.get("--intent")
+    scope = v.get("--scope")
+    source_client = v.get("--source-client")
+    source_session = v.get("--source-session")
+    invocation = v.get("--invocation")
+    ttl_seconds = v.get("--ttl-seconds")
+    idem_key = v.get("--idempotency-key")
+    handoff_id = v.get("--id")
+    summary = v.get("--summary")
+
+    hoff = _load_sibling("ai-os-handoff")
+    # Same resolver every other coordinator/handoff command uses: refuses (exit 4) if the
+    # task id is malformed or resolves to no ticket at all — before anything else runs.
+    d = hoff.task_dir(task_id)
+
+    # --- every check below runs before any lease/claim/handoff is written --------------------
+    if not intent or not intent.strip():
+        die("--intent is required — begin with no intent is not a workflow")
+    intent = intent.strip()
+
+    if not source_client or not source_client.strip():
+        die("--source-client is required — begin never records an unspecified source")
+    if not source_session or not source_session.strip():
+        die("--source-session is required — begin never records an unspecified source")
+    source_client = source_client.strip()
+    source_session = source_session.strip()
+    if not hoff.IDENTITY.fullmatch(source_client):
+        die(f"not a client identifier: {source_client!r} — one token of [A-Za-z0-9._-]")
+    if not hoff.IDENTITY.fullmatch(source_session):
+        die(f"not a session identifier: {source_session!r} — one token of [A-Za-z0-9._-]")
+
+    if not invocation or not str(invocation).strip():
+        die("--invocation is required")
+    if not idem_key or not str(idem_key).strip():
+        die("--idempotency-key is required")
+
+    coord = _coord()
+    try:
+        idem_key = coord.require_token(idem_key, "idempotency-key")
+    except coord.CoordinationError as e:
+        die(str(e), code=e.code)
+
+    roles, intents = load_policy()
+    if intent not in intents:
+        die(f"unknown intent {intent!r} — one of: {', '.join(sorted(intents))}")
+    role = intents[intent]
+    if role not in roles:
+        die(f"routing policy is malformed: intent {intent!r} names role {role!r}, which has "
+            f"no entry in 'roles' — refusing rather than guessing a client")
+    client = roles[role]
+
+    gate = GATE_BY_INTENT.get(intent)
+    if gate is None or gate not in hoff.GATES:
+        die(f"policy mismatch: intent {intent!r} has no known gate mapping in this "
+            f"coordinator's own GATE_BY_INTENT table — refusing rather than guessing a gate")
+
+    scope = validate_scope(scope)
+
+    spec, binary, unavailable = hoff.resolve_transport(client)
+    if unavailable:
+        die(f"cannot prepare a handoff to {client!r}: {unavailable}")
+
+    if handoff_id is None:
+        handoff_id = intent
+    if not hoff.SAFE.fullmatch(handoff_id):
+        die(f"not a handoff id: {handoff_id!r} — [A-Za-z0-9._-], one segment")
+
+    # Idempotent replay, checked before the "handoff already exists" guard below and before
+    # anything is acquired: a repeated identical idempotency key must return the exact
+    # original result, even though the first call's own successful prepare has, by design,
+    # already left a real handoff record on disk — which would otherwise make a legitimate
+    # replay collide with the very next check ("record already exists") instead of ever
+    # reaching it. The delegated `ai-os handoff prepare` itself has no idempotency concept of
+    # its own, so this check must run first, and it never touches lease_acquire, claim_acquire
+    # or handoff prepare a second time once it finds a cached result.
+    begin_target = f"{task_id}:{handoff_id}"
+    try:
+        with coord.ticket_guard(d):
+            cached = coord.idempotency_check(d, idem_key, "coordinator_begin", begin_target)
+    except coord.CoordinationError as e:
+        die(str(e), code=e.code)
+    if cached is not None:
+        _print_begin(cached, replay=True)
+        return 0
+
+    existing = hoff.record_path(d, handoff_id)
+    if existing.exists():
+        die(f"handoff {handoff_id} already exists at {existing} for task {task_id} — begin "
+            f"refuses to overwrite an existing handoff; approve it, or pass a different --id "
+            f"for a new one", code=2)
+    # -----------------------------------------------------------------------------------
+
+    # A fresh per-attempt namespace for the underlying lease/claim idempotency keys, so a
+    # retried begin call after a genuine failure (never cached above, since only a success
+    # is stored) always acquires fresh coordination state rather than replaying a prior
+    # attempt's now-released lease/claim.
+    attempt = coord.uuid.uuid4().hex[:12]
+
+    try:
+        lease = coord.lease_acquire(d, task_id, source_client, source_session, invocation,
+                                    ttl_seconds, _sub_key(idem_key, f"lease-{attempt}"))
+    except coord.CoordinationError as e:
+        die(str(e), code=e.code)  # lease acquisition itself failed: nothing was written
+
+    try:
+        claim = coord.claim_acquire(d, task_id, lease["lease_id"], scope, source_client,
+                                    source_session, _sub_key(idem_key, f"claim-{attempt}"))
+    except coord.CoordinationError as e:
+        try:
+            coord.lease_release(d, task_id, lease["lease_id"], source_client, source_session,
+                                invocation, _sub_key(idem_key, f"lease-cleanup-{attempt}"))
+        except coord.CoordinationError as e2:
+            die(f"BLOCKED: file claim acquisition failed ({e}); the lease-release cleanup "
+                f"ALSO failed ({e2}) — lease {lease['lease_id']} on task {task_id} remains "
+                f"active and requires explicit owner inspection ('coordinator lease release' "
+                f"or 'coordinator lease clear-stale')", code=5)
+        die(f"file claim acquisition failed: {e} — the lease acquired for this attempt was "
+            f"explicitly released; no coordination state remains", code=e.code)
+
+    approval_command = (f"ai-os handoff approve {task_id} {handoff_id} --gate {gate} --to "
+                        f"{client} --scope {scope} --owner-words <text>")
+
+    def _compensate_claim_and_lease(reason):
+        errors = []
+        try:
+            coord.claim_release(d, task_id, lease["lease_id"], scope, source_client,
+                                source_session, _sub_key(idem_key, f"claim-cleanup-{attempt}"))
+        except coord.CoordinationError as ce:
+            errors.append(f"claim release failed: {ce}")
+        try:
+            coord.lease_release(d, task_id, lease["lease_id"], source_client, source_session,
+                                invocation, _sub_key(idem_key, f"lease-cleanup2-{attempt}"))
+        except coord.CoordinationError as le:
+            errors.append(f"lease release failed: {le}")
+        if errors:
+            die(f"BLOCKED: {reason}, and cleanup could not fully complete: "
+                f"{'; '.join(errors)} — task {task_id} lease {lease['lease_id']} / claim "
+                f"{claim['path']} require explicit owner inspection", code=5)
+
+    # --- delegate: the one and only place a V6 handoff record is written is
+    # `cli/ai-os-handoff`'s own `cmd_prepare` — identical to `coordinator prepare`'s own
+    # delegation above. Unlike `prepare`, a failure here must compensate the lease/claim
+    # this call itself just acquired: `hoff.cmd_prepare` calls `die()`, which raises
+    # `SystemExit` rather than returning a code, so that failure is caught here, compensated,
+    # and only then re-raised unchanged. -------------------------------------------------
+    prepare_args = [task_id, "--to", client, "--gate", gate, "--scope", scope,
+                    "--id", handoff_id, "--status", "waiting-owner",
+                    "--source-client", source_client, "--source-session", source_session]
+    if summary:
+        prepare_args += ["--summary", summary]
+    try:
+        rc = hoff.cmd_prepare(prepare_args)
+    except SystemExit as e:
+        _compensate_claim_and_lease(f"handoff prepare failed (exit {e.code})")
+        raise
+    if rc:
+        _compensate_claim_and_lease(f"handoff prepare returned exit code {rc}")
+        return rc
+    # -----------------------------------------------------------------------------------
+
+    result = {
+        "task_id": task_id, "lease_id": lease["lease_id"], "claimed_path": claim["path"],
+        "handoff_id": handoff_id, "destination": client, "gate": gate, "scope": scope,
+        "approval_command": approval_command,
+        "next_action": "owner runs the approval command above via the existing `ai-os "
+                       "handoff approve`; after that, `ai-os coordinator dispatch` sends it, "
+                       "the owner reviews the reply, and `ai-os coordinator finalize` "
+                       "releases the claim and lease",
+    }
+    with coord.ticket_guard(d):
+        coord.idempotency_store(d, idem_key, "coordinator_begin", begin_target, result)
+
+    _print_begin(result, replay=False)
+    return 0
+
+
+def _print_finalize(result, replay=False):
+    print(f"\n  {B}finalize{X}  {result['task_id']} / {result['handoff_id']}")
+    print(f"  released claim:        {result['released_claim'] or 'n/a'}")
+    print(f"  released lease:        {result['released_lease']}")
+    print(f"  cost status:           {result['cost_status']}")
+    print(f"  reduction signal:      {result['reduction_signal']}")
+    if replay:
+        print(f"  {D}(duplicate idempotency key — original finalize result returned, no "
+              f"second release was performed){X}")
+    print(f"  {D}finalize only: no ticket completion performed, no next hop selected — "
+          f"nothing approved, sent, dispatched or received here{X}\n")
+
+
+def cmd_finalize(args):
+    if len(args) < 2 or args[0].startswith("-") or args[1].startswith("-"):
+        die("usage: ai-os coordinator finalize <task-id> <handoff-id> --lease-id <lease-id> "
+            "--client <client-id> --session <session-id> --invocation <invocation-id> "
+            "--idempotency-key <key>")
+    task_id, handoff_id, flag_args = args[0], args[1], args[2:]
+    v = _parse_flags(flag_args, ("--lease-id", "--client", "--session", "--invocation",
+                                 "--idempotency-key"), "finalize")
+    lease_id, client, session = v.get("--lease-id"), v.get("--client"), v.get("--session")
+    invocation, idem_key = v.get("--invocation"), v.get("--idempotency-key")
+    for name, val in (("--lease-id", lease_id), ("--client", client), ("--session", session),
+                      ("--invocation", invocation), ("--idempotency-key", idem_key)):
+        if not val or not str(val).strip():
+            die(f"{name} is required")
+
+    coord = _coord()
+    try:
+        idem_key = coord.require_token(idem_key, "idempotency-key")
+    except coord.CoordinationError as e:
+        die(str(e), code=e.code)
+
+    hoff = _load_sibling("ai-os-handoff")
+    d = hoff.task_dir(task_id)
+    # `load_record` itself fails closed: exit 4 for a missing/unknown handoff id, and a
+    # refusal for a handoff_id mismatch between the filename and the record's own field —
+    # the same "match task id and handoff id" requirement finalize needs, reused rather than
+    # re-checked.
+    p, text, meta = hoff.load_record(d, handoff_id)
+
+    if meta.get("task_id") not in (None, task_id):
+        die(f"handoff {handoff_id} belongs to task {meta.get('task_id')!r}, not {task_id!r} "
+            f"— finalize refused")
+
+    # --- the one status gate this command enforces, identical wording to `review`'s own ----
+    status = meta.get("status")
+    if status not in ("returned", "reviewed"):
+        die(f"handoff {handoff_id} is {status!r}; finalize requires 'returned' or 'reviewed' "
+            f"— the existing `ai-os handoff receive` is what gets it there. finalize never "
+            f"receives, approves, sends or dispatches, and has no code path that could move "
+            f"a handoff to that state itself.")
+
+    # Idempotent replay, checked before any lease/claim state is touched.
+    target = f"{task_id}:{handoff_id}:{lease_id}"
+    try:
+        with coord.ticket_guard(d):
+            cached = coord.idempotency_check(d, idem_key, "coordinator_finalize", target)
+    except coord.CoordinationError as e:
+        die(str(e), code=e.code)
+    if cached is not None:
+        _print_finalize(cached, replay=True)
+        return 0
+
+    # --- validation only below this line. Nothing is released until every one of these
+    # --- checks passes; a failure here releases nothing and leaves the lease/claim exactly
+    # --- as they were. Reuses the exact same read-only lease/claim verification `coordinator
+    # --- dispatch` already applies (`verify_dispatch_conflict_protection`), plus the
+    # --- explicit invocation match this command additionally requires. --------------------
+    try:
+        _, lease = coord._load_active_lease_or_die(d, task_id)
+        if lease.get("lease_id") != lease_id:
+            coord.refuse(f"--lease-id {lease_id!r} does not match the active lease "
+                        f"{lease.get('lease_id')!r} on task {task_id} — finalize refused")
+        if lease.get("client_id") != client or lease.get("session_id") != session:
+            coord.refuse(f"the active lease on task {task_id} is held by "
+                        f"{lease.get('client_id')}/{lease.get('session_id')}, not "
+                        f"{client}/{session} — finalize refused")
+        if lease.get("invocation_id") != invocation:
+            coord.refuse(f"the active lease on task {task_id} was acquired under invocation "
+                        f"{lease.get('invocation_id')!r}, not {invocation!r} — finalize "
+                        f"refused")
+        coord.verify_dispatch_conflict_protection(d, task_id, meta.get("scope"), lease_id,
+                                                  client, session)
+        scope_paths = coord.resolve_scope_paths(meta.get("scope"))
+    except coord.CoordinationError as e:
+        die(str(e), code=e.code)
+    # -----------------------------------------------------------------------------------
+
+    # --- read-only review, exactly as `coordinator review` runs it, plus the per-handoff
+    # --- cost status/reduction signal exactly as `coordinator cost` computes it. Neither
+    # --- writes anything, changes any status, or picks a next hop. ------------------------
+    review = _build_review_report(task_id, handoff_id, text, meta, hoff)
+    _print_review_report(review)
+    cost = _build_cost_report(task_id, handoff_id, text, meta, hoff)
+    print(f"  cost status:            {cost['cost_status']}")
+    print(f"  reduction signal:       {cost['reduction_signal']}\n")
+    # -----------------------------------------------------------------------------------
+
+    # --- release: claim(s) first, then the lease, exactly in that order. A failure at
+    # --- either step releases nothing further and is reported BLOCKED, naming exactly what
+    # --- remains — never retried automatically. ------------------------------------------
+    released_claims = []
+    for raw_path in scope_paths:
+        try:
+            rel = coord.claim_release(d, task_id, lease_id, raw_path, client, session,
+                                      _sub_key(idem_key, f"claim-release-{raw_path}"))
+        except coord.CoordinationError as e:
+            die(f"BLOCKED: claim release failed for {raw_path!r}: {e} — lease {lease_id} "
+                f"and this claim remain active; no retry performed automatically", code=5)
+        released_claims.append(rel)
+
+    try:
+        coord.lease_release(d, task_id, lease_id, client, session, invocation,
+                            _sub_key(idem_key, "lease-release"))
+    except coord.CoordinationError as e:
+        die(f"BLOCKED: claim release succeeded but lease release failed: {e} — lease "
+            f"{lease_id} remains and must be released explicitly", code=5)
+
+    for rel in released_claims:
+        obj, corrupt = coord._read_json(coord._claim_path(rel["path"]))
+        if corrupt or obj is None or obj.get("state") not in ("released", "cleared"):
+            die(f"BLOCKED: lease release succeeded but claim {rel['path']} did not end up "
+                f"released — requires explicit owner inspection", code=5)
+    # -----------------------------------------------------------------------------------
+
+    result = {
+        "task_id": task_id, "handoff_id": handoff_id,
+        "released_claim": ", ".join(r["path"] for r in released_claims) or None,
+        "released_lease": lease_id,
+        "cost_status": cost["cost_status"], "reduction_signal": cost["reduction_signal"],
+    }
+    with coord.ticket_guard(d):
+        coord.idempotency_store(d, idem_key, "coordinator_finalize", target, result)
+
+    _print_finalize(result, replay=False)
+    return 0
+
+
+CMDS = {"route": cmd_route, "prepare": cmd_prepare, "dispatch": cmd_dispatch,
+        "review": cmd_review, "cost": cmd_cost, "lease": cmd_lease, "claim": cmd_claim,
+        "transition": cmd_transition, "begin": cmd_begin, "finalize": cmd_finalize}
+
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    if not a or a[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        sys.exit(0 if a else 2)
+    if a[0] not in CMDS:
+        print(f"  ai-os coordinator: unknown command {a[0]!r}", file=sys.stderr)
+        print(__doc__, file=sys.stderr)
+        sys.exit(2)
+    sys.exit(CMDS[a[0]](a[1:]))

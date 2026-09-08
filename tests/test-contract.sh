@@ -310,7 +310,7 @@ chk "a credential on the copyright line is still a finding" $?
 grep -q 'COPYRIGHT_LINE = re.compile' "$CLI/ai-os-privacy-scan"
 chk "licence attribution is a pattern in the scanner, not a literal name" $?
 n=$(grep -cvE '^[[:space:]]*(#|$)' "$REPO/internal/governance/policies/privacy-allowlist.txt")
-[ "$n" -eq 12 ]
+[ "$n" -eq 14 ]
 chk "the allowlist gained no entry — every one is a hole in the scan ($n)" $?
 grep -q "^exceptions:" "$REPO/internal/governance/policies/privacy-classification.yaml"
 chk "both exemptions are documented as policy" $?
@@ -332,7 +332,7 @@ t "adapter contract: the real registry"
 out=$("$CLI/ai-os-adapter" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "all shipped manifests valid" $?
 n=$(echo "$out" | grep -c '^  ok ')
-[ "$n" -eq 5 ];                                      chk "5 manifests present and parsed" $?
+[ "$n" -eq 9 ];                                      chk "9 manifests present and parsed" $?
 echo "$out" | grep -q "consumer not verified";       chk "unverified consumers are flagged, not hidden" $?
 "$CLI/ai-os-adapter" list 2>&1 | grep -q "cursor.*nothing"
 chk "an adapter that writes nothing is valid" $?
@@ -551,9 +551,15 @@ H = Path.home()
 EXPECTED = {
     "claude": (H/".claude/CLAUDE.md", H/".claude/skills"),
     "codex":  (H/".codex/AGENTS.md",  H/".codex/skills"),
-    "gemini": (H/".gemini/GEMINI.md", H/".gemini/skills"),
 }
-EXPECTED_PROJECT_ONLY = ["cursor", "opencode"]
+# gemini's manifest declares writes: [] (consumer_verified: false — path confirmed,
+# consumption not observed), so load_registry() correctly places it in project_only
+# alongside cursor/opencode rather than in the writable table above. The mission-pilot
+# adapters (claude-code-mission-pilot, claude-code-tools-pilot, gemini-cli-mission-pilot)
+# and the disposable atlas-fixture registry fixture are unverified/writes-nothing too.
+EXPECTED_PROJECT_ONLY = ["atlas-fixture", "claude-code-mission-pilot",
+                         "claude-code-tools-pilot", "cursor", "gemini",
+                         "gemini-cli-mission-pilot", "opencode"]
 m = {"__name__": "notmain",
      "__file__": str(Path(os.environ["CLI"], "ai-sync"))}
 exec(compile(Path(os.environ["CLI"], "ai-sync").read_text(), "ai-sync", "exec"), m)
@@ -654,7 +660,7 @@ n=$(grep -c '^[[:space:]]*[{[]' "$FMT"/adapters/*/adapter.yaml | awk -F: '{s+=$2
 
 out=$(AI_OS_ADAPTERS="$FMT/adapters" "$CLI/ai-os-adapter" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "reflowed adapter manifests still validate" $?
-[ "$(echo "$out" | grep -c '^  ok ')" -eq 5 ];       chk "  ...all 5, none unreadable" $?
+[ "$(echo "$out" | grep -c '^  ok ')" -eq 9 ];       chk "  ...all 9, none unreadable" $?
 echo "$out" | grep -qi "flow collection"; [ $? -ne 0 ]
 chk "  ...and no flow-collection complaint" $?
 
@@ -1140,16 +1146,17 @@ chk "the repository is located from the file's own path" $?
 n=$(grep -c 'search(r"\^ai_os_repo' "$SY" || true)
 [ "$n" -eq 0 ];                                      chk "   ...and never resolved from ai_os_repo:" $?
 
-t "ai-sync honours AI_OS_HOME for runtime state"
+t "ai-sync honours ATLAS_HOME for runtime state (T-020: runtime/caches/backups moved off the AI_OS_HOME-compat resolver; RULES/PROFILE stay on it, untouched)"
 grep -q 'AI_OS_HOME = Path(os.environ.get("AI_OS_HOME"' "$SY"
-chk "AI_OS_HOME is read from the environment" $?
-# Still under AI_OS_HOME — through the one resolver, so a relocated runtime/ moves the
-# state with it instead of splitting it across two layouts.
-grep -q 'RUNTIME = private_path_or_die("runtime")' "$SY"
-chk "runtime state resolves under it" $?
-grep -q 'AI_OS_HOME / "runtime"' "$SY"
-[ $? -ne 0 ];                                        chk "   ...and never as a hardcoded layout" $?
-grep -q 'STATE = RUNTIME / "state"' "$SY";           chk "   ...state" $?
+chk "AI_OS_HOME is still read, for RULES/PROFILE" $?
+# Runtime/caches/backups are Atlas-canonical as of T-020 — resolved from ATLAS_HOME
+# directly, not through the AI_OS_HOME-compat private_path_or_die() resolver that
+# RULES/PROFILE still use above.
+grep -q 'ATLAS_HOME = Path(os.environ\["ATLAS_HOME"\]) if os.environ.get("ATLAS_HOME")' "$SY"
+chk "ATLAS_HOME is read from the environment for runtime state" $?
+grep -q 'RUNTIME = ATLAS_HOME / "runtime"' "$SY";    chk "   ...runtime resolves under it" $?
+grep -q 'CACHES = RUNTIME / "caches"' "$SY";         chk "   ...caches" $?
+grep -q 'STATE = CACHES / "state" / "state.json"' "$SY"; chk "   ...state" $?
 grep -q 'BACKUPS = RUNTIME / "backups"' "$SY";       chk "   ...backups" $?
 
 t "the retired ~/.ai layer is completely removed"
@@ -1921,24 +1928,24 @@ fi
 # =====================================================================================
 t "run: create requires an explicit, finite budget and scope"
 RW="$TMP/runws"; AI_OS_HOME="$RW" "$CLI/ai-os-init" >/dev/null 2>&1
-out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" create --scope 'browser.read' 2>&1); rc=$?
+out=$(ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" create --scope 'browser.read' 2>&1); rc=$?
 [ "$rc" -ne 0 ];                          chk "refuses to create with no --max-steps" $?
-out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" create --max-steps 3 2>&1); rc=$?
+out=$(ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" create --max-steps 3 2>&1); rc=$?
 [ "$rc" -ne 0 ];                          chk "refuses to create with no --scope" $?
 grep -Eq -- '--unlimited|--no-limit|autonomous=true' "$CLI/ai-os-run"
 [ $? -ne 0 ];                             chk "no unlimited/bypass mode exists in the code" $?
-out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" create --max-steps 3 --scope 'browser.read,browser.navigate' --task AIOS-TEST 2>&1)
+out=$(ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" create --max-steps 3 --scope 'browser.read,browser.navigate' --task AIOS-TEST 2>&1)
 echo "$out" | grep -q 'created';          chk "creates a run with a finite budget and scope" $?
 RUN_ID=$(echo "$out" | grep -oE 'run-[0-9a-f-]+' | head -1)
 [ -n "$RUN_ID" ];                         chk "  ...and prints its id" $?
-[ -f "$RW/internal/runtime/runs/$RUN_ID.json" ];   chk "  ...persisted under runtime/, not tasks/ or memory" $?
+[ -f "$RW/runtime/runs/$RUN_ID.json" ];   chk "  ...persisted under runtime/, not tasks/ or memory" $?
 
 # =====================================================================================
 t "run: scope — out-of-scope capability/operation is refused, run stays continue"
-out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_ID" browser.click --dry-run 2>&1); rc=$?
+out=$(ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_ID" browser.click --dry-run 2>&1); rc=$?
 echo "$out" | grep -q 'outside this run.s scope';  chk "an out-of-scope operation is refused" $?
 [ "$rc" -ne 0 ];                          chk "  ...as a non-zero exit" $?
-rec="$RW/internal/runtime/runs/$RUN_ID.json"
+rec="$RW/runtime/runs/$RUN_ID.json"
 grep -q '"status": "continue"' "$rec";    chk "  ...and the run itself is untouched — still continue" $?
 grep -q '"steps_used": 0' "$rec";         chk "  ...a Run-local refusal never consumes budget" $?
 
@@ -1946,9 +1953,9 @@ grep -q '"steps_used": 0' "$rec";         chk "  ...a Run-local refusal never co
 t "run: authority — run scope can only restrict, never elevate, the user's grant"
 grep -q '^default: observe' "$RW/internal/config/authority.yaml"
 chk "fresh workspace still grants only observe" $?
-out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_ID" browser.read --dry-run 2>&1); rc=$?
+out=$(ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_ID" browser.read --dry-run 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "an in-scope, observe-level op is allowed" $?
-out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_ID" browser.navigate --dry-run 2>&1); rc=$?
+out=$(ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_ID" browser.navigate --dry-run 2>&1); rc=$?
 echo "$out" | grep -q "needs 'execute'; granted 'observe'"
 chk "an in-scope op still needs the SAME authority invoke would require" $?
 [ "$rc" -eq 6 ];                          chk "  ...and the run blocks rather than silently downgrading" $?
@@ -1959,14 +1966,14 @@ chk "every step's stdin is closed — a Run can never see a terminal to approve 
 
 # =====================================================================================
 t "run: approval — execute-with-approval is never silently satisfied"
-AI_OS_HOME="$RW" "$CLI/ai-os-run" create --max-steps 3 --scope 'browser.submit' >/tmp/aios-run-approval.out 2>&1
+ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" create --max-steps 3 --scope 'browser.submit' >/tmp/aios-run-approval.out 2>&1
 RUN_A=$(grep -oE 'run-[0-9a-f-]+' /tmp/aios-run-approval.out | head -1)
-out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_A" browser.submit --dry-run </dev/null 2>&1); rc=$?
+out=$(ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_A" browser.submit --dry-run </dev/null 2>&1); rc=$?
 echo "$out" | grep -q "needs-approval";   chk "an approval-gated op moves the run to needs-approval" $?
 [ "$rc" -eq 5 ];                          chk "  ...as its own distinct exit code" $?
-grep -q '"status": "needs-approval"' "$RW/internal/runtime/runs/$RUN_A.json"
+grep -q '"status": "needs-approval"' "$RW/runtime/runs/$RUN_A.json"
 chk "  ...and the run record says so" $?
-out=$(AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_A" browser.read --dry-run 2>&1); rc=$?
+out=$(ATLAS_HOME="$RW" AI_OS_HOME="$RW" "$CLI/ai-os-run" step "$RUN_A" browser.read --dry-run 2>&1); rc=$?
 echo "$out" | grep -q 'refused';          chk "needs-approval is terminal — no further step is taken" $?
 rm -f /tmp/aios-run-approval.out
 
@@ -1980,12 +1987,12 @@ grep -Eq 'status.*=.*.completed.*executed' "$CLI/ai-os-run"
 # =====================================================================================
 t "run: budget — a step beyond max_steps is refused and the run ends"
 BW="$TMP/budgetws"; AI_OS_HOME="$BW" "$CLI/ai-os-init" >/dev/null 2>&1
-AI_OS_HOME="$BW" "$CLI/ai-os-run" create --max-steps 1 --scope 'browser.navigate' >/tmp/aios-run-budget.out 2>&1
+ATLAS_HOME="$BW" AI_OS_HOME="$BW" "$CLI/ai-os-run" create --max-steps 1 --scope 'browser.navigate' >/tmp/aios-run-budget.out 2>&1
 RUN_B=$(grep -oE 'run-[0-9a-f-]+' /tmp/aios-run-budget.out | head -1)
-AI_OS_HOME="$BW" "$CLI/ai-os-run" step "$RUN_B" browser.navigate --json '{"url":"http://example.com"}' >/dev/null 2>&1
-grep -q '"steps_used": 1' "$BW/internal/runtime/runs/$RUN_B.json"
+ATLAS_HOME="$BW" AI_OS_HOME="$BW" "$CLI/ai-os-run" step "$RUN_B" browser.navigate --json '{"url":"http://example.com"}' >/dev/null 2>&1
+grep -q '"steps_used": 1' "$BW/runtime/runs/$RUN_B.json"
 chk "the one permitted step consumed the budget" $?
-out=$(AI_OS_HOME="$BW" "$CLI/ai-os-run" step "$RUN_B" browser.navigate --json '{}' 2>&1); rc=$?
+out=$(ATLAS_HOME="$BW" AI_OS_HOME="$BW" "$CLI/ai-os-run" step "$RUN_B" browser.navigate --json '{}' 2>&1); rc=$?
 echo "$out" | grep -qE 'blocked|budget exhausted|not .continue.'
 chk "a step beyond the budget is refused" $?
 [ "$rc" -ne 0 ];                          chk "  ...as a non-zero exit" $?
@@ -2008,7 +2015,9 @@ grep -q 'opaque' "$CLI/ai-os-run";        chk "task_id is documented as opaque, 
 
 # =====================================================================================
 t "run: persistence isolation — run state lives only under runtime/"
-grep -q 'RUNS_DIR = private_path_or_die("runtime") / "runs"' "$CLI/ai-os-run"
+# T-021: deliberately Atlas-canonical, not the AI_OS_HOME-compat resolver 13+ other
+# commands still use — see the comment above _ATLAS_HOME in cli/ai-os-run.
+grep -q 'RUNS_DIR = _ATLAS_HOME / "runtime" / "runs"' "$CLI/ai-os-run"
 chk "run records are rooted under runtime/runs/" $?
 grep -Eq '02-personal|05-knowledge|memory/|knowledge/' "$CLI/ai-os-run"
 [ $? -ne 0 ];                             chk "ai-os-run writes no durable workspace state" $?
@@ -2016,10 +2025,10 @@ grep -Eq '02-personal|05-knowledge|memory/|knowledge/' "$CLI/ai-os-run"
 # =====================================================================================
 t "run: determinism — the same run, the same step, refused the same way twice"
 DW="$TMP/detws"; AI_OS_HOME="$DW" "$CLI/ai-os-init" >/dev/null 2>&1
-AI_OS_HOME="$DW" "$CLI/ai-os-run" create --max-steps 5 --scope 'browser.read' >/tmp/aios-run-det.out 2>&1
+ATLAS_HOME="$DW" AI_OS_HOME="$DW" "$CLI/ai-os-run" create --max-steps 5 --scope 'browser.read' >/tmp/aios-run-det.out 2>&1
 RUN_D=$(grep -oE 'run-[0-9a-f-]+' /tmp/aios-run-det.out | head -1)
-out1=$(AI_OS_HOME="$DW" "$CLI/ai-os-run" step "$RUN_D" browser.click --dry-run 2>&1); rc1=$?
-out2=$(AI_OS_HOME="$DW" "$CLI/ai-os-run" step "$RUN_D" browser.click --dry-run 2>&1); rc2=$?
+out1=$(ATLAS_HOME="$DW" AI_OS_HOME="$DW" "$CLI/ai-os-run" step "$RUN_D" browser.click --dry-run 2>&1); rc1=$?
+out2=$(ATLAS_HOME="$DW" AI_OS_HOME="$DW" "$CLI/ai-os-run" step "$RUN_D" browser.click --dry-run 2>&1); rc2=$?
 [ "$rc1" -eq "$rc2" ];                    chk "the same out-of-scope call refuses identically twice" $?
 [ "$out1" = "$out2" ];                    chk "  ...with byte-identical output" $?
 rm -f /tmp/aios-run-det.out
@@ -2043,18 +2052,18 @@ cat > "$NWEB/f.html" <<'HTMLEOF'
 <html><body><h1 id="h">Exam</h1><button id="b" type="button">Click</button></body></html>
 HTMLEOF
 export AI_OS_BROWSER_RUNTIME="$TMP/noprog-runtime"
-AI_OS_HOME="$NW" "$CLI/ai-os-run" create --max-steps 10 \
+ATLAS_HOME="$NW" AI_OS_HOME="$NW" "$CLI/ai-os-run" create --max-steps 10 \
   --scope 'browser.open,browser.navigate,browser.click,browser.close' >/tmp/aios-run-noprog.out 2>&1
 RUN_N=$(grep -oE 'run-[0-9a-f-]+' /tmp/aios-run-noprog.out | head -1)
-AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.open --json '{}' >/dev/null 2>&1
-AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.navigate --json "{\"url\":\"file://$NWEB/f.html\"}" >/dev/null 2>&1
+ATLAS_HOME="$NW" AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.open --json '{}' >/dev/null 2>&1
+ATLAS_HOME="$NW" AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.navigate --json "{\"url\":\"file://$NWEB/f.html\"}" >/dev/null 2>&1
 for i in 1 2 3; do
-  out=$(AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.click --json '{"selector":"#b"}' 2>&1)
+  out=$(ATLAS_HOME="$NW" AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.click --json '{"selector":"#b"}' 2>&1)
 done
 echo "$out" | grep -q 'no-progress';      chk "the 3rd identical unverified click blocks the run" $?
-grep -q '"status": "blocked"' "$NW/internal/runtime/runs/$RUN_N.json"
+grep -q '"status": "blocked"' "$NW/runtime/runs/$RUN_N.json"
 chk "  ...recorded in the run itself" $?
-out=$(AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.click --json '{"selector":"#b"}' 2>&1); rc=$?
+out=$(ATLAS_HOME="$NW" AI_OS_HOME="$NW" "$CLI/ai-os-run" step "$RUN_N" browser.click --json '{"selector":"#b"}' 2>&1); rc=$?
 [ "$rc" -ne 0 ];                          chk "  ...and a 4th attempt is refused, not retried" $?
 AI_OS_HOME="$NW" AI_OS_PLUGINS="$REPO/capabilities" "$CLI/ai-os-capability" invoke browser.close --json '{}' >/dev/null 2>&1
 rm -f /tmp/aios-run-noprog.out
@@ -2152,7 +2161,12 @@ grep -q 'clients_contacted: none' "$HREC"; chk "the audit says no client was con
 t "handoff: show prints the record, list finds it"
 out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff show AIOS-TEST "$HID" 2>&1); rc=$?
 [ "$rc" -eq 0 ];                           chk "show exits 0" $?
-[ "$out" = "$(cat "$HREC")" ];             chk "  ...and prints the record verbatim" $?
+# T-048: show writes the raw record verbatim, then appends one derived-only
+# "source client/session" footer line (blank line + the footer) — never written back
+# to the record itself. Strip exactly those two trailing lines before comparing.
+out_without_footer=$(printf '%s' "$out" | sed '$d' | sed '$d')
+[ "$out_without_footer" = "$(cat "$HREC")" ]
+chk "  ...and prints the record verbatim, plus the T-048 source footer" $?
 out=$(AI_OS_HOME="$HW" "$CLI/ai-os" handoff list AIOS-TEST 2>&1); rc=$?
 [ "$rc" -eq 0 ];                           chk "list exits 0" $?
 echo "$out" | grep -q "$HID";              chk "  ...and finds the record it just wrote" $?
@@ -2291,13 +2305,15 @@ grep -Eq '^[[:space:]]*(import|from)[[:space:]]+[A-Za-z0-9_, ]*\b(socket|http|ur
 [ $? -ne 0 ];                              chk "imports nothing that could open a network connection" $?
 grep -Eq 'os\.(system|popen|exec[lv]|spawn)|urlopen|pbcopy|pbpaste|osascript|xdg-open|webbrowser' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "no shell-out, clipboard or app-open call" $?
-grep -Eq 'shell[[:space:]]*=[[:space:]]*True' "$CLI/ai-os-handoff"
+grep -Eq '[,(][[:space:]]*shell[[:space:]]*=[[:space:]]*True' "$CLI/ai-os-handoff"
 [ $? -ne 0 ];                              chk "never shell=True — the packet can never be a command" $?
-# Two call sites now, and the invariant is about what they can reach, not how many there
-# are: exactly one may leave this machine, and the other is the local read-only resolver
-# that says where a ticket lives. Anything beyond those two is a new way out.
-[ "$(grep -c 'subprocess\.run(' "$CLI/ai-os-handoff")" = "2" ]
-chk "exactly two subprocess.run call sites, and no more" $?
+# Three call sites now, and the invariant is about what they can reach, not how many
+# there are: the local read-only resolver that says where a ticket lives, run_transport_
+# subprocess (T-051-S7's shared bounded-call helper, also used by `mission execute` in
+# cli/aios_mission.py), and the one that may leave this machine unmonitored (`send`'s own
+# uncaptured call). Anything beyond those three is a new way out.
+[ "$(grep -c 'subprocess\.run(' "$CLI/ai-os-handoff")" = "3" ]
+chk "exactly three subprocess.run call sites, and no more" $?
 grep -q 'subprocess.run(argv, input=packet' "$CLI/ai-os-handoff"
 chk "  ...one is the transport, taking a list argv and the packet on stdin" $?
 grep -q 'subprocess.run(\[str(RESOLVER), "ticket", task_id\]' "$CLI/ai-os-handoff"
@@ -3287,7 +3303,9 @@ grep -q 'private_path_or_die("inbox")' "$CLI/ai-os-memory"
 chk "memory quarantines through the resolver, not a literal path" $?
 grep -Eq 'AI_OS_HOME[^\n]*(user|00-inbox)' "$CLI/ai-os-memory"
 [ $? -ne 0 ];                            chk "  ...and names no old inbox path at all" $?
-grep -q 'TEMPLATE_REF = "\$AI_OS_HOME/internal/templates/agent-handoff.md"' "$CLI/ai-os-handoff"
+# Atlas-canonical (T-020 family): resolved from ATLAS_HOME directly, no internal/
+# prefix — templates/ lives at the workspace top level, not under internal/.
+grep -q 'TEMPLATE_REF = str(ATLAS_HOME / "templates" / "agent-handoff.md")' "$CLI/ai-os-handoff"
 chk "the handoff template reference names its real location" $?
 python3 - "$CLI/ai-os-handoff" <<'PYEOF'
 import ast, pathlib, sys
@@ -3527,7 +3545,13 @@ printf 'ai_os_repo: %s\n' "$REPO"        > "$H_BOTH/internal/config/settings.yam
 printf 'ai_os_repo: %s\n' "/nonexistent" > "$H_BOTH/system/config/settings.yaml"
 AI_OS_HOME="$H_BOTH" "$CLI/ai-os-hook" cli/ai-os-paths list >/dev/null 2>&1
 chk "  ...and prefers the new one when both exist" $?
-out=$(AI_OS_HOME="$TMP/hook-none" "$CLI/ai-os-hook" cli/ai-os-paths list 2>&1); rc=$?
+# T-046: ai-os-hook's resolution has a third fallback — ${ATLAS_HOME:-$HOME/atlas}/config
+# /settings.yaml — checked when neither AI_OS_HOME-relative path has a config. Left
+# unset, that falls through to the real ~/atlas on the machine running this suite,
+# which has a real settings.yaml and masks the "neither exists" failure this asserts.
+# ATLAS_HOME must be isolated here too, not just AI_OS_HOME.
+out=$(AI_OS_HOME="$TMP/hook-none" ATLAS_HOME="$TMP/hook-none-atlas" \
+      "$CLI/ai-os-hook" cli/ai-os-paths list 2>&1); rc=$?
 [ "$rc" -eq 78 ] && echo "$out" | grep -q "internal/config/settings.yaml" \
                  && echo "$out" | grep -q "system/config/settings.yaml"
 chk "  ...and names both when it finds neither" $?

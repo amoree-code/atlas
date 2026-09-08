@@ -153,14 +153,26 @@ transports:
     name: Gemini CLI, bounded non-interactive read-only mission-scoped pilot
     adapter: gemini
     binary: gemini
-    argv: [--sandbox, --approval-mode, plan, --include-directories, __MISSION_SCOPE_DIR__, --allowed-tools, Read, --prompt, "Return exactly JSON: {\"status\":\"pilot_ok\"}. Read no files and make no changes."]
+    argv: [--sandbox, --approval-mode, plan, --include-directories, __MISSION_SCOPE_DIR__, --prompt, "Return exactly JSON: {\"status\":\"pilot_ok\"}. Read no files and make no changes."]
     stdin: packet
     timeout: 300
-    verified: true
+    verified: false
     evidence: >
-      Owner-run trial on 2026-09-07 against the PATH binary `gemini`, using
+      Reverted to unverified 2026-09-08: this entry's argv previously restricted tools
+      with `--allowed-tools`, which `gemini --help` itself marks DEPRECATED ("Use Policy
+      Engine instead") and describes as controlling confirmation prompts, not which
+      tools can run — this registry's own contract treats a flag like that as
+      "restricting nothing" for a real security boundary. `--allowed-tools Read` has
+      been removed from argv below. There is no real `--tools`-equivalent flag on the
+      actual gemini CLI today (confirmed via `gemini --help`); a real restriction would
+      have to go through gemini's Policy Engine, which is undesigned and untried here.
+      Do not flip back to `true` without a confirmed, real restriction mechanism for
+      this binary and a fresh owner trial against the corrected argv.
+
+      Prior trial (2026-09-07, kept for context only — it tested the now-removed
+      `--allowed-tools` flag): owner-run trial against the PATH binary `gemini`, using
       `gemini --sandbox --approval-mode plan --include-directories engine/cli --allowed-tools Read --output-format json --prompt 'Return exactly JSON: {"status":"pilot_ok"}. Read no files and make no changes.'`
-      The CLI started in headless mode, read no files, and successfully returned the requested `{"status":"pilot_ok"}` JSON without timing out. This proves the transport path is viable when `--prompt` is included.
+      The CLI started in headless mode, read no files, and successfully returned the requested `{"status":"pilot_ok"}` JSON without timing out. This proves the transport path itself is reachable — it does not prove any tool restriction, since `--allowed-tools` is no longer part of this argv and never provided one.
 
   # cursor and opencode have no entry on purpose. An absent transport is a clean refusal;
   # a guessed one is a command run against a client nobody checked.
