@@ -202,6 +202,17 @@ def claim_guard(claim_key):
     return _guard(runtime_claims_dir() / f".{claim_key}.lock", "claim")
 
 
+def admissions_dir():
+    """T-125: the one cross-ticket admission-record store — one JSON record per
+    (client, session) admission. Mirrors `runtime_claims_dir()` exactly: same
+    `$ATLAS_HOME/runtime` root, a separate sibling subdirectory, never a new root."""
+    return atlas_home() / "runtime" / "coordination" / "admissions"
+
+
+def admission_guard(admission_key):
+    return _guard(admissions_dir() / f".{admission_key}.lock", "admission")
+
+
 # --- low-level atomic file helpers -------------------------------------------------------
 def _atomic_write_json(path, obj):
     path.parent.mkdir(parents=True, exist_ok=True)

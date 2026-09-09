@@ -20,6 +20,7 @@ import hashlib
 import importlib.machinery
 import importlib.util
 import io
+import json
 import os
 import re
 import subprocess
@@ -71,6 +72,7 @@ def _load(name):
 handoff = _load("atlas-handoff")
 coordinator = _load("atlas-coordinator")
 coord = _load("atlas_coordination.py")
+admission = _load("atlas_admission.py")
 
 # T-050-S6-R1: `coordinator dispatch` now requires --lease-id/--client/--session and verifies
 # them before it ever reaches the pre-existing approval-tuple checks these S1-S3 dispatch
@@ -389,6 +391,23 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
                                      3600, "good-lease-acq")
     coord.claim_acquire(d, "T-900", good_lease["lease_id"], "s1", "good-client",
                         "good-session", "good-claim-acq")
+    good_run = "agentic-20260909-120000-000001"
+    run_path = root / "runtime" / "agentic" / f"{good_run}.json"
+    run_path.parent.mkdir(parents=True, exist_ok=True)
+    run_path.write_text(json.dumps({
+        "run_id": good_run,
+        "goal": {"ticket": "T-900", "summary": "coordinator dispatch fixture"},
+        "actor": {"client": "good-client", "session_id": "good-session"},
+        "stage": "implement", "workflow": "fixture",
+        "packet": {"id": "packet-good", "kind": "context", "revision": 1},
+        "budget": {"steps_max": 10, "steps_used": 0},
+        "permissions": {"profile": "executor", "grant": "inherit"},
+        "claims": {"scope": "s1", "lease": good_lease["lease_id"]},
+        "stop_conditions": ["fixture stop"], "status": "active",
+        "created_at": "2026-09-09 12:00:00", "updated_at": "2026-09-09 12:00:00",
+    }))
+    admission.admit_open(d, "T-900", good_run, "s1", "good-client", "good-session",
+                         "good-admission")
     good_dispatch_flags = ["--lease-id", good_lease["lease_id"], "--client", "good-client",
                            "--session", "good-session"]
     calls = []
@@ -457,7 +476,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     # named like a daemon/queue/worker/scheduler artifact is tolerated anywhere under it.
     unexpected_runtime_entries = [
         str(p.relative_to(runtime_dir)) for p in runtime_dir.rglob("*")
-        if "coordination" not in p.relative_to(runtime_dir).parts
+        if not (set(p.relative_to(runtime_dir).parts) & {"coordination", "agentic"})
     ] if runtime_dir.exists() else []
     chk("no runtime/locks, runtime/runs, or other non-S6-coordination state directory was "
         "created", not unexpected_runtime_entries)

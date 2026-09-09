@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Read-only live ticket and agent activity snapshot."""
-import argparse, json, os, time
+import argparse, json, os, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
+
+CLI_DIR = Path(__file__).resolve().parent
+if str(CLI_DIR) not in sys.path:
+    sys.path.insert(0, str(CLI_DIR))
+import atlas_client_activity as client_activity
 
 HOME = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
 
@@ -47,14 +52,19 @@ def snapshot(project, stale_seconds):
                 lease = {"state": "corrupt"}
         heartbeat = lease.get("heartbeat") if lease else (events[-1]["at"] if events else None)
         age = max(0, time.time() - stamp(heartbeat)) if heartbeat else None
-        rows.append({"ticket": fields.get("id", task.parent.name),
+        ticket_id = fields.get("id", task.parent.name)
+        clients = client_activity.list_activity(ticket_id, stale_seconds=stale_seconds)
+        rows.append({"ticket": ticket_id,
                      "state": fields.get("state", "unknown"),
                      "activity": events,
                      "lease": {"state": lease.get("state"),
                                "client_id": lease.get("client_id"),
                                "heartbeat": heartbeat} if lease else None,
                      "stale": bool(age is not None and age > stale_seconds),
-                     "last_activity_at": heartbeat})
+                     "last_activity_at": heartbeat,
+                     "clients": [{"client_id": c.get("client_id"),
+                                  "status": c.get("status"),
+                                  "last_seen": c.get("last_seen")} for c in clients]})
     return rows
 
 parser = argparse.ArgumentParser(prog="atlas activity")
@@ -73,3 +83,6 @@ else:
     for row in result["tickets"]:
         print(f"{row['ticket']}  {row['state']}  stale={str(row['stale']).lower()} "
               f"events={len(row['activity'])}")
+        for c in row["clients"]:
+            print(f"    client={c['client_id']}  status={c['status']}  "
+                  f"last_seen={c['last_seen']}")

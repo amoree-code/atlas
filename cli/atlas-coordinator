@@ -597,6 +597,11 @@ def cmd_dispatch(args):
                                                    client, session)
     except coord.CoordinationError as e:
         die(str(e), code=e.code)
+    admission = _load_sibling("atlas_admission.py")
+    try:
+        admission.verify_write(client, session, meta.get("scope"))
+    except admission.coord.CoordinationError as e:
+        die(str(e), code=e.code)
     # -----------------------------------------------------------------------------------
 
     if agentic_run:
