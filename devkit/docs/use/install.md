@@ -10,7 +10,7 @@ Atlas has a public engine and a separate private workspace. Keep those locations
 ## Install the engine
 
 ```bash
-git clone <repository-url> atlas
+git clone https://github.com/amoree-code/atlas.git atlas
 cd atlas
 export PATH="$PWD/cli:$PATH"
 ```

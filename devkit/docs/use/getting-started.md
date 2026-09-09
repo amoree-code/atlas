@@ -7,7 +7,7 @@ This is the shortest supported path from a fresh clone to a checked Atlas worksp
 The repository is the reusable engine. Your private workspace is created separately.
 
 ```bash
-git clone <repository-url> atlas
+git clone https://github.com/amoree-code/atlas.git atlas
 cd atlas
 export PATH="$PWD/cli:$PATH"
 ```
