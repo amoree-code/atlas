@@ -70,8 +70,16 @@ def configure(client):
         backup = None
         if target.exists(): backup = target.with_name(f"{target.name}.atlas-backup-{int(time.time())}"); shutil.copy2(target, backup)
         target.parent.mkdir(parents=True, exist_ok=True); target.write_text(old.rstrip() + f"\n\n[mcp_servers.atlas]\n{command}\n")
+    elif client == "hermes":
+        target = Path(os.path.expanduser("~/.hermes/config.yaml")); old = target.read_text() if target.exists() else ""
+        if "\nmcp_servers:" in f"\n{old}":
+            raise SystemExit("atlas connect: Hermes mcp_servers already exists; refusing ambiguous YAML merge")
+        backup = None
+        if target.exists(): backup = target.with_name(f"{target.name}.atlas-backup-{int(time.time())}"); shutil.copy2(target, backup)
+        block = f"\n\n# Atlas-managed MCP server\nmcp_servers:\n  atlas:\n    command: {json.dumps(gateway)}\n"
+        target.parent.mkdir(parents=True, exist_ok=True); target.write_text(old.rstrip() + block)
     else:
-        raise SystemExit("atlas connect: approved registration supports claude-code and codex only")
+        raise SystemExit("atlas connect: approved registration supports claude-code, codex, and hermes only")
     print(f"connected: {client}\nconfig: {target}\nbackup: {backup or 'none'}\nstatus: configured (consumer verification pending)")
 
 args = sys.argv[1:]
