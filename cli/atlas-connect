@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import importlib.util, json, os, shutil, sys, time
+import importlib.util, json, os, shutil, subprocess, sys, time
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -80,7 +80,12 @@ def configure(client):
         target.parent.mkdir(parents=True, exist_ok=True); target.write_text(old.rstrip() + block)
     else:
         raise SystemExit("atlas connect: approved registration supports claude-code, codex, and hermes only")
-    print(f"connected: {client}\nconfig: {target}\nbackup: {backup or 'none'}\nstatus: configured (consumer verification pending)")
+    status = "configured (consumer verification pending)"
+    if client == "hermes" and shutil.which("hermes"):
+        probe = subprocess.run(["hermes", "mcp", "test", "atlas"], capture_output=True, text=True, timeout=60)
+        if probe.returncode == 0:
+            status = "verified (Hermes MCP discovery passed)"
+    print(f"connected: {client}\nconfig: {target}\nbackup: {backup or 'none'}\nstatus: {status}")
 
 args = sys.argv[1:]
 if not args or args == ["list"]:
