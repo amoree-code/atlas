@@ -1,0 +1,14 @@
+connection: continue
+name: Continue
+contract: 1
+aliases: [.continue]
+client:
+  detect: [~/.continue/, ~/.continue/config.yaml]
+transport:
+  preferred: adapter
+  fallback: adapter
+  gateway: atlas-mcp-gateway
+adapter:
+  id: continue
+  package: atlas-adapter-continue
+  status: draft
