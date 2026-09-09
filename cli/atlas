@@ -66,7 +66,8 @@ AGENTIC RUNS — layered: run < agentic < mission < coordinator
 
 INTEGRATIONS — clients, capabilities, channels
   atlas adapter <cmd>        list | doctor — the client adapter registry
-  atlas connect <id>         resolve and connect an AI client
+  atlas connect <id>         connect a known MCP client
+  atlas connect --client ... connect an unknown client using an explicit JSON config
   atlas integration <cmd>    detect | inventory | register | list — provider-neutral records
   atlas capability <cmd>     list | doctor — the capability registry (what Atlas can do)
   atlas capability-route     choose a declared provider for one capability (read-only)

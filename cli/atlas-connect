@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Connect any MCP-capable client to Atlas."""
 import importlib.util, json, os, shutil, subprocess, sys, time
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -6,92 +7,108 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 REGISTRY = REPO / "extensions" / "connections"
+GATEWAY = str(HERE / "atlas-mcp-gateway")
 
-def parser():
+def load_parser():
     spec = importlib.util.spec_from_loader("atlas_adapter", SourceFileLoader("atlas_adapter", str(HERE / "atlas-adapter")))
     mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod.parse
-
-parse = parser()
+parse = load_parser()
 
 def rows():
     result = []
     for d in sorted(REGISTRY.iterdir() if REGISTRY.is_dir() else []):
         f = d / "connection.yaml"
-        if d.is_dir() and f.is_file():
-            result.append((d.name, parse(f.read_text(), str(f))))
+        if d.is_dir() and f.is_file(): result.append((d.name, parse(f.read_text(), str(f))))
     return result
 
-def resolve(value):
+def resolve(client):
     for name, m in rows():
-        if value == name or value == m.get("connection") or value in (m.get("aliases") or []): return m
-    raise SystemExit(f"atlas connect: unknown client {value!r}")
-
-def adapter(client):
-    f = REPO / "agentic" / "integrations" / "adapters" / client / "adapter.yaml"
-    return parse(f.read_text(), str(f)) if f.is_file() else None
+        if client in {name, m.get("connection"), *(m.get("aliases") or [])}: return m
+    return None
 
 def detect(m):
     for raw in (m.get("client") or {}).get("detect") or []:
         p = Path(os.path.expanduser(str(raw)))
         if p.exists(): return str(p)
 
-def plan(value):
-    m = resolve(value); client = m["connection"]; a = adapter((m.get("adapter") or {}).get("id", client))
-    if a is None: raise SystemExit(f"atlas connect: adapter for {client!r} is not registered")
-    found = detect(m)
-    if not found:
-        print(f"client: {client}\nstatus: unavailable\nnext: install the client, then rerun"); return 1
-    preferred = (m.get("transport") or {}).get("preferred")
-    ap = (a.get("provides") or {}).get("mcp") or {}
-    verified = (a.get("client") or {}).get("consumer_verified") is True and ap.get("verified") is True
-    transport = preferred if preferred == "mcp" and verified else (m.get("transport") or {}).get("fallback", "adapter")
-    print(f"client: {client}\ndetected: {found}\ntransport: {transport}\nstatus: planned")
-    print("writes: none (use --approve for supported registration)"); return 0
+def gateway_probe():
+    p = subprocess.Popen([GATEWAY], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        for request in ({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}, {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}):
+            p.stdin.write(json.dumps(request) + "\n"); p.stdin.flush(); line = p.stdout.readline()
+            if not line: return 0, "gateway closed before replying"
+            response = json.loads(line)
+            if "error" in response: return 0, response["error"].get("message", "gateway error")
+            if request["id"] == 2: return len(response.get("result", {}).get("tools", [])), None
+        return 0, "gateway did not return tools"
+    finally:
+        p.kill(); p.wait()
 
-def configure(client):
-    gateway = str(HERE / "atlas-mcp-gateway")
-    if client in {"claude", "claude-code"}:
-        target = Path(os.path.expanduser("~/.claude.json")); data = {}
-        if target.exists():
-            try: data = json.loads(target.read_text())
-            except json.JSONDecodeError as e: raise SystemExit(f"atlas connect: invalid Claude JSON: {e}")
-        if not isinstance(data, dict): raise SystemExit("atlas connect: Claude config is not an object")
-        servers = data.setdefault("mcpServers", {})
-        if not isinstance(servers, dict): raise SystemExit("atlas connect: Claude mcpServers is not an object")
-        backup = None
-        if target.exists(): backup = target.with_name(f"{target.name}.atlas-backup-{int(time.time())}"); shutil.copy2(target, backup)
-        servers["atlas"] = {"command": gateway}; target.parent.mkdir(parents=True, exist_ok=True); target.write_text(json.dumps(data, indent=2) + "\n")
-    elif client == "codex":
-        target = Path(os.path.expanduser("~/.codex/config.toml")); old = target.read_text() if target.exists() else ""
-        marker = "[mcp_servers.atlas]"; command = f'command = {json.dumps(gateway)}'
-        if marker in old:
-            if command in old: print(f"connected: codex\nconfig: {target}\nstatus: already configured"); return 0
-            raise SystemExit("atlas connect: conflicting Codex atlas MCP entry")
-        backup = None
-        if target.exists(): backup = target.with_name(f"{target.name}.atlas-backup-{int(time.time())}"); shutil.copy2(target, backup)
-        target.parent.mkdir(parents=True, exist_ok=True); target.write_text(old.rstrip() + f"\n\n[mcp_servers.atlas]\n{command}\n")
-    elif client == "hermes":
-        target = Path(os.path.expanduser("~/.hermes/config.yaml")); old = target.read_text() if target.exists() else ""
-        if "\nmcp_servers:" in f"\n{old}":
-            raise SystemExit("atlas connect: Hermes mcp_servers already exists; refusing ambiguous YAML merge")
-        backup = None
-        if target.exists(): backup = target.with_name(f"{target.name}.atlas-backup-{int(time.time())}"); shutil.copy2(target, backup)
-        block = f"\n\n# Atlas-managed MCP server\nmcp_servers:\n  atlas:\n    command: {json.dumps(gateway)}\n"
-        target.parent.mkdir(parents=True, exist_ok=True); target.write_text(old.rstrip() + block)
-    else:
-        raise SystemExit("atlas connect: approved registration supports claude-code, codex, and hermes only")
-    status = "configured (consumer verification pending)"
-    if client == "hermes" and shutil.which("hermes"):
-        probe = subprocess.run(["hermes", "mcp", "test", "atlas"], capture_output=True, text=True, timeout=60)
+def backup(path):
+    if not path.exists(): return None
+    target = path.with_name(f"{path.name}.atlas-backup-{int(time.time())}"); shutil.copy2(path, target); return target
+
+def write_json_config(path, key, approve):
+    path = Path(os.path.expanduser(path)); data = {}
+    if path.exists():
+        try: data = json.loads(path.read_text())
+        except json.JSONDecodeError as error: raise SystemExit(f"atlas connect: invalid JSON config: {error}")
+    if not isinstance(data, dict): raise SystemExit("atlas connect: JSON config must contain an object")
+    section = data.setdefault(key, {})
+    if not isinstance(section, dict): raise SystemExit(f"atlas connect: JSON key {key!r} is not an object")
+    if not approve:
+        print(f"config: {path}\nplanned key: {key}.atlas\nwrites: none"); return 0
+    previous = backup(path); section["atlas"] = {"command": GATEWAY}; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
+
+def plan(client):
+    m = resolve(client)
+    if m is None: raise SystemExit(f"atlas connect: unknown client {client!r}; use --client with --json-config")
+    found = detect(m)
+    if not found: print(f"client: {m['connection']}\nstatus: unavailable\nnext: install the client, then rerun"); return 1
+    tools, error = gateway_probe(); print(f"client: {m['connection']}\ndetected: {found}\ntransport: mcp\ngateway_tools: {tools}")
+    if error: print(f"status: failed\nreason: {error}"); return 1
+    print("status: planned\nwrites: none (use --approve to register)"); return 0
+
+def connect_known(client):
+    m = resolve(client)
+    if m is None: raise SystemExit(f"atlas connect: unknown client {client!r}; use --client with --json-config")
+    if not detect(m): raise SystemExit(f"atlas connect: {client!r} is not installed")
+    tools, error = gateway_probe()
+    if error: raise SystemExit(f"atlas connect: gateway probe failed: {error}")
+    native = {
+        "claude-code": (["claude", "mcp", "get", "atlas"], ["claude", "mcp", "add", "-s", "user", "atlas", "--", GATEWAY]),
+        "codex": (["codex", "mcp", "get", "atlas"], ["codex", "mcp", "add", "atlas", "--", GATEWAY]),
+        "hermes": (["hermes", "mcp", "test", "atlas"], ["hermes", "mcp", "add", "atlas", "--command", GATEWAY]),
+    }
+    if m["connection"] in native:
+        check, add = native[m["connection"]]
+        probe = subprocess.run(check, capture_output=True, text=True, timeout=60)
+        if probe.returncode != 0:
+            subprocess.run(add, check=True, capture_output=True, text=True, timeout=60)
+            probe = subprocess.run(check, capture_output=True, text=True, timeout=60)
         if probe.returncode == 0:
-            status = "verified (Hermes MCP discovery passed)"
-    print(f"connected: {client}\nconfig: {target}\nbackup: {backup or 'none'}\nstatus: {status}")
+            print(f"connected: {m['connection']}\ngateway_tools: {tools}\nstatus: verified")
+            return 0
+    raise SystemExit(f"atlas connect: native/config registration required for {m['connection']!r}; gateway_tools={tools}")
+
+def usage():
+    print("usage: atlas connect list | atlas connect <id> [--approve] | atlas connect --client <id> --json-config <path> [--key <name>] [--approve]", file=sys.stderr)
 
 args = sys.argv[1:]
 if not args or args == ["list"]:
-    print(f"connections  {REGISTRY}"); [print(f"  {n:<16} aliases: {', '.join(m.get('aliases') or []) or '-'}") for n, m in rows()]; raise SystemExit(0)
+    print(f"connections  {REGISTRY}")
+    for name, m in rows(): print(f"  {name:<16} aliases: {', '.join(m.get('aliases') or []) or '-'}")
+    raise SystemExit(0)
 approve = "--approve" in args; args = [a for a in args if a != "--approve"]
-if len(args) != 1: raise SystemExit("usage: atlas connect list | atlas connect <id> [--approve]")
-client = resolve(args[0])["connection"]
-if approve: configure(client)
-else: raise SystemExit(plan(client))
+if args and args[0] == "--client":
+    if len(args) not in {4, 6} or "--json-config" not in args: usage(); raise SystemExit(2)
+    client, config, key = args[1], args[args.index("--json-config") + 1], "mcpServers"
+    if "--key" in args: key = args[args.index("--key") + 1]
+    tools, error = gateway_probe()
+    if error: raise SystemExit(f"atlas connect: gateway probe failed: {error}")
+    print(f"client: {client}\ngateway_tools: {tools}")
+    if not approve: raise SystemExit(write_json_config(config, key, False))
+    write_json_config(config, key, True); print("status: configured (client restart/discovery required)"); raise SystemExit(0)
+if len(args) != 1: usage(); raise SystemExit(2)
+raise SystemExit(connect_known(args[0]) if approve else plan(args[0]))
