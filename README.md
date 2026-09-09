@@ -1,164 +1,130 @@
 # Atlas
 
-**Status: early, active development.** The core (CLI, adapters, capabilities, privacy
-scanner, governance) plus the mission/coordinator/channel-pilot subsystem are tested and
-passing. Expect breaking changes before a tagged release.
+![Atlas project mark](assets/ATLAS.png)
 
-A portable operating layer for AI coding agents — not a Claude Code configuration.
+Atlas is a local-first operating layer for AI coding agents. It helps one workspace
+connect safely to multiple clients while keeping private data under `$ATLAS_HOME`.
 
-**Naming note (T-031/T-032):** the product was renamed from Atlas to **Atlas**. The
-canonical CLI command is `atlas`; `atlas` remains a temporary compatibility alias,
-resolving identically during the deprecation window. The canonical private workspace
-root is `$ATLAS_HOME` (default `~/atlas`); `$ATLAS_HOME` (default `~/atlas`) remains a
-compatibility fallback for any root that has not yet cut over. Historical tickets and
-records below keep the name "AI OS"/"Atlas" where that is what actually happened —
-this is a forward-only rename, not a rewrite of history.
-
-Atlas separates the parts of an AI development setup that are genuinely reusable (memory
-schema, knowledge taxonomy, skills, policies, a CLI) from the parts that are specific to
-one person (their actual memory, their actual projects) and one client (how Claude Code,
-specifically, enforces a policy). The reusable half is this repository. The personal half
-never leaves your machine.
-
-## Two layers, two owners
-
-| | Lives | Owns |
-|---|---|---|
-| **Public** (this repo) | wherever you clone it | code, CLI, adapters, capabilities, domain declarations, policies, schemas, public skills, templates, docs, tests |
-| **Private** (your workspace) | `$ATLAS_HOME`, default `~/atlas` (compatibility fallback `$ATLAS_HOME`, default `~/atlas`) | your memory, projects, knowledge, daily records, and `internal/` for system config, session records and transient generated state |
-
-**Access is not ownership.** The CLI reads and writes your workspace constantly — that is
-its job. It does not follow that this repository owns, tracks, or may publish any of it.
-This repository writes *into* your workspace from its templates, once, at `atlas init`,
-and never reads back.
-
-```mermaid
-flowchart TB
-    subgraph PUB["PUBLIC — this repository"]
-        direction TB
-        P1["reusable software"]
-        P2["publishable"]
-        P3["owns no user data"]
-    end
-    subgraph PRIV["PRIVATE — $ATLAS_HOME"]
-        direction TB
-        R1["memory · knowledge"]
-        R2["projects · internal"]
-        R3["never published"]
-    end
-    PUB -->|"seeds once, at init"| PRIV
-    PUB -.->|"reads/writes after — access, not ownership"| PRIV
-```
-
-Full contract, including the four invariants `atlas doctor` checks:
-**[docs/design/public-private.md](docs/design/public-private.md)**.
-
-## Install
+## Start here
 
 ```bash
-git clone <this-repo> ~/atlas
-export PATH="$HOME/atlas/cli:$PATH"
-atlas init --dry-run     # see exactly what would happen
-atlas init               # create ~/atlas — never overwrites anything
-atlas doctor             # verify the contract holds
+export PATH="$PWD/cli:$PATH"
+atlas setup
+atlas status
 ```
 
-Requires `bash`, `git`, `python3`. Nothing else — no package manager, no dependencies, no
-build step. Guided path: **[docs/use/getting-started.md](docs/use/getting-started.md)**.
-Full walkthrough: **[docs/use/install.md](docs/use/install.md)**.
+`atlas setup` is the guided terminal interface. It discovers clients, lets you choose
+providers and adapters, shows the plan, and requires explicit approval before applying.
 
-## Status
+The generated section below is the maintained local reference. It is rebuilt from
+`devkit/docs/atlas-catalog.json`, so the README stays aligned with the shipped CLI.
 
-`VERSION` is the only version claim worth trusting here — commit messages and code
-comments have applied milestone numbers inconsistently, so this section describes what is
-*on disk*.
+<!-- atlas:readme-generated:begin -->
+## Atlas — local reference
 
-What ships:
+Atlas is a local-first operating layer for AI coding agents. Reusable code lives in
+this repository; private workspace data lives under `$ATLAS_HOME` and is never generated
+into this README.
 
-- The public/private split, checked by `atlas doctor` on every run.
-- One CLI entry point with fourteen verbs, `init` ownership-aware and non-destructive, and
-  `privacy-scan` checking that this repository is still publishable.
-- Five adapters — Claude Code, Codex, Cursor, Gemini, OpenCode.
-- One capability: browser control, in `capabilities/browser/`.
-- Two domain declarations, in `domains/`.
+### Features
 
-It deliberately does **not** yet include an autonomous task engine, a multi-agent system,
-a full model router, computer automation beyond the browser, Atlas-managed MCP servers, or
-a GUI. A **domain** is a declaration and nothing more — nothing here executes one; naming
-an area of work is the entire feature. Why it stays this size on purpose:
-**[docs/design/decisions.md](docs/design/decisions.md)**.
+| Feature | What it provides |
+|---|---|
+| Setup | Guided first-run setup |
+| Onboarding | Workspace onboarding |
+| Integrations | Client adapters and connections |
+| Agentic Runs | Bounded agentic execution |
+| Migration | Safe layout migration |
+| Rollback | Recoverable rollback paths |
+| Release Gates | Deterministic release checks |
 
-## How it fits together
+### Quick start
+
+```bash
+export PATH="$PWD/cli:$PATH"
+atlas setup
+atlas status
+```
+
+### Setup flow
 
 ```mermaid
 flowchart LR
-    CLI["CLI"] --> Core["Core"]
-    Core --> Adapters["Adapters"]
-    Core --> Capabilities["Capabilities"]
-    Core --> Domains["Domains"]
-    Core --> Governance["Governance"]
-    Core --> Schemas["Schemas"]
+    A[atlas setup] --> B[workspace + safe defaults]
+    B --> C[client preflight]
+    C --> D[provider and adapter selection]
+    D --> E[review and explicit apply]
+    E --> F[atlas status]
 ```
 
-Core is the mechanism shared across every client and every capability —
-`capability · availability · authority · invocation · result · verification ·
-persistence`, and nothing else. An **adapter** answers *how does one AI client reach
-Atlas?* A **capability** answers *what can Atlas do?* A **domain** answers *what area of
-work is this?*, and executes nothing. **Governance** is policy: what must be true,
-client-agnostically — it lives in `internal/governance/policies/` today. **Schemas** are the contracts
-everything above is checked against. Detail on each: `docs/design/core.md`,
-`docs/use/adapters.md`, `docs/use/capabilities.md`, `docs/use/domains.md`,
-`docs/design/governance.md`.
+### Architecture
 
-## Layout
-
-```
-atlas/                      the public repository — software only (Atlas is the product name)
-├── cli/                    atlas, one entry point: init · onboard · doctor · status ·
-│                           workspace · adapter · capability · domain · run · render ·
-│                           memory · privacy-scan — plus the hook launcher and ai-sync
-│                           (atlas remains a compatibility alias for atlas)
-├── adapters/<client>/      client integrations — manifest, hooks, policy enforcement
-├── capabilities/<id>/      what Atlas can do — browser control ships today
-├── domains/                areas of work, declared and inert — nothing executes one
-├── schemas/                the contracts: adapter · capability · domain · run
-├── skills/                 public skills — yours in ~/atlas/skills override these
-├── templates/
-│   ├── workspace/          seeds for a new ~/atlas — placeholder data only
-│   └── runtime/            operational scripts, kept public and never seeded
-├── docs/
-│   └── examples/           worked examples — placeholder until real ones land
-├── tests/
-└── internal/               not the product surface — machinery it ships with
-    ├── core/               pointer to docs/design/core.md — no separate binary yet
-    └── governance/         policy: the contract, privacy classification, git approval
+```mermaid
+flowchart TB
+    CLI[CLI] --> CONFIG[Local workspace config]
+    CONFIG --> ADAPTERS[Client adapters]
+    CLI --> GOVERNANCE[Governance and policies]
+    CLI --> CAPABILITIES[Capabilities]
+    ADAPTERS --> CLIENTS[AI clients: `claude-code`, `codex`, `gemini`, `cursor`, `opencode`]
+    CONFIG -. metadata only .-> PRIVATE[$ATLAS_HOME]
 ```
 
-Agent definitions are not here: they live in your workspace, because an agent is
-configuration you own rather than software this repository ships.
+### Supported clients
 
-> **Adapter vs capability vs domain.** An **adapter** answers *"how does this AI client
-> reach Atlas?"* (`adapters/<client>/adapter.yaml`). A **capability** answers *"what can
-> Atlas do?"* (`capabilities/<id>/capability.yaml`). A **domain** answers *"what area of
-> work is this, and which capabilities would delivering it need?"* (`domains/<id>.yaml`)
-> — and stops there: no command, no verifier, no ordering.
+| Client | Role |
+|---|---|
+| `claude-code` | Adapter declared in the local registry |
+| `codex` | Adapter declared in the local registry |
+| `gemini` | Adapter declared in the local registry |
+| `cursor` | Adapter declared in the local registry |
+| `opencode` | Adapter declared in the local registry |
 
-> **Renamed 2026-09-03.** The capability surface was spelled `plugin` until then. Every
-> old spelling still works for one version and is compatibility only: `plugins/`,
-> `plugin.yaml`, `atlas plugin`, `ATLAS_PLUGINS`. The manifest key stays `plugin:` under
-> contract 1, so no existing manifest needs editing. Details:
-> [docs/use/capabilities.md](docs/use/capabilities.md).
+### Main commands
 
-## Where to read next
+- `atlas init`
+- `atlas setup`
+- `atlas setup reconfigure`
+- `atlas providers status|add|remove`
+- `atlas structure plan|apply|check`
+- `atlas onboard`
+- `atlas integration inventory|detect|register|list`
+- `atlas activity`
+- `atlas agentic`
+- `atlas migrate`
+- `atlas update`
+- `atlas docs`
 
-**[docs/README.md](docs/README.md)** is the full reading order — `use/` for how to do
-something, `design/` for why it works this way.
+### Local documentation
 
-## Tests
+- [Getting started](devkit/docs/use/getting-started.md)
+- [Adapters](devkit/docs/use/adapters.md)
+- [Workspace](devkit/docs/use/workspace.md)
+- [Architecture decisions](devkit/docs/design/decisions.md)
+- [GitDiagram view](https://gitdiagram.com)
+<!-- atlas:readme-generated:end -->
+
+## Safety model
+
+- Reusable code belongs in this repository.
+- Private memory, projects, knowledge, and runtime state belong under `$ATLAS_HOME`.
+- Client homes remain client-owned; Atlas stores metadata and bridge configuration only.
+- Setup never stores credentials and never silently approves or sends work.
+
+## Read next
+
+- [Getting started](devkit/docs/use/getting-started.md)
+- [Workspace layout](devkit/docs/use/workspace.md)
+- [Adapters](devkit/docs/use/adapters.md)
+- [Capabilities](devkit/docs/use/capabilities.md)
+- [Architecture decisions](devkit/docs/design/decisions.md)
+- [Documentation index](devkit/docs/README.md)
+
+## Development
 
 ```bash
-tests/test-contract.sh   # the contract suite, in a throwaway workspace
+atlas docs check
+python3 devkit/tests/test-release-gate.py
 ```
 
-Not yet ready for general use — this assumes a single-user local setup and has only been
-exercised against one machine. Treat it as a working sketch, not a released tool.
+The project is local-first by design: generated docs, configuration metadata, and
+verification run from the checked-out Atlas repository without a runtime service.

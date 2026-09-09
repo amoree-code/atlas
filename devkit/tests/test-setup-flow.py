@@ -14,7 +14,10 @@ with tempfile.TemporaryDirectory() as raw:
     env.update({"ATLAS_HOME": str(home), "ATLAS_HOME": str(home), "PATH": "/usr/bin:/bin"})
     plan = subprocess.run([str(ATLAS), "setup", "plan"], env=env, text=True, capture_output=True)
     chk("setup plan is read-only", plan.returncode == 0 and not (home / "runtime").exists()
-        and "approval" in plan.stdout)
+        and "approval" in plan.stdout and "client preflight" in plan.stdout
+        and "PASS" in plan.stdout and "UNVERIFIED" in plan.stdout
+        and "BLOCKED" in plan.stdout)
+    chk("setup ships the Atlas brand asset", (ROOT / "assets/ATLAS.png").is_file())
     no = subprocess.run([str(ATLAS), "setup", "apply"], env=env, text=True, capture_output=True)
     chk("setup apply requires approval", no.returncode == 2 and not (home / "runtime").exists())
     yes = subprocess.run([str(ATLAS), "setup", "apply", "--approve"], env=env, text=True, capture_output=True)

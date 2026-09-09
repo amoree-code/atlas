@@ -7,8 +7,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG = ROOT / "devkit" / "docs" / "atlas-catalog.json"
 OUTPUT = ROOT / "devkit" / "docs" / "atlas-environment.generated.md"
+README = ROOT / "README.md"
 BEGIN = "<!-- atlas:generated:begin -->"
 END = "<!-- atlas:generated:end -->"
+README_BEGIN = "<!-- atlas:readme-generated:begin -->"
+README_END = "<!-- atlas:readme-generated:end -->"
 
 
 def load():
@@ -29,6 +32,95 @@ def render(data):
               "- Client homes remain client-owned; Atlas stores bridge metadata only.", "", END, ""]
     return "\n".join(lines)
 
+def render_readme(data):
+    commands = "\n".join(f"- `{item}`" for item in data["commands"])
+    clients = ", ".join(f"`{item}`" for item in data["clients"])
+    feature_names = {
+        "setup": "Guided first-run setup",
+        "onboarding": "Workspace onboarding",
+        "integrations": "Client adapters and connections",
+        "agentic runs": "Bounded agentic execution",
+        "migration": "Safe layout migration",
+        "rollback": "Recoverable rollback paths",
+        "release gates": "Deterministic release checks",
+    }
+    features = "\n".join(f"| {item.title()} | {feature_names.get(item, item)} |"
+                         for item in data["features"])
+    provider_rows = "\n".join(f"| `{item}` | Adapter declared in the local registry |"
+                              for item in data["clients"])
+    return f'''{README_BEGIN}
+## Atlas — local reference
+
+Atlas is a local-first operating layer for AI coding agents. Reusable code lives in
+this repository; private workspace data lives under `$ATLAS_HOME` and is never generated
+into this README.
+
+### Features
+
+| Feature | What it provides |
+|---|---|
+{features}
+
+### Quick start
+
+```bash
+export PATH="$PWD/cli:$PATH"
+atlas setup
+atlas status
+```
+
+### Setup flow
+
+```mermaid
+flowchart LR
+    A[atlas setup] --> B[workspace + safe defaults]
+    B --> C[client preflight]
+    C --> D[provider and adapter selection]
+    D --> E[review and explicit apply]
+    E --> F[atlas status]
+```
+
+### Architecture
+
+```mermaid
+flowchart TB
+    CLI[CLI] --> CONFIG[Local workspace config]
+    CONFIG --> ADAPTERS[Client adapters]
+    CLI --> GOVERNANCE[Governance and policies]
+    CLI --> CAPABILITIES[Capabilities]
+    ADAPTERS --> CLIENTS[AI clients: {clients}]
+    CONFIG -. metadata only .-> PRIVATE[$ATLAS_HOME]
+```
+
+### Supported clients
+
+| Client | Role |
+|---|---|
+{provider_rows}
+
+### Main commands
+
+{commands}
+
+### Local documentation
+
+- [Getting started](devkit/docs/use/getting-started.md)
+- [Adapters](devkit/docs/use/adapters.md)
+- [Workspace](devkit/docs/use/workspace.md)
+- [Architecture decisions](devkit/docs/design/decisions.md)
+- [GitDiagram view](https://gitdiagram.com)
+{README_END}
+'''
+
+def sync_marked(path, begin, end, body):
+    current = path.read_text() if path.exists() else ""
+    if begin in current and end in current:
+        start, finish = current.index(begin), current.index(end) + len(end)
+        current = current[:start] + body.rstrip() + current[finish:]
+    else:
+        current = current.rstrip() + "\n\n" + body.rstrip() + "\n"
+    path.write_text(current)
+
 
 def main(argv):
     if len(argv) != 2 or argv[1] not in {"check", "build", "sync"}:
@@ -37,6 +129,7 @@ def main(argv):
     expected = render(load())
     if argv[1] in {"build", "sync"}:
         OUTPUT.write_text(expected)
+        sync_marked(README, README_BEGIN, README_END, render_readme(load()))
         print(f"wrote {OUTPUT.relative_to(ROOT)}")
         return 0
     if not OUTPUT.exists():
@@ -44,6 +137,16 @@ def main(argv):
         return 1
     if OUTPUT.read_text() != expected:
         print("atlas docs check: generated guidance is stale", file=sys.stderr)
+        return 1
+    expected_readme = render_readme(load())
+    if not README.exists() or README_BEGIN not in README.read_text() \
+            or README_END not in README.read_text():
+        print("atlas docs check: README generated section is missing", file=sys.stderr)
+        return 1
+    start = README.read_text().index(README_BEGIN)
+    finish = README.read_text().index(README_END) + len(README_END)
+    if README.read_text()[start:finish].rstrip() != expected_readme.rstrip():
+        print("atlas docs check: README generated section is stale", file=sys.stderr)
         return 1
     print("atlas docs check: current")
     return 0

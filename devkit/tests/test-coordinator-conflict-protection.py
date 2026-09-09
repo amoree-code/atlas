@@ -55,6 +55,7 @@ def _load(name):
 
 coordinator = _load("atlas-coordinator")
 coord = _load("atlas_coordination.py")
+admission = _load("atlas_admission.py")
 
 
 def make_ticket_home(root, project="demo", ticket_id="T-900"):
@@ -633,6 +634,29 @@ fixture packet
     return p
 
 
+def open_dispatch_admission(root, d, task_id, lease_id, client, session, scope):
+    """Create the admission evidence required by the T-125 dispatch boundary."""
+    run_id = "agentic-20260909-120000-a92600"
+    run_path = root / "runtime" / "agentic" / f"{run_id}.json"
+    run_path.parent.mkdir(parents=True, exist_ok=True)
+    run_path.write_text(json.dumps({
+        "run_id": run_id,
+        "goal": {"ticket": task_id, "summary": "dispatch fixture"},
+        "actor": {"client": client, "session_id": session},
+        "surface": "cli", "stage": "implement", "workflow": "fixture",
+        "packet": {"id": "packet-1", "kind": "context", "revision": 1},
+        "budget": {"steps_max": 10, "steps_used": 0},
+        "permissions": {"profile": "executor", "grant": "inherit"},
+        "claims": {"scope": scope, "lease": lease_id},
+        "stop_conditions": ["fixture stop"], "status": "active",
+        "created_at": "2026-09-09 12:00:00", "updated_at": "2026-09-09 12:00:00",
+        "approval": {"approval": "none", "approved_at": None, "owner_words": None},
+        "permission_log": [], "confirmation": {"status": "pending", "ticket_ids": [task_id]},
+    }))
+    admission.admit_open(d, task_id, run_id, scope, client, session,
+                         f"dispatch-{task_id}")
+
+
 class FakeCompleted:
     def __init__(self, returncode=0):
         self.returncode = returncode
@@ -906,9 +930,10 @@ chk("dispatch with a conflicted claim record refuses", rc != 0 and "conflicted" 
 
 t("R1/29/30/31 — valid lease+claims dispatch calls send exactly once; failed preflight "
   "makes zero send calls; dispatch never auto-acquires anything")
-root, d = new_home(ticket_id="R1-926")
-r = coord.lease_acquire(d, "R1-926", "c", "s", "i", 3600, "r1-29-acq")
-coord.claim_acquire(d, "R1-926", r["lease_id"], "s1", "c", "s", "r1-29-claim")
+root, d = new_home(ticket_id="T-926")
+r = coord.lease_acquire(d, "T-926", "c", "s", "i", 3600, "r1-29-acq")
+coord.claim_acquire(d, "T-926", r["lease_id"], "s1", "c", "s", "r1-29-claim")
+open_dispatch_admission(root, d, "T-926", r["lease_id"], "c", "s", "s1")
 write_dispatch_fixture(d, "good", scope="s1", to="codex")
 write_dispatch_fixture(d, "bad", scope="s1", to="codex")  # no matching claim scenario reused below
 calls = []
@@ -925,7 +950,7 @@ def fake_run(argv, **kwargs):
 
 subprocess.run = fake_run
 try:
-    rc, out, err = run(coordinator.cmd_dispatch, ["R1-926", "good", "--lease-id",
+    rc, out, err = run(coordinator.cmd_dispatch, ["T-926", "good", "--lease-id",
                                                   r["lease_id"], "--client", "c",
                                                   "--session", "s"])
     chk("dispatch with a valid lease and claim calls send exactly once and exits 0",

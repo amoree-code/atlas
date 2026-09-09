@@ -1,42 +1,271 @@
 #!/usr/bin/env python3
-"""First-run Atlas setup with a readable preview and explicit approval."""
-import os, subprocess, sys
+"""Atlas setup: read-only preflight, five-step wizard, and legacy apply path."""
+import argparse, base64, json, os, re, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parent
 ATLAS = Path(os.environ.get("ATLAS_HOME", Path.home() / "atlas"))
+ADAPTERS = REPO / "agentic" / "integrations" / "adapters"
+CONNECTIONS = REPO / "extensions" / "connections"
+SETUP_STATE = ATLAS / "internal" / "config" / "setup.json"
+PROVIDER_STATE = ATLAS / "internal" / "config" / "providers.json"
+BRAND_IMAGE = REPO / "assets" / "ATLAS.png"
 
-def run(name, *args):
+def run(name, *args, env=None):
     return subprocess.run([str(HERE / name), *args], text=True, capture_output=True,
-                          env=os.environ.copy())
+                          env=env or os.environ.copy())
+
+def detect_paths(raw):
+    values = re.search(r"detect:\s*\[([^]]*)\]", raw)
+    return [str(Path(os.path.expanduser(x.strip().strip("'\""))))
+            for x in values.group(1).split(",") if x.strip()] if values else []
+
+def connection_ids():
+    return {p.parent.name for p in CONNECTIONS.glob("*/connection.yaml")}
+
+def gateway_probe(client):
+    if client not in connection_ids():
+        return None, None
+    try:
+        result = subprocess.run([str(HERE / "atlas-connect"), client], text=True,
+                                capture_output=True, timeout=15, env=os.environ.copy())
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return None, f"gateway probe failed: {error}"
+    tools = re.search(r"^gateway_tools:\s*(\d+)", result.stdout, re.M)
+    if result.returncode != 0:
+        return None, (result.stdout + result.stderr).strip().splitlines()[-1]
+    return int(tools.group(1)) if tools else None, None
+
+def preflight():
+    rows = []
+    for manifest in sorted(ADAPTERS.glob("*/adapter.yaml")):
+        raw = manifest.read_text()
+        adapter = re.search(r"^adapter:\s*(\S+)", raw, re.M)
+        name = re.search(r"^name:\s*(.+)$", raw, re.M)
+        verified = re.search(r"consumer_verified:\s*(true|false)", raw)
+        adapter_id = adapter.group(1) if adapter else manifest.parent.name
+        label = name.group(1).strip() if name else adapter_id
+        found = next((p for p in detect_paths(raw) if Path(p).exists()), None)
+        if not found:
+            status, reason = "BLOCKED", "client not detected"
+        elif verified and verified.group(1) == "true":
+            status, reason = "PASS", f"detected at {found}; consumer verified"
+        else:
+            status, reason = "UNVERIFIED", f"detected at {found}; consumer not verified"
+        tools, error = gateway_probe(adapter_id) if found else (None, None)
+        if error:
+            status, reason = "BLOCKED", error
+        elif tools is not None:
+            reason += f"; MCP gateway exposes {tools} tools"
+        rows.append({"id": adapter_id, "name": label, "status": status,
+                     "detected": found, "reason": reason})
+    return rows
+
+def print_preflight():
+    rows = preflight()
+    print("\nAtlas client preflight")
+    print("  ID                         STATUS       RESULT")
+    for row in rows:
+        print(f"  {row['id']:<26} {row['status']:<12} {row['reason']}")
+    return rows
 
 def plan():
     print(f"Atlas setup preview\n  root: {ATLAS}\n  writes: init structure and integration metadata only")
     print("  preserves: existing files, client homes, conversations, and credentials")
     print("  approval: required for apply")
+    print_preflight()
     return 0
 
-def apply():
+def write_state(values):
+    SETUP_STATE.parent.mkdir(parents=True, exist_ok=True)
+    previous = json.loads(SETUP_STATE.read_text()) if SETUP_STATE.exists() else {}
+    previous.update(values)
+    SETUP_STATE.write_text(json.dumps(previous, indent=2) + "\n")
+
+def write_provider_state(values):
+    rows = {row["id"]: row for row in preflight()}
+    selected = values.get("clients") or ([values["provider"]]
+                                         if values.get("provider") in rows else [])
+    providers = [{"id": client, "status": rows[client]["status"],
+                  "reason": rows[client]["reason"]}
+                 for client in selected if client in rows]
+    previous = json.loads(PROVIDER_STATE.read_text()) if PROVIDER_STATE.exists() else {}
+    previous.update({"primary_provider": values.get("provider", "other"),
+                    "permission_profile": values.get("permission_profile", "safe"),
+                    "providers": providers, "privacy": "metadata-only"})
+    PROVIDER_STATE.parent.mkdir(parents=True, exist_ok=True)
+    PROVIDER_STATE.write_text(json.dumps(previous, indent=2) + "\n")
+
+def ask(label, default=""):
+    suffix = f" [{default}]" if default else ""
+    answer = input(f"{label}{suffix}: ").strip()
+    return answer or default
+
+def validate_workspace(raw):
+    value = Path(os.path.expanduser(raw)).resolve()
+    if str(value) == value.anchor:
+        return None, "workspace cannot be the filesystem root"
+    if value.exists() and not value.is_dir():
+        return None, "workspace is not a directory"
+    if not value.exists() and not value.parent.is_dir():
+        return None, "workspace parent directory does not exist"
+    return value, None
+
+def choose_csv(label, default, allowed):
+    value = ask(label, default)
+    selected = [item.strip() for item in value.split(",") if item.strip()]
+    invalid = [item for item in selected if item not in allowed]
+    if invalid:
+        print(f"BLOCKED: unsupported {label.lower()}: {', '.join(invalid)}")
+        return None
+    return selected
+
+def apply_settings(values):
+    workspace, error = validate_workspace(values.get("workspace", str(ATLAS)))
+    if error:
+        print(f"BLOCKED: {error}", file=sys.stderr)
+        return None
+    mode = values.get("mode", "personal")
+    permission = values.get("permission_profile", "safe")
+    if mode not in ("personal", "team", "development"):
+        print(f"BLOCKED: unsupported usage mode: {mode}", file=sys.stderr)
+        return None
+    if permission not in ("safe", "read-only", "custom"):
+        print(f"BLOCKED: unsupported permission profile: {permission}", file=sys.stderr)
+        return None
+    result = dict(values, workspace=str(workspace), mode=mode,
+                  permission_profile=permission)
+    result.setdefault("clients", [])
+    return result
+
+def render_brand():
+    """Show the project mark when the terminal supports inline graphics."""
+    if not sys.stdout.isatty() or not BRAND_IMAGE.is_file():
+        print("       ATLAS")
+        return
+    encoded = base64.b64encode(BRAND_IMAGE.read_bytes()).decode()
+    program = os.environ.get("TERM_PROGRAM", "")
+    if os.environ.get("KITTY_WINDOW_ID") or program in ("kitty", "WezTerm"):
+        first = True
+        while encoded:
+            chunk, encoded = encoded[:4096], encoded[4096:]
+            params = "a=T,f=100,m=1" if first else "m=1"
+            if not encoded:
+                params = params.replace("m=1", "m=0")
+            print(f"\x1b_G{params};{chunk}\x1b\\", end="")
+            first = False
+        print()
+    elif program == "iTerm.app":
+        print(f"\x1b]1337;File=inline=1;preserveAspectRatio=1;width=40%;base64:{encoded}\x07")
+    else:
+        print("       ATLAS")
+
+def wizard():
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        print("setup wizard requires an interactive terminal; use: atlas setup plan", file=sys.stderr)
+        return 2
+    saved = json.loads(SETUP_STATE.read_text()) if SETUP_STATE.exists() else {}
+    render_brand()
+    print("Atlas setup — five steps")
+    workspace = ask("1/5 Workspace location", saved.get("workspace", str(ATLAS)))
+    settings = apply_settings({"workspace": workspace})
+    if not settings:
+        return 2
+    mode = ask("2/5 Usage mode (personal/team/development)", saved.get("mode", "personal"))
+    settings = apply_settings({"workspace": workspace, "mode": mode})
+    if not settings:
+        return 2
+    rows = print_preflight()
+    available = [r["id"] for r in rows if r["status"] != "BLOCKED"]
+    provider = ask("3/5 Primary provider", saved.get("provider", available[0] if available else "other"))
+    if provider not in available and provider not in ("claude-code", "codex", "gemini", "other"):
+        print("BLOCKED: provider is not detected or supported")
+        return 2
+    clients = choose_csv("clients", ",".join(saved.get("clients") or available), available)
+    if clients is None:
+        return 2
+    permission = ask("4/5 Permission profile (safe/read-only/custom)", saved.get("permission_profile", "safe"))
+    settings = apply_settings({"workspace": workspace, "mode": mode,
+                               "provider": provider, "clients": clients,
+                               "permission_profile": permission})
+    if not settings:
+        return 2
+    print(f"\n5/5 Review\n  workspace: {workspace}\n  mode: {mode}\n  provider: {provider}\n  permissions: {permission}")
+    if ask("Apply these settings? (yes/no)", "no").lower() not in ("y", "yes"):
+        print("ACTION: rerun `atlas setup` when ready")
+        return 0
+    write_state(settings)
+    write_provider_state(settings)
+    print(f"READY: setup preferences saved to {SETUP_STATE}")
+    print("ACTION: run `atlas setup apply --approve`")
+    return 0
+
+def apply(dry_run=False):
     if "--approve" not in sys.argv[2:]:
         print("setup apply requires explicit --approve", file=sys.stderr); return 2
-    init = run("atlas-init")
+    if dry_run:
+        return plan()
+    saved = json.loads(SETUP_STATE.read_text()) if SETUP_STATE.exists() else {}
+    settings = apply_settings(saved or {"workspace": str(ATLAS)})
+    if not settings:
+        return 2
+    print("PROGRESS: validating setup settings")
+    write_provider_state(settings)
+    env = os.environ.copy(); env["ATLAS_HOME"] = settings["workspace"]
+    init = run("atlas-init", env=env)
     sys.stdout.write(init.stdout); sys.stderr.write(init.stderr)
     if init.returncode != 0: return init.returncode
     structure = subprocess.run([sys.executable, str(HERE / "atlas-structure"),
-                                "apply", "--approve"], env=os.environ.copy())
-    if structure.returncode != 0:
-        return structure.returncode
-    for adapter_dir in sorted((HERE.parent / "agentic" / "integrations" / "adapters").iterdir()):
+                                "apply", "--approve"], env=env)
+    if structure.returncode != 0: return structure.returncode
+    for adapter_dir in sorted(ADAPTERS.iterdir()):
         if not (adapter_dir / "adapter.yaml").is_file(): continue
         subprocess.run([str(HERE / "atlas-integration"), "register", "--client",
                         adapter_dir.name, "--surface", "cli", "--channel", "cli"],
-                       env=os.environ.copy(), check=False)
-    onboard = run("atlas-onboard", "--adopt")
+                       env=env, check=False)
+    onboard = run("atlas-onboard", "--adopt", env=env)
     sys.stdout.write(onboard.stdout); sys.stderr.write(onboard.stderr)
-    doctor = run("atlas-doctor", "--quiet")
+    doctor = run("atlas-doctor", "--quiet", env=env)
     sys.stdout.write(doctor.stdout); sys.stderr.write(doctor.stderr)
     return onboard.returncode if onboard.returncode else doctor.returncode
 
-if len(sys.argv) < 2 or sys.argv[1] not in ("plan", "apply"):
-    print("usage: atlas setup plan | apply --approve", file=sys.stderr); raise SystemExit(2)
-raise SystemExit(plan() if sys.argv[1] == "plan" else apply())
+def reconfigure():
+    return wizard()
+
+def noninteractive():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--workspace", default=str(ATLAS))
+    parser.add_argument("--mode", default="personal")
+    parser.add_argument("--provider", default="other")
+    parser.add_argument("--clients", default="")
+    parser.add_argument("--permission-profile", default="safe")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--approve", action="store_true")
+    args, unknown = parser.parse_known_args(sys.argv[1:])
+    if unknown:
+        print(f"usage: unknown option: {unknown[0]}", file=sys.stderr)
+        return 2
+    values = {"workspace": args.workspace, "mode": args.mode,
+              "provider": args.provider, "permission_profile": args.permission_profile,
+              "clients": [x.strip() for x in args.clients.split(",") if x.strip()]}
+    settings = apply_settings(values)
+    if not settings:
+        return 2
+    if args.dry_run:
+        return plan()
+    write_state(settings)
+    write_provider_state(settings)
+    if not args.approve:
+        print("READY: settings saved; apply requires --approve")
+        return 0
+    return apply()
+
+if len(sys.argv) == 1: raise SystemExit(wizard())
+if sys.argv[1] == "plan": raise SystemExit(plan())
+if sys.argv[1] == "preflight": raise SystemExit(0 if print_preflight() else 1)
+if sys.argv[1] == "apply": raise SystemExit(apply("--dry-run" in sys.argv[2:]))
+if sys.argv[1].startswith("--"): raise SystemExit(noninteractive())
+if sys.argv[1] == "reconfigure": raise SystemExit(reconfigure())
+print("usage: atlas setup | plan | preflight | apply --approve", file=sys.stderr)
+raise SystemExit(2)

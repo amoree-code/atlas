@@ -278,6 +278,8 @@ def load(path, projects_root=None):
     text = path.read_text()
     meta, body = parse_frontmatter(text)
     na = section(body, "Next action") or ""
+    objective = section(body, "Objective") or ""
+    scope = section(body, "Scope") or ""
     log = section(body, "Log") or ""
     # project_dir is "the first path segment under projects_root" regardless of how many
     # directories separate it from task.md — true for both `<project>/tickets/<ID>/task.md`
@@ -313,6 +315,9 @@ def load(path, projects_root=None):
         "relation": meta.get("relation"),
         "decision_required": meta.get("decision_required"),
         "goal": meta.get("goal"),
+        "objective": objective,
+        "scope": scope,
+        "references": meta.get("references") if isinstance(meta.get("references"), list) else [],
         "priority": meta.get("priority"),
         "blocked_by": meta.get("blocked_by"),
         "unblocks": meta.get("unblocks") if isinstance(meta.get("unblocks"), list) else (
@@ -401,6 +406,32 @@ def duplicate_candidates(title, all_tickets, exclude_id=None):
         if score > 0:
             out.append((t, score, sorted(keywords & other)))
     out.sort(key=lambda triple: triple[1], reverse=True)
+    return out
+
+
+def prior_work_candidates(title, objective, scope, references, all_tickets, exclude_id=None):
+    """Deterministic prior-work score across title, objective, scope and references."""
+    fields = {"title": title or "", "objective": objective or "", "scope": scope or "",
+              "references": " ".join(references or [])}
+    weights = {"title": 0.25, "objective": 0.4, "scope": 0.25, "references": 0.1}
+    out = []
+    for t in all_tickets:
+        if exclude_id and t["id"] == exclude_id:
+            continue
+        score_total, weight_total, matches = 0.0, 0.0, []
+        for field, value in fields.items():
+            left = normalize_keywords(value)
+            right_value = " ".join(t.get("references") or []) if field == "references" else t.get(field, "")
+            right = normalize_keywords(right_value)
+            if left and right:
+                score = duplicate_score(left, right)
+                score_total += weights[field] * score
+                weight_total += weights[field]
+                if left & right:
+                    matches.append(field)
+        if weight_total and score_total > 0:
+            out.append((t, score_total / weight_total, matches))
+    out.sort(key=lambda triple: (-triple[1], id_sort_key(triple[0]["id"])))
     return out
 
 

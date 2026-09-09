@@ -67,6 +67,8 @@ tests = (
     "test-cli-source-drift.py",
     "test-root-duplicate-drift.py",
     "test-setup-flow.py",
+    "test-provider-configuration.py",
+    "test-readme-docs.py",
     "test-migration-flow.py",
     "test-update-flow.py",
     "test-agentic-permission.py",

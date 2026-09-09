@@ -147,7 +147,7 @@ from atlas_tickets import (STATES, LIVE, REQUIRED, CLASSES, SCOPES, BEGIN, END,
                          RISKS, CONFIDENCES, BOOLEANS, DATE_RE, CANDIDATE_STATES,
                          classify_and_rank, render_recommendation, lifecycle_issues,
                          next_ticket_id, INTENT_EXEMPT_RELATION, per_ticket_errors,
-                         archive_completion_gate, duplicate_candidates,
+                         archive_completion_gate, duplicate_candidates, prior_work_candidates,
                          DUPLICATE_HIGH_CONFIDENCE)
 
 # T-024: what makes a ticket archivable, and where its generation's history lives.
@@ -626,6 +626,7 @@ def cmd_new(a, projects_root):
         "title": a.title, "state": a.state, "class": a.klass,
         "relation": a.relation, "parent": a.parent, "requirement": a.requirement,
         "goal": a.goal, "priority": a.priority,
+        "references": [r.strip() for r in (a.references or "").split(",") if r.strip()],
         "decision_required": a.decision_required or "false",
         "blocked_by": a.blocked_by or "none",
         "unblocks": [u.strip().upper() for u in a.unblocks.split(",") if u.strip()]
@@ -644,15 +645,16 @@ def cmd_new(a, projects_root):
               f"written")
         return 1
 
-    candidates = duplicate_candidates(a.title, all_tickets)
+    candidates = prior_work_candidates(a.title, a.objective, a.scope, meta["references"],
+                                       all_tickets)
     high_confidence = [c for c in candidates if c[1] >= DUPLICATE_HIGH_CONFIDENCE]
     if high_confidence and not (a.force and (a.reason or "").strip()):
-        print(f"  possible duplicate of existing work — resume one of these instead, or "
-              f"pass --force --reason \"…\" to create anyway:\n")
+        print(f"  likely prior work found — review these live/archived records before creating, "
+              f"or pass --force --reason \"…\" to create anyway:\n")
         for line in render_duplicate_candidates(high_confidence):
             print(line)
         print(f"\n  atlas tickets new: refused — {len(high_confidence)} likely "
-              f"duplicate(s), nothing written")
+              f"prior-work match(es), nothing written")
         return 1
 
     if a.dry_run:
@@ -663,7 +665,9 @@ def cmd_new(a, projects_root):
     ts = now_readable()
     lines = ["---", "kind: ticket", "namespace: atlas.ticket", f"id: {new_id}",
              f"title: {meta['title']}", f"state: {meta['state']}", f"project: {a.project}",
-             "", f"opened_at: {ts}", f"updated_at: {ts}", "", "references: []",
+             "", f"opened_at: {ts}", f"updated_at: {ts}", "",
+             f"references: [{', '.join(meta['references'])}]" if meta["references"] else
+             "references: []",
              "artifacts: []"]
     if meta.get("class"):
         lines.append(f"class: {meta['class']}")
@@ -695,6 +699,7 @@ def cmd_new(a, projects_root):
              "checkpoint:", "  current: opened, not yet started",
              f"  updated_at: {ts}", "---", "",
              "## Objective", "", (a.objective or "(not yet written)"), "",
+             "## Scope", "", (a.scope or "(not yet written)"), "",
              "## Next action", "", a.next_action, ""]
 
     d = projects_root / a.project / "tickets" / new_id
@@ -1085,17 +1090,16 @@ def cmd_search(a, tickets):
 
 
 def cmd_watch(a, tickets):
-    """Read-only preview of `atlas tickets new`'s duplicate guard: scores `--title`
-    against every live candidate ticket without creating anything. Never mutates — an
-    owner checks this before running `new`, or `new`'s own refusal points back here."""
-    candidates = duplicate_candidates(a.title, tickets)
+    """Read-only preview of `atlas tickets new`'s prior-work guard."""
+    references = [r.strip() for r in (a.references or "").split(",") if r.strip()]
+    candidates = prior_work_candidates(a.title, a.objective, a.scope, references, tickets)
     if a.json:
         print(json.dumps([{"id": t["id"], "title": t["title"], "state": t["state"],
                            "score": round(score, 4), "matches_on": keywords}
                           for t, score, keywords in candidates], indent=2))
         return 0
     if not candidates:
-        print(f"  no live ticket shares a keyword with '{a.title}'")
+        print(f"  no live ticket shares a keyword with '{a.title}' (live or archived prior work)")
         return 0
     high = [c for c in candidates if c[1] >= DUPLICATE_HIGH_CONFIDENCE]
     for line in render_duplicate_candidates(candidates):
@@ -1274,7 +1278,10 @@ def main(argv):
             p.add_argument("query")
         if name == "watch":
             p.add_argument("--title", required=True,
-                           help="candidate title to score against live tickets")
+                           help="candidate title to score against prior work")
+            p.add_argument("--objective")
+            p.add_argument("--scope")
+            p.add_argument("--references", help="comma-separated ticket ids or references")
             p.add_argument("--json", action="store_true")
         if name == "next":
             p.add_argument("--goal")
@@ -1301,6 +1308,8 @@ def main(argv):
             p.add_argument("--due")
             p.add_argument("--last-touched", dest="last_touched")
             p.add_argument("--objective")
+            p.add_argument("--scope")
+            p.add_argument("--references", help="comma-separated ticket ids or references")
             p.add_argument("--next-action", dest="next_action")
             p.add_argument("--dry-run", action="store_true")
             p.add_argument("--force", action="store_true",

@@ -107,6 +107,12 @@ row "yours" "$(find "${ATLAS_PATH_SKILLS:-$ATLAS_HOME/internal/extensions/skills
 printf '\n%sadapter%s\n' "$B" "$X"
 adapter=$(grep -m1 '^active_adapter:' "${ATLAS_PATH_CONFIG:-$ATLAS_HOME/internal/config}/settings.yaml" 2>/dev/null | cut -d: -f2 | tr -d ' ')
 row "active" "${adapter:-claude-code ${D}(default)${X}}"
+provider_file="$ATLAS_HOME/internal/config/providers.json"
+if [ -f "$provider_file" ]; then
+  primary=$(grep -m1 '"primary_provider"' "$provider_file" | sed 's/.*: *"\([^"]*\)".*/\1/')
+  selected=$(grep -c '"id"' "$provider_file" 2>/dev/null || true)
+  row "providers" "${primary:-other}, ${selected:-0} configured"
+fi
 
 printf '\n%shealth%s\n' "$B" "$X"
 if [ -x "$SELF_DIR/atlas-doctor" ]; then

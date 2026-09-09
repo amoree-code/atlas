@@ -71,6 +71,7 @@ INTEGRATIONS — clients, capabilities, channels
   atlas integration <cmd>    detect | inventory | register | list — provider-neutral records
   atlas capability <cmd>     list | doctor — the capability registry (what Atlas can do)
   atlas capability-route     choose a declared provider for one capability (read-only)
+  atlas providers [cmd]      show or update selected provider adapters
   atlas domain <cmd>         list | doctor — the domain registry (declarations only)
   atlas channel resolve      bind a channel to an explicit project and session
   atlas channel packet       create a read-only extension/desktop/Obsidian packet
@@ -121,6 +122,7 @@ case "$cmd" in
   # dispatched exactly like every other command below.
   init|onboard|doctor|status|workspace|privacy-scan|adapter|connect|integration|migrate|setup|update|capability|domain|run|agentic|render|memory|handoff|coordinator|mission|tickets|policy|context|observe|usage|lifecycle) exec "$SELF_DIR/atlas-$cmd" "$@" ;;
   # Compatibility alias, kept for one version. `capability` is the current name.
+  providers) exec python3 "$SELF_DIR/atlas-providers" "$@" ;;
   plugin) exec "$SELF_DIR/atlas-plugin" "$@" ;;
   version|--version|-V) echo "$VERSION" ;;
   help|--help|-h)       usage ;;
