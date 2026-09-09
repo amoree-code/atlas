@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+import importlib.util, json, os, shutil, sys, time
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parent
+REGISTRY = REPO / "extensions" / "connections"
+
+def parser():
+    spec = importlib.util.spec_from_loader("atlas_adapter", SourceFileLoader("atlas_adapter", str(HERE / "atlas-adapter")))
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod.parse
+
+parse = parser()
+
+def rows():
+    result = []
+    for d in sorted(REGISTRY.iterdir() if REGISTRY.is_dir() else []):
+        f = d / "connection.yaml"
+        if d.is_dir() and f.is_file():
+            result.append((d.name, parse(f.read_text(), str(f))))
+    return result
+
+def resolve(value):
+    for name, m in rows():
+        if value == name or value == m.get("connection") or value in (m.get("aliases") or []): return m
+    raise SystemExit(f"atlas connect: unknown client {value!r}")
+
+def adapter(client):
+    f = REPO / "agentic" / "integrations" / "adapters" / client / "adapter.yaml"
+    return parse(f.read_text(), str(f)) if f.is_file() else None
+
+def detect(m):
+    for raw in (m.get("client") or {}).get("detect") or []:
+        p = Path(os.path.expanduser(str(raw)))
+        if p.exists(): return str(p)
+
+def plan(value):
+    m = resolve(value); client = m["connection"]; a = adapter((m.get("adapter") or {}).get("id", client))
+    if a is None: raise SystemExit(f"atlas connect: adapter for {client!r} is not registered")
+    found = detect(m)
+    if not found:
+        print(f"client: {client}\nstatus: unavailable\nnext: install the client, then rerun"); return 1
+    preferred = (m.get("transport") or {}).get("preferred")
+    ap = (a.get("provides") or {}).get("mcp") or {}
+    verified = (a.get("client") or {}).get("consumer_verified") is True and ap.get("verified") is True
+    transport = preferred if preferred == "mcp" and verified else (m.get("transport") or {}).get("fallback", "adapter")
+    print(f"client: {client}\ndetected: {found}\ntransport: {transport}\nstatus: planned")
+    print("writes: none (use --approve for supported registration)"); return 0
+
+def configure(client):
+    gateway = str(HERE / "atlas-mcp-gateway")
+    if client in {"claude", "claude-code"}:
+        target = Path(os.path.expanduser("~/.claude.json")); data = {}
+        if target.exists():
+            try: data = json.loads(target.read_text())
+            except json.JSONDecodeError as e: raise SystemExit(f"atlas connect: invalid Claude JSON: {e}")
+        if not isinstance(data, dict): raise SystemExit("atlas connect: Claude config is not an object")
+        servers = data.setdefault("mcpServers", {})
+        if not isinstance(servers, dict): raise SystemExit("atlas connect: Claude mcpServers is not an object")
+        backup = None
+        if target.exists(): backup = target.with_name(f"{target.name}.atlas-backup-{int(time.time())}"); shutil.copy2(target, backup)
+        servers["atlas"] = {"command": gateway}; target.parent.mkdir(parents=True, exist_ok=True); target.write_text(json.dumps(data, indent=2) + "\n")
+    elif client == "codex":
+        target = Path(os.path.expanduser("~/.codex/config.toml")); old = target.read_text() if target.exists() else ""
+        marker = "[mcp_servers.atlas]"; command = f'command = {json.dumps(gateway)}'
+        if marker in old:
+            if command in old: print(f"connected: codex\nconfig: {target}\nstatus: already configured"); return 0
+            raise SystemExit("atlas connect: conflicting Codex atlas MCP entry")
+        backup = None
+        if target.exists(): backup = target.with_name(f"{target.name}.atlas-backup-{int(time.time())}"); shutil.copy2(target, backup)
+        target.parent.mkdir(parents=True, exist_ok=True); target.write_text(old.rstrip() + f"\n\n[mcp_servers.atlas]\n{command}\n")
+    else:
+        raise SystemExit("atlas connect: approved registration supports claude-code and codex only")
+    print(f"connected: {client}\nconfig: {target}\nbackup: {backup or 'none'}\nstatus: configured (consumer verification pending)")
+
+args = sys.argv[1:]
+if not args or args == ["list"]:
+    print(f"connections  {REGISTRY}"); [print(f"  {n:<16} aliases: {', '.join(m.get('aliases') or []) or '-'}") for n, m in rows()]; raise SystemExit(0)
+approve = "--approve" in args; args = [a for a in args if a != "--approve"]
+if len(args) != 1: raise SystemExit("usage: atlas connect list | atlas connect <id> [--approve]")
+client = resolve(args[0])["connection"]
+if approve: configure(client)
+else: raise SystemExit(plan(client))

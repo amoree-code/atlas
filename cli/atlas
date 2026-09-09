@@ -66,6 +66,7 @@ AGENTIC RUNS — layered: run < agentic < mission < coordinator
 
 INTEGRATIONS — clients, capabilities, channels
   atlas adapter <cmd>        list | doctor — the client adapter registry
+  atlas connect <id>         resolve and connect an AI client
   atlas integration <cmd>    detect | inventory | register | list — provider-neutral records
   atlas capability <cmd>     list | doctor — the capability registry (what Atlas can do)
   atlas capability-route     choose a declared provider for one capability (read-only)
@@ -117,7 +118,7 @@ case "$cmd" in
   # was proven (test-context-parity.py, T-105). T-118 retired that copy and the parity
   # mechanism once the proof held: engine/cli/ is the sole implementation of all four now,
   # dispatched exactly like every other command below.
-  init|onboard|doctor|status|workspace|privacy-scan|adapter|integration|migrate|setup|update|capability|domain|run|agentic|render|memory|handoff|coordinator|mission|tickets|policy|context|observe|usage|lifecycle) exec "$SELF_DIR/atlas-$cmd" "$@" ;;
+  init|onboard|doctor|status|workspace|privacy-scan|adapter|connect|integration|migrate|setup|update|capability|domain|run|agentic|render|memory|handoff|coordinator|mission|tickets|policy|context|observe|usage|lifecycle) exec "$SELF_DIR/atlas-$cmd" "$@" ;;
   # Compatibility alias, kept for one version. `capability` is the current name.
   plugin) exec "$SELF_DIR/atlas-plugin" "$@" ;;
   version|--version|-V) echo "$VERSION" ;;
