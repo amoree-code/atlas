@@ -1,0 +1,14 @@
+connection: codex
+name: OpenAI Codex CLI
+contract: 1
+aliases: [openai-codex]
+client:
+  detect: [~/.local/bin/codex, ~/.codex/]
+transport:
+  preferred: mcp
+  fallback: adapter
+  gateway: atlas-mcp-gateway
+adapter:
+  id: codex
+  package: atlas-adapter-codex
+  status: official

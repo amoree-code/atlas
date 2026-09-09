@@ -1,0 +1,20 @@
+# Hermes Agent adapter. MCP config path confirmed from the installed config template.
+adapter: hermes
+name: Hermes Agent
+contract: 1
+
+client:
+  detect: [~/.local/bin/hermes, ~/.hermes/]
+  version_cmd: hermes --version
+  consumer_verified: false
+
+provides:
+  mcp: { path: ~/.hermes/config.yaml, format: yaml:mcp_servers, verified: true }
+
+writes: [mcp]
+requires: []
+enforces: []
+
+notes: >
+  The installed Hermes configuration documents stdio MCP servers under mcp_servers.
+  Consumer behavior remains unverified until Hermes discovers and exposes Atlas tools.

@@ -1,0 +1,10 @@
+connection: kilo
+name: Kilo
+contract: 1
+aliases: [.kilo]
+client:
+  detect: [~/.kilo/bin/kilo, ~/.kilo/]
+transport:
+  preferred: mcp
+  fallback: mcp
+  gateway: atlas-mcp-gateway

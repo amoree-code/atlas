@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Connect any MCP-capable client to Atlas."""
+import importlib.util, json, os, shutil, subprocess, sys, time
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parent
+REGISTRY = REPO / "extensions" / "connections"
+GATEWAY = str(HERE / "atlas-mcp-gateway")
+
+def load_parser():
+    spec = importlib.util.spec_from_loader("atlas_adapter", SourceFileLoader("atlas_adapter", str(HERE / "atlas-adapter")))
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod.parse
+parse = load_parser()
+
+def rows():
+    result = []
+    for d in sorted(REGISTRY.iterdir() if REGISTRY.is_dir() else []):
+        f = d / "connection.yaml"
+        if d.is_dir() and f.is_file(): result.append((d.name, parse(f.read_text(), str(f))))
+    return result
+
+def resolve(client):
+    for name, m in rows():
+        if client in {name, m.get("connection"), *(m.get("aliases") or [])}: return m
+    return None
+
+def detect(m):
+    for raw in (m.get("client") or {}).get("detect") or []:
+        p = Path(os.path.expanduser(str(raw)))
+        if p.exists(): return str(p)
+
+def gateway_probe():
+    p = subprocess.Popen([GATEWAY], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        for request in ({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}, {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}):
+            p.stdin.write(json.dumps(request) + "\n"); p.stdin.flush(); line = p.stdout.readline()
+            if not line: return 0, "gateway closed before replying"
+            response = json.loads(line)
+            if "error" in response: return 0, response["error"].get("message", "gateway error")
+            if request["id"] == 2: return len(response.get("result", {}).get("tools", [])), None
+        return 0, "gateway did not return tools"
+    finally:
+        p.kill(); p.wait()
+
+def backup(path):
+    if not path.exists(): return None
+    target = path.with_name(f"{path.name}.atlas-backup-{int(time.time())}"); shutil.copy2(path, target); return target
+
+def write_json_config(path, key, approve):
+    path = Path(os.path.expanduser(path)); data = {}
+    if path.exists():
+        try: data = json.loads(path.read_text())
+        except json.JSONDecodeError as error: raise SystemExit(f"atlas connect: invalid JSON config: {error}")
+    if not isinstance(data, dict): raise SystemExit("atlas connect: JSON config must contain an object")
+    section = data.setdefault(key, {})
+    if not isinstance(section, dict): raise SystemExit(f"atlas connect: JSON key {key!r} is not an object")
+    if not approve:
+        print(f"config: {path}\nplanned key: {key}.atlas\nwrites: none"); return 0
+    previous = backup(path); section["atlas"] = {"command": GATEWAY}; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
+
+def write_continue_config(approve):
+    path = Path(os.path.expanduser("~/.continue/config.yaml")); old = path.read_text() if path.exists() else ""
+    if "\nmcpServers:" in f"\n{old}":
+        if f"command: {GATEWAY}" in old:
+            print(f"config: {path}\nstatus: already configured"); return 0
+        raise SystemExit("atlas connect: Continue mcpServers already exists; refusing ambiguous YAML merge")
+    if not approve:
+        print(f"config: {path}\nplanned key: mcpServers\nwrites: none"); return 0
+    previous = backup(path)
+    block = f"\n\nmcpServers:\n  - name: Atlas\n    command: {GATEWAY}\n"
+    path.parent.mkdir(parents=True, exist_ok=True); path.write_text(old.rstrip() + block)
+    print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
+
+def write_kilo_config(approve):
+    path = Path(os.path.expanduser("~/.config/kilo/kilo.jsonc")); data = {}
+    if path.exists():
+        try: data = json.loads(path.read_text())
+        except json.JSONDecodeError as error: raise SystemExit(f"atlas connect: Kilo JSONC is not plain JSON: {error}")
+    if not isinstance(data, dict): raise SystemExit("atlas connect: Kilo config must contain an object")
+    servers = data.setdefault("mcp", {})
+    if not isinstance(servers, dict): raise SystemExit("atlas connect: Kilo mcp is not an object")
+    if "atlas" in servers and servers["atlas"].get("command") == [GATEWAY]:
+        print(f"config: {path}\nstatus: already configured"); return 0
+    if not approve:
+        print(f"config: {path}\nplanned key: mcp.atlas\nwrites: none"); return 0
+    previous = backup(path); servers["atlas"] = {"type": "local", "command": [GATEWAY], "enabled": True}
+    path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
+
+def write_opencode_config(approve):
+    path = Path(os.path.expanduser("~/.config/opencode/opencode.json")); data = {}
+    if path.exists():
+        try: data = json.loads(path.read_text())
+        except json.JSONDecodeError as error: raise SystemExit(f"atlas connect: OpenCode JSON is invalid: {error}")
+    if not isinstance(data, dict): raise SystemExit("atlas connect: OpenCode config must contain an object")
+    servers = data.setdefault("mcp", {})
+    if not isinstance(servers, dict): raise SystemExit("atlas connect: OpenCode mcp is not an object")
+    if servers.get("atlas", {}).get("command") == [GATEWAY]:
+        print(f"config: {path}\nstatus: already configured"); return 0
+    if not approve:
+        print(f"config: {path}\nplanned key: mcp.atlas\nwrites: none"); return 0
+    previous = backup(path); data["$schema"] = data.get("$schema", "https://opencode.ai/config.json")
+    servers["atlas"] = {"type": "local", "command": [GATEWAY], "enabled": True}
+    path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
+
+def write_goose_config(approve):
+    path = Path(os.path.expanduser("~/.config/goose/config.yaml")); old = path.read_text() if path.exists() else ""
+    if "\natlas:" in f"\n{old}" or "\n  atlas:" in f"\n{old}":
+        if GATEWAY in old: print(f"config: {path}\nstatus: already configured"); return 0
+        raise SystemExit("atlas connect: Goose extensions already exist; refusing ambiguous YAML merge")
+    if not approve:
+        print(f"config: {path}\nplanned key: extensions.atlas\nwrites: none"); return 0
+    previous = backup(path)
+    block = f"\n\nextensions:\n  atlas:\n    name: Atlas\n    type: stdio\n    cmd: {GATEWAY}\n    args: []\n    enabled: true\n    timeout: 300\n"
+    path.parent.mkdir(parents=True, exist_ok=True); path.write_text(old.rstrip() + block)
+    print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
+
+def plan(client):
+    m = resolve(client)
+    if m is None: raise SystemExit(f"atlas connect: unknown client {client!r}; use --client with --json-config")
+    found = detect(m)
+    if not found: print(f"client: {m['connection']}\nstatus: unavailable\nnext: install the client, then rerun"); return 1
+    tools, error = gateway_probe(); print(f"client: {m['connection']}\ndetected: {found}\ntransport: mcp\ngateway_tools: {tools}")
+    if error: print(f"status: failed\nreason: {error}"); return 1
+    print("status: planned\nwrites: none (use --approve to register)"); return 0
+
+def connect_known(client):
+    m = resolve(client)
+    if m is None: raise SystemExit(f"atlas connect: unknown client {client!r}; use --client with --json-config")
+    if not detect(m): raise SystemExit(f"atlas connect: {client!r} is not installed")
+    tools, error = gateway_probe()
+    if error: raise SystemExit(f"atlas connect: gateway probe failed: {error}")
+    if m["connection"] == "gemini":
+        write_json_config("~/.gemini/settings.json", "mcpServers", True)
+        check = subprocess.run(["gemini", "mcp", "list"], capture_output=True, text=True, timeout=60)
+        if check.returncode == 0 and "atlas" in check.stdout: print("status: verified (Gemini MCP discovery passed)"); return 0
+        raise SystemExit("atlas connect: Gemini MCP discovery failed")
+    if m["connection"] == "continue":
+        return write_continue_config(True)
+    if m["connection"] == "kilo":
+        write_kilo_config(True)
+        check = subprocess.run(["kilo", "mcp", "list"], capture_output=True, text=True, timeout=60)
+        if check.returncode == 0 and "atlas" in check.stdout: print("status: verified (Kilo MCP discovery passed)"); return 0
+        raise SystemExit("atlas connect: Kilo MCP discovery failed")
+    if m["connection"] == "qwen-code":
+        check = subprocess.run(["qwen", "mcp", "add", "--scope", "user", "--transport", "stdio", "atlas", GATEWAY], capture_output=True, text=True, timeout=60)
+        if check.returncode != 0 and "already" not in (check.stdout + check.stderr).lower(): raise SystemExit(check.stderr.strip() or "atlas connect: Qwen MCP registration failed")
+        probe = subprocess.run(["qwen", "mcp", "list"], capture_output=True, text=True, timeout=60)
+        if probe.returncode == 0 and "atlas" in probe.stdout: print("status: verified (Qwen MCP discovery passed)"); return 0
+        raise SystemExit("atlas connect: Qwen MCP discovery failed")
+    if m["connection"] == "openhands":
+        check = subprocess.run(["openhands", "mcp", "add", "atlas", "--transport", "stdio", GATEWAY], capture_output=True, text=True, timeout=60)
+        if check.returncode != 0 and "already" not in (check.stdout + check.stderr).lower(): raise SystemExit(check.stderr.strip() or "atlas connect: OpenHands MCP registration failed")
+        if Path(os.path.expanduser("~/.openhands/mcp.json")).exists(): print("status: configured (OpenHands MCP config present)"); return 0
+        raise SystemExit("atlas connect: OpenHands MCP config missing")
+    if m["connection"] == "opencode":
+        write_opencode_config(True)
+        check = subprocess.run(["opencode", "mcp", "list"], capture_output=True, text=True, timeout=60)
+        if check.returncode == 0 and "atlas" in check.stdout: print("status: verified (OpenCode MCP discovery passed)"); return 0
+        raise SystemExit("atlas connect: OpenCode MCP discovery failed")
+    if m["connection"] == "goose":
+        return write_goose_config(True)
+    native = {
+        "claude-code": (["claude", "mcp", "get", "atlas"], ["claude", "mcp", "add", "-s", "user", "atlas", "--", GATEWAY]),
+        "codex": (["codex", "mcp", "get", "atlas"], ["codex", "mcp", "add", "atlas", "--", GATEWAY]),
+        "hermes": (["hermes", "mcp", "test", "atlas"], ["hermes", "mcp", "add", "atlas", "--command", GATEWAY]),
+    }
+    if m["connection"] in native:
+        check, add = native[m["connection"]]
+        probe = subprocess.run(check, capture_output=True, text=True, timeout=60)
+        if probe.returncode != 0:
+            subprocess.run(add, check=True, capture_output=True, text=True, timeout=60)
+            probe = subprocess.run(check, capture_output=True, text=True, timeout=60)
+        if probe.returncode == 0:
+            print(f"connected: {m['connection']}\ngateway_tools: {tools}\nstatus: verified")
+            return 0
+    raise SystemExit(f"atlas connect: native/config registration required for {m['connection']!r}; gateway_tools={tools}")
+
+def usage():
+    print("usage: atlas connect list | atlas connect <id> [--approve] | atlas connect --client <id> --json-config <path> [--key <name>] [--approve]", file=sys.stderr)
+
+args = sys.argv[1:]
+if not args or args == ["list"]:
+    print(f"connections  {REGISTRY}")
+    for name, m in rows(): print(f"  {name:<16} aliases: {', '.join(m.get('aliases') or []) or '-'}")
+    raise SystemExit(0)
+approve = "--approve" in args; args = [a for a in args if a != "--approve"]
+if args and args[0] == "--client":
+    if len(args) not in {4, 6} or "--json-config" not in args: usage(); raise SystemExit(2)
+    client, config, key = args[1], args[args.index("--json-config") + 1], "mcpServers"
+    if "--key" in args: key = args[args.index("--key") + 1]
+    tools, error = gateway_probe()
+    if error: raise SystemExit(f"atlas connect: gateway probe failed: {error}")
+    print(f"client: {client}\ngateway_tools: {tools}")
+    if not approve: raise SystemExit(write_json_config(config, key, False))
+    write_json_config(config, key, True); print("status: configured (client restart/discovery required)"); raise SystemExit(0)
+if len(args) != 1: usage(); raise SystemExit(2)
+raise SystemExit(connect_known(args[0]) if approve else plan(args[0]))

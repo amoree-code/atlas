@@ -1,0 +1,14 @@
+connection: claude-code
+name: Claude Code
+contract: 1
+aliases: [claude]
+client:
+  detect: [~/.local/bin/claude, ~/.claude/]
+transport:
+  preferred: mcp
+  fallback: adapter
+  gateway: atlas-mcp-gateway
+adapter:
+  id: claude-code
+  package: atlas-adapter-claude-code
+  status: official

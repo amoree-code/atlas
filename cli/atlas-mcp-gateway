@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+import json, subprocess, sys
+from pathlib import Path
+HERE = Path(__file__).resolve().parent
+CAPS = HERE.parent / "extensions" / "capabilities"
+
+def tools():
+    out = []
+    for d in sorted(CAPS.iterdir() if CAPS.is_dir() else []):
+        f = d / "capability.yaml"
+        if not d.is_dir() or not f.is_file(): continue
+        current = None
+        for line in f.read_text().splitlines():
+            s = line.strip()
+            if line.startswith("  ") and not line.startswith("    ") and s.endswith(":"): current = s[:-1]
+            elif current and line.startswith("    summary:"):
+                out.append({"name": f"atlas_{d.name}_{current}", "description": s.split(":", 1)[1].strip(), "inputSchema": {"type": "object"}})
+    return out
+
+def send(i, result=None, error=None):
+    x = {"jsonrpc": "2.0", "id": i}; x["error" if error else "result"] = error or result; print(json.dumps(x), flush=True)
+
+for line in sys.stdin:
+    try: r = json.loads(line)
+    except json.JSONDecodeError: continue
+    i, method = r.get("id"), r.get("method")
+    if i is None: continue
+    if method == "initialize": send(i, {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}, "serverInfo": {"name": "atlas-mcp-gateway", "version": "0.1"}})
+    elif method == "ping": send(i, {})
+    elif method == "tools/list": send(i, {"tools": tools()})
+    elif method == "tools/call":
+        p = r.get("params", {}); name = p.get("name", "")
+        if not name.startswith("atlas_") or name.count("_") < 2: send(i, error={"code": -32602, "message": "unknown Atlas tool"}); continue
+        _, cap, op = name.split("_", 2)
+        q = subprocess.run([sys.executable, str(HERE / "atlas-capability"), "invoke", f"{cap}.{op}", "--json", json.dumps(p.get("arguments", {}))], capture_output=True, text=True, timeout=300)
+        send(i, {"content": [{"type": "text", "text": ((q.stdout or "") + (q.stderr or "")).strip()}], "isError": q.returncode != 0})
+    else: send(i, error={"code": -32601, "message": f"method not found: {method}"})

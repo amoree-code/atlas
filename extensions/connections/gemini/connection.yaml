@@ -1,0 +1,14 @@
+connection: gemini
+name: Gemini CLI
+contract: 1
+aliases: [gemini-cli]
+client:
+  detect: [~/.local/bin/gemini, /opt/homebrew/bin/gemini, ~/.gemini/]
+transport:
+  preferred: mcp
+  fallback: adapter
+  gateway: atlas-mcp-gateway
+adapter:
+  id: gemini
+  package: atlas-adapter-gemini
+  status: official
