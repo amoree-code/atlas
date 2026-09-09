@@ -18,8 +18,8 @@ with tempfile.TemporaryDirectory() as raw:
     no = subprocess.run([str(ATLAS), "setup", "apply"], env=env, text=True, capture_output=True)
     chk("setup apply requires approval", no.returncode == 2 and not (home / "runtime").exists())
     yes = subprocess.run([str(ATLAS), "setup", "apply", "--approve"], env=env, text=True, capture_output=True)
-    chk("approved setup initializes Atlas and stops for missing onboarding data", yes.returncode == 1
-        and (home / "runtime/dispatch-inbox").is_dir() and "FAIL" in yes.stdout)
+    chk("approved setup initializes Atlas and reports doctor findings", yes.returncode == 1
+        and (home / "runtime/dispatch-inbox").is_dir() and "problem(s)" in yes.stdout)
     chk("setup does not create a legacy root", not (home / "atlas").exists())
 
 print(f"{passed} passed, {failed} failed")

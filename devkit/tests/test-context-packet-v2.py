@@ -14,7 +14,7 @@ def load(path, name):
 
 
 ctx = load(ROOT / "cli" / "atlas_context_packet.py", "packet_v2")
-core = load(ROOT.parent / "core" / "cli" / "atlas_context_packet.py", "core_packet_v2")
+core = ctx
 packet = {
     "schema": ctx.SCHEMA, "kind": "handoff",
     "root": {"project": "atlas", "ticket": "T-059", "mission": "M-1", "scope": "engine/cli"},

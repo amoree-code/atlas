@@ -15,48 +15,67 @@ VERSION="$(cat "$SELF_DIR/../VERSION" 2>/dev/null || echo unknown)"
 usage() { cat <<EOF
 atlas v$VERSION — a portable operating layer for AI coding agents.
 
-  atlas init [--dry-run]     create/verify your private workspace (never overwrites)
-  atlas onboard [cmd]        first-run setup: who you are, so the rest has a starting point
-  atlas doctor [--quiet]     verify the public/private contract (reports only)
-  atlas status               where each layer is and whether the contract holds
-  atlas root                 resolve the canonical Atlas root
-  atlas structure <cmd>      plan | apply --approve | check — workspace readiness
-  atlas project <id>         resolve one canonical project directory
-  atlas channel resolve      bind a channel to an explicit project and session
-  atlas channel packet       create a read-only extension/desktop/Obsidian packet
-  atlas capability-route     choose a declared provider for one capability (read-only)
-  atlas knowledge-index      index Markdown knowledge into SQLite (source remains read-only)
-  atlas workspace <cmd>      local versioning of the private workspace
-  atlas adapter <cmd>        list | doctor — the client adapter registry
-  atlas integration <cmd>    detect | inventory | register | list — provider-neutral records
-  atlas migrate <cmd>       plan | apply | rollback — explicit additive private migration
-  atlas setup <cmd>         plan | apply --approve — first-run Atlas setup
-  atlas update <cmd>        check | plan | apply --approve — local update metadata
+New machine? Run:  atlas setup apply --approve
+That one command does init + structure + adapters + onboard + doctor for you —
+the four setup commands below exist as its named parts, not four separate first steps.
+
+SETUP — first run, once per machine
+  atlas setup <cmd>         plan | apply --approve — the one first-run command, above
+  atlas init [--dry-run]     create/verify the private workspace's folders (no interview)
+  atlas onboard [cmd]        the interview: who you are, so the rest has a starting point
+  atlas structure <cmd>      plan | apply --approve | check — adopt/verify the layout
+  atlas migrate <cmd>       plan | apply | rollback — one-time old-layout data move
+  atlas update <cmd>        check | plan | apply --approve — local engine-version bookkeeping
+
+HEALTH — read-only checks, run anytime
+  atlas status               one-screen dashboard: where each layer is, contract holding?
+  atlas doctor [--quiet]     deep audit of the public/private/runtime boundary
+  atlas privacy-scan [path]  check the public repo for credentials and personal data before publishing
   atlas docs <cmd>          check | build | sync — generated Atlas Environment guidance
-  atlas capability <cmd>     list | doctor — the capability registry
-  atlas plugin <cmd>         compatibility alias for 'capability'
-  atlas domain <cmd>         list | doctor — the domain registry (declarations only)
+
+WORKSPACE — where things live
+  atlas root                 resolve the canonical Atlas root
+  atlas project <id>         resolve one canonical project directory
+  atlas workspace <cmd>      local git versioning of the private workspace
+
+MEMORY & KNOWLEDGE
+  atlas memory <cmd>         status | doctor | attach — the memory engine
+  atlas knowledge-index      index Markdown knowledge into SQLite (source stays read-only)
+  atlas render <skill>       resolve a canonical skill for one client
+  atlas policy <name>        list | doctor | <module> — governance, loaded on demand
+
+TICKETS & SESSIONS
+  atlas tickets <cmd>        list | index | doctor | log | checkpoint — task records
+  atlas context [ticket]     the cold-start packet: project, live tickets, git state
+  atlas activity              read-only live ticket and agent activity snapshot
+  atlas lifecycle [effort]   continue, checkpoint, compact, restart or hand off
+  atlas usage [--json]       measured token spend per session, from client transcripts
+  atlas observe -- <cmd>     run it, keep the output, return only what decides
+
+AGENTIC RUNS — layered: run < agentic < mission < coordinator
   atlas run <cmd>            create | step | status | list — bounded execution boundary
   atlas agentic <cmd>        create | show | validate | list | transition | capture |
-                             check | approve — bounded controller envelope
-  atlas handoff <cmd>        prepare | approve | send | receive | show | list — handoffs
-  atlas coordinator <cmd>    route | prepare | dispatch | review | cost | lease | claim |
-                             transition | begin | finalize — T-050 owner-gated auto-route +
-                             lease/claim/state + the S7 begin/finalize workflow
+                             check | approve — bounded controller envelope, one run
   atlas mission <cmd>        create | approve | show | status — T-051-S1 owner-approved
                              mission contract and durable run state ONLY; no planner,
                              executor, verifier, or continuation loop runs yet
-  atlas render <skill>       resolve a canonical skill for one client
-  atlas memory <cmd>         status | doctor | attach — the memory engine
-  atlas context [ticket]     the cold-start packet: project, live tickets, git state
-  atlas activity              read-only live ticket and agent activity snapshot
-  atlas observe -- <cmd>     run it, keep the output, return only what decides
-  atlas policy <name>        list | doctor | <module> — governance, loaded on demand
-  atlas tickets <cmd>        list | index | doctor | log | checkpoint — task records
-  atlas usage [--json]       measured token spend per session, from client transcripts
-  atlas lifecycle [effort]   continue, checkpoint, compact, restart or hand off
-  atlas privacy-scan [path]  check the public repo for credentials and personal data
+  atlas coordinator <cmd>    route | prepare | dispatch | review | cost | lease | claim |
+                             transition | begin | finalize — T-050 owner-gated auto-route +
+                             lease/claim/state + the S7 begin/finalize workflow
+  atlas handoff <cmd>        prepare | approve | send | receive | show | list — handoffs
+
+INTEGRATIONS — clients, capabilities, channels
+  atlas adapter <cmd>        list | doctor — the client adapter registry
+  atlas integration <cmd>    detect | inventory | register | list — provider-neutral records
+  atlas capability <cmd>     list | doctor — the capability registry (what Atlas can do)
+  atlas capability-route     choose a declared provider for one capability (read-only)
+  atlas domain <cmd>         list | doctor — the domain registry (declarations only)
+  atlas channel resolve      bind a channel to an explicit project and session
+  atlas channel packet       create a read-only extension/desktop/Obsidian packet
+
   atlas version
+
+Deprecated: 'atlas plugin' is a compatibility alias for 'capability' — use 'capability'.
 
 Two layers, two owners:
   public   this repository   reusable software — publishable

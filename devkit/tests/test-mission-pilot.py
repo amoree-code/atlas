@@ -55,7 +55,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli"
-CORE_CLI = REPO.parent / "core" / "cli"
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -86,8 +85,6 @@ def _load(cli_dir, name):
 
 mission_cli = _load(CLI, "atlas-mission")
 mission = _load(CLI, "atlas_mission.py")
-core_mission_cli = _load(CORE_CLI, "atlas-mission")
-core_mission = _load(CORE_CLI, "atlas_mission.py")
 
 
 @contextlib.contextmanager
@@ -593,40 +590,32 @@ rc2, out2, _ = do_finalize("T-960-A", mission_det, handoff_det, key=key_finalize
 chk("replaying the same finalize request produces byte-identical JSON", rc1 == rc2 == 0 and out1 == out2)
 
 # =============================================================================================
-t("18. engine/core parity for the pilot flow")
+t("18. engine canonical parity for the pilot flow (T-118: core/cli retired, single canonical "
+  "copy — nothing left to compare against)")
 rc, out, err = do_create("T-960-A", scopes=["pilot-a/alpha-parity.txt"], m=mission_cli,
                          key=uniq_key("parity-e"))
 assert rc == 0, (rc, out, err)
 mid_parity_e = mission_id_from(out)
-rc, out, err = do_create("T-960-A", scopes=["pilot-a/alpha-parity-core.txt"], m=core_mission_cli,
-                         key=uniq_key("parity-c"))
-assert rc == 0, (rc, out, err)
-mid_parity_c = mission_id_from(out)
 rc, out, err = do_approve("T-960-A", mid_parity_e, m=mission_cli, key=uniq_key("parity-ea"))
-assert rc == 0, (rc, out, err)
-rc, out, err = do_approve("T-960-A", mid_parity_c, m=core_mission_cli, key=uniq_key("parity-ca"))
 assert rc == 0, (rc, out, err)
 rc_e, out_e, _ = do_handoff("T-960-A", mid_parity_e, "pilot-a/alpha-parity.txt", session_a,
                            "inv-parity-e", m=mission_cli, key=uniq_key("parity-eh"))
-rc_c, out_c, _ = do_handoff("T-960-A", mid_parity_c, "pilot-a/alpha-parity-core.txt", session_a,
-                           "inv-parity-c", m=core_mission_cli, key=uniq_key("parity-ch"))
-chk("engine and core produce equivalent handoff outcomes for the same pilot shape",
-    rc_e == 0 and rc_c == 0)
+chk("engine produces a successful bounded handoff for the pilot shape", rc_e == 0)
 engine_py = CLI / "atlas_mission.py"
-core_py = CORE_CLI / "atlas_mission.py"
-chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
-    engine_py.read_bytes() == core_py.read_bytes())
 engine_cli_file = CLI / "atlas-mission"
-core_cli_file = CORE_CLI / "atlas-mission"
-chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
-    engine_cli_file.read_bytes() == core_cli_file.read_bytes())
+chk("engine/cli/atlas_mission.py exists", engine_py.is_file())
+chk("engine/cli/atlas-mission exists", engine_cli_file.is_file())
+core_py = REPO.parent / "core" / "cli" / "atlas_mission.py"
+core_cli_file = REPO.parent / "core" / "cli" / "atlas-mission"
+chk("no stale core/cli/atlas_mission.py copy has reappeared", not core_py.exists())
+chk("no stale core/cli/atlas-mission copy has reappeared", not core_cli_file.exists())
 
 # =============================================================================================
 t("19. protected T-050/T-051 files and tickets untouched")
 PROTECTED = [
-    CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
-    CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
-    CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
+    CLI / "atlas-coordinator",
+    CLI / "atlas_coordination.py",
+    CLI / "atlas-handoff",
     REPO / "governance" / "policies" / "handoff-transports.yaml",
     REPO / "governance" / "policies" / "coordinator-routing.yaml",
 ]

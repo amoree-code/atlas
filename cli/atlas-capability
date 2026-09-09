@@ -40,7 +40,7 @@ REPO = Path(__file__).resolve().parent.parent
 # caller written against the old name keeps working. New name wins when both are set.
 CAPS = Path(os.environ.get("ATLAS_CAPABILITIES")
             or os.environ.get("ATLAS_PLUGINS")
-            or REPO / "capabilities")
+            or REPO / "extensions" / "capabilities")
 # The manifest filename, new then old. Order is the precedence.
 MANIFEST_NAMES = ("capability.yaml", "plugin.yaml")
 ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", Path.home() / "atlas")))

@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""tests/test-cli-source-drift.py — T-025 (mostly retired by T-118); T-048 handoff
-identity (still live).
+"""tests/test-cli-source-drift.py — T-025, retired by T-118.
 
 T-025's original concern was two physical trees existing by design (`<repo>/cli/` and
 `~/atlas/`), a consequence of the migration cutting commands over one at a time
 (T-016/017/018 moved `context`/`usage`/`lifecycle`/`observe`; T-012 placed, but explicitly
 did not cut over, everything else). That transition state ended with T-118: the
-`~/atlas/context/` dispatch mirror and the `atlas_paths.py`/`atlas_tickets.py`/
-`atlas_lifecycle.py`/`atlas-context`/`atlas-observe` copies under `~/atlas/core/cli/` were
-retired outright (see test-context-parity.py's retirement note, and T-105/T-118 for the
-full history). `engine/cli/` is now the sole implementation of those commands, so section 1
-below (the old byte-identity/dispatch checks) is gone — there is nothing left to drift.
-
-Section 1b (T-048 handoff identity) is unrelated to that retirement and stays: `core/cli/`
-still hosts the separate, actively-tested mission/coordinator "core vs engine" parity
-subsystem (T-050/T-051 and family — atlas-mission, atlas-coordinator, atlas_mission.py,
-atlas_coordination.py, atlas_context_packet.py, and the legacy `core/cli/atlas` alias used
-by test-coordinator-routing.py), and atlas-handoff is part of that subsystem.
+`~/atlas/context/` dispatch mirror and the `~/atlas/core/cli/` copies (both the
+context/usage/lifecycle/observe family and the mission/coordinator "core vs engine" parity
+subsystem — atlas-mission, atlas-coordinator, atlas-handoff, atlas_mission.py,
+atlas_coordination.py, atlas_context_packet.py) were retired outright: `core/cli/` no longer
+exists on disk at all (see test-context-parity.py's and test-mission-*.py's retirement
+notes, and T-105/T-118 for the full history). `engine/cli/` is now the sole implementation
+of every one of those commands, so section 1 (the old byte-identity/dispatch checks) and
+the former section 1b (T-048 handoff identity against a live `core/cli/atlas-handoff`) are
+both gone — there is nothing left to drift against. Sections 2 and 3 below are the only
+still-live regression coverage this file provides, and they do not depend on whether
+`core/cli` exists anywhere, so this file no longer self-skips.
 
 Nothing here touches ~/atlas or ~/atlas — it only reads them.
 """
@@ -28,7 +27,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli"
-ATLAS = Path(os.environ.get("ATLAS_HOME", str(Path.home() / "atlas")))
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -53,42 +51,24 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-HAVE_ATLAS = (ATLAS / "core" / "cli").is_dir()
-
-if not HAVE_ATLAS:
-    print("  (skipped — no ~/atlas/core/cli found on this machine; nothing to check)")
-    print("\n0 passed, 0 failed")
-    sys.exit(0)
-
 # --- 1. (retired by T-118) -------------------------------------------------------------
 # atlas_paths.py/atlas_tickets.py/atlas_lifecycle.py/atlas-context/atlas-observe no longer
 # have copies under ~/atlas/context/ or ~/atlas/core/cli/ to drift from each other — there
 # is exactly one copy of each, in engine/cli/. Nothing left to check; see this file's own
 # module docstring for the retirement record.
 
-# --- 1b. T-048 handoff identity: core is intentionally not byte-identical to engine
-# during the migration, but the live dispatched copy must carry the same approved
-# identity behavior. This catches the exact failure where the engine copy was updated
-# while `atlas handoff` still ran an older core copy.
-t("T-048 handoff identity exists in both engine and the live core copy")
-HANDOFF_IDENTITY_MARKERS = (
-    "--source-client",
-    "--source-session",
-    "source_client",
-    "source_session_id",
-    "IDENTITY_UNSPECIFIED",
-    "def identity_display",
-)
+# --- 1b. (retired by T-118) -------------------------------------------------------------
+# The T-048 handoff-identity check used to compare engine/cli/atlas-handoff against a live
+# ~/atlas/core/cli/atlas-handoff dispatched copy. `core/cli/` no longer exists on this or
+# any machine post-T-118 — there is exactly one atlas-handoff implementation, in
+# engine/cli/. See test-mission-handoff.py for the still-live behavioral coverage of that
+# command; this file only ever checked that a second copy stayed in sync, and there is no
+# second copy left to sync.
+t("T-118: no stale core/cli/atlas-handoff copy has reappeared")
 engine_handoff = CLI / "atlas-handoff"
-atlas_handoff = ATLAS / "core" / "cli" / "atlas-handoff"
-chk("atlas-handoff engine copy exists", engine_handoff.is_file())
-chk("atlas-handoff atlas/core/cli copy exists", atlas_handoff.is_file())
-if engine_handoff.is_file() and atlas_handoff.is_file():
-    engine_text = engine_handoff.read_text(errors="replace")
-    atlas_text = atlas_handoff.read_text(errors="replace")
-    for marker in HANDOFF_IDENTITY_MARKERS:
-        chk(f"atlas-handoff identity marker {marker!r} is present in both copies",
-            marker in engine_text and marker in atlas_text)
+chk("engine/cli/atlas-handoff exists", engine_handoff.is_file())
+chk("no ~/atlas/core/cli/atlas-handoff copy exists",
+    not (Path.home() / "atlas" / "core" / "cli" / "atlas-handoff").exists())
 
 # --- 2. Dispatch resolution: context/usage/lifecycle/observe now ignore ATLAS_HOME, -----
 #         exactly like every other command (T-118) -------------------------------------

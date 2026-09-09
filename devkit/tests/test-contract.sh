@@ -12,7 +12,7 @@ set -uo pipefail
 # is even reached, so both must start unset here regardless of the calling shell.
 unset ATLAS_REPO ATLAS_REPO
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CLI="$REPO/cli"; export CLI
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/atlas-test.XXXXXX")"
 trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
@@ -37,18 +37,18 @@ t "init on a clean workspace"
 W="$TMP/clean"; export ATLAS_HOME="$W"
 out=$("$CLI/atlas-init" 2>&1); rc=$?
 chk "exits 0" $rc
-for s in internal/config internal/governance/rules internal/governance/policies \
-         internal/schemas internal/extensions/skills internal/extensions/agents \
-         internal/helpers internal/runtime personal/inbox personal/daily \
+for s in system/config system/governance/rules system/governance/policies \
+         schemas extensions/skills extensions/agents \
+         helpers runtime personal/inbox personal/daily \
          personal/memory personal/professional personal/knowledge personal/templates \
-         projects internal/sessions; do
+         projects runtime/sessions; do
   [ -d "$W/$s" ]; chk "created $s/" $?
 done
 [ -d "$W/personal/memory/education" ];  chk "created the 8 memory sections" $?
 [ -d "$W/personal/knowledge/decisions" ];        chk "created the 7 knowledge kinds" $?
 [ -f "$W/personal/memory/MEMORY.md" ];  chk "seeded memory/MEMORY.md" $?
-[ ! -d "$W/internal/config/scripts" ];     chk "did NOT seed runtime scripts into private data" $?
-[ ! -d "$W/internal/extensions/skills/research" ];           chk "did NOT copy public skills into the workspace" $?
+[ ! -d "$W/system/config/scripts" ];     chk "did NOT seed runtime scripts into private data" $?
+[ ! -d "$W/extensions/skills/research" ];           chk "did NOT copy public skills into the workspace" $?
 [ ! -d "$W/.git" ];                      chk "did NOT create a git repo (never a remote)" $?
 
 # =====================================================================================
@@ -63,11 +63,11 @@ after=$(find "$W" -type f -exec shasum {} \; | sort | shasum)
 t "init never overwrites user-owned content"
 echo "MY OWN NOTES — do not touch" > "$W/personal/memory/MEMORY.md"
 echo "a real memory" > "$W/personal/memory/education/scholarship.md"
-mkdir -p "$W/internal/extensions/skills/research"; echo "my own research skill" > "$W/internal/extensions/skills/research/SKILL.md"
+mkdir -p "$W/extensions/skills/research"; echo "my own research skill" > "$W/extensions/skills/research/SKILL.md"
 out=$("$CLI/atlas-init" 2>&1)
 grep -q "MY OWN NOTES" "$W/personal/memory/MEMORY.md";        chk "edited seed file preserved verbatim" $?
 grep -q "a real memory" "$W/personal/memory/education/scholarship.md"; chk "user memory file untouched" $?
-grep -q "my own research skill" "$W/internal/extensions/skills/research/SKILL.md"; chk "user skill NOT overwritten by the public one" $?
+grep -q "my own research skill" "$W/extensions/skills/research/SKILL.md"; chk "user skill NOT overwritten by the public one" $?
 grep -q "yours" <<< "$out";                       chk "reports the divergence instead of resolving it" $?
 
 # =====================================================================================
@@ -209,12 +209,12 @@ echo "$TERM" > "$F/doc.md"
 out=$(ATLAS_HOME="$TMP/clean" "$CLI/atlas-privacy-scan" "$F" 2>&1)
 echo "$out" | grep -q "PERSONAL.*user term"; [ $? -ne 0 ]
 chk "unknown term not flagged without a terms file" $?
-mkdir -p "$TMP/clean/internal/governance/policies"; echo "$TERM" > "$TMP/clean/internal/governance/policies/privacy-terms.txt"
+mkdir -p "$TMP/clean/system/governance/policies"; echo "$TERM" > "$TMP/clean/system/governance/policies/privacy-terms.txt"
 out=$(ATLAS_HOME="$TMP/clean" "$CLI/atlas-privacy-scan" "$F" 2>&1)
 echo "$out" | grep -q "PERSONAL.*user term";         chk "term from ~/atlas is applied" $?
 grep -rqi "$TERM" "$REPO" --exclude-dir=.git; [ $? -ne 0 ]
 chk "the term itself never entered the public repo" $?
-rm -f "$TMP/clean/internal/governance/policies/privacy-terms.txt"
+rm -f "$TMP/clean/system/governance/policies/privacy-terms.txt"
 
 # =====================================================================================
 # `personal` is severity block-IN-PUBLIC-REPO, so two cases are not findings at all: a
@@ -265,8 +265,8 @@ LC="$TMP/licence"; mkdir -p "$LC"
 # A generated term, for the same reason as every other user-term test here: a real name
 # written into this file would put it in the public repo.
 LTERM="zz$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')corp"
-LHOME="$TMP/lhome"; mkdir -p "$LHOME/internal/governance/policies"
-echo "$LTERM" > "$LHOME/internal/governance/policies/privacy-terms.txt"
+LHOME="$TMP/lhome"; mkdir -p "$LHOME/system/governance/policies"
+echo "$LTERM" > "$LHOME/system/governance/policies/privacy-terms.txt"
 # NB: capture, never `lscan | grep`. The scanner exits 1 when it finds something and the
 # suite runs under `set -o pipefail`, so a pipe reports the scanner's exit, not grep's.
 lscan() { ATLAS_HOME="$LHOME" "$CLI/atlas-privacy-scan" "$LC" 2>&1; }
@@ -464,7 +464,7 @@ chk "  ...no draft dir was created for an official adapter" $?
 
 t "adapter contract: AIOS-016 \`adapter init\` — draft scaffold lifecycle"
 A16_HOME2="$TMP/a16-home2"
-adapters_before=$(find "$REPO/adapters" -type f -exec shasum {} \; | sort | shasum)
+adapters_before=$(find "$REPO/agentic/integrations/adapters" -type f -exec shasum {} \; | sort | shasum)
 
 out=$(ATLAS_HOME="$A16_HOME2" ATLAS_ADAPTERS="$A16_EMPTY" \
       "$CLI/atlas-adapter" init scratchtool --skip 2>&1); rc=$?
@@ -508,7 +508,7 @@ echo "$out" | grep -q "draft already exists"
 chk "  ...and reports the draft already exists" $?
 [ "$before" = "$after" ];                            chk "  ...byte-identical, no new files (idempotent)" $?
 
-adapters_after=$(find "$REPO/adapters" -type f -exec shasum {} \; | sort | shasum)
+adapters_after=$(find "$REPO/agentic/integrations/adapters" -type f -exec shasum {} \; | sort | shasum)
 [ "$adapters_before" = "$adapters_after" ]
 chk "no write ever landed in the real adapters/ tree" $?
 
@@ -645,13 +645,13 @@ reflow() {  # src -> dst
   sed -E 's/^([[:space:]]*)([A-Za-z0-9_.-]+):[[:space:]]+(\{.*\})[[:space:]]*$/\1\2:\n\1  \3/' \
     "$1" > "$2"
 }
-for src in "$REPO"/adapters/*/adapter.yaml; do
+for src in "$REPO"/agentic/integrations/adapters/*/adapter.yaml; do
   aid=$(basename "$(dirname "$src")"); mkdir -p "$FMT/adapters/$aid"
   reflow "$src" "$FMT/adapters/$aid/adapter.yaml"
 done
 # The fixture deliberately keeps the OLD directory and manifest names: reading it back
 # through ATLAS_PLUGINS below is also the compatibility-window proof.
-for src in "$REPO"/capabilities/*/capability.yaml; do
+for src in "$REPO"/extensions/capabilities/*/capability.yaml; do
   cid=$(basename "$(dirname "$src")"); mkdir -p "$FMT/plugins/$cid"
   reflow "$src" "$FMT/plugins/$cid/plugin.yaml"
 done
@@ -666,14 +666,14 @@ chk "  ...and no flow-collection complaint" $?
 
 # The two layouts must not merely both parse — they must parse to the SAME document.
 # (drop the header line, which echoes the fixture directory and so always differs)
-inline=$(ATLAS_ADAPTERS="$REPO/adapters" "$CLI/atlas-adapter" list 2>&1 | grep -v 'adapters  ')
+inline=$(ATLAS_ADAPTERS="$REPO/agentic/integrations/adapters" "$CLI/atlas-adapter" list 2>&1 | grep -v 'adapters  ')
 split=$(ATLAS_ADAPTERS="$FMT/adapters" "$CLI/atlas-adapter" list 2>&1 | grep -v 'adapters  ')
 [ "$inline" = "$split" ];                            chk "inline and split forms parse identically" $?
 
 # The capability registry borrows this parser, so the same reflow must be safe there too.
 out=$(ATLAS_PLUGINS="$FMT/plugins" "$CLI/atlas-capability" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "reflowed capability manifests still validate" $?
-inline=$(ATLAS_PLUGINS="$REPO/capabilities" "$CLI/atlas-capability" list 2>&1 | grep -v 'capabilities  ')
+inline=$(ATLAS_PLUGINS="$REPO/extensions/capabilities" "$CLI/atlas-capability" list 2>&1 | grep -v 'capabilities  ')
 split=$(ATLAS_PLUGINS="$FMT/plugins" "$CLI/atlas-capability" list 2>&1 | grep -v 'capabilities  ')
 [ "$inline" = "$split" ];                            chk "  ...to the same document as the shipped layout" $?
 
@@ -762,11 +762,11 @@ t "adapter enable/disable refuse until wired (no dead state)"
 out=$("$CLI/atlas-adapter" enable claude-code 2>&1); rc=$?
 [ "$rc" -ne 0 ];                                     chk "enable refuses" $?
 echo "$out" | grep -q "Step 8";                      chk "  ...and names the step that would wire it" $?
-[ ! -e "$ATLAS_HOME/internal/config/plugins.yaml" ]; chk "  ...and wrote no registry state" $?
+[ ! -e "$ATLAS_HOME/system/config/plugins.yaml" ]; chk "  ...and wrote no registry state" $?
 
 # =====================================================================================
 t "profile: the public template carries no values"
-TPL="$REPO/templates/workspace/internal/config/profile.yaml"
+TPL="$REPO/devkit/templates/workspace/internal/config/profile.yaml"
 [ -f "$TPL" ];                                       chk "profile.yaml template exists" $?
 grep -qE '^(vcs_owner|  default|  summary|  tool|  curator): *""$' "$TPL"
 chk "template ships blank values, not someone's" $?
@@ -775,20 +775,20 @@ grep -q 'never leaves ~/atlas' "$TPL";              chk "template states it is p
 t "profile: init seeds it once and never overwrites"
 P3="$TMP/profilews"; export ATLAS_HOME="$P3"
 "$CLI/atlas-init" >/dev/null 2>&1
-[ -f "$P3/internal/config/profile.yaml" ];             chk "init seeds internal/config/profile.yaml" $?
-echo "vcs_owner: my-own-handle" > "$P3/internal/config/profile.yaml"
+[ -f "$P3/system/config/profile.yaml" ];             chk "init seeds system/config/profile.yaml" $?
+echo "vcs_owner: my-own-handle" > "$P3/system/config/profile.yaml"
 out=$("$CLI/atlas-init" 2>&1)
-grep -q "my-own-handle" "$P3/internal/config/profile.yaml";   chk "an edited profile is never overwritten" $?
+grep -q "my-own-handle" "$P3/system/config/profile.yaml";   chk "an edited profile is never overwritten" $?
 grep -q "yours.*profile.yaml" <<< "$out";         chk "  ...and the divergence is reported" $?
 
 t "render: unresolved placeholders are visible, never silently blank"
 printf 'x {{profile.nothing.here}} y\n' > "$TMP/probe.md"
-mkdir -p "$REPO/skills/__probe__" && cp "$TMP/probe.md" "$REPO/skills/__probe__/SKILL.md"
+mkdir -p "$REPO/extensions/skills/__probe__" && cp "$TMP/probe.md" "$REPO/extensions/skills/__probe__/SKILL.md"
 out=$(ATLAS_HOME="$P3" "$CLI/atlas-render" __probe__ 2>&1)
 echo "$out" | grep -q '\[\[profile.nothing.here unset\]\]'
 chk "an unset value renders as an explicit marker" $?
 echo "$out" | grep -qE '^x  y$'; [ $? -ne 0 ];       chk "  ...not as an empty string" $?
-rm -rf "$REPO/skills/__probe__"
+rm -rf "$REPO/extensions/skills/__probe__"
 
 t "render: client conventions come from the adapter manifest"
 export ATLAS_HOME="$HOME/atlas"
@@ -811,8 +811,8 @@ t "THE SKILL GATE: 9 skills render equivalent to the committed goldens"
 # whenever a skill is added, removed, or its canonical body changes (T-023 added
 # session-handoff and edited catch-up/session-end — 8 -> 9; T-115 removed graphify — 9 -> 8).
 GW="$TMP/goldenws"; mkdir -p "$GW/internal/config"
-cp "$REPO/tests/fixtures/profile.yaml" "$GW/internal/config/profile.yaml"
-out=$(ATLAS_HOME="$GW" "$CLI/atlas-render" --check "$REPO/tests/fixtures/golden-skills" \
+cp "$REPO/devkit/tests/fixtures/profile.yaml" "$GW/internal/config/profile.yaml"
+out=$(ATLAS_HOME="$GW" "$CLI/atlas-render" --check "$REPO/devkit/tests/fixtures/golden-skills" \
         --client claude-code 2>&1); rc=$?
 [ "$rc" -eq 0 ];                                     chk "no semantic loss across all 8 skills" $?
 # Count per-skill result lines only — the summary line says "equivalent" too.
@@ -820,20 +820,20 @@ n=$(echo "$out" | grep -cE '^  (identical|equivalent) ')
 [ "$n" -eq 8 ];                                      chk "all 8 accounted for ($n)" $?
 echo "$out" | grep -q "DIFFERS"; [ $? -ne 0 ];       chk "no skill differs semantically" $?
 # The goldens are public artefacts and must stay that way.
-ATLAS_HOME="$GW" "$CLI/atlas-privacy-scan" "$REPO/tests/fixtures" >/dev/null 2>&1
+ATLAS_HOME="$GW" "$CLI/atlas-privacy-scan" "$REPO/devkit/tests/fixtures" >/dev/null 2>&1
 chk "the goldens carry no private data" $?
 # Independence, proved by construction rather than by grepping this file: run the same
 # gate with a HOME that has no runtime layer under it at all. If it still passes, nothing
 # in the path from canonical body to golden touches ~/.ai.
 NOAI="$TMP/no-runtime-home"; mkdir -p "$NOAI"
 HOME="$NOAI" ATLAS_HOME="$GW" "$CLI/atlas-render" --check \
-  "$REPO/tests/fixtures/golden-skills" --client claude-code >/dev/null 2>&1
+  "$REPO/devkit/tests/fixtures/golden-skills" --client claude-code >/dev/null 2>&1
 chk "the gate passes with no runtime layer present" $?
 
 t "public skills carry no personal values"
 # The terms are read from the PRIVATE term file, never spelled out here: a test that
 # names the strings it asserts are absent puts them in the repo it is guarding.
-TERMS="${ATLAS_HOME:-$HOME/atlas}/internal/governance/policies/privacy-terms.txt"
+TERMS="${ATLAS_HOME:-$HOME/atlas}/system/governance/policies/privacy-terms.txt"
 if [ -f "$TERMS" ]; then
   miss=0; nterms=0
   while IFS= read -r term; do
@@ -864,7 +864,7 @@ grep -q 're\.sub' "$AD";                         chk "it owns the cwd-slug rule"
 # The slug rule must be IMPLEMENTED in exactly one place, or the split leaked. Manifests
 # are excluded: since V0.4 they sit beside the executable in adapters/<id>/, and the
 # claude-code manifest describes the path in prose. Prose is not a second implementation.
-n=$(grep -rl 'projects.*<cwd-slug>\|\[/\.\]' "$REPO/cli" "$REPO/adapters" 2>/dev/null \
+n=$(grep -rl 'projects.*<cwd-slug>\|\[/\.\]' "$REPO/cli" "$REPO/agentic/integrations/adapters" 2>/dev/null \
       | grep -v '\.yaml$' | wc -l)
 [ "$n" -eq 1 ];                                  chk "the slug rule is implemented in exactly one file" $?
 
@@ -1081,13 +1081,13 @@ t "init records the repository location, and never overwrites yours"
 # 11. empty -> recorded automatically
 IW="$TMP/init-ws"
 ATLAS_HOME="$IW" "$CLI/atlas-init" >/dev/null 2>&1
-got=$(sed -n 's/^atlas_repo:[[:space:]]*//p' "$IW/internal/config/settings.yaml" | head -1)
+got=$(sed -n 's/^atlas_repo:[[:space:]]*//p' "$IW/system/config/settings.yaml" | head -1)
 [ "$got" = "$REPO" ];                           chk "init recorded its own actual location" $?
 # 12. explicit value survives
-sed 's|^atlas_repo:.*|atlas_repo: ~/deliberately/elsewhere|' "$IW/internal/config/settings.yaml" > "$TMP/x" \
-  && mv "$TMP/x" "$IW/internal/config/settings.yaml"
+sed 's|^atlas_repo:.*|atlas_repo: ~/deliberately/elsewhere|' "$IW/system/config/settings.yaml" > "$TMP/x" \
+  && mv "$TMP/x" "$IW/system/config/settings.yaml"
 out=$(ATLAS_HOME="$IW" "$CLI/atlas-init" 2>&1)
-got=$(sed -n 's/^atlas_repo:[[:space:]]*//p' "$IW/internal/config/settings.yaml" | head -1)
+got=$(sed -n 's/^atlas_repo:[[:space:]]*//p' "$IW/system/config/settings.yaml" | head -1)
 [ "$got" = "~/deliberately/elsewhere" ];        chk "an explicit atlas_repo is NOT overwritten" $?
 grep -q "kept your value" <<< "$out";        chk "   ...and the divergence is reported" $?
 # dry run must still write nothing
@@ -1137,7 +1137,7 @@ chk "verify works with ~/.ai/bin off PATH" $?
 t "ai-sync resolves its own repository, not a configured one"
 # A copy of core must sync from the tree it lives in; resolving some other checkout
 # would sync from a tree nobody is looking at.
-grep -q 'Path(__file__).resolve().parents[2]' "$SY"
+grep -Fq 'Path(__file__).resolve().parents[2]' "$SY"
 chk "the repository is located from the file's own path" $?
 # Scoped to the resolver's own code: the name appears in its docstring, explaining
 # precisely why it is not consulted. A prose mention is not a code path.
@@ -1192,8 +1192,8 @@ echo "$out" | grep -q '0 client(s) changed';         chk "   ...reporting 0 clie
 t "onboarding: a fresh workspace reports uninitialized"
 OB="$TMP/onboard"; export ATLAS_HOME="$OB"
 "$CLI/atlas-init" >/dev/null 2>&1
-[ -f "$OB/internal/config/workspace.yaml" ];        chk "init seeds the workspace state file" $?
-grep -q '^status: uninitialized' "$OB/internal/config/workspace.yaml"; chk "seeded as uninitialized" $?
+[ -f "$OB/system/config/workspace.yaml" ];        chk "init seeds the workspace state file" $?
+grep -q '^status: uninitialized' "$OB/system/config/workspace.yaml"; chk "seeded as uninitialized" $?
 "$CLI/atlas-onboard" status >/dev/null 2>&1
 [ $? -eq 10 ];                                    chk "status exits 10 = onboarding required" $?
 # The point of a canonical marker: a workspace full of directories is still uninitialized.
@@ -1204,7 +1204,7 @@ chk "directories existing does NOT count as initialized" $?
 t "onboarding: completion is earned, not announced"
 "$CLI/atlas-onboard" complete >/dev/null 2>&1
 [ $? -ne 0 ];                                     chk "complete refuses with no data collected" $?
-grep -q '^status: uninitialized' "$OB/internal/config/workspace.yaml"; chk "  ...and did not mark initialized" $?
+grep -q '^status: uninitialized' "$OB/system/config/workspace.yaml"; chk "  ...and did not mark initialized" $?
 
 # =====================================================================================
 t "onboarding: an interrupted run resumes where it stopped"
@@ -1212,8 +1212,8 @@ t "onboarding: an interrupted run resumes where it stopped"
 chk "first answer accepted" $?
 "$CLI/atlas-onboard" status >/dev/null 2>&1
 [ $? -eq 11 ];                                    chk "status exits 11 = incomplete, resumable" $?
-grep -q '^step_identity: done' "$OB/internal/config/workspace.yaml";    chk "answered step recorded done" $?
-grep -q '^step_language: pending' "$OB/internal/config/workspace.yaml"; chk "unanswered step still pending" $?
+grep -q '^step_identity: done' "$OB/system/config/workspace.yaml";    chk "answered step recorded done" $?
+grep -q '^step_language: pending' "$OB/system/config/workspace.yaml"; chk "unanswered step still pending" $?
 "$CLI/atlas-onboard" set language "English" >/dev/null 2>&1
 "$CLI/atlas-onboard" complete >/dev/null 2>&1
 [ $? -eq 0 ];                                     chk "resumed run completes" $?
@@ -1223,16 +1223,16 @@ grep -q '^step_language: pending' "$OB/internal/config/workspace.yaml"; chk "una
 # =====================================================================================
 t "onboarding: idempotent — repeat runs change nothing and duplicate nothing"
 ob_before=$(find "$OB" -type f -exec shasum {} \; | sort | shasum)
-ob_when=$(grep '^initialized_at:' "$OB/internal/config/workspace.yaml")
+ob_when=$(grep '^initialized_at:' "$OB/system/config/workspace.yaml")
 "$CLI/atlas-onboard"          >/dev/null 2>&1
 "$CLI/atlas-onboard" complete >/dev/null 2>&1
 "$CLI/atlas-onboard" --adopt  >/dev/null 2>&1
 "$CLI/atlas-init"             >/dev/null 2>&1
 ob_after=$(find "$OB" -type f -exec shasum {} \; | sort | shasum)
 [ "$ob_before" = "$ob_after" ];                   chk "four further runs, byte-identical workspace" $?
-[ "$ob_when" = "$(grep '^initialized_at:' "$OB/internal/config/workspace.yaml")" ]
+[ "$ob_when" = "$(grep '^initialized_at:' "$OB/system/config/workspace.yaml")" ]
 chk "the initialization timestamp is written once, never moved" $?
-[ "$(grep -c '^status:' "$OB/internal/config/workspace.yaml")" -eq 1 ]; chk "no duplicated state key" $?
+[ "$(grep -c '^status:' "$OB/system/config/workspace.yaml")" -eq 1 ]; chk "no duplicated state key" $?
 [ "$(find "$OB/personal/memory/identity" -name '*.md' | wc -l | tr -d ' ')" -eq 1 ]
 chk "no duplicated identity record" $?
 
@@ -1270,13 +1270,13 @@ rm -f "$AD/personal/memory/identity/profile.md"
 out=$("$CLI/atlas-onboard" status 2>&1)
 echo "$out" | grep -q "INCONSISTENT";             chk "names the inconsistency instead of passing" $?
 echo "$out" | grep -q -- "--repair";              chk "offers a deterministic recovery path" $?
-was=$(grep '^initialized_at:' "$AD/internal/config/workspace.yaml")
+was=$(grep '^initialized_at:' "$AD/system/config/workspace.yaml")
 "$CLI/atlas-onboard" --repair >/dev/null 2>&1
-grep -q '^step_identity: pending' "$AD/internal/config/workspace.yaml"; chk "repair reopens the missing step" $?
-grep -q '^step_language: done'    "$AD/internal/config/workspace.yaml"; chk "  ...and only the missing step" $?
+grep -q '^step_identity: pending' "$AD/system/config/workspace.yaml"; chk "repair reopens the missing step" $?
+grep -q '^step_language: done'    "$AD/system/config/workspace.yaml"; chk "  ...and only the missing step" $?
 [ -f "$AD/personal/memory/preferences/working-style.md" ]
 chk "repair destroyed no surviving data" $?
-[ "$was" = "$(grep '^initialized_at:' "$AD/internal/config/workspace.yaml")" ]
+[ "$was" = "$(grep '^initialized_at:' "$AD/system/config/workspace.yaml")" ]
 chk "repair preserved the original initialization date" $?
 
 # =====================================================================================
@@ -1298,17 +1298,17 @@ HOME="$TMP/empty-home" "$CLI/atlas-onboard" complete >/dev/null 2>&1
 t "namespace: adapters and capabilities are separate directories"
 # The V0.4 inversion fix. Client manifests are adapters; plugins/ is capabilities.
 for c in claude-code codex cursor gemini opencode; do
-  [ -f "$REPO/adapters/$c/adapter.yaml" ]; chk "adapters/$c/adapter.yaml exists" $?
+  [ -f "$REPO/agentic/integrations/adapters/$c/adapter.yaml" ]; chk "adapters/$c/adapter.yaml exists" $?
 done
-[ ! -e "$REPO/capabilities/claude-code" ];    chk "no client manifest left in capabilities/" $?
+[ ! -e "$REPO/extensions/capabilities/claude-code" ];    chk "no client manifest left in capabilities/" $?
 # Exactly one canonical location — a copy in both would be two sources of truth.
-dup=$(find "$REPO/capabilities" \( -name 'capability.yaml' -o -name 'plugin.yaml' \) -path '*claude*' 2>/dev/null | wc -l | tr -d ' ')
+dup=$(find "$REPO/extensions/capabilities" \( -name 'capability.yaml' -o -name 'plugin.yaml' \) -path '*claude*' 2>/dev/null | wc -l | tr -d ' ')
 [ "$dup" -eq 0 ];                        chk "no compatibility duplicate was left behind" $?
-[ -f "$REPO/contracts/adapter.schema.md" ]; chk "adapter contract has its own schema" $?
-[ -f "$REPO/contracts/capability.schema.md" ];  chk "capability contract has its own schema" $?
-grep -q 'adapter.*connects.*one AI client' "$REPO/contracts/adapter.schema.md"
+[ -f "$REPO/governance/contracts/adapter.schema.md" ]; chk "adapter contract has its own schema" $?
+[ -f "$REPO/governance/contracts/capability.schema.md" ];  chk "capability contract has its own schema" $?
+grep -q 'adapter.*connects.*one AI client' "$REPO/governance/contracts/adapter.schema.md"
 chk "the adapter schema describes clients" $?
-grep -qi 'capability' "$REPO/contracts/capability.schema.md"
+grep -qi 'capability' "$REPO/governance/contracts/capability.schema.md"
 chk "the plugin schema describes capabilities" $?
 
 # =====================================================================================
@@ -1533,9 +1533,9 @@ grep -Eqi '\b(software|customer-support|mobile-app|resolved-ticket|web-applicati
 # The capability contract no longer carries a `domain:` field at all. It was removed rather
 # than renamed when Domain became a real concept: core never read it, nothing validated it,
 # and one manifest set it — so one word now has exactly one meaning.
-grep -Eq '^\s*domain:' "$REPO/capabilities/browser/capability.yaml"
+grep -Eq '^\s*domain:' "$REPO/extensions/capabilities/browser/capability.yaml"
 [ $? -ne 0 ];                             chk "the browser capability declares no domain field" $?
-grep -Eq '^\s+domain: ' "$REPO/contracts/capability.schema.md"
+grep -Eq '^\s+domain: ' "$REPO/governance/contracts/capability.schema.md"
 [ $? -ne 0 ];                             chk "the capability contract's example declares no domain field" $?
 
 # =====================================================================================
@@ -1543,7 +1543,7 @@ t "domain contract: a domain is inert"
 DD="$TMP/domains"; mkdir -p "$DD"
 dom() { rm -f "$DD"/*.yaml; cat > "$DD/$1.yaml"; }
 
-[ -f "$REPO/contracts/domain.schema.md" ];  chk "the domain contract has its own schema" $?
+[ -f "$REPO/governance/contracts/domain.schema.md" ];  chk "the domain contract has its own schema" $?
 [ -x "$CLI/atlas-domain" ];               chk "the domain registry is executable" $?
 out=$("$CLI/atlas" domain list 2>&1)
 echo "$out" | grep -q 'domains'
@@ -1737,9 +1737,9 @@ rm -rf "$CF/x"
 
 # =====================================================================================
 t "boundary: executed is not verified, and invoke is not wired"
-grep -q 'executed' "$REPO/contracts/capability.schema.md" && grep -q 'verified' "$REPO/contracts/capability.schema.md"
+grep -q 'executed' "$REPO/governance/contracts/capability.schema.md" && grep -q 'verified' "$REPO/governance/contracts/capability.schema.md"
 chk "the contract distinguishes executed from verified" $?
-grep -q 'never implies' "$REPO/contracts/capability.schema.md"
+grep -q 'never implies' "$REPO/governance/contracts/capability.schema.md"
 chk "  ...explicitly, as a stated rule" $?
 # Superseded by AIOS-007: invoke is wired. What must still hold is that it refuses
 # cleanly for anything it cannot actually run, and writes no state while doing so.
@@ -1766,7 +1766,7 @@ inpat=$(grep -Eo 'claude\|claude-code\|codex\|cursor\|gemini\|opencode\|chatgpt'
 
 # =====================================================================================
 t "browser capability: manifest, dependencies and authority declarations"
-BR="$REPO/capabilities/browser"
+BR="$REPO/extensions/capabilities/browser"
 [ -f "$BR/capability.yaml" ];                 chk "the browser capability ships a manifest" $?
 out=$("$CLI/atlas-capability" doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "it validates against the capability contract" $?
@@ -1808,7 +1808,7 @@ for f in atlas atlas-capability atlas-adapter ai-sync atlas-memory atlas-doctor 
   grep -Eqi 'playwright|chromium|webkit|querySelector|page\.goto' "$CLI/$f"
   [ $? -ne 0 ];                           chk "Core tool $f names no browser technology" $?
 done
-grep -Eqi 'playwright|chromium' "$REPO/contracts/capability.schema.md"
+grep -Eqi 'playwright|chromium' "$REPO/governance/contracts/capability.schema.md"
 [ $? -ne 0 ];                             chk "the capability contract names no engine" $?
 # And the capability never learns a client.
 grep -Eqi '\bclaude\b|\bcodex\b|\bgemini\b|\bcursor\b|opencode' "$BR/browser" "$BR/browser-verify" "$BR/capability.yaml" "$BR/providers/playwright_provider.py"
@@ -1823,7 +1823,7 @@ grep -Eqi 'github\.com|google\.com|facebook' "$BR/browser" "$BR/capability.yaml"
 # =====================================================================================
 t "authority: Core enforces the ladder, and there is no bypass"
 AW="$TMP/authws"; ATLAS_HOME="$AW" "$CLI/atlas-init" >/dev/null 2>&1
-grep -q '^default: observe' "$AW/internal/config/authority.yaml"
+grep -q '^default: observe' "$AW/system/config/authority.yaml"
 chk "a fresh workspace grants only observe" $?
 out=$(ATLAS_HOME="$AW" "$CLI/atlas-capability" invoke browser.read --dry-run 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "an observe operation is allowed by default" $?
@@ -1835,7 +1835,7 @@ out=$(ATLAS_HOME="$AW" "$CLI/atlas-capability" invoke browser.submit --dry-run <
 # Grant execute; click becomes allowed, submit still does not.
 python3 - "$AW" <<'PYEOF'
 import sys,pathlib
-f=pathlib.Path(sys.argv[1])/"internal/config/authority.yaml"
+f=pathlib.Path(sys.argv[1])/"system/config/authority.yaml"
 f.write_text(f.read_text().replace("capabilities: {}","capabilities:\n  browser: execute"))
 PYEOF
 ATLAS_HOME="$AW" "$CLI/atlas-capability" invoke browser.click --dry-run >/dev/null 2>&1
@@ -1848,7 +1848,7 @@ grep -Eq '\-\-force|\-\-unsafe|\-\-god-mode|\-\-bypass|allowEverything' "$CLI/at
 # autonomous is refused, never granted.
 python3 - "$AW" <<'PYEOF'
 import sys,pathlib
-f=pathlib.Path(sys.argv[1])/"internal/config/authority.yaml"
+f=pathlib.Path(sys.argv[1])/"system/config/authority.yaml"
 f.write_text(f.read_text().replace("  browser: execute","  browser: autonomous"))
 PYEOF
 out=$(ATLAS_HOME="$AW" "$CLI/atlas-capability" invoke browser.click --dry-run 2>&1)
@@ -1857,7 +1857,7 @@ chk "an autonomous grant is not honoured — it falls back to the floor" $?
 
 # =====================================================================================
 t "verification: executed is never verified by assertion"
-VB="$REPO/capabilities/browser"
+VB="$REPO/extensions/capabilities/browser"
 # A result that simply claims success must not verify.
 out=$(cd "$VB" && echo '{"ok":true,"operation":"submit","verified":true,"note":"I submitted it"}' \
       | ATLAS_BROWSER_RUNTIME="$TMP/novr" ./browser-verify submit 2>&1); rc=$?
@@ -1951,7 +1951,7 @@ grep -q '"steps_used": 0' "$rec";         chk "  ...a Run-local refusal never co
 
 # =====================================================================================
 t "run: authority — run scope can only restrict, never elevate, the user's grant"
-grep -q '^default: observe' "$RW/internal/config/authority.yaml"
+grep -q '^default: observe' "$RW/system/config/authority.yaml"
 chk "fresh workspace still grants only observe" $?
 out=$(ATLAS_HOME="$RW" ATLAS_HOME="$RW" "$CLI/atlas-run" step "$RUN_ID" browser.read --dry-run 2>&1); rc=$?
 [ "$rc" -eq 0 ];                          chk "an in-scope, observe-level op is allowed" $?
@@ -2039,12 +2039,12 @@ grep -Eiq '\bnext_action\b|\bplan\(|\bdecide_capability\b|\bchoose_operation\b' 
 [ $? -ne 0 ];                             chk "atlas-run contains no planning/decision logic" $?
 
 # =====================================================================================
-if (cd "$REPO/capabilities/browser" && echo '{}' | ./browser detect >/dev/null 2>&1); then
+if (cd "$REPO/extensions/capabilities/browser" && echo '{}' | ./browser detect >/dev/null 2>&1); then
 t "run: no-progress — an identical unverified step repeated 3x blocks the run"
 NW="$TMP/noprogws"; ATLAS_HOME="$NW" "$CLI/atlas-init" >/dev/null 2>&1
 python3 - "$NW" <<'PYEOF'
 import sys, pathlib
-f = pathlib.Path(sys.argv[1]) / "internal/config/authority.yaml"
+f = pathlib.Path(sys.argv[1]) / "system/config/authority.yaml"
 f.write_text(f.read_text().replace("capabilities: {}", "capabilities:\n  browser: execute"))
 PYEOF
 NWEB="$TMP/noprog-web"; mkdir -p "$NWEB"
@@ -2065,7 +2065,7 @@ grep -q '"status": "blocked"' "$NW/runtime/runs/$RUN_N.json"
 chk "  ...recorded in the run itself" $?
 out=$(ATLAS_HOME="$NW" ATLAS_HOME="$NW" "$CLI/atlas-run" step "$RUN_N" browser.click --json '{"selector":"#b"}' 2>&1); rc=$?
 [ "$rc" -ne 0 ];                          chk "  ...and a 4th attempt is refused, not retried" $?
-ATLAS_HOME="$NW" ATLAS_PLUGINS="$REPO/capabilities" "$CLI/atlas-capability" invoke browser.close --json '{}' >/dev/null 2>&1
+ATLAS_HOME="$NW" ATLAS_PLUGINS="$REPO/extensions/capabilities" "$CLI/atlas-capability" invoke browser.close --json '{}' >/dev/null 2>&1
 rm -f /tmp/aios-run-noprog.out
 else
   printf '  %sSKIP%s run: no-progress test needs a working browser provider\n' "$D" "$X"
@@ -2077,8 +2077,8 @@ t "run: dispatcher and schema exist and are wired"
 # now a thin compatibility alias (single exec line) with no banner text of its own.
 grep -q 'atlas run' "$CLI/atlas";          chk "atlas run is a documented subcommand" $?
 grep -q '|run|' "$CLI/atlas";              chk "  ...and dispatches to atlas-run" $?
-[ -f "$REPO/contracts/run.schema.md" ];      chk "contracts/run.schema.md exists" $?
-grep -q 'not an agent' "$REPO/contracts/run.schema.md"
+[ -f "$REPO/governance/contracts/run.schema.md" ];      chk "contracts/run.schema.md exists" $?
+grep -q 'not an agent' "$REPO/governance/contracts/run.schema.md"
 chk "  ...and states the boundary: not an agent/orchestrator/planner" $?
 
 # =====================================================================================
@@ -2893,10 +2893,10 @@ t "the plugin -> capability rename keeps its compatibility window open"
 chk "atlas capability list works" $?
 "$CLI/atlas" capability doctor >/dev/null 2>&1
 chk "atlas capability doctor works" $?
-[ -d "$REPO/capabilities" ];               chk "the capability registry is capabilities/" $?
-[ -f "$REPO/capabilities/browser/capability.yaml" ]
+[ -d "$REPO/extensions/capabilities" ];               chk "the capability registry is capabilities/" $?
+[ -f "$REPO/extensions/capabilities/browser/capability.yaml" ]
 chk "  ...and the shipped manifest is capability.yaml" $?
-[ -f "$REPO/contracts/capability.schema.md" ]
+[ -f "$REPO/governance/contracts/capability.schema.md" ]
 chk "the capability contract is contracts/capability.schema.md" $?
 [ -x "$CLI/atlas-capability" ];            chk "cli/atlas-capability is the real command" $?
 
@@ -2912,13 +2912,13 @@ oldout=$("$CLI/atlas" plugin list 2>&1)
 [ ! -e "$REPO/plugins" ];                  chk "plugins/ is not required for a new install" $?
 
 # --- both env vars ----------------------------------------------------------------------
-ATLAS_CAPABILITIES="$REPO/capabilities" "$CLI/atlas" capability doctor >/dev/null 2>&1
+ATLAS_CAPABILITIES="$REPO/extensions/capabilities" "$CLI/atlas" capability doctor >/dev/null 2>&1
 chk "ATLAS_CAPABILITIES points the registry" $?
-ATLAS_PLUGINS="$REPO/capabilities" "$CLI/atlas" capability doctor >/dev/null 2>&1
+ATLAS_PLUGINS="$REPO/extensions/capabilities" "$CLI/atlas" capability doctor >/dev/null 2>&1
 chk "ATLAS_PLUGINS is still honoured as a fallback" $?
 # The new name wins when both are set, so a stale old value cannot quietly take over.
 EMPTYREG2="$TMP/emptyreg2"; mkdir -p "$EMPTYREG2"
-out=$(ATLAS_CAPABILITIES="$REPO/capabilities" ATLAS_PLUGINS="$EMPTYREG2" \
+out=$(ATLAS_CAPABILITIES="$REPO/extensions/capabilities" ATLAS_PLUGINS="$EMPTYREG2" \
       "$CLI/atlas" capability list 2>&1)
 echo "$out" | grep -q 'browser';           chk "  ...and ATLAS_CAPABILITIES wins when both are set" $?
 
@@ -2942,7 +2942,7 @@ out=$(ATLAS_CAPABILITIES="$MF" "$CLI/atlas" capability list 2>&1)
 echo "$out" | grep -q 'newname';           chk "capability.yaml is read" $?
 echo "$out" | grep -q 'oldname';           chk "plugin.yaml is still read" $?
 # The manifest KEY stays `plugin:` under contract 1 — renaming it is a contract 2 change.
-grep -q '^plugin: browser' "$REPO/capabilities/browser/capability.yaml"
+grep -q '^plugin: browser' "$REPO/extensions/capabilities/browser/capability.yaml"
 chk "the manifest key is still plugin: under contract 1" $?
 out=$(ATLAS_CAPABILITIES="$MF" "$CLI/atlas" capability doctor 2>&1); rc=$?
 [ "$rc" -eq 0 ];                           chk "  ...and both manifests validate" $?
@@ -2964,7 +2964,7 @@ echo "$out" | grep -qi 'merge';            chk "  ...and saying nothing is merge
 
 # --- the rename moved nothing else --------------------------------------------------------
 for c in claude-code codex cursor gemini opencode; do
-  [ -f "$REPO/adapters/$c/adapter.yaml" ] || { false; break; }
+  [ -f "$REPO/agentic/integrations/adapters/$c/adapter.yaml" ] || { false; break; }
 done
 chk "no adapter manifest moved" $?
 [ -f "$REPO/domains/software.yaml" ] && [ -f "$REPO/domains/customer-support.yaml" ]
@@ -3048,9 +3048,8 @@ chk "  ...neither side was touched" $?
 
 # A shim is not a clash: one directory reachable under both names is exactly how a move
 # is made reversible, and reporting it as a conflict would block the safe path.
-mkdir -p "$PW/internal/governance"
-ln -s "$PW/system/rules" "$PW/internal/governance/rules"
-mkdir -p "$PW/system/rules"
+mkdir -p "$PW/system/governance/rules"
+ln -s "$PW/system/governance/rules" "$PW/system/rules"
 [ "$("$PA" layout rules)" = "new" ];         chk "both names, one directory -> not a conflict" $?
 
 # =====================================================================================
@@ -3150,11 +3149,11 @@ chk "  ...while the marked mirror inside it stays exempt" $?
 PO="$TMP/pilot-other-roots"
 mkdir -p "$PO/personal/memory" "$PO/user/02-personal/memory" \
          "$PO/personal/knowledge" "$PO/user/05-knowledge" \
-         "$PO/internal/governance/rules" "$PO/system/rules" \
+         "$PO/system/governance/rules" "$PO/system/rules" \
          "$PO/internal/runtime" "$PO/runtime"
 mk_pilot "$PO/personal/memory/index.md";           echo old > "$PO/user/02-personal/memory/i.md"
 mk_pilot "$PO/personal/knowledge/index.md";        echo old > "$PO/user/05-knowledge/i.md"
-mk_pilot "$PO/internal/governance/rules/index.md"; echo old > "$PO/system/rules/i.md"
+mk_pilot "$PO/system/governance/rules/index.md"; echo old > "$PO/system/rules/i.md"
 mk_pilot "$PO/internal/runtime/index.md";          echo old > "$PO/runtime/i.md"
 n=0
 for r in memory knowledge rules runtime; do
@@ -3260,7 +3259,7 @@ chk "a pilot marker under personal/memory exempts nothing" $?
 
 # The other three roots are untouched by this slice.
 RO="$TMP/retarget-others"
-mkdir -p "$RO/projects" "$RO/internal/governance/rules" "$RO/internal/runtime"
+mkdir -p "$RO/projects" "$RO/system/governance/rules" "$RO/runtime"
 [ "$(ATLAS_HOME="$RO" "$PA" layout projects)" = "new" ] &&
   [ "$(ATLAS_HOME="$RO" "$PA" layout rules)" = "new" ] &&
   [ "$(ATLAS_HOME="$RO" "$PA" layout runtime)" = "new" ]
@@ -3384,7 +3383,7 @@ AS="$TMP/archived-scope"; ATLAS_HOME="$AS" "$CLI/atlas-init" >/dev/null 2>&1
 mkdir -p "$AS/personal/memory"; mk_ptr "$AS/user/02-personal/memory/whatever" "elsewhere/task.md"
 [ "$(ATLAS_HOME="$AS" "$PA" layout memory)" = "conflict" ]
 chk "a pointer under memory exempts nothing" $?
-mkdir -p "$AS/internal/governance/rules"; mk_ptr "$AS/system/rules/whatever" "elsewhere/task.md"
+mkdir -p "$AS/system/governance/rules"; mk_ptr "$AS/system/rules/whatever" "elsewhere/task.md"
 [ "$(ATLAS_HOME="$AS" "$PA" layout rules)" = "conflict" ]
 chk "  ...and one under rules exempts nothing" $?
 
@@ -3433,13 +3432,13 @@ t "contraction: the seven shimmed roots resolve like every other root"
 # user/06-templates, skills, agents and scripts. Slice 10A gave each one a resolver root,
 # which is what makes removing those shims possible later. Same four states as the
 # original six roots — old, new, neither, conflict — and the same refusal.
-SEVEN="config:internal/config:system/config
-policies:internal/governance/policies:system/policies
+SEVEN="config:system/config:internal/config
+policies:system/governance/policies:system/policies
 daily:personal/daily:user/01-daily
 templates:personal/templates:user/06-templates
-skills:internal/extensions/skills:skills
-agents:internal/extensions/agents:agents
-helpers:internal/helpers:scripts"
+skills:extensions/skills:skills
+agents:extensions/agents:agents
+helpers:helpers:scripts"
 
 C_OLD="$TMP/c-old"; C_NEW="$TMP/c-new"; C_NONE="$TMP/c-none"; C_SHIM="$TMP/c-shim"
 mkdir -p "$C_OLD" "$C_NEW" "$C_NONE" "$C_SHIM"
@@ -3561,10 +3560,10 @@ chk "  ...and names both when it finds neither" $?
 D_NEW="$TMP/doctor-new"
 mkdir -p "$D_NEW/personal/memory" "$D_NEW/personal/knowledge" "$D_NEW/projects" \
          "$D_NEW/personal/professional" "$D_NEW/personal/daily" "$D_NEW/personal/templates" \
-         "$D_NEW/internal/sessions" "$D_NEW/internal/schemas" "$D_NEW/internal/runtime" \
-         "$D_NEW/internal/config" "$D_NEW/internal/governance/rules" \
-         "$D_NEW/internal/governance/policies" "$D_NEW/internal/extensions/skills" \
-         "$D_NEW/internal/extensions/agents" "$D_NEW/internal/helpers" \
+         "$D_NEW/runtime/sessions" "$D_NEW/schemas" "$D_NEW/runtime" \
+         "$D_NEW/system/config" "$D_NEW/system/governance/rules" \
+         "$D_NEW/system/governance/policies" "$D_NEW/extensions/skills" \
+         "$D_NEW/extensions/agents" "$D_NEW/helpers" \
          "$D_NEW/personal/inbox"
 dout=$(ATLAS_HOME="$D_NEW" "$CLI/atlas-doctor" --quiet 2>&1)
 printf '%s' "$dout" | grep -q "missing section"
@@ -3585,7 +3584,7 @@ chk "a new-layout template path is rewritten onto an old workspace" $?
 chk "a path under no moving root is left alone" $?
 # sessions used to be that example. It became a root when session records moved under
 # internal/, so the same call now has to come back rewritten rather than untouched.
-[ "$("$PA" rewrite sessions/2026/x.md)" = "$PW/internal/sessions/2026/x.md" ]
+[ "$("$PA" rewrite sessions/2026/x.md)" = "$PW/runtime/sessions/2026/x.md" ]
 chk "  ...and a path under sessions is rewritten now that it is one" $?
 "$PA" rewrite runtime/state/state.json >/dev/null 2>&1
 [ $? -eq 3 ];                                chk "a conflicting root propagates the refusal" $?
@@ -3735,7 +3734,7 @@ chk "a cohort with no outlier produces no findings" $?
 t "atlas policy — the bootstrap routes, the modules load on demand"
 PL="$TMP/pol"; export ATLAS_HOME="$PL"
 "$CLI/atlas-init" >/dev/null 2>&1
-PRULES="$PL/internal/governance/rules"; PPOL="$PL/internal/governance/policies"
+PRULES="$PL/system/governance/rules"; PPOL="$PL/system/governance/policies"
 mkdir -p "${PRULES}" "${PPOL}"
 cat > "${PRULES}/core.md" <<'EOC'
 # Global rules
@@ -3792,7 +3791,7 @@ chk "reachable as the 'atlas policy' subcommand" $?
 # =====================================================================================
 t "the real bootstrap stays a bootstrap"
 unset ATLAS_HOME
-REAL_CORE="$HOME/atlas/internal/governance/rules/core.md"
+REAL_CORE="$HOME/atlas/system/governance/rules/core.md"
 if [ -f "$REAL_CORE" ]; then
   # A soft budget, asserted loudly: this file is rendered into every client's system
   # prompt, so growth here is charged to every request of every session. It was 24,523
@@ -4193,13 +4192,13 @@ chk "--doctor reports rather than crashing, whatever the client is set to" $?
 EW="$TMP/effort-ws"; export ATLAS_HOME="$EW"
 "$CLI/atlas-init" >/dev/null 2>&1
 printf 'effort_by_class:\n  small: low\n  medium: medium\n  large: high\n' \
-  > "$EW/internal/config/models.yaml"
+  > "$EW/system/config/models.yaml"
 echo '{"effortLevel":"medium"}' > "$ATLAS_CLAUDE_SETTINGS"
 "$CLI/atlas-lifecycle" effort --doctor >/dev/null 2>&1
 chk "clean when the policy and the client agree" $?
 # An illegal level in the policy could never have been applied by the client.
 printf 'effort_by_class:\n  small: low\n  medium: normal\n  large: high\n' \
-  > "$EW/internal/config/models.yaml"
+  > "$EW/system/config/models.yaml"
 out=$("$CLI/atlas-lifecycle" effort --doctor 2>&1)
 printf '%s' "$out" | grep -q 'NOT a client effort level'
 chk "a class mapped to a level the client does not have is caught" $?
@@ -4495,7 +4494,7 @@ chk "plain 'atlas usage --session' (no --models) still works unchanged" $?
 
 # =====================================================================================
 t "response protocol contract"
-RESP="$HOME/atlas/internal/governance/policies/response.md"
+RESP="$HOME/atlas/system/governance/policies/response.md"
 if [ -f "$RESP" ]; then
   # Lazy: the module lives in policies/, not in the always-loaded bootstrap.
   ! grep -q 'QUICK_RESULT\|EXECUTION_REPORT' "$REAL_CORE" 2>/dev/null
@@ -4523,7 +4522,7 @@ if [ -f "$CC_ADAPTER" ]; then
   chk "  ...ai-response-gate exists and is executable" $?
 fi
 for c in codex gemini; do
-  A="$REPO/adapters/$c/adapter.yaml"
+  A="$REPO/agentic/integrations/adapters/$c/adapter.yaml"
   if [ -f "$A" ]; then
     grep -q 'enforces: \[\]' "$A"
     chk "$c adapter does not claim enforcement it cannot deliver" $?

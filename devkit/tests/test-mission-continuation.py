@@ -31,7 +31,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli"
-CORE_CLI = REPO.parent / "core" / "cli"
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -62,8 +61,6 @@ def _load(cli_dir, name):
 
 mission_cli = _load(CLI, "atlas-mission")
 mission = _load(CLI, "atlas_mission.py")
-core_mission_cli = _load(CORE_CLI, "atlas-mission")
-core_mission = _load(CORE_CLI, "atlas_mission.py")
 
 
 @contextlib.contextmanager
@@ -584,31 +581,27 @@ chk("the only subprocess.run call in the whole file targets atlas-paths (pre-exi
     src.count("subprocess.run(") == 1 and "PATHS_RESOLVER" in src)
 
 # =============================================================================================
-t("26. engine/core parity")
+t("26. single canonical copy (T-118: core/cli retired, nothing left to compare against)")
 mid_e, hid_e, cls_e = make_verified_handoff(root=root, d=d, m=mission_cli)
-mid_c, hid_c, cls_c = make_verified_handoff(root=root, d=d, m=core_mission_cli)
 rc_e, out_e, _ = do_continue("T-940", mid_e, hid_e, m=mission_cli)
-rc_c, out_c, _ = do_continue("T-940", mid_c, hid_c, m=core_mission_cli)
-view_e, view_c = json.loads(out_e), json.loads(out_c)
-chk("engine and core mission continue agree on outcome",
-    rc_e == 0 and rc_c == 0 and view_e["previous_classification"] ==
-    view_c["previous_classification"] == "PASS")
+view_e = json.loads(out_e)
+chk("engine mission continue reports PASS", rc_e == 0 and view_e["previous_classification"] == "PASS")
 
 engine_py = CLI / "atlas_mission.py"
-core_py = CORE_CLI / "atlas_mission.py"
-chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
-    engine_py.read_bytes() == core_py.read_bytes())
+core_py = REPO.parent / "core" / "cli" / "atlas_mission.py"
+chk("no stale core/cli/atlas_mission.py copy has reappeared", not core_py.exists())
+chk("engine/cli/atlas_mission.py exists", engine_py.is_file())
 engine_cli_file = CLI / "atlas-mission"
-core_cli_file = CORE_CLI / "atlas-mission"
-chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
-    engine_cli_file.read_bytes() == core_cli_file.read_bytes())
+core_cli_file = REPO.parent / "core" / "cli" / "atlas-mission"
+chk("no stale core/cli/atlas-mission copy has reappeared", not core_cli_file.exists())
+chk("engine/cli/atlas-mission exists", engine_cli_file.is_file())
 
 # =============================================================================================
 t("27. protected T-050 files remain untouched")
 PROTECTED = [
-    CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
-    CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
-    CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
+    CLI / "atlas-coordinator",
+    CLI / "atlas_coordination.py",
+    CLI / "atlas-handoff",
     REPO / "governance" / "policies" / "handoff-transports.yaml",
     REPO / "governance" / "policies" / "coordinator-routing.yaml",
 ]
@@ -875,28 +868,28 @@ chk("a second continuation off the first continuation's own PASS succeeds", rc =
 t("50. everything under T-051-S1/S2/S3/S4 remains green")
 _CLEAN_ENV = {k: v for k, v in os.environ.items()
              if k not in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS")}
-r1 = subprocess.run([sys.executable, str(REPO / "tests" / "test-mission-contract.py")],
+r1 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-mission-contract.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-mission-contract.py (T-051-S1) exits 0", r1.returncode == 0)
-r2 = subprocess.run([sys.executable, str(REPO / "tests" / "test-mission-routing.py")],
+r2 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-mission-routing.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-mission-routing.py (T-051-S2) exits 0", r2.returncode == 0)
-r3 = subprocess.run([sys.executable, str(REPO / "tests" / "test-mission-handoff.py")],
+r3 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-mission-handoff.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-mission-handoff.py (T-051-S3) exits 0", r3.returncode == 0)
-r4 = subprocess.run([sys.executable, str(REPO / "tests" / "test-mission-result.py")],
+r4 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-mission-result.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-mission-result.py (T-051-S4) exits 0", r4.returncode == 0)
 
 t("51. all T-050 tests remain green")
 r5 = subprocess.run(
-    [sys.executable, str(REPO / "tests" / "test-coordinator-conflict-protection.py")],
+    [sys.executable, str(REPO / "devkit" / "tests" / "test-coordinator-conflict-protection.py")],
     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-coordinator-conflict-protection.py exits 0", r5.returncode == 0)
-r6 = subprocess.run([sys.executable, str(REPO / "tests" / "test-coordinator-routing.py")],
+r6 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-coordinator-routing.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-coordinator-routing.py exits 0", r6.returncode == 0)
-r7 = subprocess.run([sys.executable, str(REPO / "tests" / "test-cli-source-drift.py")],
+r7 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-cli-source-drift.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-cli-source-drift.py exits 0", r7.returncode == 0)
 

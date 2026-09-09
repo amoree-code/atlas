@@ -36,7 +36,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli"
-CORE_CLI = REPO.parent / "core" / "cli"
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -89,9 +88,7 @@ for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
     os.environ.pop(_var, None)
 
 mission = _load(CLI, "atlas_mission.py")
-core_mission = _load(CORE_CLI, "atlas_mission.py")
 mission_cli = _load(CLI, "atlas-mission")
-core_mission_cli = _load(CORE_CLI, "atlas-mission")
 coord = _load(CLI, "atlas_coordination.py")
 
 # The FAKE executor binary. Behavior selected by FAKE_EXECUTOR_MODE:
@@ -876,17 +873,15 @@ chk("mission P's own lease/claim never reference mission Q's ticket",
 chk("mission Q's own lease/claim never reference mission P's ticket",
    lease_record(ctxQ["task_dir"]).get("task_id") == "T-991-Q")
 
-# --- 33: engine/core parity ---------------------------------------------------------------------
-t("33. engine/core parity")
-chk("engine and core atlas_mission.py are byte-identical",
-   (CLI / "atlas_mission.py").read_bytes() == (CORE_CLI / "atlas_mission.py").read_bytes())
-chk("engine and core atlas_coordination.py are byte-identical",
-   (CLI / "atlas_coordination.py").read_bytes() ==
-   (CORE_CLI / "atlas_coordination.py").read_bytes())
-chk("engine and core atlas-mission are byte-identical",
-   (CLI / "atlas-mission").read_bytes() == (CORE_CLI / "atlas-mission").read_bytes())
-chk("core module also exposes mission_execute", hasattr(core_mission, "mission_execute"))
-chk("core CLI also exposes cmd_execute", hasattr(core_mission_cli, "cmd_execute"))
+# --- 33: single canonical copy -------------------------------------------------------------------
+t("33. single canonical copy (T-118: core/cli retired, nothing left to compare against)")
+core_cli_dir = REPO.parent / "core" / "cli"
+chk("no stale core/cli directory has reappeared", not core_cli_dir.exists())
+chk("engine/cli/atlas_mission.py exists", (CLI / "atlas_mission.py").is_file())
+chk("engine/cli/atlas_coordination.py exists", (CLI / "atlas_coordination.py").is_file())
+chk("engine/cli/atlas-mission exists", (CLI / "atlas-mission").is_file())
+chk("engine module exposes mission_execute", hasattr(mission, "mission_execute"))
+chk("engine CLI exposes cmd_execute", hasattr(mission_cli, "cmd_execute"))
 
 # --- 34: T-050/T-051/production files untouched -------------------------------------------------
 t("34. no T-050/AIOS-011/AIOS-012/AIOS-017/T-049 file or record touched by this fixture root")
@@ -932,7 +927,7 @@ _CLEAN_ENV = {k: v for k, v in os.environ.items()
                           "FAKE_EXECUTOR_COORD_PATH", "FAKE_EXECUTOR_TICKET_DIR")}
 
 t("36. T-051-S1 (the one suite with no nested children) remains green")
-r = subprocess.run([sys.executable, str(REPO / "tests" / "test-mission-contract.py")],
+r = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-mission-contract.py")],
                    capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-mission-contract.py exits 0", r.returncode == 0)
 

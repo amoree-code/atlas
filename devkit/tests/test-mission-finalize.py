@@ -32,7 +32,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli"
-CORE_CLI = REPO.parent / "core" / "cli"
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -63,8 +62,6 @@ def _load(cli_dir, name):
 
 mission_cli = _load(CLI, "atlas-mission")
 mission = _load(CLI, "atlas_mission.py")
-core_mission_cli = _load(CORE_CLI, "atlas-mission")
-core_mission = _load(CORE_CLI, "atlas_mission.py")
 
 
 @contextlib.contextmanager
@@ -629,30 +626,27 @@ chk("no claims/ or leases/ directory exists anywhere under the fixture root",
     not any(p.name in ("claims", "leases") for p in root.rglob("*") if p.is_dir()))
 
 # =============================================================================================
-t("28. engine/core parity")
+t("28. single canonical copy (T-118: core/cli retired, nothing left to compare against)")
 mid_e, hid_e, cls_e = make_verified_handoff(root=root, d=d, m=mission_cli)
-mid_c, hid_c, cls_c = make_verified_handoff(root=root, d=d, m=core_mission_cli)
 rc_e, out_e, _ = do_finalize("T-950", mid_e, hid_e, m=mission_cli)
-rc_c, out_c, _ = do_finalize("T-950", mid_c, hid_c, m=core_mission_cli)
-view_e, view_c = json.loads(out_e), json.loads(out_c)
-chk("engine and core mission finalize agree on outcome",
-    rc_e == 0 and rc_c == 0 and view_e["final_classification"] ==
-    view_c["final_classification"] == "PASS")
+view_e = json.loads(out_e)
+chk("engine mission finalize reaches the expected PASS outcome",
+    rc_e == 0 and view_e["final_classification"] == "PASS")
+core_py = REPO.parent / "core" / "cli" / "atlas_mission.py"
+core_cli_file = REPO.parent / "core" / "cli" / "atlas-mission"
+chk("no stale core/cli/atlas_mission.py copy has reappeared", not core_py.exists())
+chk("no stale core/cli/atlas-mission copy has reappeared", not core_cli_file.exists())
 engine_py = CLI / "atlas_mission.py"
-core_py = CORE_CLI / "atlas_mission.py"
-chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
-    engine_py.read_bytes() == core_py.read_bytes())
 engine_cli_file = CLI / "atlas-mission"
-core_cli_file = CORE_CLI / "atlas-mission"
-chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
-    engine_cli_file.read_bytes() == core_cli_file.read_bytes())
+chk("engine/cli/atlas_mission.py exists", engine_py.is_file())
+chk("engine/cli/atlas-mission exists", engine_cli_file.is_file())
 
 # =============================================================================================
 t("29. protected T-050/T-051 files untouched")
 PROTECTED = [
-    CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
-    CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
-    CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
+    CLI / "atlas-coordinator",
+    CLI / "atlas_coordination.py",
+    CLI / "atlas-handoff",
     REPO / "governance" / "policies" / "handoff-transports.yaml",
     REPO / "governance" / "policies" / "coordinator-routing.yaml",
 ]
@@ -805,14 +799,14 @@ _CLEAN_ENV = {k: v for k, v in os.environ.items()
              if k not in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS")}
 for name in ("test-mission-contract", "test-mission-routing", "test-mission-handoff",
             "test-mission-result", "test-mission-continuation"):
-    r = subprocess.run([sys.executable, str(REPO / "tests" / f"{name}.py")],
+    r = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / f"{name}.py")],
                        capture_output=True, text=True, env=_CLEAN_ENV)
     chk(f"{name}.py exits 0", r.returncode == 0)
 
 t("44. all T-050 tests remain green")
 for name in ("test-coordinator-conflict-protection", "test-coordinator-routing",
             "test-cli-source-drift"):
-    r = subprocess.run([sys.executable, str(REPO / "tests" / f"{name}.py")],
+    r = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / f"{name}.py")],
                        capture_output=True, text=True, env=_CLEAN_ENV)
     chk(f"{name}.py exits 0", r.returncode == 0)
 

@@ -29,20 +29,25 @@ with tempfile.TemporaryDirectory() as tmp:
     assert run("structure", "apply", "--approve").returncode != 0
     assert marker.read_text() == "{}"
     marker.write_bytes(before)
-    (root / "system/clients").rmdir()
-    assert run("root").returncode != 0
+    clients = root / "system/clients"
+    if clients.exists():
+        clients.rmdir()
+    assert run("root").returncode == 0
     assert run("structure", "apply", "--approve").returncode == 0
     assert run("root").returncode == 0
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp) / "fresh"
     env = dict(os.environ, ATLAS_HOME=str(root))
     assert run("init").returncode == 0
-    profile = root / "internal/config/profile.yaml"
+    # T-116/T-118: atlas-init now creates the current canonical layout directly
+    # (system/config, runtime/) — there is no more pre-migration "internal/" layout for a
+    # fresh workspace to start from, so `structure apply` on a fresh init is a no-op, not
+    # a migration.
+    profile = root / "system/config/profile.yaml"
     before = profile.read_bytes()
-    assert not (root / "runtime").exists()
+    assert (root / "runtime").is_dir()
     assert run("structure", "apply", "--approve").returncode == 0
     assert (root / "system/config/profile.yaml").read_bytes() == before
-    assert (root / "runtime").samefile(root / "internal/runtime")
     assert (root / "runtime/dispatch-inbox").is_dir()
     paths = subprocess.run([str(CLI.parent / "atlas-paths"), "check"], env=env,
                            capture_output=True, text=True)

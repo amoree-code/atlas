@@ -26,7 +26,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli"
-CORE_CLI = REPO.parent / "core" / "cli"
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -57,8 +56,6 @@ def _load(cli_dir, name):
 
 mission_cli = _load(CLI, "atlas-mission")
 mission = _load(CLI, "atlas_mission.py")
-core_mission_cli = _load(CORE_CLI, "atlas-mission")
-core_mission = _load(CORE_CLI, "atlas_mission.py")
 
 
 @contextlib.contextmanager
@@ -453,42 +450,33 @@ chk("no claims/ or leases/ directory exists anywhere under the fixture root",
     not any(p.name in ("claims", "leases") for p in root.rglob("*") if p.is_dir()))
 
 # =============================================================================================
-t("27. core/engine parity")
-mid_core = make_approved_mission(m=core_mission_cli)
+t("27. single canonical copy (T-118: core/cli retired, nothing left to compare against)")
 rc_e, out_e, _ = run(mission_cli.cmd_route, ["T-910", mid, "--role", "executor",
                                              "--capability", "Read", "--json"])
-rc_c, out_c, _ = run(core_mission_cli.cmd_route, ["T-910", mid_core, "--role", "executor",
-                                                  "--capability", "Read", "--json"])
-view_e, view_c = json.loads(out_e), json.loads(out_c)
-same_shape = {k: v for k, v in view_e.items() if k not in ("mission_id",)} == \
-             {k: v for k, v in view_c.items() if k not in ("mission_id",)}
-chk("engine and core mission route agree on client/adapter/transport/capability shape",
-    rc_e == rc_c == 0 and same_shape)
+view_e = json.loads(out_e)
+chk("engine mission route succeeds and reports client/adapter/transport/capability shape",
+    rc_e == 0 and view_e.get("client") == "test-executor" and
+    view_e.get("transport_verified") is True)
 
 rc_e, out_e, _ = run(mission_cli.cmd_validate, ["T-910", mid, "--json"])
-rc_c, out_c, _ = run(core_mission_cli.cmd_validate, ["T-910", mid_core, "--json"])
-view_e, view_c = json.loads(out_e), json.loads(out_c)
-chk("engine and core mission validate agree on valid/findings shape",
-    rc_e == rc_c == 0 and view_e["valid"] == view_c["valid"] == True and
-    view_e["findings"] == view_c["findings"] == [])
+view_e = json.loads(out_e)
+chk("engine mission validate reports valid with no findings",
+    rc_e == 0 and view_e["valid"] == True and view_e["findings"] == [])
 
 engine_py = CLI / "atlas_mission.py"
-core_py = CORE_CLI / "atlas_mission.py"
-chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
-    engine_py.read_bytes() == core_py.read_bytes())
 engine_cli_file = CLI / "atlas-mission"
-core_cli_file = CORE_CLI / "atlas-mission"
-chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
-    engine_cli_file.read_bytes() == core_cli_file.read_bytes())
+chk("engine/cli/atlas_mission.py exists", engine_py.is_file())
+chk("engine/cli/atlas-mission exists", engine_cli_file.is_file())
+core_py = REPO.parent / "core" / "cli" / "atlas_mission.py"
+core_cli_file = REPO.parent / "core" / "cli" / "atlas-mission"
+chk("no stale core/cli/atlas_mission.py copy has reappeared", not core_py.exists())
+chk("no stale core/cli/atlas-mission copy has reappeared", not core_cli_file.exists())
 
 # =============================================================================================
-t("28. canonical atlas parity")
+t("28. canonical atlas dispatch")
 atlas_text = (CLI / "atlas").read_text()
-core_atlas_text = (CORE_CLI / "atlas").read_text()
 chk("'mission' still sits in engine/cli/atlas's generic exec-by-name case arm",
     "|mission|" in atlas_text or "mission|" in atlas_text)
-chk("'mission' still sits in core/cli/atlas's generic exec-by-name case arm",
-    "|mission|" in core_atlas_text or "mission|" in core_atlas_text)
 
 # A clean environment for the subprocess checks below: this file's own fixtures override
 # ATLAS_HOME / ATLAS_ADAPTERS / ATLAS_HANDOFF_TRANSPORTS in-process for the tests above, and
@@ -498,7 +486,7 @@ _CLEAN_ENV = {k: v for k, v in os.environ.items()
 
 # =============================================================================================
 t("29. all T-051-S1 tests remain green")
-r = subprocess.run([sys.executable, str(REPO / "tests" / "test-mission-contract.py")],
+r = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-mission-contract.py")],
                    capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-mission-contract.py (T-051-S1) exits 0", r.returncode == 0)
 chk("test-mission-contract.py reports zero FAIL lines",
@@ -506,13 +494,13 @@ chk("test-mission-contract.py reports zero FAIL lines",
 
 # =============================================================================================
 t("30. all T-050 S1-S7 tests remain green")
-r1 = subprocess.run([sys.executable, str(REPO / "tests" / "test-coordinator-conflict-protection.py")],
+r1 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-coordinator-conflict-protection.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-coordinator-conflict-protection.py exits 0", r1.returncode == 0)
-r2 = subprocess.run([sys.executable, str(REPO / "tests" / "test-coordinator-routing.py")],
+r2 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-coordinator-routing.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-coordinator-routing.py exits 0", r2.returncode == 0)
-r3 = subprocess.run([sys.executable, str(REPO / "tests" / "test-cli-source-drift.py")],
+r3 = subprocess.run([sys.executable, str(REPO / "devkit" / "tests" / "test-cli-source-drift.py")],
                     capture_output=True, text=True, env=_CLEAN_ENV)
 chk("test-cli-source-drift.py exits 0", r3.returncode == 0)
 

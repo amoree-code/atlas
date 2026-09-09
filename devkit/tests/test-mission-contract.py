@@ -413,7 +413,7 @@ chk("every mission file lives under the ticket's own mission/ directory",
     (d / "mission" / mid3 / "contract.json").is_file())
 
 # =============================================================================================
-t("32. Core/engine parity")
+t("32. Single canonical copy (T-118: core/cli retired, nothing left to compare against)")
 
 
 def sha(p):
@@ -422,28 +422,19 @@ def sha(p):
 
 core_mission_py = REPO.parent / "core" / "cli" / "atlas_mission.py"
 core_mission_cli = REPO.parent / "core" / "cli" / "atlas-mission"
-chk("core/cli/atlas_mission.py exists", core_mission_py.is_file())
-chk("core/cli/atlas-mission exists", core_mission_cli.is_file())
-if core_mission_py.is_file():
-    chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py are byte-identical",
-        sha(CLI / "atlas_mission.py") == sha(core_mission_py))
-if core_mission_cli.is_file():
-    chk("engine/cli/atlas-mission and core/cli/atlas-mission are byte-identical",
-        sha(CLI / "atlas-mission") == sha(core_mission_cli))
+chk("no stale core/cli/atlas_mission.py copy has reappeared", not core_mission_py.exists())
+chk("no stale core/cli/atlas-mission copy has reappeared", not core_mission_cli.exists())
+chk("engine/cli/atlas_mission.py exists", (CLI / "atlas_mission.py").is_file())
+chk("engine/cli/atlas-mission exists", (CLI / "atlas-mission").is_file())
 
 # =============================================================================================
-t("33. Canonical atlas parity — both dispatchers route 'mission' the same way")
+t("33. Canonical atlas dispatch — 'mission' routes to atlas-mission")
 atlas_text = (CLI / "atlas").read_text()
-core_atlas_text = (REPO.parent / "core" / "cli" / "atlas").read_text()
 chk("engine/cli/atlas dispatches 'mission' to atlas-mission",
     "mission" in atlas_text and 'exec "$SELF_DIR/atlas-$cmd"' in atlas_text)
-chk("core/cli/atlas dispatches 'mission' to atlas-mission",
-    "mission" in core_atlas_text and 'exec "$SELF_DIR/atlas-$cmd"' in core_atlas_text)
 import re as _re
 atlas_case = _re.search(r"init\|[a-z|-]*mission[a-z|-]*\)", atlas_text)
-core_case = _re.search(r"init\|[a-z|-]*mission[a-z|-]*\)", core_atlas_text)
 chk("'mission' sits in engine/cli/atlas's generic exec-by-name case arm", bool(atlas_case))
-chk("'mission' sits in core/cli/atlas's generic exec-by-name case arm", bool(core_case))
 
 
 print(f"\n{passed} passed, {failed} failed")

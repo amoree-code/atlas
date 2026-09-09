@@ -40,7 +40,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli"
-CORE_CLI = REPO.parent / "core" / "cli"
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -93,9 +92,7 @@ for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
     os.environ.pop(_var, None)
 
 mission = _load(CLI, "atlas_mission.py")
-core_mission = _load(CORE_CLI, "atlas_mission.py")
 mission_cli = _load(CLI, "atlas-mission")
-core_mission_cli = _load(CORE_CLI, "atlas-mission")
 
 FAKE_EXECUTOR_SCRIPT = '''#!/usr/bin/env python3
 import json, os, sys, time
@@ -753,19 +750,13 @@ rc, out, err = do_continue(ctx28["ticket_id"], ctx28["mission_id"], ctx28["hando
                            ctx28["executor"])
 chk("continuation after an executed PASS succeeds", rc == 0)
 
-t("29. engine/core parity")
-chk("engine and core atlas_mission.py are byte-identical",
-   (CLI / "atlas_mission.py").read_bytes() == (CORE_CLI / "atlas_mission.py").read_bytes())
-chk("engine and core atlas-mission are byte-identical",
-   (CLI / "atlas-mission").read_bytes() == (CORE_CLI / "atlas-mission").read_bytes())
-chk("core module also exposes mission_execute", hasattr(core_mission, "mission_execute"))
-chk("core CLI also exposes cmd_execute", hasattr(core_mission_cli, "cmd_execute"))
-
-os.environ_backup = dict(os.environ)
-for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
-    os.environ.pop(_var, None)
-core_ctx = None
-os.environ.update(os.environ_backup)
+t("29. single canonical copy (T-118: core/cli retired, nothing left to compare against)")
+core_cli_dir = REPO.parent / "core" / "cli"
+chk("no stale core/cli directory has reappeared", not core_cli_dir.exists())
+chk("engine/cli/atlas_mission.py exists", (CLI / "atlas_mission.py").is_file())
+chk("engine/cli/atlas-mission exists", (CLI / "atlas-mission").is_file())
+chk("engine module exposes mission_execute", hasattr(mission, "mission_execute"))
+chk("engine CLI exposes cmd_execute", hasattr(mission_cli, "cmd_execute"))
 
 t("30. no T-050/AIOS-011/AIOS-012/AIOS-017/T-049 file or record touched by this fixture root")
 chk("no real AIOS-011, AIOS-012, AIOS-017, T-049 or T-050 ticket directory exists under this "

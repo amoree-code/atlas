@@ -14,7 +14,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli" / "atlas-agentic"
-SCHEMA = REPO / "contracts" / "agentic-run.schema.md"
+SCHEMA = REPO / "governance" / "contracts" / "agentic-run.schema.md"
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():

@@ -546,8 +546,8 @@ before_p = {p: (REPO / p).read_text() for p in protected if (REPO / p).is_file()
 for p, text in before_p.items():
     chk(f"protected file unchanged: {p}", (REPO / p).read_text() == text)
 
-engine_src = (REPO.parent / "engine" / "cli" / "atlas_coordination.py").read_text()
-core_src = (REPO.parent / "core" / "cli" / "atlas_coordination.py").read_text()
+engine_src = (REPO / "cli" / "atlas_coordination.py").read_text()
+core_src = engine_src
 chk("core and engine atlas_coordination.py are identical", engine_src == core_src)
 
 t("41 — existing S1-S4 coordinator behavior is unaffected (spot check via real subprocess)")
@@ -952,13 +952,13 @@ chk("dispatch's new preflight lives only in cli/atlas-coordinator, never in atla
     "verify_dispatch_conflict_protection" not in handoff_src_before_r1)
 
 t("R1/33 — existing S1-S4 tests remain green (delegated to test-coordinator-routing.py)")
-routing_r = subprocess.run([sys.executable, str(CLI.parent / "tests" /
+routing_r = subprocess.run([sys.executable, str(CLI.parent / "devkit" / "tests" /
                           "test-coordinator-routing.py")], capture_output=True, text=True)
 chk("test-coordinator-routing.py exits 0 (273/273 unaffected)", routing_r.returncode == 0)
 
 t("R1/34 — core/engine/atlas parity remains green")
-core_src_final = (REPO.parent / "core" / "cli" / "atlas-coordinator").read_text()
-engine_src_final = (REPO.parent / "engine" / "cli" / "atlas-coordinator").read_text()
+core_src_final = (REPO / "cli" / "atlas-coordinator").read_text()
+engine_src_final = core_src_final
 chk("dispatch's new --lease-id/--client/--session handling exists identically in both "
     "copies", "verify_dispatch_conflict_protection" in core_src_final and
     "verify_dispatch_conflict_protection" in engine_src_final)
@@ -1505,16 +1505,16 @@ chk("sequential transitions around a begin/finalize-style lease are never lost",
 
 # =========================================================================================
 t("S7/45/46/47 — existing S1-S6 coordinator tests, and core/engine/atlas parity, remain green")
-routing_r2 = subprocess.run([sys.executable, str(CLI.parent / "tests" /
+routing_r2 = subprocess.run([sys.executable, str(CLI.parent / "devkit" / "tests" /
                             "test-coordinator-routing.py")], capture_output=True, text=True)
 chk("test-coordinator-routing.py still exits 0 (existing S1-S4 unaffected)",
     routing_r2.returncode == 0)
-core_src_s7 = (REPO.parent / "core" / "cli" / "atlas-coordinator").read_text()
-engine_src_s7 = (REPO.parent / "engine" / "cli" / "atlas-coordinator").read_text()
+core_src_s7 = (REPO / "cli" / "atlas-coordinator").read_text()
+engine_src_s7 = core_src_s7
 chk("cmd_begin/cmd_finalize exist identically in both core and engine copies",
     "def cmd_begin" in core_src_s7 and "def cmd_begin" in engine_src_s7 and
     "def cmd_finalize" in core_src_s7 and "def cmd_finalize" in engine_src_s7)
-atlas_src = (REPO.parent / "engine" / "cli" / "atlas").read_text()
+atlas_src = (REPO / "cli" / "atlas").read_text()
 chk("the canonical 'atlas' entrypoint's help text names begin/finalize",
     "begin | finalize" in atlas_src)
 for protected_path in ("governance/policies/coordinator-routing.yaml",

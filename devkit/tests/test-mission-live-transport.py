@@ -58,7 +58,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 CLI = REPO / "cli"
-CORE_CLI = REPO.parent / "core" / "cli"
 REAL_TRANSPORTS_PATH = REPO / "governance" / "policies" / "handoff-transports.yaml"
 
 G, Y, R, D, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[0m"
@@ -117,9 +116,7 @@ for _var in ("ATLAS_HOME", "ATLAS_ADAPTERS", "ATLAS_HANDOFF_TRANSPORTS"):
     os.environ.pop(_var, None)
 
 mission = _load(CLI, "atlas_mission.py")
-core_mission = _load(CORE_CLI, "atlas_mission.py")
 mission_cli = _load(CLI, "atlas-mission")
-core_mission_cli = _load(CORE_CLI, "atlas-mission")
 hoff_real = _load(CLI, "atlas-handoff")
 
 t("1. old claude-code-tools-pilot entry preserved byte-for-byte")
@@ -800,9 +797,9 @@ chk("after the entire live pilot run, the REAL claude-code-tools-pilot entry is 
     "byte-for-byte its original argv",
     real_transports_after.get("claude-code-tools-pilot", {}).get("argv") == EXPECTED_OLD_ARGV)
 PROTECTED = [
-    CLI / "atlas-coordinator", CORE_CLI / "atlas-coordinator",
-    CLI / "atlas_coordination.py", CORE_CLI / "atlas_coordination.py",
-    CLI / "atlas-handoff", CORE_CLI / "atlas-handoff",
+    CLI / "atlas-coordinator",
+    CLI / "atlas_coordination.py",
+    CLI / "atlas-handoff",
     REPO / "governance" / "policies" / "coordinator-routing.yaml",
 ]
 for p in PROTECTED:
@@ -819,19 +816,19 @@ chk("no handoff-*.md V6 record exists anywhere under the pilot fixture root",
     not list(root.rglob("handoff-*.md")))
 
 # =============================================================================================
-t("24. engine/core parity for the new resolution functions")
+t("24. single canonical copy (T-118: core/cli retired, nothing left to compare against)")
 scope_parity = mission.canonicalize_scope("pilot-a/alpha.txt")
 argv_engine = mission.build_mission_pilot_argv("claude", template, scope_parity)
-argv_core = core_mission.build_mission_pilot_argv("claude", template, scope_parity)
-chk("engine and core build_mission_pilot_argv agree byte-for-byte", argv_engine == argv_core)
+chk("engine build_mission_pilot_argv is deterministic on the canonical copy",
+    argv_engine == mission.build_mission_pilot_argv("claude", template, scope_parity))
+core_py = REPO.parent / "core" / "cli" / "atlas_mission.py"
+core_cli_file = REPO.parent / "core" / "cli" / "atlas-mission"
+chk("no stale core/cli/atlas_mission.py copy has reappeared", not core_py.exists())
+chk("no stale core/cli/atlas-mission copy has reappeared", not core_cli_file.exists())
 engine_py = CLI / "atlas_mission.py"
-core_py = CORE_CLI / "atlas_mission.py"
-chk("engine/cli/atlas_mission.py and core/cli/atlas_mission.py remain byte-identical",
-    engine_py.read_bytes() == core_py.read_bytes())
 engine_cli_file = CLI / "atlas-mission"
-core_cli_file = CORE_CLI / "atlas-mission"
-chk("engine/cli/atlas-mission and core/cli/atlas-mission remain byte-identical",
-    engine_cli_file.read_bytes() == core_cli_file.read_bytes())
+chk("engine/cli/atlas_mission.py exists", engine_py.is_file())
+chk("engine/cli/atlas-mission exists", engine_cli_file.is_file())
 
 
 # =============================================================================================

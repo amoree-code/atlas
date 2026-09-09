@@ -31,7 +31,7 @@ DOMAINS = Path(os.environ.get("ATLAS_DOMAINS", REPO / "domains"))
 # ATLAS_CAPABILITIES is the current name; ATLAS_PLUGINS is honoured for one version.
 CAPS = Path(os.environ.get("ATLAS_CAPABILITIES")
             or os.environ.get("ATLAS_PLUGINS")
-            or REPO / "capabilities")
+            or REPO / "extensions" / "capabilities")
 # capability.yaml is the current manifest name; plugin.yaml is accepted for one version.
 MANIFEST_NAMES = ("capability.yaml", "plugin.yaml")
 CORE_CONTRACT_RANGE = (1, 1)

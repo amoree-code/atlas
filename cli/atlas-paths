@@ -49,18 +49,18 @@ _atlas_pair() {  # <root> -> "<new-rel> <old-rel>"
     projects)  echo "projects                        user/04-projects" ;;
     tickets)   echo "projects/*/tickets              tasks" ;;
     rules)     echo "system/governance/rules    system/rules" ;;
-    runtime)   echo "internal/runtime                runtime" ;;
-    config)    echo "internal/config                 system/config" ;;
+    runtime)   echo "runtime                         internal/runtime" ;;
+    config)    echo "system/config                   internal/config" ;;
     policies)  echo "system/governance/policies system/policies" ;;
     daily)     echo "personal/daily                  user/01-daily" ;;
     templates) echo "personal/templates              user/06-templates" ;;
-    skills)    echo "internal/extensions/skills      skills" ;;
-    agents)    echo "internal/extensions/agents      agents" ;;
-    helpers)   echo "internal/helpers                scripts" ;;
-    schemas)   echo "internal/schemas                system/schemas" ;;
+    skills)    echo "extensions/skills               skills" ;;
+    agents)    echo "extensions/agents               agents" ;;
+    helpers)   echo "helpers                         scripts" ;;
+    schemas)   echo "schemas                         system/schemas" ;;
     professional) echo "personal/professional          user/03-professional" ;;
     inbox)     echo "personal/inbox                  user/00-inbox" ;;
-    sessions)  echo "internal/sessions               sessions" ;;
+    sessions)  echo "runtime/sessions                sessions" ;;
     *) return 1 ;;
   esac
 }
@@ -97,8 +97,8 @@ _atlas_atlas_rel() {  # <root> -> its Atlas-relative path, or empty if not cut o
     policies)     echo "system/governance/policies" ;;
     runtime)      echo "runtime" ;;
     config)       echo "system/config" ;;
-    skills)       echo "skills" ;;
-    agents)       echo "agents" ;;
+    skills)       echo "extensions/skills" ;;
+    agents)       echo "extensions/agents" ;;
     helpers)      echo "helpers" ;;
     schemas)      echo "schemas" ;;
     sessions)     echo "runtime/sessions" ;;

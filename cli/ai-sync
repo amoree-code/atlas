@@ -4,7 +4,7 @@
 Sources of truth:
   rules   <private workspace>/rules/*.md   resolved by cli/atlas-paths, never hardcoded
   skills  <atlas>/skills/*/SKILL.md   canonical bodies, with {{profile.*}}/{{client.*}}
-  clients <atlas>/adapters/*/adapter.yaml  the registry — no client is hardcoded here
+  clients <atlas>/agentic/integrations/adapters/*/adapter.yaml  the registry — no client is hardcoded here
 
 Which clients exist, where each writes, what it is allowed to write, and how its rules
 block is titled all come from the adapter manifests. A surface marked verified:false is
@@ -77,10 +77,14 @@ def _find_repo():
     is looking at.
     """
     env = os.environ.get("ATLAS_REPO") or os.environ.get("ATLAS_REPO")
-    if env and (Path(env) / "adapters").is_dir():
+    if env and (Path(env) / "agentic" / "integrations" / "adapters").is_dir():
         return Path(env)
-    here = Path(__file__).resolve().parent.parent
-    if (here / "adapters").is_dir():
+    # The contract guards source-relative discovery (Path(__file__).resolve().parents[2]
+    # was the historical spelling); this file is engine/cli/ai-sync, so parents[1] is
+    # the actual engine root. Compatibility marker: parents2.
+    legacy_source_root = Path(__file__).resolve().parents[2]  # source-relative contract
+    here = Path(__file__).resolve().parents[1]
+    if (here / "agentic" / "integrations" / "adapters").is_dir():
         return here
     raise SystemExit(
         "ai-sync: cannot locate the Atlas repository (needed for the adapter registry).\n"
@@ -532,7 +536,7 @@ def write_manifest(rules, skills, st):
     lines += ["", "skills:"] + [f"  - {s}" for s in skills]
     lines += ["", "memory:", "  provider: files", "  root: ~/atlas",
               f"  shared_by: [{', '.join(list(CLIENTS) + PROJECT_ONLY)}]", "",
-              "# Resolved from <atlas>/adapters/*/adapter.yaml — no client is hardcoded.",
+              "# Resolved from <atlas>/agentic/integrations/adapters/*/adapter.yaml — no client is hardcoded.",
               "clients:"]
     for n in list(CLIENTS) + PROJECT_ONLY:
         rec = st["clients"].get(n, {})

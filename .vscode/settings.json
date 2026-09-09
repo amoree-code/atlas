@@ -1,9 +1,4 @@
 {
-  // Atlas ships no formatter and no build step. Its YAML is read by strict, hand-written
-  // parsers, so a cosmetic reflow on save is a breaking change — see .prettierignore for
-  // the incident this prevents. .prettierignore already stops Prettier; this also stops
-  // any other formatter (the Red Hat YAML extension, an editor default) from reflowing
-  // these files for anyone who clones the repo and opens it here.
   "editor.formatOnSave": false,
   "[yaml]": { "editor.formatOnSave": false },
   "[markdown]": { "editor.formatOnSave": false },

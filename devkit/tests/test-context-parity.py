@@ -15,9 +15,10 @@ docstring, and the parity narrative it recorded — for anyone auditing that dec
 engine/cli/ is now the sole implementation of all four commands; the `atlas` dispatcher
 routes to it directly, the same way it already routes everything else.
 
-core/cli/ itself is not retired — it still hosts the separate, actively-tested mission/
-coordinator "core vs engine" parity subsystem (T-050/T-051 and family; see
-test-coordinator-routing.py, test-mission-*.py). Nothing here touches that.
+core/cli/ itself has since been retired in full: the mission/coordinator "core vs engine"
+parity subsystem it used to also host (T-050/T-051 and family; see
+test-coordinator-routing.py, test-mission-*.py) no longer has a second copy to compare
+against either. Nothing here touches that.
 
 Nothing left to check: there is exactly one copy of each of these four commands now.
 """

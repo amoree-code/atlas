@@ -627,7 +627,7 @@ with tempfile.TemporaryDirectory(prefix="t050-coordinator-") as tmp:
     # `handoff-transports.yaml` (also unmodified). Nothing below touches either registry file,
     # `cli/atlas-handoff`, or the coordinator's own route/dispatch code.
     # =====================================================================================
-    adapter_manifest_path = REPO / "adapters" / "claude-code-tools-pilot" / "adapter.yaml"
+    adapter_manifest_path = REPO / "agentic" / "integrations" / "adapters" / "claude-code-tools-pilot" / "adapter.yaml"
     adapter_manifest_before = adapter_manifest_path.read_text()
     handoff_transports_before_2 = handoff_transports_path.read_text()
 
@@ -1150,7 +1150,7 @@ def normalize(text):
 
 env = real_ticket_env()
 parity_root = Path(env["ATLAS_HOME"])
-core_atlas = REPO.parent / "core" / "cli" / "atlas"
+core_atlas = REPO / "cli" / "atlas"
 engine_atlas = CLI / "atlas"
 results = {}
 for intent in ("plan", "execute", "review"):

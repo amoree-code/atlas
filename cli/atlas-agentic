@@ -15,9 +15,16 @@
                                                      permissions; --execute only ever runs
                                                      `atlas capability invoke ... --dry-run`,
                                                      and only when allowed
+  atlas agentic preflight <run_id> --used-tokens N --token-limit N
+        --estimated-cost-usd N --cost-limit-usd N --transport-verified <true|false>
+                                                     check packet bounds before dispatch
+  atlas agentic reconcile <run_id> --usage-file <path> [--actual-cost-usd N]
+        [--cost-limit-usd N]                              persist measured post-run usage
   atlas agentic check <run_id> --permission-change   decide allow/deny for an admin-only
                                                      permission-management action
   atlas agentic approve <run_id> --owner-words "…"   record approval evidence, exactly once
+  atlas agentic confirm <run_id> --packet-file <path> --tickets <T-###,...>
+        --scope-ref <ref> --token-limit N --cost-limit-usd N
 
 An Agentic run is one bounded, generated execution record — see
 contracts/agentic-run.schema.md for the full contract. It is NOT a ticket, a mission, or a
@@ -55,7 +62,7 @@ with the reason; a denied action never reaches `atlas capability invoke`, not ev
 
 Zero non-stdlib dependencies.
 """
-import json, os, re, subprocess, sys, time
+import json, math, os, re, subprocess, sys, time
 from pathlib import Path
 from importlib.machinery import SourceFileLoader
 import importlib.util
@@ -82,6 +89,8 @@ def _load_sibling(name):
 # any of these — every comparison uses these exact objects, so a change to the ladder or
 # the ledger can never silently diverge between `capability invoke` and `agentic check`.
 _cap = _load_sibling("atlas-capability")
+_preflight = _load_sibling("../agentic/core/preflight.py")
+_context_packet = _load_sibling("atlas_context_packet.py")
 
 _ATLAS_HOME = Path(os.environ["ATLAS_HOME"]) if os.environ.get("ATLAS_HOME") \
     else Path.home() / "atlas"
@@ -257,6 +266,27 @@ def validate_envelope(rec):
             owner_words = approval.get("owner_words")
             if not (owner_words is None or isinstance(owner_words, str)):
                 errors.append("approval.owner_words must be null or a string")
+    if "confirmation" in rec:
+        confirmation = rec.get("confirmation")
+        if not isinstance(confirmation, dict):
+            errors.append("'confirmation' must be an object when present")
+        else:
+            if confirmation.get("status") not in ("pending", "confirmed"):
+                errors.append("confirmation.status must be 'pending' or 'confirmed'")
+            tickets = confirmation.get("ticket_ids")
+            if not (isinstance(tickets, list) and tickets and
+                    all(isinstance(t, str) and parse_ticket_id(t) is not None for t in tickets)):
+                errors.append("confirmation.ticket_ids must contain valid ticket ids")
+            if confirmation.get("status") == "confirmed":
+                for key in ("scope_ref", "packet_hash", "confirmed_at"):
+                    if not _nonempty_str(confirmation.get(key)):
+                        errors.append(f"confirmation.{key} is required once confirmed")
+                policy = confirmation.get("context_policy")
+                if not isinstance(policy, dict) or policy.get("mode") != "lazy":
+                    errors.append("confirmation.context_policy.mode must be 'lazy'")
+                for key in ("token_limit", "cost_limit_usd"):
+                    if not isinstance(confirmation.get(key), (int, float)) or confirmation[key] <= 0:
+                        errors.append(f"confirmation.{key} must be positive")
 
     if "permission_log" in rec:
         log = rec.get("permission_log")
@@ -520,6 +550,7 @@ def cmd_create(args):
         # T-102: no approval exists until 'approve' records one, explicitly, every time.
         "approval": {"approval": "none", "approved_at": None, "owner_words": None},
         "permission_log": [],
+        "confirmation": {"status": "pending", "ticket_ids": [opts["ticket"]]},
     }
 
     errors = validate_envelope(rec)
@@ -565,14 +596,17 @@ def cmd_list(_args):
         print(f"\n  no Agentic runs in {RUNTIME_DIR}\n")
         return 0
     print(f"\n  {D}{RUNTIME_DIR}{X}\n")
-    print(f"  {'RUN ID':<34} {'STATUS':<12} {'STAGE':<12} GOAL.TICKET")
+    print(f"  {'RUN ID':<34} {'STATUS':<12} {'CONFIRM':<10} {'CONTEXT':<8} GOAL.TICKET")
     for f in sorted(RUNTIME_DIR.glob("*.json")):
         try:
             r = json.loads(f.read_text())
         except (json.JSONDecodeError, OSError):
             continue
+        confirmation = r.get("confirmation") or {}
         print(f"  {r.get('run_id', f.stem):<34} {r.get('status', '?'):<12} "
-              f"{r.get('stage', '?'):<12} {r.get('goal', {}).get('ticket', '?')}")
+              f"{confirmation.get('status', 'missing'):<10} "
+              f"{(confirmation.get('context_policy') or {}).get('mode', '-'):<8} "
+              f"{r.get('goal', {}).get('ticket', '?')}")
     print()
     return 0
 
@@ -754,9 +788,171 @@ def cmd_approve(args):
     return 0
 
 
+def cmd_confirm(args):
+    if not args:
+        die("usage: atlas agentic confirm <run_id> --packet-file <path> "
+            "--tickets <T-###,...> --scope-ref <ref> --token-limit N --cost-limit-usd N")
+    run_id = args[0]
+    opts = {"packet-file": None, "tickets": None, "scope-ref": None,
+            "token-limit": None, "cost-limit-usd": None}
+    i = 1
+    while i < len(args):
+        key = args[i][2:] if args[i].startswith("--") else None
+        if key in opts and i + 1 < len(args):
+            if opts[key] is not None:
+                die(f"--{key} was given more than once")
+            opts[key] = args[i + 1]
+            i += 2
+        else:
+            die(f"unknown or incomplete argument {args[i]!r}")
+    if any(opts[key] is None for key in opts):
+        die("confirmation requires --packet-file, --tickets, --scope-ref, "
+            "--token-limit, and --cost-limit-usd")
+    run, path = load_run(run_id)
+    if run.get("confirmation", {}).get("status") == "confirmed":
+        die(f"{run_id} already has confirmation — refusing to overwrite it", code=1)
+    tickets = [ticket.strip() for ticket in opts["tickets"].split(",") if ticket.strip()]
+    if not tickets or any(parse_ticket_id(ticket) is None for ticket in tickets):
+        die("--tickets must be a comma-separated list of valid ticket ids")
+    if len(set(tickets)) != len(tickets):
+        die("--tickets must not contain duplicates")
+    if run.get("goal", {}).get("ticket") not in tickets:
+        die("--tickets must include the run's goal.ticket")
+    if opts["scope-ref"] != (run.get("claims") or {}).get("scope"):
+        die("--scope-ref must exactly equal the run's claims.scope")
+    try:
+        token_limit = int(opts["token-limit"])
+        cost_limit = float(opts["cost-limit-usd"])
+        if token_limit <= 0 or not math.isfinite(cost_limit) or cost_limit <= 0:
+            raise ValueError("limits must be positive")
+        packet_path = Path(opts["packet-file"]).expanduser().resolve()
+        runtime_packets = (_ATLAS_HOME / "runtime" / "packets").resolve()
+        if packet_path == runtime_packets or not str(packet_path).startswith(str(runtime_packets) + os.sep):
+            die("--packet-file must be inside runtime/packets")
+        packet = json.loads(packet_path.read_text(encoding="utf-8"))
+        _context_packet.validate_packet(packet)
+        if packet["root"]["ticket"] not in tickets:
+            die("packet ticket is not included in --tickets")
+        if packet["root"]["scope"] != opts["scope-ref"]:
+            die("packet scope does not match --scope-ref")
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        die(f"confirmation refused: {exc}")
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    run["confirmation"] = {
+        "status": "confirmed", "ticket_ids": tickets,
+        "owner": run.get("actor", {}), "scope_ref": opts["scope-ref"],
+        "packet_hash": _context_packet.packet_hash(packet),
+        "context_policy": {"mode": "lazy", "max_files": 0, "max_ranges": 0},
+        "token_limit": token_limit, "cost_limit_usd": cost_limit,
+        "confirmed_at": now,
+    }
+    run["updated_at"] = now
+    run.setdefault("events", []).append({"kind": "ticket-confirmation", "at": now,
+                                         "ticket_ids": tickets, "scope_ref": opts["scope-ref"],
+                                         "context_mode": "lazy"})
+    save_run(run, path)
+    print(f"  {G}confirmed{X}  {run_id}")
+    print(f"  tickets: {','.join(tickets)}  scope: {opts['scope-ref']}  context: lazy")
+    return 0
+
+
+def cmd_preflight(args):
+    if not args:
+        die("usage: atlas agentic preflight <run_id> --packet-file <path> "
+            "--estimated-cost-usd N --cost-limit-usd N "
+            "--transport-verified <true|false> [--unresolved]")
+    run_id = args[0]
+    opts = {"packet-file": None, "estimated-cost-usd": None,
+            "cost-limit-usd": None, "transport-verified": None, "unresolved": False}
+    i = 1
+    while i < len(args):
+        key = args[i][2:] if args[i].startswith("--") else None
+        if key == "unresolved":
+            if opts[key]:
+                die("--unresolved was given more than once")
+            opts[key] = True
+            i += 1
+        elif key in opts and i + 1 < len(args):
+            if opts[key] is not None:
+                die(f"--{key} was given more than once")
+            opts[key] = args[i + 1]
+            i += 2
+        else:
+            die(f"unknown or incomplete argument {args[i]!r}")
+
+    run, _ = load_run(run_id)  # prove this preflight belongs to a real Agentic run
+    if opts["transport-verified"] not in ("true", "false"):
+        die("--transport-verified must be true or false")
+    try:
+        packet_path = Path(opts["packet-file"]).expanduser()
+        runtime_packets = (_ATLAS_HOME / "runtime" / "packets").resolve()
+        packet_real = packet_path.resolve()
+        if packet_real != runtime_packets and not str(packet_real).startswith(str(runtime_packets) + os.sep):
+            die("--packet-file must be inside runtime/packets")
+        packet = json.loads(packet_real.read_text(encoding="utf-8"))
+        _context_packet.validate_packet(packet)
+        confirmation = _preflight.confirmation_check(
+            run, packet, _context_packet.packet_hash(packet))
+        used_tokens, token_limit = _preflight.packet_budget(packet, run)
+        result = _preflight.evaluate(
+            used_tokens=used_tokens,
+            token_limit=min(token_limit, confirmation["token_limit"]),
+            estimated_cost_usd=float(opts["estimated-cost-usd"]),
+            cost_limit_usd=min(float(opts["cost-limit-usd"]),
+                               confirmation["cost_limit_usd"]),
+            transport_verified=opts["transport-verified"] == "true",
+            unresolved=opts["unresolved"],
+        )
+    except (TypeError, ValueError, _preflight.PreflightError) as exc:
+        die(f"preflight refused: {exc}")
+    print(json.dumps({"run_id": run_id, **result}, sort_keys=True))
+    return 0 if result["decision"] == "CONTINUE" else 5
+
+
+def cmd_reconcile(args):
+    if not args:
+        die("usage: atlas agentic reconcile <run_id> --usage-file <path> "
+            "[--actual-cost-usd N] [--cost-limit-usd N]")
+    run_id = args[0]
+    opts = {"usage-file": None, "actual-cost-usd": None, "cost-limit-usd": None}
+    i = 1
+    while i < len(args):
+        key = args[i][2:] if args[i].startswith("--") else None
+        if key in opts and i + 1 < len(args):
+            if opts[key] is not None:
+                die(f"--{key} was given more than once")
+            opts[key] = args[i + 1]
+            i += 2
+        else:
+            die(f"unknown or incomplete argument {args[i]!r}")
+    run, path = load_run(run_id)
+    if "reconciliation" in run:
+        die(f"{run_id} already has usage reconciliation — refusing to overwrite it", code=1)
+    try:
+        usage_path = Path(opts["usage-file"]).expanduser().resolve()
+        report = json.loads(usage_path.read_text(encoding="utf-8"))
+        actual = (float(opts["actual-cost-usd"])
+                  if opts["actual-cost-usd"] is not None else None)
+        limit = (float(opts["cost-limit-usd"])
+                 if opts["cost-limit-usd"] is not None else None)
+        reconciliation = _preflight.reconcile_usage(report, actual, limit)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError, _preflight.PreflightError) as exc:
+        die(f"usage reconciliation refused: {exc}")
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    run["reconciliation"] = {"source": str(usage_path), **reconciliation, "at": now}
+    run.setdefault("events", []).append({"kind": "usage-reconciliation", "at": now,
+                                         "cost_status": reconciliation["cost_status"],
+                                         "total_tokens": reconciliation["total_tokens"]})
+    run["updated_at"] = now
+    save_run(run, path)
+    print(json.dumps({"run_id": run_id, **reconciliation}, sort_keys=True))
+    return 0 if reconciliation["reduction_signal"] != "over_budget" else 5
+
+
 CMDS = {"create": cmd_create, "show": cmd_show, "validate": cmd_validate, "list": cmd_list,
        "transition": cmd_transition, "capture": cmd_capture, "check": cmd_check,
-       "approve": cmd_approve}
+       "preflight": cmd_preflight, "reconcile": cmd_reconcile, "approve": cmd_approve,
+       "confirm": cmd_confirm}
 if __name__ == "__main__":
     a = sys.argv[1:]
     if not a or a[0] not in CMDS:

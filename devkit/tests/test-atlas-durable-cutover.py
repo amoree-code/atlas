@@ -68,8 +68,8 @@ real_atlas = Path.home() / "atlas"
 if (real_atlas / "personal" / "memory").is_dir():
     env = {}
     for root, rel in (("memory", "personal/memory"), ("knowledge", "personal/knowledge"),
-                       ("projects", "projects"), ("rules", "governance/rules"),
-                       ("policies", "governance/policies")):
+                       ("projects", "projects"), ("rules", "system/governance/rules"),
+                       ("policies", "system/governance/policies")):
         r = run(["get", root], env)
         chk(f"{root} -> resolves under the real ~/atlas/{rel}",
             r.stdout.strip() == str(real_atlas / rel))
@@ -81,10 +81,13 @@ t("T-046 (owner reopened T-030/T-045's permanent-legacy ruling): runtime/config/
   "agents/helpers/schemas/sessions are now cut over to Atlas too, once physically migrated")
 if real_atlas.is_dir():
     env = {}
-    for root in ("skills", "agents", "config", "helpers", "schemas", "sessions", "runtime"):
+    for root, rel in (("skills", "extensions/skills"), ("agents", "extensions/agents"),
+                       ("config", "system/config"), ("helpers", "helpers"),
+                       ("schemas", "schemas"), ("sessions", "runtime/sessions"),
+                       ("runtime", "runtime")):
         r = run(["get", root], env)
-        chk(f"{root} -> resolves under the real ~/atlas/{root} (T-046 cutover)",
-            r.stdout.strip() == str(real_atlas / root))
+        chk(f"{root} -> resolves under the real ~/atlas/{rel} (T-046/T-116 cutover)",
+            r.stdout.strip() == str(real_atlas / rel))
 else:
     chk("~/atlas not present on this machine — skipped (not a failure)", True)
 

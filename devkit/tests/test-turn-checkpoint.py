@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """tests/test-turn-checkpoint.py — automatic per-turn checkpoint journal
-(`adapters/claude-code/ai-atlas-turn-checkpoint`, the `Stop`/`PreCompact` hook).
+(`agentic/integrations/adapters/claude-code/ai-atlas-turn-checkpoint`, the
+`Stop`/`PreCompact` hook).
 
 Live file under test:
 
-  ~/Documents/amir/atlas-engine/adapters/claude-code/ai-atlas-turn-checkpoint
+  <repo>/agentic/integrations/adapters/claude-code/ai-atlas-turn-checkpoint
 
 Every scenario runs the live script directly via subprocess, feeding it stdin JSON that
 matches real hook payloads (verified by hand against a real headless `claude --settings
@@ -27,7 +28,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-HOOK = REPO / "adapters" / "claude-code" / "ai-atlas-turn-checkpoint"
+HOOK = REPO / "agentic" / "integrations" / "adapters" / "claude-code" / "ai-atlas-turn-checkpoint"
 
 G, R, D, X = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 if not sys.stdout.isatty():
@@ -48,7 +49,7 @@ def t(label):
 
 
 if not HOOK.is_file():
-    print("  (skipped — no adapters/claude-code/ai-atlas-turn-checkpoint found)")
+    print("  (skipped — no agentic/integrations/adapters/claude-code/ai-atlas-turn-checkpoint found)")
     print("\n0 passed, 0 failed")
     sys.exit(0)
 

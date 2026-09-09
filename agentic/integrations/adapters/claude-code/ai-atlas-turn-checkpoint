@@ -94,7 +94,7 @@ def load_credential_patterns():
     try:
         import importlib.util
         from importlib.machinery import SourceFileLoader
-        repo = Path(__file__).resolve().parent.parent.parent
+        repo = Path(__file__).resolve().parent.parent.parent.parent.parent
         scan_path = repo / "cli" / "atlas-privacy-scan"
         loader = SourceFileLoader("atlas_privacy_scan_patterns", str(scan_path))
         spec = importlib.util.spec_from_loader(loader.name, loader)

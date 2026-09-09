@@ -10,7 +10,7 @@ def block(text, marker):
     return text[start:]
 
 
-transports = (ROOT / "engine/governance/policies/handoff-transports.yaml").read_text()
+transports = (ROOT / "governance/policies/handoff-transports.yaml").read_text()
 gemini_transport = block(transports, "gemini-cli-mission-pilot:")
 assert "adapter: gemini" in gemini_transport
 assert "verified: false" in gemini_transport
@@ -24,22 +24,22 @@ assert "--allowed-tools" not in gemini_argv_line
 assert "__MISSION_SCOPE_DIR__" in gemini_transport
 assert "timeout: 300" in gemini_transport
 
-gemini = (ROOT / "engine/adapters/gemini/adapter.yaml").read_text()
+gemini = (ROOT / "agentic/integrations/adapters/gemini/adapter.yaml").read_text()
 assert "consumer_verified: false" in gemini
 assert "writes: []" in gemini
 
-fixture = (ROOT / "engine/adapters/atlas-fixture/adapter.yaml").read_text()
+fixture = (ROOT / "agentic/integrations/adapters/atlas-fixture/adapter.yaml").read_text()
 assert "adapter: atlas-fixture" in fixture
 assert "contract: 1" in fixture
 assert "provides: {}" in fixture
 assert "writes: []" in fixture
 assert "consumer_verified: false" in fixture
 
-spec = importlib.util.spec_from_file_location("atlas_mission", ROOT / "engine/cli/atlas_mission.py")
+spec = importlib.util.spec_from_file_location("atlas_mission", ROOT / "cli/atlas_mission.py")
 mission = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mission)
 assert mission.MISSION_PILOT_BUDGET_PLACEHOLDER == "__MISSION_BUDGET_USD__"
-scope = {"canonical": str(ROOT / "engine/tests/test-provider-neutral-registry.py")}
+scope = {"canonical": str(ROOT / "devkit/tests/test-provider-neutral-registry.py")}
 argv = mission.build_mission_pilot_argv(
     "gemini",
     [mission.MISSION_PILOT_SCOPE_DIR_PLACEHOLDER, "--max-budget-usd",

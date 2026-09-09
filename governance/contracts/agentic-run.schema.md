@@ -50,6 +50,17 @@ truth, ticket truth, personal knowledge, or any copied task record.
     "scope": "T-101",
     "lease": null
   },
+  "confirmation": {
+    "status": "confirmed",
+    "ticket_ids": ["T-123"],
+    "owner": {"client": "atlas", "session_id": "session-..."},
+    "scope_ref": "engine/cli",
+    "packet_hash": "sha256:...",
+    "context_policy": {"mode": "lazy", "max_files": 0, "max_ranges": 0},
+    "token_limit": 40000,
+    "cost_limit_usd": 0.50,
+    "confirmed_at": "2026-09-09 12:00:00"
+  },
   "stop_conditions": [
     "goal-complete",
     "budget-exhausted",
@@ -158,6 +169,10 @@ treated as a fresh run.
 - `permissions` records the run's profile and its declared ceiling — never a private grant
   of its own (see Permission boundary below).
 - `claims` records the run-local scope and lease view.
+- `confirmation` binds a run to ticket IDs, its scope, and one packet hash. Dispatch
+  refuses a run without `status: confirmed`.
+- `context_policy.mode: lazy` records bounded references and budgets only; it never copies
+  file contents into the run envelope. `max_files: 0` means no eager file loading.
 - `surface` records the entry surface that owns this run.
 - `routing` records classified references to context packets or artifacts; it is not a
   second source of truth.

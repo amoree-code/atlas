@@ -20,7 +20,7 @@ set -euo pipefail
 ATLAS_HOME="${ATLAS_HOME:-${ATLAS_HOME:-$HOME/atlas}}"
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(dirname "$SELF_DIR")"
-TEMPLATES="$REPO/templates"
+TEMPLATES="$REPO/devkit/templates"
 VERSION="$(cat "$REPO/VERSION" 2>/dev/null || echo unknown)"
 
 DRY=0
