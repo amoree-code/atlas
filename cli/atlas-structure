@@ -10,7 +10,7 @@ ROOTS = ("personal/profile", "personal/memory", "personal/knowledge", "personal/
          "personal/inbox", "projects", "runtime/sessions", "system/agentic/clients",
          "runtime/dispatch-inbox", "runtime/backups", "system/governance/rules",
          "system/governance/policies", "system/config")
-MARKER = ".atlas-workspace.json"
+MARKER = "system/config/.atlas-workspace.json"
 COMPAT = {"system/config": "internal/config", "runtime": "internal/runtime",
           "runtime/sessions": "internal/sessions",
           "system/governance/rules": "internal/governance/rules",
