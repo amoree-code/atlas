@@ -2,7 +2,7 @@
 """atlas-privacy-scan — keep the public repository publishable.
 
 Two classes of finding, because they are two different problems (see
-internal/governance/policies/privacy-classification.yaml):
+governance/policies/privacy-classification.yaml):
 
   credential   a value that grants access.      Generic shapes, built in.
   personal     a value that identifies someone. Generic shapes built in; the user's own
@@ -20,7 +20,7 @@ Reports. Never edits, never deletes, never rewrites history.
                                          path-based publication eligibility under
                                          $ATLAS_HOME (~/atlas) — a gate BEFORE the content
                                          scan above, not a replacement for it. See
-                                         internal/governance/policies/
+                                         governance/policies/
                                          atlas-path-classification.yaml and T-004.
 
 Two narrow exceptions, both about publishability rather than about secrecy:
@@ -96,7 +96,7 @@ PERSONAL = [
 # --- publishability exceptions -----------------------------------------------------
 # A licence names its owner by design. Narrow by construction: only these filenames,
 # only a line that really is a copyright notice, and only the two shapes that constitute
-# attribution. See internal/governance/policies/privacy-classification.yaml.
+# attribution. See governance/policies/privacy-classification.yaml.
 LICENSE_FILES = {"LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "LICENCE.md",
                  "COPYING", "COPYING.md", "NOTICE"}
 COPYRIGHT_LINE = re.compile(r"^\s*(?:[#*/]{1,2}\s*)?Copyright\s*(?:\([cC]\)|©)?\s*\d{4}")
@@ -107,7 +107,7 @@ def license_attribution(rel, line):
     """Is this the copyright line of a licence file, where naming the owner is the point?
 
     Deliberately NOT an allowlist entry: putting the owner's real name in
-    internal/governance/policies/privacy-allowlist.txt would ship that name in the public
+    governance/policies/privacy-allowlist.txt would ship that name in the public
     repository, which is the exact failure this scanner exists to prevent. A context rule
     carries no name.
     """
@@ -156,7 +156,7 @@ def is_ignored(rel, ignored):
 
 
 def load_allowlist():
-    f = REPO / "internal" / "governance" / "policies" / "privacy-allowlist.txt"
+    f = REPO / "governance" / "policies" / "privacy-allowlist.txt"
     if not f.exists():
         return []
     return [l.strip() for l in f.read_text().splitlines()

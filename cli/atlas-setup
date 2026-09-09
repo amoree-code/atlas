@@ -26,7 +26,7 @@ def apply():
                                 "apply", "--approve"], env=os.environ.copy())
     if structure.returncode != 0:
         return structure.returncode
-    for adapter_dir in sorted((HERE.parent / "adapters").iterdir()):
+    for adapter_dir in sorted((HERE.parent / "agentic" / "integrations" / "adapters").iterdir()):
         if not (adapter_dir / "adapter.yaml").is_file(): continue
         subprocess.run([str(HERE / "atlas-integration"), "register", "--client",
                         adapter_dir.name, "--surface", "cli", "--channel", "cli"],

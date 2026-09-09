@@ -8,6 +8,8 @@ read-only review of a returned handoff.
                            [--id <handoff-id>] [--summary <text>]
   atlas coordinator dispatch <task-id> <handoff-id> --lease-id <lease-id>
                             --client <client-id> --session <session-id>
+                            [--agentic-run <run-id> --packet-file <path>
+                             --estimated-cost-usd <n> --cost-limit-usd <n>]
   atlas coordinator review <task-id> <handoff-id>
   atlas coordinator cost <task-id> [--handoff <handoff-id>] [--json]
   atlas coordinator begin <task-id> --intent <intent> --scope <relative-file-path>
@@ -100,7 +102,7 @@ the routing policy resolves but this table does not cover is a **policy mismatch
 
 ## Routing policy
 
-`route` resolves an intent through `internal/governance/policies/coordinator-routing.yaml`
+`route` resolves an intent through `governance/policies/coordinator-routing.yaml`
 — structured data (`roles: {role: client}`, `intents: {intent: role}`), parsed with the same
 manifest parser `cli/atlas-handoff` already uses for the transport registry
 (`cli/atlas-adapter`'s `parse`). There is no ad-hoc string matching of intents or clients
@@ -108,7 +110,7 @@ anywhere in this file: an intent absent from the policy, or a role the policy na
 not define, is a refusal, never a guess.
 
 A client `route` resolves to is only ever as real as
-`internal/governance/policies/handoff-transports.yaml` says it is: `route` refuses any
+`governance/policies/handoff-transports.yaml` says it is: `route` refuses any
 client absent from that registry, and any transport recorded `verified: false`. Resolving a
 client is not authorizing it — the transport registry stays the one place a transport is
 declared safe to use, exactly as it is for `atlas handoff send`.
@@ -264,7 +266,7 @@ sys.path.insert(0, str(REPO / "cli"))
 # transport registry it works alongside. Overridable for tests, never synthesised.
 POLICY = Path(os.environ.get(
     "ATLAS_COORDINATOR_POLICY",
-    REPO / "internal" / "governance" / "policies" / "coordinator-routing.yaml"))
+    REPO / "governance" / "policies" / "coordinator-routing.yaml"))
 
 # prepare-only: the closed intent -> gate table described in the module docstring. Not
 # policy data — `coordinator-routing.yaml` is protected and carries no gate field — just the
@@ -524,8 +526,14 @@ def cmd_dispatch(args):
         die("usage: atlas coordinator dispatch <task-id> <handoff-id> --lease-id <lease-id> "
             "--client <client-id> --session <session-id>")
     task_id, handoff_id, flag_args = args[0], args[1], args[2:]
-    v = _parse_flags(flag_args, ("--lease-id", "--client", "--session"), "dispatch")
+    v = _parse_flags(flag_args, ("--lease-id", "--client", "--session", "--agentic-run",
+                                 "--packet-file", "--estimated-cost-usd", "--cost-limit-usd"),
+                     "dispatch")
     lease_id, client, session = v.get("--lease-id"), v.get("--client"), v.get("--session")
+    agentic_run = v.get("--agentic-run")
+    packet_file = v.get("--packet-file")
+    estimated_cost = v.get("--estimated-cost-usd")
+    cost_limit = v.get("--cost-limit-usd")
     # T-050-S6-R1 part D: a write-capable dispatch must prove conflict protection is in
     # force before it may send anything — never optional, never inferred, never defaulted.
     if not lease_id or not lease_id.strip():
@@ -569,6 +577,10 @@ def cmd_dispatch(args):
     spec, binary, unavailable = hoff.resolve_transport(to)
     if unavailable:
         die(f"cannot dispatch to {to!r}: {unavailable}")
+    preflight_values = (agentic_run, packet_file, estimated_cost, cost_limit)
+    if any(preflight_values) and not all(preflight_values):
+        die("preflight dispatch requires --agentic-run, --packet-file, "
+            "--estimated-cost-usd, and --cost-limit-usd together")
     # -----------------------------------------------------------------------------------
 
     # --- T-050-S6-R1 part D: conflict-protection preflight. Read-only, refuses before any
@@ -587,6 +599,18 @@ def cmd_dispatch(args):
         die(str(e), code=e.code)
     # -----------------------------------------------------------------------------------
 
+    if agentic_run:
+        agentic_bin = Path(__file__).resolve().parent / "atlas-agentic"
+        preflight = subprocess.run(
+            [str(agentic_bin), "preflight", agentic_run, "--packet-file", packet_file,
+             "--estimated-cost-usd", estimated_cost, "--cost-limit-usd", cost_limit,
+             "--transport-verified", "true"],
+            capture_output=True, text=True, check=False)
+        if preflight.returncode != 0:
+            detail = (preflight.stderr or preflight.stdout).strip()
+            die(f"Agentic preflight refused dispatch: {detail or 'no reason returned'}",
+                code=5)
+
     print(f"\n  {B}dispatch{X}  {handoff_id} -> {to}")
     print(f"  gate:        {meta.get('gate')}")
     print(f"  scope:       {meta.get('scope')}")
@@ -595,6 +619,8 @@ def cmd_dispatch(args):
     print(f"  lease:       {lease_id} ({client}/{session}) — verified active, claim(s) "
           f"verified active and matching")
     print(f"  transport:   {spec.get('name')}")
+    if agentic_run:
+        print(f"  preflight:   passed for Agentic run {agentic_run}")
     print(f"  {D}calling the existing 'atlas handoff send' — one foreground call, no retry{X}\n")
 
     handoff_bin = Path(__file__).resolve().parent / "atlas-handoff"

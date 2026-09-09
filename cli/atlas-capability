@@ -2,7 +2,7 @@
 """atlas-capability — the capability registry. Reads manifests; enforces the contract.
 
   atlas capability list              what capabilities exist, and whether each is available
-  atlas capability doctor            validate every manifest against schemas/capability.schema.md
+  atlas capability doctor            validate every manifest against contracts/capability.schema.md
   atlas capability invoke <id>.<op>  run ONE declared operation, and stop
 
 A CAPABILITY is what Atlas can do. An ADAPTER is how one AI client reaches Atlas and lives
@@ -40,7 +40,7 @@ REPO = Path(__file__).resolve().parent.parent
 # caller written against the old name keeps working. New name wins when both are set.
 CAPS = Path(os.environ.get("ATLAS_CAPABILITIES")
             or os.environ.get("ATLAS_PLUGINS")
-            or REPO / "capabilities")
+            or REPO / "extensions" / "capabilities")
 # The manifest filename, new then old. Order is the precedence.
 MANIFEST_NAMES = ("capability.yaml", "plugin.yaml")
 ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", Path.home() / "atlas")))
@@ -294,7 +294,7 @@ def cmd_list(_):
         req = ", ".join(str(x) for x in (m.get("requires") or [])) or f"{D}nothing{X}"
         print(f"  {pid:<20} {av:<20} {auth:<22} {req:<24} {ops}")
     print(f"\n  {D}available != allowed != executed != verified — see "
-          f"schemas/capability.schema.md{X}\n")
+          f"contracts/capability.schema.md{X}\n")
     return 0
 
 

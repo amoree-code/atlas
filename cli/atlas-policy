@@ -5,7 +5,7 @@
   atlas policy <name>        print one module
   atlas policy doctor        every module the bootstrap routes to exists, and vice versa
 
-`internal/governance/rules/core.md` is rendered into every AI client's system prompt, so
+`governance/rules/core.md` is rendered into every AI client's system prompt, so
 every byte of it is paid for on every request of every session. It is a bootstrap: identity,
 the hard authority and security boundaries, the language and direction rules that would
 corrupt a reply if got wrong, the minimum-context principle, and a table saying which module

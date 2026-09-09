@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CATALOG = ROOT / "docs" / "atlas-catalog.json"
-OUTPUT = ROOT / "docs" / "atlas-environment.generated.md"
+CATALOG = ROOT / "devkit" / "docs" / "atlas-catalog.json"
+OUTPUT = ROOT / "devkit" / "docs" / "atlas-environment.generated.md"
 BEGIN = "<!-- atlas:generated:begin -->"
 END = "<!-- atlas:generated:end -->"
 

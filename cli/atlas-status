@@ -101,7 +101,7 @@ fi
 row "knowledge" "$(find "${ATLAS_PATH_KNOWLEDGE:-/nonexistent}" -name '*.md' 2>/dev/null | wc -l | tr -d ' ') entries across $(find "${ATLAS_PATH_KNOWLEDGE:-/nonexistent}" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ') kinds"
 
 printf '\n%sskills%s\n' "$B" "$X"
-row "public" "$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
+row "public" "$(find "$REPO/extensions/skills" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
 row "yours" "$(find "${ATLAS_PATH_SKILLS:-$ATLAS_HOME/internal/extensions/skills}" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')  ${D}(yours win on a name collision)${X}"
 
 printf '\n%sadapter%s\n' "$B" "$X"
