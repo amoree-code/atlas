@@ -1,13 +1,13 @@
 # Why the workspace is shaped this way
 
-The layout itself is in `docs/use/workspace.md`. This is the reasoning behind it.
+The current layout is in [Workspace](../use/workspace.md). This is the reasoning behind it.
 
 ## Two halves, not one flat tree
 
 A user should be able to hold the whole workspace in their head with three ideas:
-`personal/` is long-lived personal material, `projects/` is work state, and `internal/`
+`personal/` is long-lived personal material, `projects/` is work state, and `system/`
 is Atlas machinery, and that now includes `sessions/`, which moved under
-`internal/` after the heavy migration settles. They should not need to understand an
+`system/` after the layout settles. They should not need to understand an
 orchestrator, an event bus, or an adapter's internals to use the system. That is the
 "simple for the user, not simple internally" principle in `docs/design/decisions.md`:
 internal machinery is allowed to be intricate; the thing the user has to hold in their head

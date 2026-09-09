@@ -1,7 +1,7 @@
 <!-- atlas:generated:begin -->
 # Atlas Environment
 
-Atlas is the canonical environment; engine owns reusable behavior and ~/atlas owns private data.
+Atlas is the local-first control layer; the public engine owns reusable behavior and $ATLAS_HOME owns private data.
 
 ## Features
 
@@ -15,18 +15,20 @@ Atlas is the canonical environment; engine owns reusable behavior and ~/atlas ow
 
 ## Commands
 
-- `atlas init`
 - `atlas setup`
-- `atlas setup reconfigure`
+- `atlas setup preflight|apply --approve`
+- `atlas status|doctor`
 - `atlas providers status|add|remove`
 - `atlas structure plan|apply|check`
 - `atlas onboard`
+- `atlas adapter list|doctor`
 - `atlas integration inventory|detect|register|list`
+- `atlas capability list|doctor|invoke`
 - `atlas activity`
 - `atlas agentic`
 - `atlas migrate`
 - `atlas update`
-- `atlas docs`
+- `atlas docs check|build|sync`
 
 ## Clients
 

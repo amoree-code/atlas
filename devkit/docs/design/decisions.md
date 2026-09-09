@@ -27,7 +27,7 @@ each is a genuinely different axis, and conflating two makes both harder to reas
 **Modular.** Optional functionality is a module or adapter, not baked into the core.
 
 **Safe autonomy.** The agent can act on its own, but sensitive operations — a remote
-push, a merge, a delete — require explicit approval. See `internal/governance/policies/`.
+push, a merge, a delete — require explicit approval. See `governance/policies/`.
 
 **Context-efficient.** Retrieve only what's relevant. Never load the whole workspace for
 a request that needs three files.
@@ -46,8 +46,8 @@ workspace in their head with two ideas: `user/` is everything they own — memor
 knowledge, daily records, projects — and `system/` is configuration and governance.
 Everything else in the workspace hangs off one of those two or is transient. They should
 not need to understand an orchestrator, an event bus, or an adapter's internals to use the
-system. The current shape is in `docs/use/workspace.md`; the reasoning behind that shape
-is in `docs/design/workspace-structure.md`.
+system. The current shape is in [Workspace](../use/workspace.md); the reasoning behind that shape
+is in [Workspace structure](workspace-structure.md).
 
 ## Why this is still small
 

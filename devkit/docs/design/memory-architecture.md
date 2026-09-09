@@ -6,7 +6,7 @@
 |---|---|---|---|
 | **Memory** | *what is true about you and your world?* | `~/atlas/personal/memory/<section>/` | years |
 | **Knowledge** | *what did work teach us that saves effort next time?* | `~/atlas/personal/knowledge/<kind>/` | until superseded |
-| **Session** | *what are we doing right now?* | `~/atlas/internal/sessions/` | one session |
+| **Session** | *what are we doing right now?* | `$ATLAS_HOME/runtime/sessions/` | one session |
 | **Daily** | *what happened today?* | `~/atlas/personal/daily/YYYY/MM/YYYY-MM-DD/` | one day |
 | **Project memory** | *what is true about ONE project?* | `~/atlas/projects/<project>/memory/` | life of the project |
 

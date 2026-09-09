@@ -13,7 +13,8 @@ keeping them apart, so the boundary is written down here and checked by `atlas d
   PRIVATE — $ATLAS_HOME, default ~/atlas
   personal/ memory · knowledge · daily      projects/ registry · work
         │
-        └─ internal/  config · governance · schemas · extensions · sessions
+        └─ system/    config · governance · schemas
+           extensions/ · runtime/
                       helpers · runtime (transient, gitignored)
 ```
 
@@ -49,7 +50,7 @@ this, and `atlas doctor` runs it for you.
 Atlas grew up in a runtime directory at `~/.ai`, which held the live hooks, the scripts
 and the client integration. That layer is retired. Its engine became this repository's
 `cli/`, its client integration became `adapters/<client>/`, the user's own data moved into
-the private workspace, and its transient state became `$ATLAS_HOME/internal/runtime/`.
+the private workspace, and its transient state lives under `$ATLAS_HOME/runtime/`.
 
 `atlas doctor` now treats `~/.ai` as a **legacy** location rather than a live layer. It
 passes when the directory is absent or inert, and **fails** when it still holds active
