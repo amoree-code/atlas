@@ -146,18 +146,20 @@ Private user state stays outside the public repository under `$ATLAS_HOME`.
 
 ### Main commands
 
-- `atlas init`
 - `atlas setup`
-- `atlas setup reconfigure`
+- `atlas setup preflight|apply --approve`
+- `atlas status|doctor`
 - `atlas providers status|add|remove`
 - `atlas structure plan|apply|check`
 - `atlas onboard`
+- `atlas adapter list|doctor`
 - `atlas integration inventory|detect|register|list`
+- `atlas capability list|doctor|invoke`
 - `atlas activity`
 - `atlas agentic`
 - `atlas migrate`
 - `atlas update`
-- `atlas docs`
+- `atlas docs check|build|sync`
 
 ### Local documentation
 

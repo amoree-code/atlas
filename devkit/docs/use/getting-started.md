@@ -1,59 +1,71 @@
 # Getting started
 
-The fast path. Each step links to where to go deeper.
+This is the shortest supported path from a fresh clone to a checked Atlas workspace.
 
-**Naming note (T-031):** `atlas` is the canonical command; `atlas` remains a temporary
-compatibility alias, resolving identically during the transition window.
+## 1. Clone the public engine
 
-## 1. Install
-
-```bash
-git clone <this-repo> ~/atlas
-export PATH="$HOME/atlas/cli:$PATH"     # add to ~/.zshrc or ~/.config/fish/config.fish
-```
-
-Requires `bash`, `git`, `python3`. Nothing else — no package manager, no dependencies, no
-build step. Full walkthrough, including moving the workspace off the default path: `docs/use/install.md`.
-
-## 2. Create your workspace
+The repository is the reusable engine. Your private workspace is created separately.
 
 ```bash
-atlas init --dry-run     # see exactly what would happen
-atlas init               # create ~/atlas — never overwrites anything
-atlas doctor             # verify the contract holds
+git clone <repository-url> atlas
+cd atlas
+export PATH="$PWD/cli:$PATH"
 ```
 
-What gets created and why it's shaped the way it is: `docs/use/workspace.md` and
-`docs/design/workspace-structure.md`.
+Atlas needs only `bash`, `git`, and `python3`; there is no package manager or build step.
 
-## 3. Tell it who you are (optional, but worth doing once)
+## 2. Run first-time setup
 
 ```bash
-atlas onboard
+atlas setup
 ```
 
-A few questions, written to their one canonical owner each — no second profile system.
-Already have a populated workspace? `atlas onboard --adopt` instead. Detail: `docs/use/install.md`.
+The wizard prepares the private workspace, checks the structure, detects client adapters,
+and offers onboarding. For the approval-gated one-command flow:
 
-## 4. Know the boundary
+```bash
+atlas setup apply --approve
+```
 
-Atlas is two layers: this repository (public, reusable, publishable) and your workspace
-(`$ATLAS_HOME`, default `~/atlas`, private, never published — compatibility fallback
-`$ATLAS_HOME` for any root Atlas has not yet cut over). `atlas doctor` checks the
-boundary holds on every run. The full contract: `docs/design/public-private.md`.
+Use `atlas setup preflight` to inspect the plan without changing anything. The lower-level
+commands remain available when you need one part only: `atlas init`, `atlas structure`,
+`atlas onboard`, and `atlas adapter`.
 
-## 5. Pick a client
+## 3. Verify the installation
 
-An **adapter** connects one AI client (Claude Code, Codex, Cursor, Gemini, OpenCode) to AI
-OS. `docs/use/adapters.md` lists what each one does today.
+```bash
+atlas status
+atlas doctor
+atlas setup preflight
+```
 
-## 6. See what Atlas can actually do
+`status` is the quick dashboard. `doctor` is the deeper read-only audit. A warning about
+an optional client or tool not installed is expected; install it only when you need it.
 
-- **Capabilities** — what Atlas can *do* (browser control ships today): `docs/use/capabilities.md`.
-- **Domains** — declaring an area of work, which executes nothing: `docs/use/domains.md`.
+## 4. Choose clients and providers
 
-## Where to read next
+```bash
+atlas adapter list
+atlas adapter doctor
+atlas providers status
+atlas integration inventory
+```
 
-`docs/README.md` is the full reading order. `docs/use/safety.md` covers versioning your
-workspace and keeping the public repository publishable — worth reading before you commit
-anything to either.
+Adapters connect AI clients to Atlas. Providers are the selected implementations behind
+capabilities. Atlas keeps both registries explicit; it does not silently install tools.
+
+## 5. Understand the two layers
+
+| Layer | Location | Purpose |
+|---|---|---|
+| Public engine | this clone | CLI, policies, adapters, capabilities, tests |
+| Private workspace | `$ATLAS_HOME` (default `~/atlas`) | memory, knowledge, projects, config, runtime |
+
+The boundary is checked by `atlas doctor` and `atlas privacy-scan`. Read
+[Public and private](../design/public-private.md) before publishing changes.
+
+## Next
+
+Read [Installation](install.md) for custom workspace paths, [Workspace](workspace.md) for
+the directory layout, and [Adapters](adapters.md) or [Capabilities](capabilities.md) for
+client integration and available operations. The complete index is [Docs](../README.md).

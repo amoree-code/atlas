@@ -1,112 +1,61 @@
 # Your workspace
 
-`~/atlas` is yours. Atlas writes into it at `init` and reads from it forever after; it
-never owns it, never publishes it, and never overwrites what you have put there.
+`$ATLAS_HOME` is private (default `~/atlas`). Atlas reads and updates it during setup, but
+never publishes it or overwrites existing user files.
 
-```
-~/atlas/
-├── personal/             your long-lived information
-│   ├── daily/               daily logs
-│   ├── memory/              the 8-section memory store
-│   ├── professional/        professional material outside the memory store
-│   ├── knowledge/           what work taught the system — 7 kinds
-│   └── templates/           reusable document templates
-├── projects/             registry · backlog · project-owned work and context
-├── internal/             Atlas machinery and governance
-│   ├── config/              settings, model routing, profile
-│   ├── governance/
-│   │   ├── rules/           canonical behavioral rules
-│   │   └── policies/        private policy inputs (privacy terms)
-│   ├── schemas/             private data schemas — reserved
-│   ├── extensions/
-│   │   ├── skills/          your own skills
-│   │   └── agents/          canonical agent definitions
-│   ├── helpers/             operational helper scripts
-│   └── runtime/             transient generated state
-├── user/
-│   └── 00-inbox/            unprocessed, waiting for triage
-├── mcp/                  reserved — global MCP namespace, not created by init
-├── plugins/              reserved — your capability configuration, not created by init
-└── internal/sessions/    session records — one per sitting, immutable once written
+## Main layout
+
+```text
+$ATLAS_HOME/
+├── personal/       memory, knowledge, daily records, templates
+├── projects/       project registry and project-owned state
+├── system/         config, governance rules and policies
+├── extensions/     personal skills and agents
+├── helpers/        local helper scripts when configured
+├── schemas/        private schemas when configured
+└── runtime/        sessions and transient generated state
 ```
 
-`personal/` is the human-facing durable layer, `projects/` is project-owned work, and
-`internal/` is the machine-facing layer. Set `ATLAS_HOME` to put the workspace somewhere
-else. Why the shape is split this way is in `docs/design/workspace-structure.md`.
+This is a guide, not a creation recipe. Workspace versions and existing data can add
+directories. Use `atlas root` and `atlas paths list` to resolve the current locations.
 
-`mcp/` and `plugins/` are reserved names with ownership rules rather than directories that
-exist on a fresh workspace: `atlas init` creates everything above them and neither of
-those two, because there is nothing yet to put in either.
+## The important boundaries
 
-> The workspace's reserved `plugins/` keeps that spelling for now, while the *public*
-> capability directory was renamed `plugins/` -> `capabilities/` on 2026-09-03. The two
-> are different things — one is your configuration, the other is shipped software — and
-> the workspace name will be reconciled in its own change rather than silently here.
+- `personal/` holds durable human-facing data.
+- `projects/` holds state belonging to one project.
+- `system/` holds machine-facing configuration and governance.
+- `runtime/` holds temporary or session-scoped state.
 
-## What's true about you, and what a project taught the system
+The public engine clone is separate from all of these. Read [Public and private](../design/public-private.md)
+for the reason behind the split.
 
-`personal/memory/` and `personal/knowledge/` are different things that are easy to
-conflate. The short version: memory is what's true about *you*, knowledge is what a task
-*taught* the system, and they are never merged. Practical detail — global vs. project
-memory, resolution order, how your client reaches the store — is in `docs/use/memory.md`.
-The conceptual model and the test that settles ambiguous cases is in
-`docs/design/memory-architecture.md`.
+## Templates
 
-## Project state
+`atlas setup` seeds files only when their destination does not exist. After that, your file
+and the public template are independent. Updating a template never overwrites your copy;
+rerun `atlas setup preflight` to see what the current setup would do.
 
-A project that accumulates its own persistent state gets a directory under
-`projects/<project>/`, created on demand. What lives there, isolation rules, and
-how the active project is determined are in `docs/use/projects.md`.
+## Skills and agents
 
-## MCP, adapters, capabilities and domains
+Personal extensions take precedence over public extensions:
 
-Four concepts that must not be collapsed:
-
-- **Adapter** — how one AI client reaches Atlas. `docs/use/adapters.md`.
-- **Capability** (a `plugin`) — something Atlas can *do*. `docs/use/capabilities.md`.
-- **Domain** — an area of work that names which capabilities it would need, and executes
-  nothing. `docs/use/domains.md`.
-- **MCP** — the protocol/server mechanism that may deliver a capability. `mcp/` is a
-  reserved namespace, owned by Atlas rather than any agent, skill, project or client.
-  There are currently zero Atlas-managed servers; the namespace exists so one can be added
-  without inventing where it goes.
-
-## Configuration
-
-```
-Atlas defaults  <  your configuration  <  project configuration
+```text
+$ATLAS_HOME/extensions/skills -> <engine>/extensions/skills
+$ATLAS_HOME/extensions/agents -> <engine>/extensions/agents
 ```
 
-Your values win over defaults; a project's win over yours. A future update **may add** a
-key you do not have, but **never changes** one you have set, and a key removed from the
-defaults is left alone — deleting it is your call. `atlas doctor` reports which new
-default keys exist that your config lacks; it adds nothing. There is no schema validation
-and no migration system yet, deliberately.
+Public extensions are not copied into the private workspace. `atlas doctor` reports
+shadowing or boundary problems.
 
-## Templates are seeds, not a sync
+## Related commands
 
-`atlas init` copies a template only where nothing exists at the destination. After that,
-the template and your file are two unrelated documents. **Divergence is the expected
-steady state, not a defect.** Once you edit a seeded file it is yours; changing a template
-in the public repository has no effect on any existing workspace, and nothing ever
-reapplies one over your version. `init` reports which files differ so you can look; it
-will not act.
-
-The operational scripts under the public `templates/runtime/` are *not* seeded into your
-workspace — `init` only walks `templates/workspace/`.
-
-## Skills: yours win
-
-```
-resolution order:  ~/atlas/internal/extensions/skills   →   <atlas>/skills
+```bash
+atlas root
+atlas paths list
+atlas status
+atlas structure check
+atlas doctor
 ```
 
-Public skills stay in the public repository and are **not** copied into your workspace at
-init — copying would turn software into your files and make it impossible to update. When
-a skill name exists in both places, **yours wins**, and nothing will ever overwrite,
-modify or delete it. `atlas doctor` lists which of your skills are shadowing a public one.
-
-## Versioning and privacy
-
-Versioning your workspace and keeping the public repository publishable are both covered
-in `docs/use/safety.md`.
+See [Memory](memory.md), [Projects](projects.md), and [Safety](safety.md) for the data,
+scope, and versioning rules.

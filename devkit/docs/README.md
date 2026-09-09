@@ -6,15 +6,16 @@ Three kinds of document here, and they answer different questions.
   CLI right now.
 - **`design/`** — *why does it work this way?* Rationale, contracts and the reasoning
   behind a choice, written for someone deciding whether to change something.
-- **`examples/`** — *show me one.* Worked examples to read and adapt. A placeholder
-  today; see [examples/README.md](examples/README.md) for what will land there.
+- **`examples/`** — worked examples when a workflow needs one. No examples folder is
+  shipped in the current release, so it is not linked as an available guide.
 
 A `use/` page links to the `design/` page behind it when the "why" matters; it doesn't
 repeat it.
 
 ## Reading order
 
-New here? Start with `use/getting-started.md` — it links out to everything else in order.
+New here? Start with [Getting started](use/getting-started.md). It is the supported path
+for the current CLI and links to the deeper pages.
 
 ### Use
 
@@ -44,7 +45,7 @@ New here? Start with `use/getting-started.md` — it links out to everything els
 | [memory-architecture.md](design/memory-architecture.md) | the memory/knowledge model and the test that settles ambiguity |
 | [decisions.md](design/decisions.md) | the principles, and why the system stays this small |
 
-## Not yet written
+## Current limits
 
-`use/work.md` — project-local work tracking is designed but not implemented. It will be
-added once there's a real workflow to document, not before.
+Project-local work tracking is not a supported CLI workflow yet. Projects can hold memory,
+rules, knowledge, and context; use the ticket and session commands for governed work.

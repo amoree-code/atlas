@@ -1,54 +1,57 @@
 # Adapters
 
-An **adapter** answers *"how does this AI client reach Atlas?"* It is not a capability —
-a capability answers *"what can Atlas do?"* (`docs/use/capabilities.md`). Adapters are
-public software, one per client, in `adapters/<client>/`. Full contract:
-`schemas/adapter.schema.md`.
+An adapter is the client-specific bridge: it tells Atlas how to detect and integrate one
+AI coding client. A capability is different: it describes what Atlas can do.
 
-## What ships today
+## Current registry
 
-| Adapter | Directory |
+Adapter manifests live in the public engine under
+`agentic/integrations/adapters/<client>/`:
+
+| Client | Manifest |
 |---|---|
-| Claude Code | `adapters/claude-code/` |
-| Codex | `adapters/codex/` |
-| Cursor | `adapters/cursor/` |
-| Gemini | `adapters/gemini/` |
-| OpenCode | `adapters/opencode/` |
+| Claude Code | `agentic/integrations/adapters/claude-code/adapter.yaml` |
+| Codex | `agentic/integrations/adapters/codex/adapter.yaml` |
+| Cursor | `agentic/integrations/adapters/cursor/adapter.yaml` |
+| Gemini | `agentic/integrations/adapters/gemini/adapter.yaml` |
+| OpenCode | `agentic/integrations/adapters/opencode/adapter.yaml` |
 
-## What an adapter does
-
-Exactly three things, and nothing else:
-
-```
-detect()        is this client present on this machine?
-apply(bundle)   render core's bundle into this client's own config domain
-doctor()        report this adapter's health; change nothing
-```
-
-Installing, enabling, disabling and reporting overall status are **core** operations, not
-adapter behavior — an adapter never decides whether it is active, only whether the client
-it targets is present and healthy.
-
-## The rule that keeps adapters from becoming a second workspace
-
-An adapter may declare where it writes **only inside its own client's configuration
-domain** — `~/.claude/`, `~/.codex/`, `~/.gemini/`, `~/.cursor/`,
-`~/.config/opencode/` — and never under `$ATLAS_HOME`. `atlas doctor` rejects any manifest
-that tries. When an adapter needs workspace data, it asks core for it by name (a resolved
-path, a rendered bundle) rather than reaching in itself.
-
-Some clients need one fact only they can supply — for example, where Claude Code keeps its
-per-project memory directories, since it scopes its own memory tool by working directory.
-An adapter declares that single fact under `integrates:` in its manifest; core owns
-everything downstream of it. See `docs/use/memory.md` for what this solves.
-
-## Enforcement
-
-A policy (`docs/design/governance.md`) states *what* must be true, client-agnostically. An
-adapter states *how* its client makes that true — implementing the policy, never
-restating or relaxing it.
+The authoritative list on your machine is:
 
 ```bash
 atlas adapter list
 atlas adapter doctor
 ```
+
+## What an adapter owns
+
+An adapter may detect its client, render Atlas configuration into that client's own config
+directory, and report health. It must not own private workspace data or duplicate Atlas
+policies. Core decides workspace paths and safety rules.
+
+Client configuration stays inside the client's domain, such as `~/.claude/`, `~/.codex/`,
+`~/.cursor/`, `~/.gemini/`, or `~/.config/opencode/`. A manifest that writes inside
+`$ATLAS_HOME` is invalid.
+
+## Connect a client
+
+Known MCP clients use:
+
+```bash
+atlas connect <id> --approve
+```
+
+An unknown client requires an explicit JSON configuration path:
+
+```bash
+atlas connect --client <name> --json-config <path> --approve
+```
+
+Use [Connect](connect.md) for protocol details. Atlas never guesses an unknown client's
+configuration path.
+
+## Safety boundary
+
+`atlas adapter doctor` validates manifests and changes nothing. `atlas adapter init` can
+produce an approval-gated local draft for a detected client; it must not be used to edit
+the public adapter registry directly.

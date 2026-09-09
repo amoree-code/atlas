@@ -2,7 +2,7 @@
 
 The everyday guards for a workspace that holds real personal data: keeping it versioned
 without publishing it, and keeping the public repository free of what leaked into it by
-accident. The reasoning behind these guards is in `docs/design/public-private.md`.
+accident. The reasoning behind these guards is in [Public and private](../design/public-private.md).
 
 ## Versioning your workspace
 
@@ -11,16 +11,16 @@ atlas workspace status              # tracked state + safety checks
 atlas workspace snapshot "<what the task did>"
 ```
 
-`atlas init` does not create a git repository or a remote — that is your call. If you run
+`atlas setup` does not create a git repository or a remote in the private workspace — that is your call. If you run
 `git init` in `$ATLAS_HOME` yourself, the one rule is **no remote, ever**. History and
 recovery use git directly:
 
 ```bash
-git -C ~/atlas log --oneline
-git -C ~/atlas diff
-git -C ~/atlas restore <path>              # undo an uncommitted edit
-git -C ~/atlas checkout <sha> -- <path>    # recover one file from a snapshot
-git -C ~/atlas revert <sha>                # undo a snapshot, keeping history
+git -C "$ATLAS_HOME" log --oneline
+git -C "$ATLAS_HOME" diff
+git -C "$ATLAS_HOME" restore <path>              # undo an uncommitted edit
+git -C "$ATLAS_HOME" checkout <sha> -- <path>    # recover one file from a snapshot
+git -C "$ATLAS_HOME" revert <sha>                # undo a snapshot, keeping history
 ```
 
 `reset --hard` is never used by Atlas tooling. `restore` and `revert` are additive and
@@ -32,12 +32,9 @@ record, project state — and those belong in one coherent commit rather than se
 technically-complete, practically-unreadable ones. There is deliberately no automatic
 session-end commit hook: it would fire mid-work and snapshot an incoherent state.
 
-**Undoing versioning entirely** returns the workspace to an unversioned directory. No
-workspace data is touched:
-
-```bash
-rm -rf ~/atlas/.git ~/atlas/.gitignore
-```
+If you stop versioning the private workspace, take a backup and confirm the exact path
+before removing its local Git metadata. Atlas intentionally provides no destructive
+uninstall command.
 
 ## The guards, and what each is actually worth
 
@@ -72,10 +69,10 @@ atlas privacy-scan            # is this repository still publishable?
 atlas privacy-scan docs       # the same check, scoped to docs/
 ```
 
-Fill in `~/atlas/internal/governance/policies/privacy-terms.txt` with your name, handles, emails,
+Fill in `$ATLAS_HOME/system/governance/policies/privacy-terms.txt` with your name, handles, emails,
 employers and private repository names once, early. Without it `privacy-scan` runs only
 generic patterns and cannot catch a name or a client repository — the file itself stays
 private and is never read by anything in the public repository.
 
 A `git push` from the public repository requires explicit approval every time; see
-`internal/governance/policies/git.yaml` and `docs/design/governance.md`.
+`governance/policies/git.yaml` and [Governance](../design/governance.md).

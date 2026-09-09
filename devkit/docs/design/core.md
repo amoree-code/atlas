@@ -39,8 +39,8 @@ ever talks to Core.
 
 ## Read next
 
-- `docs/use/adapters.md`, `docs/use/capabilities.md`, `docs/use/domains.md` — the three
+- `../use/adapters.md`, `../use/capabilities.md`, `../use/domains.md` — the three
   things Core mediates between.
-- `docs/design/governance.md` — how policy constrains what Core is allowed to do.
-- `docs/design/domain-delivery.md` — why a domain declaration stops at "requires
+- `governance.md` — how policy constrains what Core is allowed to do.
+- `domain-delivery.md` — why a domain declaration stops at "requires
   capabilities" instead of becoming a fourth thing Core executes.
