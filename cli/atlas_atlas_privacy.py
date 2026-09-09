@@ -1,7 +1,7 @@
 """atlas_atlas_privacy — path-based publication-eligibility classification for $ATLAS_HOME.
 
 Answers "is this path even eligible for publication" BEFORE any content scan runs. See
-internal/governance/policies/atlas-path-classification.yaml for the full rationale; this
+governance/policies/atlas-path-classification.yaml for the full rationale; this
 module is the enforced version of that policy's `roots` table, the same relationship
 atlas_tickets.py's STATES/CLASSES have to internal/schemas/task.md.
 
@@ -34,16 +34,13 @@ ROOTS = {
     "context":      {"class": PUBLISHABLE, "evidence": "candidate-tree.md context/: Publishable, nothing private lives here itself"},
     "personal":     {"class": PRIVATE,     "evidence": "candidate-tree.md personal/: Private, never publishable, non-negotiable"},
     "projects":     {"class": PRIVATE,     "evidence": "candidate-tree.md projects/: Project-name-level PII, never publishable"},
-    "adapters":     {"class": MIXED,       "evidence": "candidate-tree.md adapters/: Publishable, except client-specific private config"},
-    "capabilities": {"class": PUBLISHABLE, "evidence": "candidate-tree.md capabilities/: Publishable at the contract level"},
     "domains":      {"class": PUBLISHABLE, "evidence": "candidate-tree.md domains/: Publishable"},
     "extensions":   {"class": MIXED,       "evidence": "candidate-tree.md extensions/: publishable skill/agent bodies, private MCP connection detail per-entry"},
-    "governance":   {"class": MIXED,       "evidence": "candidate-tree.md governance/: publishable rules/policies, private authority.yaml/workspace policy text"},
-    "contracts":    {"class": PUBLISHABLE, "evidence": "candidate-tree.md contracts/: Publishable, contracts are not PII"},
     "runtime":      {"class": LOCAL,       "evidence": "candidate-tree.md runtime/: Generated/transient, never publishable as data"},
-    "integration":  {"class": MIXED,       "evidence": "candidate-tree.md integration/: private task content in flight or once reconciled, never itself publishable"},
-    "docs":         {"class": PUBLISHABLE, "evidence": "candidate-tree.md docs/: Publishable"},
-    "tests":        {"class": PUBLISHABLE, "evidence": "candidate-tree.md tests/: Publishable (suite)"},
+    # T-116: adapters/capabilities/contracts/docs/integration/skills/tests (all README-only
+    # tombstones from T-105) and governance/ (split into system/rules + system/policies)
+    # removed from the private top level; "system" replaces governance/ as the mixed root.
+    "system":       {"class": MIXED,       "evidence": "T-116: publishable rules/policies (system/rules, system/policies), private config/clients/permissions/workflows"},
 }
 
 # Deterministic, default-deny: a root is eligible for the publication pipeline only if
@@ -53,18 +50,26 @@ PUBLICATION_ALLOWLIST = tuple(sorted(
     root for root, info in ROOTS.items() if info["class"] == PUBLISHABLE
 ))
 
-# --- per-file promotion inside the `governance` mixed root (T-028) --------------------
+# --- per-file promotion inside the `system` mixed root (T-028, re-rooted by T-116) -----
 # The `mixed` class above is private-by-default at the root level; ROOTS itself names a
 # "future mechanism, not built by this module" for promoting individual paths. This table
-# is that mechanism, scoped to `governance/` only — the root T-028 was asked to classify.
-# It does not extend to any other mixed root (`adapters`, `extensions`, `integration`):
-# those stay exactly as default-deny as before this change; do not add entries for them
-# speculatively. Every governance file is listed explicitly — private entries are kept
-# in the table (rather than just omitted) so the matrix stays visibly complete and a
-# reviewer never has to trust an omission. Paths are relative to `governance/` itself.
-GOVERNANCE_FILE_CLASSES = {
+# is that mechanism, scoped to `system/` only — the root T-028 was asked to classify
+# (as `governance/`, before T-116 split it into `system/rules` + `system/policies`).
+# It does not extend to any other mixed root (`extensions`): that stays exactly as
+# default-deny as before this change; do not add entries for it speculatively. Every
+# rules/policies file is listed explicitly — private entries are kept in the table
+# (rather than just omitted) so the matrix stays visibly complete and a reviewer never
+# has to trust an omission. Paths are relative to `system/` itself. `config/`, `clients/`,
+# `permissions/`, `workflows/` are not listed — unlisted `system/*` paths stay private by
+# default, which is the correct outcome for local settings and identity data.
+#
+# The old table also carried a `product/*.yaml` block that never corresponded to any real
+# path under the private `governance/` (now `system/`) root — those filenames match the
+# *public* engine's `engine/governance/policies/`, not anything mirrored into the private
+# workspace. Dropped as dead entries rather than carried forward unexamined; `authority.yaml`
+# is dropped too (T-116 removed the stale private-root copy — see system/config/authority.yaml).
+SYSTEM_FILE_CLASSES = {
     "README.md":                                  PRIVATE,
-    "authority.yaml":                              PRIVATE,
     "rules/core.md":                               PRIVATE,
     "policies/README.md":                          PRIVATE,
     "policies/context.md":                         PRIVATE,
@@ -79,23 +84,15 @@ GOVERNANCE_FILE_CLASSES = {
     "policies/stack.md":                           PRIVATE,
     "policies/task.md":                            PRIVATE,
     "policies/verification.md":                    PRIVATE,
-    "product/README.md":                           PUBLISHABLE,
-    "product/atlas-path-classification.yaml":      PUBLISHABLE,
-    "product/git.yaml":                            PUBLISHABLE,
-    "product/handoff-transports.yaml":             PUBLISHABLE,
-    "product/privacy-allowlist.txt":               PUBLISHABLE,
-    "product/privacy-classification.yaml":         PUBLISHABLE,
-    "product/public-private-contract.yaml":        PUBLISHABLE,
-    "product/workspace-privacy.yaml":               PUBLISHABLE,
 }
 
 # --- per-file promotion inside the `extensions` mixed root (T-029) --------------------
 # Same mechanism as GOVERNANCE_FILE_CLASSES above, scoped to `extensions/` only — the
 # Phase D3 merge (public skills/ + private internal/extensions/{agents,capabilities,mcp,
-# skills}) T-029 was asked to execute. Does not extend to `adapters`/`governance`(already
-# has its own table)/`integration`: those stay exactly as default-deny as before. Every
+# skills}) T-029 was asked to execute. Does not extend to `system` (already has its own
+# table, SYSTEM_FILE_CLASSES): that stays exactly as default-deny as before. Every
 # merged file is listed explicitly, private entries included, for the same reviewer-
-# visibility reason as the governance table. Paths are relative to `extensions/` itself.
+# visibility reason as the system table. Paths are relative to `extensions/` itself.
 #
 # `skills/` (public-origin, canonical, already lived in the public repo) is publishable
 # per-directory; `skills/README.md` (the private custom-skill doorway note, migrated from
@@ -139,17 +136,17 @@ def classify_root(root_name):
     return ROOTS.get(root_name)
 
 
-def _governance_promotion(path, atlas_home):
-    """The explicit per-file class for a path under governance/, or None if not listed.
+def _system_promotion(path, atlas_home):
+    """The explicit per-file class for a path under system/, or None if not listed.
 
-    None covers both "not under governance/" and "under governance/ but not in the
-    table" — both fail safe to the caller's existing mixed-root default deny.
+    None covers both "not under system/" and "under system/ but not in the table" —
+    both fail safe to the caller's existing mixed-root default deny.
     """
     try:
-        rel = Path(path).resolve().relative_to(Path(atlas_home).resolve() / "governance")
+        rel = Path(path).resolve().relative_to(Path(atlas_home).resolve() / "system")
     except ValueError:
         return None
-    return GOVERNANCE_FILE_CLASSES.get(str(rel))
+    return SYSTEM_FILE_CLASSES.get(str(rel))
 
 
 def _extensions_promotion(path, atlas_home):
@@ -195,17 +192,17 @@ def publication_eligibility(path, atlas_home):
         return None, False, "not under $ATLAS_HOME, or no root segment — default deny"
     info = classify_root(root)
     if info is None:
-        return None, False, f"'{root}' is not one of the fourteen frozen roots — default deny"
+        return None, False, f"'{root}' is not one of the 8 frozen roots — default deny"
     cls = info["class"]
     if cls == PUBLISHABLE:
         return cls, True, info["evidence"]
     if cls == MIXED:
-        if root == "governance":
-            promoted = _governance_promotion(path, atlas_home)
+        if root == "system":
+            promoted = _system_promotion(path, atlas_home)
             if promoted == PUBLISHABLE:
-                return PUBLISHABLE, True, "governance per-file promotion (T-028)"
+                return PUBLISHABLE, True, "system per-file promotion (T-028/T-116)"
             if promoted is not None:
-                return promoted, False, f"governance per-file classification: {promoted} (T-028)"
+                return promoted, False, f"system per-file classification: {promoted} (T-028/T-116)"
         if root == "extensions":
             promoted = _extensions_promotion(path, atlas_home)
             if promoted == PUBLISHABLE:

@@ -46,7 +46,7 @@ are entirely read-only.
 
 `route` and `validate` (T-051-S2) resolve the mission's declared planner/executor/verifier
 client against the existing adapter registry (`adapters/*/adapter.yaml`) and the existing
-verified transport registry (`internal/governance/policies/handoff-transports.yaml`) — never
+verified transport registry (`governance/policies/handoff-transports.yaml`) — never
 by a hard-coded vendor name, never by inferring a capability from a client or binary name.
 Both are entirely read-only: no mission state change, no lease, no file claim, no handoff, no
 approval, no send, no dispatch, and no AI invocation.

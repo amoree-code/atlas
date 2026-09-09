@@ -9,7 +9,7 @@
 #   atlas-doctor            full check
 #   atlas-doctor --quiet    findings only
 #
-# Exit: number of problems (0 = clean). See internal/governance/policies/public-private-contract.yaml.
+# Exit: number of problems (0 = clean). See governance/policies/public-private-contract.yaml.
 
 set -uo pipefail
 
@@ -395,7 +395,7 @@ head "configuration"
 # ====================================================================================
 CFG="${ATLAS_PATH_CONFIG:-$ATLAS_HOME/internal/config}/settings.yaml"
 CFG_REL="${CFG#"$ATLAS_HOME"/}"
-TPL="$REPO/templates/workspace/internal/config/settings.yaml"
+TPL="$REPO/devkit/templates/workspace/internal/config/settings.yaml"
 if [ -f "$CFG" ]; then
   if grep -qP '^\t' "$CFG" 2>/dev/null; then
     fail "$CFG_REL contains tab indentation — not valid YAML"
@@ -426,21 +426,21 @@ TERMS_REL="${TERMS#"$ATLAS_HOME"/}"
 # ====================================================================================
 head "skills"
 # ====================================================================================
-if [ -d "$REPO/skills" ]; then
+if [ -d "$REPO/extensions/skills" ]; then
   USR_SKILLS="${ATLAS_PATH_SKILLS:-$ATLAS_HOME/internal/extensions/skills}"
-  pub=$(find "$REPO/skills" -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ')
+  pub=$(find "$REPO/extensions/skills" -maxdepth 1 -mindepth 1 -type d | wc -l | tr -d ' ')
   usr=$(find "$USR_SKILLS" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
   ok "$pub public skill(s), $usr user skill(s)"
   shadow=""
   for d in "$USR_SKILLS"/*/; do
     [ -d "$d" ] || continue
     n=$(basename "${d%/}")
-    [ -d "$REPO/skills/$n" ] && shadow="$shadow $n"
+    [ -d "$REPO/extensions/skills/$n" ] && shadow="$shadow $n"
   done
   [ -n "$shadow" ] && { ok "user skills override public ones:$shadow"; note "expected — the user's version wins by design"; } \
                    || ok "no name collisions between user and public skills"
 else
-  warn "public skills directory missing: $REPO/skills"
+  warn "public skills directory missing: $REPO/extensions/skills"
 fi
 
 # ====================================================================================

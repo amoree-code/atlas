@@ -133,8 +133,8 @@ detect() {
   ws="$ATLAS_HOME"
   clients=""
   # Resolved from the adapter registry, so no client name is hardcoded here.
-  if [ -d "$REPO/adapters" ]; then
-    for p in "$REPO/adapters"/*/; do
+  if [ -d "$REPO/agentic/integrations/adapters" ]; then
+    for p in "$REPO/agentic/integrations/adapters"/*/; do
       [ -d "$p" ] || continue
       local n; n="$(basename "${p%/}")"
       # A client counts as present when one of the paths ITS OWN manifest nominates exists

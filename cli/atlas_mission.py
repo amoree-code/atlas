@@ -64,7 +64,7 @@ def adapters_dir():
     """Read at call time, never cached at import — the same posture as `atlas_home()` below,
     and required for `ATLAS_ADAPTERS` to be honored by a caller (a test fixture) that sets it
     after this module has already been imported."""
-    return Path(os.environ.get("ATLAS_ADAPTERS", CLI_DIR.parent / "adapters"))
+    return Path(os.environ.get("ATLAS_ADAPTERS", CLI_DIR.parent / "agentic" / "integrations" / "adapters"))
 
 # One identifier shape for every bare token this file accepts (mission id, idempotency key,
 # planner/executor/verifier client id): [A-Za-z0-9][A-Za-z0-9._-]{0,63}. Kept as its own
@@ -753,7 +753,7 @@ def mission_view(task_dir, mission_id):
 #
 # `mission route` and `mission validate` are both entirely read-only: they load the existing
 # mission contract, resolve its declared planner/executor/verifier client against the two
-# existing registries (`adapters/*/adapter.yaml`, `internal/governance/policies/
+# existing registries (`adapters/*/adapter.yaml`, `governance/policies/
 # handoff-transports.yaml`), and report what would be used — never invoking a client,
 # acquiring a lease or claim, preparing a handoff, or writing anything. No new registry is
 # introduced; both existing ones are read with the same manifest parser and the same

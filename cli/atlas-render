@@ -21,7 +21,7 @@ import os, re, sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-SKILLS = REPO / "skills"
+SKILLS = REPO / "extensions" / "skills"
 ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", Path.home() / "atlas")))
 # config/ is mid-migration. The profile is optional, but *which* directory holds it is not
 # a question to guess at: two profiles in two layouts would render two different skills.
@@ -59,7 +59,7 @@ def load_profile():
 
 
 def load_conventions(client_id):
-    f = REPO / "adapters" / client_id / "adapter.yaml"
+    f = REPO / "agentic" / "integrations" / "adapters" / client_id / "adapter.yaml"
     if not f.exists():
         raise SystemExit(f"no plugin manifest for client {client_id!r}")
     return parse(f.read_text(), str(f)).get("conventions") or {}

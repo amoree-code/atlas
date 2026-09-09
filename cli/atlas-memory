@@ -39,7 +39,7 @@ REPO = Path(__file__).resolve().parent.parent
 ATLAS_HOME = Path(os.environ.get("ATLAS_HOME", os.environ.get("ATLAS_HOME", Path.home() / "atlas")))
 # One root: since V0.4 an adapter's manifest and its executables are siblings in
 # adapters/<id>/, so there is nothing left for a second variable to point at.
-ADAPTERS = Path(os.environ.get("ATLAS_ADAPTERS", REPO / "adapters"))
+ADAPTERS = Path(os.environ.get("ATLAS_ADAPTERS", REPO / "agentic" / "integrations" / "adapters"))
 
 # The store and the knowledge base are being relocated one slice at a time; the engine
 # asks where they are now. There is exactly one canonical store either way — two paths
