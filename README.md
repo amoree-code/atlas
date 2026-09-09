@@ -10,7 +10,7 @@ and verify what happened while keeping private data under `$ATLAS_HOME`.
 
 ```bash
 git clone <repository-url> atlas
-cd atlas/engine
+cd atlas
 export PATH="$PWD/cli:$PATH"
 atlas setup
 atlas status
@@ -57,7 +57,7 @@ what happened. It does not replace the AI client or store credentials.
 
 ```bash
 git clone <repository-url> atlas
-cd atlas/engine
+cd atlas
 export PATH="$PWD/cli:$PATH"
 atlas setup
 atlas status
