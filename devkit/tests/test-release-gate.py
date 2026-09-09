@@ -34,6 +34,7 @@ for key in ("features", "commands", "clients", "surfaces", "channels", "architec
     check(f"catalog has {key}", bool(data.get(key)))
 
 check("generated docs are current", run(str(CLI / "atlas-docs"), "check").returncode == 0)
+check("capability doctor passes", run(str(CLI / "atlas"), "capability", "doctor").returncode == 0)
 with tempfile.TemporaryDirectory() as tmp:
     atlas = Path(tmp) / "atlas"
     (atlas / "runtime" / "dispatch-inbox").mkdir(parents=True)

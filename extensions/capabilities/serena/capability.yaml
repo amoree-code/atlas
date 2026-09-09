@@ -1,0 +1,27 @@
+# Serena — semantic code retrieval (symbol-level, not text-level). Atlas owns the
+# capability; `serena` (github.com/oraios/serena, MIT) is never installed by Atlas.
+# Absent binary => the wrapper falls back to grep, never a silent empty result.
+plugin: serena
+name: Serena Semantic Navigation
+contract: 1
+
+capability:
+  detect: [~/.local/bin/serena, ~/.local/pipx/venvs/serena, /opt/homebrew/bin/serena]
+  authority: observe
+
+operations:
+  find_symbol:
+    summary: locate a symbol's definition at the symbol level, not by text search
+    command: serena-find-symbol
+    authority: observe
+    idempotent: true
+  find_references:
+    summary: list references to a symbol across the project
+    command: serena-find-symbol
+    authority: observe
+    idempotent: true
+
+notes: >
+  Exists to satisfy `atlas policy context`'s "smallest semantic unit" rule without reading
+  a whole file or grepping the repository repeatedly. Prefer this over Read/grep only when
+  a symbol name is already known; it is not a replacement for either when it is not.
