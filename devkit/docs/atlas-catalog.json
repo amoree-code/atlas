@@ -1,7 +1,7 @@
 {
   "architecture": "Atlas is the canonical environment; engine owns reusable behavior and ~/atlas owns private data.",
   "features": ["setup", "onboarding", "integrations", "agentic runs", "migration", "rollback", "release gates"],
-  "commands": ["atlas init", "atlas setup", "atlas structure plan|apply|check", "atlas onboard", "atlas integration inventory|detect|register|list", "atlas activity", "atlas agentic", "atlas migrate", "atlas update", "atlas docs"],
+  "commands": ["atlas init", "atlas setup", "atlas setup reconfigure", "atlas providers status|add|remove", "atlas structure plan|apply|check", "atlas onboard", "atlas integration inventory|detect|register|list", "atlas activity", "atlas agentic", "atlas migrate", "atlas update", "atlas docs"],
   "clients": ["claude-code", "codex", "gemini", "cursor", "opencode"],
   "surfaces": ["cli", "ide", "terminal", "desktop", "extension", "file", "clipboard", "api"],
   "channels": ["cli", "ide", "terminal", "extension", "desktop", "obsidian"]

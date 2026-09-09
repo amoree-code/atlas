@@ -17,6 +17,8 @@ Atlas is the canonical environment; engine owns reusable behavior and ~/atlas ow
 
 - `atlas init`
 - `atlas setup`
+- `atlas setup reconfigure`
+- `atlas providers status|add|remove`
 - `atlas structure plan|apply|check`
 - `atlas onboard`
 - `atlas integration inventory|detect|register|list`

@@ -1,0 +1,26 @@
+# RTK — deterministic shell-output reduction. Atlas owns the capability; the `rtk` binary
+# (github.com/rtk-ai/rtk, Apache-2.0) is never installed by Atlas and never bundled here.
+# Absent binary => this capability degrades to a plain passthrough, never a failure.
+plugin: rtk
+name: RTK Output Reduction
+contract: 1
+
+capability:
+  # Best-effort presence check across the install locations rtk's own docs use. A path
+  # missing here does not mean rtk cannot work — atlas capability list will just report
+  # it unavailable until one of these exists.
+  detect: [~/.cargo/bin/rtk, /usr/local/bin/rtk, /opt/homebrew/bin/rtk]
+  authority: observe
+
+operations:
+  reduce:
+    summary: run a shell command through rtk's deterministic output reduction; passthrough unchanged if rtk is not installed
+    command: rtk-reduce
+    authority: observe
+    idempotent: true
+
+notes: >
+  Deliberately narrower than atlas-observe: rtk reduces a *known* command's output before
+  it is even captured (git/grep/find/test-runner shapes), where atlas-observe reduces
+  *whatever already ran*. The two do not compete — prefer rtk.reduce for a command it
+  recognizes, atlas-observe for everything else.

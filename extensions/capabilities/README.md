@@ -9,6 +9,9 @@ software delivery or automation would each be. Its contract is
 | Capability | Directory | Operations |
 |---|---|---|
 | `browser` | `browser/` | fourteen, driving a real browser — open · close · navigate · read · observe · extract · click · type · select · scroll · wait · upload · download · submit |
+| `rtk` | `rtk/` | `reduce` — deterministic shell-output reduction via the external `rtk` binary; passthrough if absent |
+| `serena` | `serena/` | `find_symbol` · `find_references` — semantic code navigation via the external `serena` toolkit; unavailable if absent |
+| `headroom` | `headroom/` | `compress` — reversible context compression via the external `headroom` binary; passthrough if absent |
 
 One real capability, not a set of placeholders. `browser` declares
 `authority: execute-with-approval` as its **ceiling**, not its normal rung: reads and

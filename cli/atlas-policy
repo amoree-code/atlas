@@ -36,6 +36,9 @@ WHEN = {
     "knowledge": "recording or retrieving what past work taught",
     "git": "anything beyond reading git state",
     "models": "choosing a model, an effort level, or delegating",
+    "concise-output": "producing any response",
+    "minimal-change": "writing new code, or adding a file/dependency",
+    "skill-observer": "a checkpoint, a handoff, or session end",
     "verification": "proving a change works",
     "response": "formatting a substantial or bilingual reply",
     "graph": "navigating an unfamiliar or large tree",
@@ -91,7 +94,7 @@ def cmd_doctor(d):
         routed = set()
     else:
         text = core.read_text()
-        routed = {m for m in re.findall(r"`([a-z]+)`(?:\s*·\s*`([a-z]+)`)?", text)
+        routed = {m for m in re.findall(r"`([a-z][a-z-]*)`(?:\s*·\s*`([a-z][a-z-]*)`)?", text)
                   for m in m if m} & set(WHEN)
     for name in sorted(routed - have):
         errors.append(f"core.md routes to '{name}', which has no module")

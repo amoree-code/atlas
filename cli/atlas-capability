@@ -31,7 +31,7 @@ adapter's job.
 Zero dependencies: stdlib only. The manifest parser is the one atlas-adapter already owns
 — both contracts use the same small YAML subset, and two parsers would drift.
 """
-import importlib.util, json, os, re, subprocess, sys, time
+import importlib.machinery, importlib.util, json, os, re, subprocess, sys, time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
