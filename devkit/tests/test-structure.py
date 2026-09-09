@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as tmp:
     owned.write_text("keep me")
     assert run("structure", "apply", "--approve").returncode == 0
     assert (root / "system/config/owned.txt").read_text() == "keep me"
-    marker = root / ".atlas-workspace.json"
+    marker = root / "system/config/.atlas-workspace.json"
     before = marker.read_bytes()
     assert run("structure", "apply", "--approve").returncode == 0
     assert marker.read_bytes() == before and owned.read_text() == "keep me"
@@ -62,5 +62,5 @@ with tempfile.TemporaryDirectory() as tmp:
     (root / "internal/config").mkdir(parents=True)
     (root / "system/config").mkdir(parents=True)
     assert run("structure", "apply", "--approve").returncode != 0
-    assert not (root / ".atlas-workspace.json").exists()
+    assert not (root / "system/config/.atlas-workspace.json").exists()
 print("Structure adoption, init parity, idempotence, preservation, and refusal: PASS")

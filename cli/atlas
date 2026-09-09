@@ -97,7 +97,7 @@ export ATLAS_HOME="${ATLAS_HOME:-$HOME/atlas}"
 case "$cmd" in
   structure|init|setup|doctor|help|--help|-h|version|--version|-V) ;;
   *)
-    if [ -e "$ATLAS_HOME/.atlas-workspace.json" ] || [ -L "$ATLAS_HOME/.atlas-workspace.json" ]; then
+    if [ -e "$ATLAS_HOME/system/config/.atlas-workspace.json" ] || [ -L "$ATLAS_HOME/system/config/.atlas-workspace.json" ]; then
       python3 "$SELF_DIR/atlas-structure" check --quiet || exit $?
     fi
     ;;

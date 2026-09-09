@@ -115,7 +115,7 @@ _atlas_atlas_path() {  # <root> -> the Atlas path for <root>, only for the real 
   # where a ticket/data root belongs is corruption, not "not migrated yet").
   local root="$1" home atlas_rel atlas_dir
   home="$(atlas_paths_home)"
-  [ "$home" = "$HOME/atlas" ] || [ -f "$home/.atlas-workspace.json" ] || return 1
+  [ "$home" = "$HOME/atlas" ] || [ -f "$home/system/config/.atlas-workspace.json" ] || return 1
   atlas_rel="$(_atlas_atlas_rel "$root")" || return 1
   atlas_dir="$(atlas_atlas_home)/$atlas_rel"
   if [ -e "$atlas_dir" ] && [ ! -d "$atlas_dir" ]; then
