@@ -5,10 +5,6 @@ aliases: [.kilo]
 client:
   detect: [~/.kilo/bin/kilo, ~/.kilo/]
 transport:
-  preferred: adapter
-  fallback: adapter
+  preferred: mcp
+  fallback: mcp
   gateway: atlas-mcp-gateway
-adapter:
-  id: kilo
-  package: atlas-adapter-kilo
-  status: draft

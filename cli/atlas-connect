@@ -61,6 +61,35 @@ def write_json_config(path, key, approve):
     previous = backup(path); section["atlas"] = {"command": GATEWAY}; path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps(data, indent=2) + "\n")
     print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
 
+def write_continue_config(approve):
+    path = Path(os.path.expanduser("~/.continue/config.yaml")); old = path.read_text() if path.exists() else ""
+    if "\nmcpServers:" in f"\n{old}":
+        if f"command: {GATEWAY}" in old:
+            print(f"config: {path}\nstatus: already configured"); return 0
+        raise SystemExit("atlas connect: Continue mcpServers already exists; refusing ambiguous YAML merge")
+    if not approve:
+        print(f"config: {path}\nplanned key: mcpServers\nwrites: none"); return 0
+    previous = backup(path)
+    block = f"\n\nmcpServers:\n  - name: Atlas\n    command: {GATEWAY}\n"
+    path.parent.mkdir(parents=True, exist_ok=True); path.write_text(old.rstrip() + block)
+    print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
+
+def write_kilo_config(approve):
+    path = Path(os.path.expanduser("~/.config/kilo/kilo.jsonc")); data = {}
+    if path.exists():
+        try: data = json.loads(path.read_text())
+        except json.JSONDecodeError as error: raise SystemExit(f"atlas connect: Kilo JSONC is not plain JSON: {error}")
+    if not isinstance(data, dict): raise SystemExit("atlas connect: Kilo config must contain an object")
+    servers = data.setdefault("mcp", {})
+    if not isinstance(servers, dict): raise SystemExit("atlas connect: Kilo mcp is not an object")
+    if "atlas" in servers and servers["atlas"].get("command") == [GATEWAY]:
+        print(f"config: {path}\nstatus: already configured"); return 0
+    if not approve:
+        print(f"config: {path}\nplanned key: mcp.atlas\nwrites: none"); return 0
+    previous = backup(path); servers["atlas"] = {"type": "local", "command": [GATEWAY], "enabled": True}
+    path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"config: {path}\nbackup: {previous or 'none'}\nstatus: configured"); return 0
+
 def plan(client):
     m = resolve(client)
     if m is None: raise SystemExit(f"atlas connect: unknown client {client!r}; use --client with --json-config")
@@ -76,6 +105,18 @@ def connect_known(client):
     if not detect(m): raise SystemExit(f"atlas connect: {client!r} is not installed")
     tools, error = gateway_probe()
     if error: raise SystemExit(f"atlas connect: gateway probe failed: {error}")
+    if m["connection"] == "gemini":
+        write_json_config("~/.gemini/settings.json", "mcpServers", True)
+        check = subprocess.run(["gemini", "mcp", "list"], capture_output=True, text=True, timeout=60)
+        if check.returncode == 0 and "atlas" in check.stdout: print("status: verified (Gemini MCP discovery passed)"); return 0
+        raise SystemExit("atlas connect: Gemini MCP discovery failed")
+    if m["connection"] == "continue":
+        return write_continue_config(True)
+    if m["connection"] == "kilo":
+        write_kilo_config(True)
+        check = subprocess.run(["kilo", "mcp", "list"], capture_output=True, text=True, timeout=60)
+        if check.returncode == 0 and "atlas" in check.stdout: print("status: verified (Kilo MCP discovery passed)"); return 0
+        raise SystemExit("atlas connect: Kilo MCP discovery failed")
     native = {
         "claude-code": (["claude", "mcp", "get", "atlas"], ["claude", "mcp", "add", "-s", "user", "atlas", "--", GATEWAY]),
         "codex": (["codex", "mcp", "get", "atlas"], ["codex", "mcp", "add", "atlas", "--", GATEWAY]),

@@ -5,10 +5,6 @@ aliases: [.continue]
 client:
   detect: [~/.continue/, ~/.continue/config.yaml]
 transport:
-  preferred: adapter
-  fallback: adapter
+  preferred: mcp
+  fallback: mcp
   gateway: atlas-mcp-gateway
-adapter:
-  id: continue
-  package: atlas-adapter-continue
-  status: draft
