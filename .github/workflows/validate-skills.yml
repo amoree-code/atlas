@@ -1,0 +1,23 @@
+name: Validate Agent Skills
+
+on:
+  push:
+    paths:
+      - "skills/**"
+      - "scripts/validate-skills.mjs"
+      - ".github/workflows/validate-skills.yml"
+  pull_request:
+    paths:
+      - "skills/**"
+      - "scripts/validate-skills.mjs"
+      - ".github/workflows/validate-skills.yml"
+
+jobs:
+  skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/validate-skills.mjs
