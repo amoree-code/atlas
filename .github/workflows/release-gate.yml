@@ -17,5 +17,6 @@ jobs:
       - run: pnpm check:skills
       - run: pnpm check:privacy
       - run: pnpm check:tickets
+      - run: pnpm build
       - run: pnpm check:package
       - run: pnpm test
