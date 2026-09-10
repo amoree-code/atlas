@@ -1,0 +1,13 @@
+{
+  "name": "strategist",
+  "description": "Planning-only profile: reasons about approach and risk without writing to the workspace.",
+  "version": "1.0.0",
+  "provider": "claude",
+  "model": "sonnet",
+  "role": "strategist",
+  "skills": [],
+  "allowedPaths": ["."],
+  "allowedCommands": [],
+  "writePolicy": "none",
+  "contextSources": []
+}

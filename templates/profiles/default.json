@@ -1,0 +1,13 @@
+{
+  "name": "default",
+  "description": "General-purpose assistant profile for ad-hoc work across the active workspace.",
+  "version": "1.0.0",
+  "provider": "claude",
+  "model": "sonnet",
+  "role": "general assistant",
+  "skills": [],
+  "allowedPaths": ["."],
+  "allowedCommands": [],
+  "writePolicy": "workspace",
+  "contextSources": []
+}

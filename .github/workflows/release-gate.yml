@@ -1,0 +1,22 @@
+name: Public Release Gate
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:skills
+      - run: pnpm check:privacy
+      - run: pnpm check:tickets
+      - run: pnpm build
+      - run: pnpm check:package
+      - run: pnpm test

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "atlas-fixture": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["tests/fixtures/mcp-server.mjs"]
+    }
+  }
+}

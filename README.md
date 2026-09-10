@@ -1,203 +1,92 @@
 # Atlas
 
-![Atlas project mark](assets/ATLAS.png)
+Atlas is a local-first runtime for running Claude, Codex, and Antigravity as
+headless agents inside one workspace. It manages profiles, bounded context,
+sessions, artifacts, and local hooks without a hosted service.
 
-Atlas is a local-first operating layer for AI coding agents. It helps one workspace
-connect safely to multiple clients, keep memory and projects organized, enforce scope,
-and verify what happened while keeping private data under `$ATLAS_HOME`.
-
-## Start here
+## Quick start
 
 ```bash
 git clone https://github.com/amoree-code/atlas.git atlas
 cd atlas
-export PATH="$PWD/cli:$PATH"
-atlas setup
-atlas status
+pnpm install
+pnpm build
+node dist/main.js setup
 ```
 
-`atlas setup` is the guided terminal interface. It discovers clients, lets you choose
-providers and adapters, shows the plan, and requires explicit approval before applying.
-Atlas is useful when multiple AI clients share one workspace and you need predictable
-configuration, safe write boundaries, and evidence instead of guesswork.
+By default, `setup` creates the Atlas workspace as a private sibling directory next to
+this repository (e.g. `atlas/` next to `atlas/engine/`), not inside it, and installs
+user-level startup integration pointed at this repository's `dist/main.js`. Later logins
+start the local runtime automatically. Set `ATLAS_ROOT` to use a different workspace
+location instead.
 
-The generated section below is the maintained local reference. It is rebuilt from
-`devkit/docs/atlas-catalog.json`, so the README stays aligned with the shipped CLI.
-
-<!-- atlas:readme-generated:begin -->
-## What Atlas is
-
-Atlas is a local control layer for AI coding agents. It gives one workspace a clear,
-safe way to connect clients, keep project memory organized, apply governance, and prove
-what happened. It does not replace the AI client or store credentials.
-
-## Why it is useful
-
-| Problem | Atlas benefit |
-|---|---|
-| Every client has different setup rules | One client-neutral registry and setup flow |
-| Work and memory become scattered | One private `$ATLAS_HOME` workspace |
-| Agents can write outside the intended scope | Admission, leases, claims, and explicit approval |
-| Setup state becomes unclear | Deterministic status, preflight, and release checks |
-| Documentation drifts from the code | Local catalog-driven generation and stale checks |
-
-### Features
-
-| Feature | What it provides |
-|---|---|
-| Setup | Guided first-run setup |
-| Onboarding | Workspace onboarding |
-| Integrations | Client adapters and connections |
-| Agentic Runs | Bounded agentic execution |
-| Migration | Safe layout migration |
-| Rollback | Recoverable rollback paths |
-| Release Gates | Deterministic release checks |
-
-### Quick start
+Run an agent:
 
 ```bash
-git clone https://github.com/amoree-code/atlas.git atlas
-cd atlas
-export PATH="$PWD/cli:$PATH"
-atlas setup
-atlas status
+node dist/main.js run --profile default --prompt "Review this project"
 ```
 
-Requirements: `bash`, `git`, and `python3`. No package manager or hosted service is
-required for the core workflow.
+Inspect or resume a saved session:
 
-### Setup flow
-
-```mermaid
-flowchart TB
-    A[atlas setup] --> B[workspace + safe defaults]
-    B --> C[client preflight]
-    C --> D[provider and adapter selection]
-    D --> E[review and explicit apply]
-    E --> F[atlas status]
+```bash
+node dist/main.js session list
+node dist/main.js session show <session-id>
+node dist/main.js session resume <session-id> "Continue the review"
 ```
 
-### Architecture
+The installed provider must be available on `PATH`. Atlas does not store provider
+credentials.
 
-```mermaid
-flowchart TB
-    CLI[CLI] --> CONFIG[Local workspace config]
-    CONFIG --> ADAPTERS[Client adapters]
-    CLI --> GOVERNANCE[Governance and policies]
-    CLI --> CAPABILITIES[Capabilities]
-    ADAPTERS --> CLIENTS[AI clients: `claude-code`, `codex`, `gemini`, `cursor`, `opencode`]
-    CONFIG -. metadata only .-> PRIVATE[$ATLAS_HOME]
-```
-
-### How the parts relate
-
-| Part | Answers | Owns |
-|---|---|---|
-| CLI/Core | How does Atlas resolve and enforce work? | Shared mechanisms and contracts |
-| Adapter | How does one AI client reach Atlas? | Client-specific integration |
-| Capability | What can Atlas do? | One client-neutral operation surface |
-| Domain | What area of work is this? | A declaration, never execution |
-| Governance | What must be true? | Policies, permissions, and safety rules |
-| Workspace | Where is user-owned state? | Memory, projects, knowledge, and runtime records |
-
-### Typical workflow
-
-```mermaid
-flowchart TB
-    START[Clone Atlas] --> SETUP[atlas setup]
-    SETUP --> PREFLIGHT[Detect clients and adapters]
-    PREFLIGHT --> SELECT[Select providers and permissions]
-    SELECT --> APPLY[Review and explicit apply]
-    APPLY --> WORK[Run bounded work]
-    WORK --> VERIFY[Review evidence and status]
-    VERIFY --> GATE[Release gate]
-```
-
-### Safety states
-
-Atlas keeps availability, permission, execution, and verification separate. A tool being
-installed does not mean it is allowed; a command running does not mean its result is
-verified. Write operations use explicit identity, scope, lease, claim, and admission
-evidence, and stale or conflicting state fails closed.
-
-### Repository layout
+## Repository layout
 
 ```text
-engine/
-├── cli/                 Atlas commands and entrypoint
-├── extensions/          client-neutral capabilities and skills
-├── agentic/              adapter and integration manifests
-├── governance/          reusable policies and safety contracts
-├── devkit/docs/          generated docs and usage guides
-└── devkit/tests/         isolated contract and release tests
+atlas/
+├── engine/                 public Atlas Runtime repository
+│   ├── src/                domain / application / infrastructure / interfaces
+│   ├── templates/
+│   ├── tests/
+│   └── package.json
+├── personal/               private user data
+├── projects/               private project data
+├── profiles/               private agent profiles
+├── sessions/               private session state
+├── config/                 private application config
+├── control-plane/          private governance and permissions
+├── integrations/           private client integrations
+└── archive/                private retained legacy history
 ```
 
-Private user state stays outside the public repository under `$ATLAS_HOME`.
-
-### Supported clients
-
-| Client | Role |
-|---|---|
-| `claude-code` | Adapter declared in the local registry |
-| `codex` | Adapter declared in the local registry |
-| `gemini` | Adapter declared in the local registry |
-| `cursor` | Adapter declared in the local registry |
-| `opencode` | Adapter declared in the local registry |
-
-### Main commands
-
-- `atlas setup`
-- `atlas setup preflight|apply --approve`
-- `atlas status|doctor`
-- `atlas providers status|add|remove`
-- `atlas structure plan|apply|check`
-- `atlas onboard`
-- `atlas adapter list|doctor`
-- `atlas integration inventory|detect|register|list`
-- `atlas capability list|doctor|invoke`
-- `atlas activity`
-- `atlas agentic`
-- `atlas migrate`
-- `atlas update`
-- `atlas docs check|build|sync`
-
-### Local documentation
-
-- [Getting started](devkit/docs/use/getting-started.md)
-- [Adapters](devkit/docs/use/adapters.md)
-- [Workspace](devkit/docs/use/workspace.md)
-- [Architecture decisions](devkit/docs/design/decisions.md)
-- [GitDiagram view](https://gitdiagram.com)
-
-### Current boundaries
-
-Atlas is not a hosted service, credential manager, autonomous approval system, or
-replacement for an AI model provider. It coordinates local tools and records evidence;
-the owner remains responsible for approvals, credentials, and publishing changes.
-<!-- atlas:readme-generated:end -->
-
-## Safety model
-
-- Reusable code belongs in this repository.
-- Private memory, projects, knowledge, and runtime state belong under `$ATLAS_HOME`.
-- Client homes remain client-owned; Atlas stores metadata and bridge configuration only.
-- Setup never stores credentials and never silently approves or sends work.
-
-## Read next
-
-- [Getting started](devkit/docs/use/getting-started.md)
-- [Workspace layout](devkit/docs/use/workspace.md)
-- [Adapters](devkit/docs/use/adapters.md)
-- [Capabilities](devkit/docs/use/capabilities.md)
-- [Architecture decisions](devkit/docs/design/decisions.md)
-- [Documentation index](devkit/docs/README.md)
+`personal/`, `projects/`, `profiles/`, `sessions/`, `config/`, `control-plane/`,
+`integrations/`, and `archive/` are private workspace data. They are ignored
+by Git and are never part of a public commit. By default they resolve to a private
+workspace directory next to this repository; set `ATLAS_ROOT` to choose another
+workspace root. Startup entries execute the engine from `engine/dist/main.js` while
+using the private workspace as their working directory.
 
 ## Development
 
 ```bash
-atlas docs check
-python3 devkit/tests/test-release-gate.py
+pnpm install
+pnpm build
+pnpm test
 ```
 
-The project is local-first by design: generated docs, configuration metadata, and
-verification run from the checked-out Atlas repository without a runtime service.
+The test suite uses local processes and temporary SQLite databases. It does not
+invoke a real provider or require an API key.
+
+## Documentation
+
+- [Architecture](docs/architecture.md) — layers, execution flow, and the public/private boundary
+- [Workspace](docs/workspace.md) — layout, path resolution, and `atlas setup`
+- [Profiles](docs/profiles.md) — schema, loading, and the default profile
+- [Sessions](docs/sessions.md) — storage, status lifecycle, and CLI usage
+- [Providers](docs/providers.md) — supported providers and how they are invoked
+- [Context](docs/context.md) — how the prompt context is assembled and bounded
+- [Security](docs/security.md) — credentials, the workspace boundary, and access control
+- [Troubleshooting](docs/troubleshooting.md) — common errors and how to resolve them
+- [Migration](docs/migration.md) — what changes between versions and how to move a workspace
+- [Changelog](CHANGELOG.md) — versioned release notes
+
+## License
+
+Atlas is open source. See [LICENSE](LICENSE).

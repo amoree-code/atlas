@@ -1,0 +1,13 @@
+{
+  "name": "developer",
+  "description": "Implementation profile: reads and writes within the workspace to build and fix code.",
+  "version": "1.0.0",
+  "provider": "claude",
+  "model": "sonnet",
+  "role": "developer",
+  "skills": [],
+  "allowedPaths": ["."],
+  "allowedCommands": [],
+  "writePolicy": "workspace",
+  "contextSources": []
+}

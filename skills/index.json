@@ -1,0 +1,26 @@
+[
+  {
+    "name": "core-thinking",
+    "description": "Analyze goals, constraints, risks, and evidence before execution.",
+    "version": "1.0.0",
+    "category": "core"
+  },
+  {
+    "name": "verification",
+    "description": "Turn implementation claims into focused, repeatable verification checks.",
+    "version": "1.0.0",
+    "category": "core"
+  },
+  {
+    "name": "catch-up",
+    "description": "Reconstruct the current project state, completed work, blockers, and next action.",
+    "version": "1.0.0",
+    "category": "core"
+  },
+  {
+    "name": "session-handoff",
+    "description": "Produce a compact continuation packet with the next action and verification commands.",
+    "version": "1.0.0",
+    "category": "core"
+  }
+]

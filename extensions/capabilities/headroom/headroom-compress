@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# headroom-compress — capability op "headroom.compress". Reads text on stdin, writes
-# (compressed or, if headroom is absent, unmodified) text on stdout.
-set -euo pipefail
-if command -v headroom >/dev/null 2>&1; then
-  exec headroom compress
-fi
-exec cat

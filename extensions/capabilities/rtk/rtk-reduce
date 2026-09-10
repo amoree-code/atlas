@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-# rtk-reduce — capability op "rtk.reduce". Runs its argv through `rtk` when installed;
-# otherwise runs the command unmodified. Never fails because rtk is absent — that is the
-# graceful-degradation contract this capability promises.
-set -euo pipefail
-if command -v rtk >/dev/null 2>&1; then
-  exec rtk "$@"
-fi
-exec "$@"
