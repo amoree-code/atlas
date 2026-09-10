@@ -1,0 +1,37 @@
+{
+  "name": "atlas",
+  "version": "0.3.2",
+  "private": false,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "skills"
+  ],
+  "bin": {
+    "atlas": "./dist/main.js"
+  },
+  "scripts": {
+    "prebuild": "node scripts/clean-dist.mjs",
+    "build": "tsc",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "check:skills": "node scripts/validate-skills.mjs",
+    "check:privacy": "node scripts/scan-privacy.mjs",
+    "check:tickets": "node scripts/validate-tickets.mjs",
+    "check:package": "node scripts/validate-package.mjs",
+    "check:providers": "node scripts/provider-smoke.mjs",
+    "test": "pnpm build && node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "zod": "^3.25.0"
+  }
+}

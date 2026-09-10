@@ -1,0 +1,13 @@
+{
+  "name": "reviewer",
+  "description": "Read-only profile: reviews changes and reports findings without writing to the workspace.",
+  "version": "1.0.0",
+  "provider": "claude",
+  "model": "sonnet",
+  "role": "code reviewer",
+  "skills": [],
+  "allowedPaths": ["."],
+  "allowedCommands": [],
+  "writePolicy": "none",
+  "contextSources": []
+}

@@ -6,8 +6,21 @@
 # `atlas workspace status` / `atlas-doctor` check for violations.
 
 # --- private workspace, if it is ever copied or symlinked in by mistake ---
-.atlas/
-**/.atlas/
+# Generated local Atlas workspace data. Keep the directory names available in clones,
+# but never commit user-owned contents.
+personal/*
+projects/*
+!personal/.gitkeep
+!projects/.gitkeep
+
+# Private application state lives beside engine/ (config, profiles, sessions,
+# control-plane, integrations, archive) — never commit any of it.
+config/*
+profiles/*
+sessions/*
+control-plane/*
+integrations/*
+archive/*
 
 # --- credentials ---
 .env
