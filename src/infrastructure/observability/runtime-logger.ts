@@ -1,9 +1,12 @@
 import { appendFile, mkdir } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { atlasPath } from "../../paths.js";
 
 const MAX_PAYLOAD = 64_000;
 const secretPattern = /(?:sk-(?:ant-)?|AIza|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]{8,}/g;
+const homePath = os.homedir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const privatePathPattern = new RegExp(`${homePath}(?:[/\\\\][^\\s/'\"]+)*`, "g");
 
 export type RuntimeLog = {
   timestamp: string;
@@ -16,7 +19,7 @@ export type RuntimeLog = {
 };
 
 export function redactRuntimeText(value: string): string {
-  return value.replace(secretPattern, "[REDACTED]").replace(/\/Users\/[^\s/'"`]+/g, "[PRIVATE_PATH]").slice(0, MAX_PAYLOAD);
+  return value.replace(secretPattern, "[REDACTED]").replace(privatePathPattern, "[PRIVATE_PATH]").slice(0, MAX_PAYLOAD);
 }
 
 export async function appendRuntimeLog(log: RuntimeLog): Promise<void> {
