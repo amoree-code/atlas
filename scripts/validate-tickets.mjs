@@ -1,10 +1,21 @@
 #!/usr/bin/env node
-import { readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-const root = path.resolve(process.argv[2] ?? "../projects/atlas/tickets");
+const explicitRoot = process.argv[2];
+const root = path.resolve(explicitRoot ?? "../projects/atlas/tickets");
 const records = [];
 const errors = [];
+
+try {
+  await access(root);
+} catch (error) {
+  if (!explicitRoot && error.code === "ENOENT") {
+    console.log("No private ticket workspace found; skipped ticket validation");
+    process.exit(0);
+  }
+  throw error;
+}
 
 async function walk(directory, archived = false) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
