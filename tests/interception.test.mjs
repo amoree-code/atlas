@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { resolveOriginalExecutable } from "../dist/infrastructure/providers/provider-registry.js";
 import { resolveOriginalExecutable as resolveProviderExecutable } from "../dist/infrastructure/providers/provider-registry.js";
-import { absolutePathBypassFinding, registerProvider, syncProviderWrappers, installShellIntegration, wrapperDoctor } from "../dist/infrastructure/wrappers/wrapper-manager.js";
+import { absolutePathBypassFinding, registerProvider, syncProviderWrappers, installShellIntegration, shellKind, wrapperDoctor } from "../dist/infrastructure/wrappers/wrapper-manager.js";
 import { intercept } from "../dist/interfaces/cli/intercept-command.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
@@ -54,6 +54,11 @@ test("sync creates Atlas wrappers and shell activation", async () => {
     assert.equal(profile, path.join(root, "profile"));
     assert.match(await readFile(profile, "utf8"), /atlas interception/);
   });
+});
+
+test("prefers the active parent shell over a stale login-shell environment", () => {
+  assert.equal(shellKind("/bin/zsh", "/opt/homebrew/bin/fish"), "posix");
+  assert.equal(shellKind("/opt/homebrew/bin/fish", "/bin/zsh"), "fish");
 });
 
 test("the generated command wrapper routes the unchanged command through Atlas", async () => {

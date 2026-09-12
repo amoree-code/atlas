@@ -1,8 +1,12 @@
 import { access, chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile as execFileCallback } from "node:child_process";
+import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
 import { enginePath, atlasPath } from "../../paths.js";
 import { builtInProviderRecords, loadProviderRegistry, resolveOriginalExecutable, saveProviderRegistry, type ProviderRecord } from "../providers/provider-registry.js";
+
+const execFile = promisify(execFileCallback);
 
 export function shimDirectory(): string {
   return atlasPath("runtime", "shims");
@@ -64,26 +68,43 @@ export async function removeProvider(id: string): Promise<ProviderRecord> {
   return provider;
 }
 
+export function shellKind(parentCommand: string, loginShell: string): "fish" | "posix" {
+  const parent = path.basename(parentCommand.trim().split(/\s+/, 1)[0] ?? "");
+  if (parent === "fish") return "fish";
+  if (["ash", "bash", "dash", "ksh", "sh", "zsh"].includes(parent)) return "posix";
+  return path.basename(loginShell) === "fish" ? "fish" : "posix";
+}
+
+async function currentShellKind(): Promise<"fish" | "posix"> {
+  if (process.platform === "win32") return "posix";
+  try {
+    const { stdout } = await execFile("ps", ["-p", String(process.ppid), "-o", "comm="]);
+    return shellKind(stdout, process.env.SHELL ?? "");
+  } catch {
+    return shellKind("", process.env.SHELL ?? "");
+  }
+}
+
 export async function installShellPath(): Promise<string> {
   const directory = shimDirectory();
   if (process.platform === "win32") {
     return `$env:Path = "${directory};$env:Path"`;
   }
-  if ((process.env.SHELL ?? "").endsWith("fish")) {
+  if (await currentShellKind() === "fish") {
     return `set -gx PATH ${shellQuote(directory)} $PATH`;
   }
   return `export PATH=${shellQuote(directory)}:$PATH`;
 }
 
-function shellProfilePath(): string {
+async function shellProfilePath(): Promise<string> {
   const home = os.homedir();
   if (process.platform === "win32") return process.env.ATLAS_SHELL_PROFILE ?? path.join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
-  if ((process.env.SHELL ?? "").endsWith("fish")) return process.env.ATLAS_SHELL_PROFILE ?? path.join(home, ".config", "fish", "conf.d", "atlas.fish");
-  return process.env.ATLAS_SHELL_PROFILE ?? (process.platform === "darwin" ? path.join(home, ".zprofile") : path.join(home, ".profile"));
+  if (await currentShellKind() === "fish") return process.env.ATLAS_SHELL_PROFILE ?? path.join(home, ".config", "fish", "conf.d", "atlas.fish");
+  return process.env.ATLAS_SHELL_PROFILE ?? (process.platform === "darwin" ? path.join(home, ".zshrc") : path.join(home, ".profile"));
 }
 
 export async function installShellIntegration(): Promise<string> {
-  const file = shellProfilePath();
+  const file = await shellProfilePath();
   const marker = /\n?# >>> atlas interception >>>[\s\S]*?# <<< atlas interception <<<\n?/;
   let existing = "";
   try { existing = await readFile(file, "utf8"); } catch { /* new profile */ }
