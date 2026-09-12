@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4
+
+- Make the `atlas` CLI available through the managed shell shim after setup.
+- Verify the generated Atlas CLI wrapper forwards commands to the engine.
+
 ## 0.3.3
 
 - Fix shell detection for Atlas CLI shim setup.
