@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5
+
+- Run headless providers through their original executable when Atlas shims are on `PATH`.
+- Add coverage proving headless execution bypasses the managed shims.
+
 ## 0.3.4
 
 - Make the `atlas` CLI available through the managed shell shim after setup.

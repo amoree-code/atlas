@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { chmod, mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { buildProviderInvocation } from "../dist/infrastructure/providers/providers.js";
+import { buildProviderInvocation, runProvider } from "../dist/infrastructure/providers/providers.js";
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
 
 test("builds the Claude CLI stream contract", () => {
@@ -40,4 +43,33 @@ test("adds Claude resume ids without changing the CLI stream contract", () => {
   assert.deepEqual(buildProviderInvocation({
     provider: "claude", prompt: "continue", cwd: "/tmp", resumeId: "session-1",
   }).args, ["--resume", "session-1", "-p", "continue", "--verbose", "--output-format", "stream-json"]);
+});
+
+test("headless providers bypass Atlas shims and run the original executable", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-headless-provider-"));
+  const shim = path.join(root, "shims");
+  const bin = path.join(root, "bin");
+  await mkdir(shim);
+  await mkdir(bin);
+  await writeFile(path.join(shim, "codex"), "#!/bin/sh\nexit 99\n");
+  await chmod(path.join(shim, "codex"), 0o755);
+  const original = path.join(bin, "codex");
+  await writeFile(original, "#!/bin/sh\nprintf '{\"session_id\":\"codex-test\"}\\n'\n");
+  await chmod(original, 0o755);
+
+  const previousRoot = process.env.ATLAS_ROOT;
+  const previousShim = process.env.ATLAS_SHIM_DIR;
+  const previousPath = process.env.PATH;
+  process.env.ATLAS_ROOT = root;
+  process.env.ATLAS_SHIM_DIR = shim;
+  process.env.PATH = `${shim}${path.delimiter}${bin}`;
+  try {
+    const result = await runProvider({ provider: "codex", prompt: "hello", cwd: root });
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.events[0], { type: "json", data: { session_id: "codex-test" } });
+  } finally {
+    if (previousRoot === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previousRoot;
+    if (previousShim === undefined) delete process.env.ATLAS_SHIM_DIR; else process.env.ATLAS_SHIM_DIR = previousShim;
+    if (previousPath === undefined) delete process.env.PATH; else process.env.PATH = previousPath;
+  }
 });
