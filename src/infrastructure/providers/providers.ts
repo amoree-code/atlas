@@ -1,5 +1,6 @@
 import path from "node:path";
 import { runHeadless, type HeadlessResult, type RuntimeEvent } from "../process/cli-process.js";
+import { resolveOriginalExecutable } from "./provider-registry.js";
 
 export type HeadlessProvider = "claude" | "codex" | "gemini" | "antigravity";
 
@@ -29,7 +30,7 @@ export function buildProviderInvocation(request: ProviderRequest): { command: st
 export function runProvider(request: ProviderRequest): Promise<HeadlessResult> {
   const { command, args } = buildProviderInvocation(request);
   return runHeadless({
-    command,
+    command: resolveOriginalExecutable(command),
     args,
     cwd: path.resolve(request.cwd),
     timeoutMs: request.timeoutMs,
