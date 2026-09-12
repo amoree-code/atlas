@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { atlasPath, atlasRoot, enginePath } from "../../paths.js";
+import { installShellIntegration, syncProviderWrappers } from "../../infrastructure/wrappers/wrapper-manager.js";
 
 const personalDirectories = [
   "personal/memory",
@@ -91,10 +92,12 @@ export async function setup(): Promise<void> {
   await ensureFile(atlasPath("config", "settings.json"), await readFile(new URL("../../../templates/config/settings.json", import.meta.url), "utf8"));
   await ensureFile(atlasPath("profiles", "default.json"), await readFile(new URL("../../../templates/profiles/default.json", import.meta.url), "utf8"));
   await ensureFile(atlasPath("config", "startup", "README.md"), "# Atlas startup\n\nManaged by `atlas setup`.\n");
+  await syncProviderWrappers();
+  const shellProfile = await installShellIntegration();
 
   if (process.platform === "darwin") await installMacStartup();
   if (process.platform === "linux") await installLinuxStartup();
   if (process.platform === "win32") await installWindowsStartup();
   await chmod(atlasPath("config"), 0o700);
-  console.log(`Atlas setup complete: ${atlasRoot()}`);
+  console.log(`Atlas setup complete: ${atlasRoot()} (AI CLI interception enabled in ${shellProfile})`);
 }
