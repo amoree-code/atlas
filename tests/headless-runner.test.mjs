@@ -29,6 +29,18 @@ test("terminates a headless process that exceeds its limit", async () => {
   assert.match(result.stderr, /timed out/);
 });
 
+test("escalates when a headless child ignores SIGTERM", async () => {
+  const result = await runHeadless({
+    command: process.execPath,
+    args: ["-e", "process.on('SIGTERM', () => {}); setTimeout(() => {}, 5000)"],
+    cwd: process.cwd(),
+    timeoutMs: 10,
+  });
+
+  assert.equal(result.exitCode, 124);
+  assert.match(result.stderr, /timed out/);
+});
+
 test("terminates a headless process that exceeds its output budget", async () => {
   const result = await runHeadless({
     command: process.execPath,

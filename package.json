@@ -16,7 +16,8 @@
     "atlas": "./dist/main.js"
   },
   "scripts": {
-    "prebuild": "node scripts/clean-dist.mjs",
+    "postinstall": "node scripts/prepare-node-pty.mjs",
+    "prebuild": "node scripts/prepare-node-pty.mjs && node scripts/clean-dist.mjs",
     "build": "tsc",
     "dev": "tsx src/main.ts",
     "start": "node dist/main.js",
@@ -33,6 +34,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
+    "node-pty": "^1.1.0",
     "zod": "^3.25.0"
   }
 }

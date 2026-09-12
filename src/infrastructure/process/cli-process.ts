@@ -34,18 +34,24 @@ export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
     let timedOut = false;
     let outputLimitExceeded = false;
     let outputBytes = 0;
+    let forceKillTimer: NodeJS.Timeout | undefined;
+    const terminate = (): void => {
+      child.kill("SIGTERM");
+      forceKillTimer = setTimeout(() => child.kill("SIGKILL"), 100);
+    };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      terminate();
     }, request.timeoutMs ?? 60_000);
 
     const emitLines = (chunk: Buffer): void => {
-      outputBytes += chunk.byteLength;
-      if (outputBytes > (request.maxOutputBytes ?? Number.MAX_SAFE_INTEGER)) {
+      const maxOutputBytes = request.maxOutputBytes ?? Number.MAX_SAFE_INTEGER;
+      if (outputBytes + chunk.byteLength > maxOutputBytes) {
         outputLimitExceeded = true;
-        child.kill("SIGTERM");
+        terminate();
         return;
       }
+      outputBytes += chunk.byteLength;
       stdoutBuffer += chunk.toString("utf8");
       const lines = stdoutBuffer.split(/\r?\n/);
       stdoutBuffer = lines.pop() ?? "";
@@ -66,10 +72,12 @@ export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
     child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
     child.once("error", (error) => {
       clearTimeout(timer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
       if (!timedOut) reject(error);
     });
     child.once("close", (exitCode) => {
       clearTimeout(timer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
       if (stdoutBuffer) emitLines(Buffer.from("\n"));
       resolve({ exitCode: timedOut ? 124 : outputLimitExceeded ? 125 : (exitCode ?? 1), events, stderr: timedOut ? `${stderr}Process timed out.\n` : outputLimitExceeded ? `${stderr}Output budget exceeded.\n` : stderr });
     });

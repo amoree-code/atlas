@@ -22,6 +22,7 @@ export class SessionStore {
     this.database = new DatabaseSync(databaseFile);
     this.database.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS sessions (
         session_id TEXT PRIMARY KEY,
         provider TEXT NOT NULL,
