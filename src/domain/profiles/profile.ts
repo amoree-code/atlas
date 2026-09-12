@@ -5,7 +5,7 @@ export const profileSchema = z.object({
   name: z.string().min(1),
   description: z.string().default(""),
   version: z.string().min(1).default("1.0.0"),
-  provider: z.enum(["claude", "codex", "gemini", "antigravity"]),
+  provider: z.enum(["claude", "codex", "gemini", "antigravity", "hermes"]),
   model: z.string().min(1),
   role: z.string().min(1),
   skills: z.array(z.string()).default([]),

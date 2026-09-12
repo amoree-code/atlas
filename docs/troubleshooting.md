@@ -10,8 +10,8 @@ as the prompt text (`src/main.ts`), so pass it last.
 `loadProfile` reads `<workspace>/profiles/<name>.json` and validates it with Zod
 (see [profiles.md](profiles.md)). Failures mean either the file does not exist (run
 `atlas setup` to create `profiles/default.json`, or add the named profile yourself)
-or it does not match the schema — check `provider` is one of `claude`/`codex`/`gemini`/
-`antigravity` and every required field is present.
+or it does not match the schema — check `provider` is one of `claude`/`codex`/`gemini`/`antigravity`/
+`hermes` and every required field is present.
 
 ## Session resume rejected: "Provider does not support resume yet"
 
@@ -23,7 +23,7 @@ cannot be resumed.
 
 ## Provider process fails immediately or times out
 
-- Confirm the provider CLI is installed and on `PATH`: `claude`, `codex`, `gemini`, or
+- Confirm the provider CLI is installed and on `PATH`: `claude`, `codex`, `gemini`, `hermes`, or
   `agy` for `antigravity` (see [providers.md](providers.md)). Atlas does not verify this
   before spawning.
 - Confirm the provider CLI is authenticated on its own terms — Atlas does not manage or

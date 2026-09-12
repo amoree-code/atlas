@@ -4,7 +4,7 @@ import { providerCapabilitySchema, type ProviderCapability } from "../../domain/
 import type { HeadlessProvider } from "./providers.js";
 
 const execFileAsync = promisify(execFile);
-const commands: Record<HeadlessProvider, string> = { claude: "claude", codex: "codex", gemini: "gemini", antigravity: "agy" };
+const commands: Record<HeadlessProvider, string> = { claude: "claude", codex: "codex", gemini: "gemini", antigravity: "agy", hermes: "hermes" };
 
 export async function discoverProviderCapabilities(provider: HeadlessProvider): Promise<ProviderCapability> {
   const command = commands[provider];

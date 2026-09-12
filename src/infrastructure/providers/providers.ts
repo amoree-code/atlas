@@ -2,7 +2,7 @@ import path from "node:path";
 import { runHeadless, type HeadlessResult, type RuntimeEvent } from "../process/cli-process.js";
 import { resolveOriginalExecutable } from "./provider-registry.js";
 
-export type HeadlessProvider = "claude" | "codex" | "gemini" | "antigravity";
+export type HeadlessProvider = "claude" | "codex" | "gemini" | "antigravity" | "hermes";
 
 export type ProviderRequest = {
   provider: HeadlessProvider;
@@ -22,7 +22,9 @@ export function buildProviderInvocation(request: ProviderRequest): { command: st
       ? ["exec", "--json", request.prompt]
       : request.provider === "gemini"
         ? ["--prompt", request.prompt, "--output-format", "stream-json"]
-        : ["--print", request.prompt, "--output-format", "stream-json"];
+          : request.provider === "hermes"
+            ? ["-z", request.prompt]
+            : ["--print", request.prompt, "--output-format", "stream-json"];
 
   return { command, args };
 }

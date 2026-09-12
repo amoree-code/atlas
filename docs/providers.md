@@ -12,6 +12,7 @@ authentication is entirely the installed CLI's responsibility.
 - `codex`
 - `gemini`
 - `antigravity`
+- `hermes`
 
 ## Requirement
 
@@ -19,6 +20,7 @@ The provider's CLI binary must be on `PATH`:
 
 - `claude`, `codex`, `gemini` are invoked by their own command name.
 - `antigravity` is invoked as `agy`.
+- `hermes` is invoked by its own command name.
 
 If the binary is missing, the spawn fails at run time (surfaced as an `error` session
 event); Atlas performs no live verification that a provider is installed or authenticated
@@ -32,6 +34,7 @@ before invoking it.
 | `codex` | `codex` | `exec --json <prompt>` |
 | `gemini` | `gemini` | `--prompt <prompt> --output-format stream-json` |
 | `antigravity` | `agy` | `--print <prompt> --output-format stream-json` |
+| `hermes` | `hermes` | `-z <prompt>` |
 
 Only `claude` currently supports `--resume`; `resumeAgent` in
 [sessions.md](sessions.md#cli-usage) rejects resume for any other provider.

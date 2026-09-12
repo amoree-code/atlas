@@ -16,7 +16,7 @@ directory and validates it against the schema below.
   name: string,                                        // non-empty
   description: string,                                  // default ""
   version: string,                                      // non-empty, default "1.0.0"
-  provider: "claude" | "codex" | "gemini" | "antigravity",
+  provider: "claude" | "codex" | "gemini" | "antigravity" | "hermes",
   model: string,                                        // non-empty
   role: string,                                         // non-empty
   skills: string[],                                      // default []

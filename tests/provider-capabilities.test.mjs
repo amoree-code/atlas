@@ -3,7 +3,7 @@ import test from "node:test";
 import { assertProviderCapability, discoverProviderCapabilities } from "../dist/infrastructure/providers/provider-capabilities.js";
 
 test("discovers installed provider CLIs without reading credentials", async () => {
-  for (const provider of ["claude", "codex", "gemini", "antigravity"]) {
+  for (const provider of ["claude", "codex", "gemini", "antigravity", "hermes"]) {
     const capability = await discoverProviderCapabilities(provider);
     assert.equal(capability.provider, provider);
     assert.equal(capability.authentication, "cli-managed");

@@ -33,6 +33,15 @@ test("builds the Gemini stream contract", () => {
   });
 });
 
+test("builds the Hermes one-shot contract", () => {
+  assert.deepEqual(buildProviderInvocation({
+    provider: "hermes", prompt: "hello", cwd: "/tmp",
+  }), {
+    command: "hermes",
+    args: ["-z", "hello"],
+  });
+});
+
 test("accepts Gemini as a profile provider", () => {
   assert.equal(validateProfile({
     name: "gemini", provider: "gemini", model: "flash", role: "assistant",
@@ -48,11 +57,15 @@ test("adds Claude resume ids without changing the CLI stream contract", () => {
 test("headless providers bypass Atlas shims and run the original executable", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-headless-provider-"));
   const shim = path.join(root, "shims");
+  const staleShim = path.join(root, "old", "runtime", "shims");
   const bin = path.join(root, "bin");
   await mkdir(shim);
+  await mkdir(staleShim, { recursive: true });
   await mkdir(bin);
   await writeFile(path.join(shim, "codex"), "#!/bin/sh\nexit 99\n");
   await chmod(path.join(shim, "codex"), 0o755);
+  await writeFile(path.join(staleShim, "codex"), "#!/bin/sh\nexit 98\n");
+  await chmod(path.join(staleShim, "codex"), 0o755);
   const original = path.join(bin, "codex");
   await writeFile(original, "#!/bin/sh\nprintf '{\"session_id\":\"codex-test\"}\\n'\n");
   await chmod(original, 0o755);
@@ -62,7 +75,7 @@ test("headless providers bypass Atlas shims and run the original executable", as
   const previousPath = process.env.PATH;
   process.env.ATLAS_ROOT = root;
   process.env.ATLAS_SHIM_DIR = shim;
-  process.env.PATH = `${shim}${path.delimiter}${bin}`;
+  process.env.PATH = `${shim}${path.delimiter}${staleShim}${path.delimiter}${bin}`;
   try {
     const result = await runProvider({ provider: "codex", prompt: "hello", cwd: root });
     assert.equal(result.exitCode, 0);
