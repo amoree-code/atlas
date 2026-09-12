@@ -1,6 +1,6 @@
 {
   "name": "atlas",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": false,
   "packageManager": "pnpm@10.26.1",
   "type": "module",

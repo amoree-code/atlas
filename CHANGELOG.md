@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- Fix shell detection for Atlas CLI shim setup.
+- Keep the public release gate green on the current mainline.
+
 ## 0.3.2
 
 Release candidate for the Atlas v2 public engine foundation.
