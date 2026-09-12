@@ -50,9 +50,23 @@ test("sync creates Atlas wrappers and shell activation", async () => {
     assert.ok(result.providers.some((provider) => provider.id === "claude"));
     const wrapper = await readFile(path.join(root, "runtime", "shims", "claude"), "utf8");
     assert.match(wrapper, /intercept --client/);
+    const atlasWrapper = await readFile(path.join(root, "runtime", "shims", "atlas"), "utf8");
+    assert.match(atlasWrapper, /dist\/main\.js/);
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
     assert.match(await readFile(profile, "utf8"), /atlas interception/);
+  });
+});
+
+test("the Atlas wrapper forwards CLI commands to the engine", async () => {
+  await withEnvironment(async (root) => {
+    const { directory } = await syncProviderWrappers();
+    const result = spawnSync(path.join(directory, "atlas"), ["client", "list"], {
+      env: { ...process.env, PATH: `${directory}${path.delimiter}${process.env.PATH}`, ATLAS_ROOT: root },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+    assert.match(result.stdout, /claude/);
   });
 });
 

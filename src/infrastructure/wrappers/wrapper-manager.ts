@@ -33,9 +33,19 @@ function wrapperContents(provider: ProviderRecord): string {
   return `#!/bin/sh\nexport ATLAS_SHIM_DIR=${shellQuote(shimDirectory())}\nexec ${node} ${entry} intercept --client ${shellQuote(provider.id)} -- "$@"\n`;
 }
 
+function atlasWrapperContents(): string {
+  if (process.platform === "win32") {
+    return `@echo off\r\n"${process.execPath}" "${enginePath("dist", "main.js")}" %*\r\n`;
+  }
+  return `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(enginePath("dist", "main.js"))} "$@"\n`;
+}
+
 export async function syncProviderWrappers(): Promise<{ providers: ProviderRecord[]; directory: string }> {
   const providers = loadProviderRegistry();
   await mkdir(shimDirectory(), { recursive: true });
+  const atlasWrapper = wrapperPath("atlas");
+  await writeFile(atlasWrapper, atlasWrapperContents());
+  if (process.platform !== "win32") await chmod(atlasWrapper, 0o755);
   for (const provider of providers) {
     const file = wrapperPath(provider.command);
     await writeFile(file, wrapperContents(provider));
@@ -118,6 +128,12 @@ export async function installShellIntegration(): Promise<string> {
 export async function wrapperDoctor(commandPath?: string): Promise<string[]> {
   const findings: string[] = [];
   const providers = loadProviderRegistry();
+  try {
+    const contents = await readFile(wrapperPath("atlas"), "utf8");
+    if (!contents.includes("dist/main.js")) findings.push("atlas: CLI wrapper is stale or does not route through Atlas");
+  } catch {
+    findings.push(`atlas: CLI wrapper is missing at ${wrapperPath("atlas")}`);
+  }
   for (const provider of providers) {
     try {
       const contents = await readFile(wrapperPath(provider.command), "utf8");
