@@ -3,7 +3,7 @@
 ## Credentials
 
 Atlas never stores, reads, or manages provider credentials. Authentication is delegated
-entirely to each provider's own CLI (`claude`, `codex`, `gemini`, `agy`) — Atlas only spawns
+entirely to each provider's own CLI (`claude`, `codex`, `gemini`, `agy`, `hermes`) — Atlas only spawns
 that binary and streams its stdout/stderr (see [providers.md](providers.md)). No API keys,
 tokens, or secrets are ever written to profiles, sessions, logs, or the repository.
 

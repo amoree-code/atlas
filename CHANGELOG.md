@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.6
+
+- Add Hermes as a supported headless provider.
+- Generate Hermes wrappers and invoke its native one-shot mode.
+
 ## 0.3.5
 
 - Run headless providers through their original executable when Atlas shims are on `PATH`.

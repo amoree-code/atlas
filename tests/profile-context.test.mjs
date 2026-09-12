@@ -35,6 +35,12 @@ test("rejects a profile with an unknown provider", () => {
   }));
 });
 
+test("accepts Hermes as a profile provider", () => {
+  assert.equal(validateProfile({
+    name: "hermes", provider: "hermes", model: "provider-managed", role: "assistant",
+  }).provider, "hermes");
+});
+
 test("rejects a profile with an unknown write policy", () => {
   assert.throws(() => validateProfile({
     name: "bad", provider: "claude", model: "sonnet", role: "assistant", writePolicy: "unrestricted",

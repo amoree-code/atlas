@@ -15,6 +15,7 @@ const builtInProviders: ProviderRecord[] = [
   { id: "codex", command: "codex", interactive: true, headless: true },
   { id: "gemini", command: "gemini", interactive: true, headless: true },
   { id: "antigravity", command: "agy", interactive: true, headless: true },
+  { id: "hermes", command: "hermes", interactive: true, headless: true },
 ];
 
 export const providerRegistryPath = (): string => atlasPath("control-plane", "registry", "providers.json");
@@ -50,7 +51,7 @@ export function resolveOriginalExecutable(command: string, env = process.env): s
   const names = process.platform === "win32" ? [command, `${command}.exe`, `${command}.cmd`, `${command}.bat`] : [command];
 
   for (const directory of pathEntries) {
-    if (path.resolve(directory) === shimRoot) continue;
+    if (path.resolve(directory) === shimRoot || isAtlasShimDirectory(directory)) continue;
     for (const name of names) {
       const candidate = path.join(directory, name);
       try {
@@ -62,4 +63,9 @@ export function resolveOriginalExecutable(command: string, env = process.env): s
     }
   }
   throw new Error(`Provider executable not found outside Atlas shims: ${command}`);
+}
+
+function isAtlasShimDirectory(directory: string): boolean {
+  const resolved = path.resolve(directory);
+  return path.basename(resolved) === "shims" && path.basename(path.dirname(resolved)) === "runtime";
 }
