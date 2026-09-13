@@ -1,7 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const root = path.resolve(new URL("..", import.meta.url).pathname);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 const version = (await readFile(path.join(root, "VERSION"), "utf8")).trim();
 const changelog = await readFile(path.join(root, "CHANGELOG.md"), "utf8");

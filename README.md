@@ -74,6 +74,16 @@ pnpm test
 The test suite uses local processes and temporary SQLite databases. It does not
 invoke a real provider or require an API key.
 
+Build and run the isolated test image:
+
+```bash
+docker build -t atlas-test .
+docker run --rm atlas-test
+```
+
+The image validates the Atlas engine and test suite. Provider CLIs and their credentials
+remain on the host and are not included in the image.
+
 ## Documentation
 
 - [Architecture](docs/architecture.md) — layers, execution flow, and the public/private boundary
