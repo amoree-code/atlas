@@ -5,7 +5,7 @@ model, what role/skills to present to it, and what it is allowed to read, write,
 
 ## Storage and loading
 
-Profiles live at `<workspace>/profiles/<name>.json` (see [workspace.md](workspace.md)).
+Profiles live at `<workspace>/system/profiles/<name>.json` (see [workspace.md](workspace.md)).
 `loadProfile(name)` (`src/infrastructure/filesystem/profile-loader.ts`) reads `<name>.json` from that
 directory and validates it against the schema below.
 
@@ -67,14 +67,14 @@ read back with `profileIdentity: ""`.
 These three are easy to conflate because all three can be named on the command line, but
 they answer different questions:
 
-- **Profile** (`profiles/<name>.json`) — *how* an agent runs: provider, model, role,
+- **Profile** (`system/profiles/<name>.json`) — *how* an agent runs: provider, model, role,
   skills, and read/write policy. It is configuration, reused across many runs, and owns no
   data of its own.
 - **Project** (`projects/<name>/`) — *what* the work is about: the tickets, plans, and
   private notes for one piece of work (see the workspace-root layout in
   [workspace.md](workspace.md)). A project has no execution configuration; a profile
   points at paths, it does not define what lives there.
-- **Session** (one row in `sessions/sessions.sqlite`) — *one run*: the record of a single
+- **Session** (one row in `system/sessions/sessions.sqlite`) — *one run*: the record of a single
   agent invocation, which profile (and, via `profileIdentity`, which exact profile
   configuration) produced it, its status, and its transcript of events (see
   [sessions.md](sessions.md)). A session is created fresh every time `atlas run` starts,
@@ -85,7 +85,7 @@ A profile is loaded by name for a run; the run happens against a project's files
 
 ## Default profile
 
-`atlas setup` writes `profiles/default.json` from
+`atlas setup` writes `system/profiles/default.json` from
 `templates/profiles/default.json` if it does not already exist:
 
 ```json
@@ -108,14 +108,14 @@ A profile is loaded by name for a run; the run happens against a project's files
 
 `templates/profiles/` also ships public starter templates for three other roles; unlike
 `default.json`, `atlas setup` does not install these automatically — copy the one you need
-into `profiles/` under the workspace root:
+into `system/profiles/` under the workspace root:
 
 - **`strategist.json`** — plans and reasons about approach; `writePolicy: "none"`.
 - **`developer.json`** — implements and fixes code; `writePolicy: "workspace"`.
 - **`reviewer.json`** — reviews changes and reports findings; `writePolicy: "none"`.
 
 The active instances a workspace actually runs with live only at `<workspace
-root>/profiles/*.json` — never inside `engine/`.
+root>/system/profiles/*.json` — never inside `engine/`.
 
 ## Skill roots
 

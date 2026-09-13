@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
 function validate(root) {
@@ -24,4 +24,13 @@ test("ticket validator rejects inconsistent done tickets", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-tickets-invalid-"));
   await mkdir(path.join(root, "T-003"), { recursive: true }); await writeFile(path.join(root, "T-003", "task.md"), ticket("T-003", "done", "[ ]"));
   const result = await validate(root); assert.notEqual(result.code, 0); assert.match(result.stderr, /unchecked work/);
+});
+
+test("tickets list returns live ticket summaries and filters by state", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-tickets-list-"));
+  await mkdir(path.join(root, "projects", "atlas", "tickets", "T-001"), { recursive: true });
+  await writeFile(path.join(root, "projects", "atlas", "tickets", "T-001", "task.md"), "---\nid: T-001\ntitle: First\nstate: active\ngoal: Test goal\nupdated_at: 2026-09-13\n---\n");
+  const result = spawnSync(process.execPath, [path.resolve("dist/main.js"), "tickets", "list", "active"], { env: { ...process.env, ATLAS_ROOT: root }, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), [{ id: "T-001", title: "First", state: "active", goal: "Test goal", updatedAt: "2026-09-13" }]);
 });

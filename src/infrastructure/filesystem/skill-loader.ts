@@ -18,7 +18,7 @@ export async function loadSkills(names: string[], maxBytes = 32_000, cwd = atlas
   const loaded: Skill[] = [];
   const seen = new Set<string>();
   let bytes = 0;
-  const roots = [enginePath("skills"), atlasPath("personal", "skills"), projectSkillRoot(cwd)].filter(Boolean) as string[];
+  const roots = [enginePath("skills"), atlasPath("system", "integrations", "claude-code", "skills"), projectSkillRoot(cwd)].filter(Boolean) as string[];
   for (const name of names) {
     if (seen.has(name) || bytes >= maxBytes) continue;
     const skill = await loadSkillFromRoots(name, roots);
@@ -60,6 +60,8 @@ function projectSkillRoot(cwd: string): string | null {
   const projectsRoot = path.resolve(atlasPath("projects"));
   const relative = path.relative(projectsRoot, path.resolve(cwd));
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null;
-  const projectName = relative.split(path.sep)[0];
-  return path.join(projectsRoot, projectName, "skills");
+  const parts = relative.split(path.sep);
+  const grouped = ["work", "freelance", "personal", "vendor", "archive"].includes(parts[0] ?? "");
+  const projectParts = grouped ? parts.slice(0, 2) : parts.slice(0, 1);
+  return path.join(projectsRoot, ...projectParts, "skills");
 }

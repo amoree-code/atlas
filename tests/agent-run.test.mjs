@@ -8,13 +8,13 @@ import { SessionStore } from "../dist/infrastructure/persistence/session-store.j
 
 test("connects profile, context, headless execution, and session storage", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-"));
-  await mkdir(path.join(root, "profiles"), { recursive: true });
-  await writeFile(path.join(root, "profiles", "reviewer.json"), JSON.stringify({
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "reviewer.json"), JSON.stringify({
     name: "reviewer", provider: "claude", model: "sonnet", role: "review only", skills: ["verification"],
     allowedPaths: ["README.md"], contextSources: ["README.md"],
   }));
   await writeFile(path.join(root, "README.md"), "project context");
-  const database = path.join(root, "sessions", "sessions.sqlite");
+  const database = path.join(root, "system", "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
   const session = await runAgent({ profileName: "reviewer", prompt: "Review", cwd: root }, async (request) => {
     assert.equal(request.provider, "claude");
@@ -26,18 +26,18 @@ test("connects profile, context, headless execution, and session storage", async
 
   const store = new SessionStore(database);
   assert.equal(session.status, "completed");
-  assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["context_manifest", "json", "process_exit", "evidence"]);
+  assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["user_input", "context_manifest", "json", "process_exit", "evidence"]);
   store.close();
   delete process.env.ATLAS_ROOT;
 });
 
 test("transitions status from created to running to completed, visible to a concurrent reader", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-status-"));
-  await mkdir(path.join(root, "profiles"), { recursive: true });
-  await writeFile(path.join(root, "profiles", "default.json"), JSON.stringify({
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({
     name: "default", provider: "claude", model: "sonnet", role: "assistant",
   }));
-  const database = path.join(root, "sessions", "sessions.sqlite");
+  const database = path.join(root, "system", "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
   const sessionId = "status-check-session";
   const session = await runAgent({ profileName: "default", prompt: "start", cwd: root, sessionId }, async () => {
@@ -53,8 +53,8 @@ test("transitions status from created to running to completed, visible to a conc
 
 test("resumes a Claude session using its provider session id", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-resume-"));
-  await mkdir(path.join(root, "profiles"), { recursive: true });
-  await writeFile(path.join(root, "profiles", "default.json"), JSON.stringify({
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({
     name: "default", provider: "claude", model: "sonnet", role: "assistant",
   }));
   process.env.ATLAS_ROOT = root;
@@ -72,11 +72,11 @@ test("resumes a Claude session using its provider session id", async () => {
 
 test("marks the session failed and records the error event when the provider throws", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-fail-throw-"));
-  await mkdir(path.join(root, "profiles"), { recursive: true });
-  await writeFile(path.join(root, "profiles", "default.json"), JSON.stringify({
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({
     name: "default", provider: "claude", model: "sonnet", role: "assistant",
   }));
-  const database = path.join(root, "sessions", "sessions.sqlite");
+  const database = path.join(root, "system", "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
 
   await assert.rejects(
@@ -89,18 +89,18 @@ test("marks the session failed and records the error event when the provider thr
   const store = new SessionStore(database);
   const [session] = store.list();
   assert.equal(session.status, "failed");
-  assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["context_manifest", "error"]);
+  assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["user_input", "context_manifest", "error"]);
   store.close();
   delete process.env.ATLAS_ROOT;
 });
 
 test("marks the session failed when the provider exits non-zero without throwing", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-fail-exit-"));
-  await mkdir(path.join(root, "profiles"), { recursive: true });
-  await writeFile(path.join(root, "profiles", "default.json"), JSON.stringify({
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({
     name: "default", provider: "claude", model: "sonnet", role: "assistant",
   }));
-  const database = path.join(root, "sessions", "sessions.sqlite");
+  const database = path.join(root, "system", "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
 
   const session = await runAgent({ profileName: "default", prompt: "start", cwd: root }, async () => {
@@ -117,8 +117,8 @@ test("marks the session failed when the provider exits non-zero without throwing
 
 test("closes its session store exactly once, on both the success and failure paths", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-shutdown-"));
-  await mkdir(path.join(root, "profiles"), { recursive: true });
-  await writeFile(path.join(root, "profiles", "default.json"), JSON.stringify({
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({
     name: "default", provider: "claude", model: "sonnet", role: "assistant",
   }));
   process.env.ATLAS_ROOT = root;

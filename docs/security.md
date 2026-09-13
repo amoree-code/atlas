@@ -14,7 +14,7 @@ workspace outside of `engine/` (see [workspace.md](workspace.md)), which:
 
 - Is not part of this repository's git history.
 - Is git-ignored by this repository's `.gitignore` as a safety net (`personal/*`,
-  `projects/*`, `profiles/*`, and `sessions/*`) even if a workspace is ever accidentally nested inside a clone.
+  `projects/*`, and `system/*`) even if a workspace is ever accidentally nested inside a clone.
 - Is created by `atlas setup` with `config` restricted to `0700` permissions.
 
 ## Filesystem access

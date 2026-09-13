@@ -24,7 +24,7 @@ const catalog: InstallSpec[] = [
   { provider: { id: "hermes", command: "hermes", interactive: true, headless: true }, platforms: ["darwin", "linux", "win32"], installer: { command: "uv", args: ["tool", "install", "--force", "hermes-agent"] }, verify: { command: "hermes", args: ["--version"] } },
 ];
 
-export const installationReceiptPath = (): string => atlasPath("control-plane", "registry", "installations.json");
+export const installationReceiptPath = (): string => atlasPath("system", "control-plane", "registry", "installations.json");
 
 export function listInstallSpecs(): InstallSpec[] {
   return catalog.map((spec) => ({ ...spec, provider: { ...spec.provider }, installer: { ...spec.installer }, verify: { ...spec.verify } }));

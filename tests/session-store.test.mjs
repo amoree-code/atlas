@@ -40,6 +40,22 @@ test("stores a session and its events without extra application data", async () 
   store.close();
 });
 
+test("stages user inputs as capture references without duplicating event content", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "atlas-capture-"));
+  const store = new SessionStore(path.join(directory, "sessions.sqlite"));
+  store.create({ sessionId: "capture-1", provider: "claude", providerSessionId: null, parentSessionId: null,
+    profile: "default", workingDirectory: directory, resumeData: null });
+  const event = store.appendEvent("capture-1", "user_input", "an idea worth reviewing");
+  assert.equal(store.scanCaptureItems("capture-1"), 1);
+  assert.equal(store.scanCaptureItems("capture-1"), 0);
+  const [item] = store.listCaptureItems();
+  assert.deepEqual(item, { captureId: 1, sourceEventId: event.eventId, sessionId: "capture-1",
+    content: "an idea worth reviewing", type: "unclassified", status: "new", target: null, createdAt: item.createdAt });
+  store.updateCaptureStatus(item.captureId, "promoted", "knowledge");
+  assert.equal(store.listCaptureItems().length, 0);
+  store.close();
+});
+
 test("allows the full valid lifecycle, including resuming a completed session", async () => {
   const store = await openStore();
   store.create({

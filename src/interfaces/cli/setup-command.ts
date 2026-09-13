@@ -14,14 +14,16 @@ const personalDirectories = [
 ];
 
 const stateDirectories = [
-  "config/policies",
-  "config/schemas",
-  "config/startup",
-  "profiles",
-  "sessions",
-  "control-plane",
-  "integrations",
-  "archive",
+  "system/config/policies",
+  "system/config/schemas",
+  "system/config/startup",
+  "system/profiles",
+  "system/sessions",
+  "system/control-plane",
+  "system/integrations",
+  "system/archive",
+  "system/runtime/shims",
+  "system/runtime/temporary",
 ];
 
 async function ensureFile(file: string, contents: string): Promise<void> {
@@ -89,15 +91,15 @@ async function installWindowsStartup(): Promise<void> {
 export async function setup(): Promise<void> {
   await Promise.all(personalDirectories.map((directory) => mkdir(atlasPath(directory), { recursive: true })));
   await Promise.all(stateDirectories.map((directory) => mkdir(atlasPath(directory), { recursive: true })));
-  await ensureFile(atlasPath("config", "settings.json"), await readFile(new URL("../../../templates/config/settings.json", import.meta.url), "utf8"));
-  await ensureFile(atlasPath("profiles", "default.json"), await readFile(new URL("../../../templates/profiles/default.json", import.meta.url), "utf8"));
-  await ensureFile(atlasPath("config", "startup", "README.md"), "# Atlas startup\n\nManaged by `atlas setup`.\n");
+  await ensureFile(atlasPath("system", "config", "settings.json"), await readFile(new URL("../../../templates/config/settings.json", import.meta.url), "utf8"));
+  await ensureFile(atlasPath("system", "profiles", "default.json"), await readFile(new URL("../../../templates/profiles/default.json", import.meta.url), "utf8"));
+  await ensureFile(atlasPath("system", "config", "startup", "STARTUP.md"), "# Atlas startup\n\nManaged by `atlas setup`.\n");
   await syncProviderWrappers();
   const shellProfile = await installShellIntegration();
 
   if (process.platform === "darwin") await installMacStartup();
   if (process.platform === "linux") await installLinuxStartup();
   if (process.platform === "win32") await installWindowsStartup();
-  await chmod(atlasPath("config"), 0o700);
+  await chmod(atlasPath("system"), 0o700);
   console.log(`Atlas setup complete: ${atlasRoot()} (AI CLI interception enabled in ${shellProfile})`);
 }

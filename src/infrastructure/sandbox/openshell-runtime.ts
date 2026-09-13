@@ -17,7 +17,7 @@ export function buildOpenShellInvocation(request: SandboxLaunchRequest, policyPa
 }
 
 export async function writeOpenShellPolicy(request: SandboxLaunchRequest): Promise<{ directory: string; policyPath: string }> {
-  const root = atlasPath("runtime", "temporary");
+  const root = atlasPath("system", "runtime", "temporary");
   await mkdir(root, { recursive: true });
   const directory = await mkdtemp(path.join(root, "openshell-"));
   const policyPath = path.join(directory, "policy.yaml");
