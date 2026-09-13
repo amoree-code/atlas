@@ -17,7 +17,8 @@ import { hasFailures, repairWorkspace, workspaceReport } from "./application/doc
 import { listSchedules, runDueSchedules, runSchedule, runSchedulerWorker, runSchedulerWorkerOnce, saveSchedule, setScheduleEnabled } from "./application/scheduler/local-scheduler.js";
 import { createWebhookGateway } from "./application/gateway/webhook-gateway.js";
 import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "./application/skills/skill-curation.js";
-import { discoverObsidianVault } from "./application/obsidian/vault-discovery.js";
+import { discoverObsidianVault, loadObsidianConnection } from "./application/obsidian/vault-discovery.js";
+import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/vault-sync.js";
 
 const command = process.argv[2] ?? "service";
 
@@ -86,12 +87,21 @@ if (command === "setup") {
 } else if (command === "memory") {
   await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "obsidian") {
-  if ((process.argv[3] ?? "discover") !== "discover") {
-    console.error("Usage: atlas obsidian discover");
+  const action = process.argv[3] ?? "discover";
+  if (!["discover", "sync", "watch"].includes(action)) {
+    console.error("Usage: atlas obsidian discover|sync|watch");
     process.exitCode = 1;
   } else {
     try {
-      console.log(JSON.stringify(await discoverObsidianVault(), null, 2));
+      const connection = await loadObsidianConnection();
+      if (action === "discover") console.log(JSON.stringify(await discoverObsidianVault(connection), null, 2));
+      else if (action === "sync") console.log(JSON.stringify(await syncObsidianVault(connection), null, 2));
+      else {
+        const controller = new AbortController();
+        process.once("SIGINT", () => controller.abort());
+        process.once("SIGTERM", () => controller.abort());
+        await watchObsidianVault(connection, undefined, controller.signal);
+      }
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
