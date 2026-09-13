@@ -59,6 +59,7 @@ export class SessionStore {
       );
       CREATE INDEX IF NOT EXISTS session_events_session_id ON session_events(session_id);
       CREATE INDEX IF NOT EXISTS session_links_parent_id ON session_links(parent_session_id);
+      CREATE INDEX IF NOT EXISTS sessions_status_updated_at ON sessions(status, updated_at);
     `);
     this.migrateProfileIdentityColumn();
   }
@@ -110,6 +111,28 @@ export class SessionStore {
   list(): Session[] {
     return (this.database.prepare("SELECT * FROM sessions ORDER BY created_at DESC").all() as SessionRow[])
       .map((row) => this.toSession(row));
+  }
+
+  listStaleRunning(olderThanMs: number, now = Date.now()): Session[] {
+    if (!Number.isFinite(olderThanMs) || olderThanMs <= 0) throw new Error("Stale-session threshold must be positive");
+    const cutoff = new Date(now - olderThanMs).toISOString();
+    return (this.database.prepare("SELECT * FROM sessions WHERE status = 'running' AND updated_at < ? ORDER BY updated_at").all(cutoff) as SessionRow[])
+      .map((row) => this.toSession(row));
+  }
+
+  reconcileStaleRunning(olderThanMs: number, now = Date.now()): Session[] {
+    const stale = this.listStaleRunning(olderThanMs, now);
+    for (const session of stale) {
+      this.updateStatus(session.sessionId, "cancelled");
+      this.appendEvent(session.sessionId, "session_reconciled", JSON.stringify({ reason: "stale-running", thresholdMs: olderThanMs, reconciledAt: new Date(now).toISOString() }));
+    }
+    return stale;
+  }
+
+  integrityCheck(): { integrity: string; foreignKeys: unknown[] } {
+    const integrity = (this.database.prepare("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check;
+    const foreignKeys = this.database.prepare("PRAGMA foreign_key_check").all();
+    return { integrity, foreignKeys };
   }
 
   appendEvent(sessionId: string, type: string, data: string): SessionEvent {

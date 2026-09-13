@@ -4,6 +4,8 @@ export type SandboxLaunchRequest = {
   cwd: string;
   environment?: Record<string, string>;
   policyVersion?: string;
+  writePolicy?: "none" | "workspace" | "allowed-paths";
+  allowedPaths?: string[];
 };
 
 export type SandboxLaunchResult = {

@@ -6,6 +6,7 @@ export type ArchiveResult = {
   candidates: string[];
   skipped: Array<{ id: string; reason: string }>;
   moved: string[];
+  repaired: string[];
 };
 
 const field = (source: string, name: string): string =>
@@ -14,7 +15,7 @@ const field = (source: string, name: string): string =>
 const projectArchiveName = (project: string): string => project.toLowerCase() === "atlas" ? "Atlas" : project;
 
 export async function archiveDoneTickets(root = atlasPath("projects", "atlas", "tickets"), apply = false): Promise<ArchiveResult> {
-  const result: ArchiveResult = { candidates: [], skipped: [], moved: [] };
+  const result: ArchiveResult = { candidates: [], skipped: [], moved: [], repaired: [] };
   let entries;
   try { entries = await readdir(root, { withFileTypes: true }); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return result; throw error; }
@@ -23,7 +24,22 @@ export async function archiveDoneTickets(root = atlasPath("projects", "atlas", "
     if (!entry.isDirectory() || entry.name === "archive") continue;
     const sourceDirectory = path.join(root, entry.name);
     const taskFile = path.join(sourceDirectory, "task.md");
-    try { await access(taskFile); } catch { continue; }
+    try { await access(taskFile); } catch {
+      const archivedDirectory = path.join(root, "archive", "Atlas", entry.name);
+      try { await access(path.join(archivedDirectory, "task.md")); } catch { continue; }
+      if (!apply) continue;
+      for (const artifact of await readdir(sourceDirectory, { withFileTypes: true })) {
+        const destination = path.join(archivedDirectory, artifact.name);
+        try { await access(destination); result.skipped.push({ id: entry.name, reason: `archive artifact exists: ${artifact.name}` }); continue; }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        await rename(path.join(sourceDirectory, artifact.name), destination);
+      }
+      try { await rmdir(sourceDirectory); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOTEMPTY") throw error;
+      }
+      result.repaired.push(entry.name);
+      continue;
+    }
     const source = await readFile(taskFile, "utf8");
     const id = field(source, "id") || entry.name;
     const state = field(source, "state");
@@ -37,14 +53,10 @@ export async function archiveDoneTickets(root = atlasPath("projects", "atlas", "
 
     const project = field(source, "project") || "atlas";
     const destinationDirectory = path.join(root, "archive", projectArchiveName(project), id);
-    const destination = path.join(destinationDirectory, "task.md");
-    try { await access(destination); result.skipped.push({ id, reason: "archive destination exists" }); continue; }
+    try { await access(destinationDirectory); result.skipped.push({ id, reason: "archive destination exists" }); continue; }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-    await mkdir(destinationDirectory, { recursive: true });
-    await rename(taskFile, destination);
-    try { await rmdir(sourceDirectory); } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOTEMPTY") throw error;
-    }
+    await mkdir(path.dirname(destinationDirectory), { recursive: true });
+    await rename(sourceDirectory, destinationDirectory);
     result.moved.push(id);
   }
   return result;

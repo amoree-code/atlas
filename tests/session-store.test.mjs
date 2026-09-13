@@ -98,6 +98,21 @@ test("rejects transitions that skip or leave the lifecycle contract", async () =
   store.close();
 });
 
+test("previews and reconciles stale running sessions without deleting their audit trail", async () => {
+  const store = await openStore();
+  store.create({ sessionId: "stale-1", provider: "hermes", providerSessionId: null, parentSessionId: null,
+    profile: "default", workingDirectory: "/tmp", resumeData: null });
+  store.updateStatus("stale-1", "running");
+  const now = Date.now() + 2 * 60 * 60 * 1000;
+  assert.equal(store.listStaleRunning(60 * 60 * 1000, now).map((session) => session.sessionId).join(), "stale-1");
+  const reconciled = store.reconcileStaleRunning(60 * 60 * 1000, now);
+  assert.equal(reconciled.length, 1);
+  assert.equal(store.get("stale-1").status, "cancelled");
+  assert.equal(store.listEvents("stale-1").at(-1).type, "session_reconciled");
+  assert.deepEqual(store.integrityCheck(), { integrity: "ok", foreignKeys: [] });
+  store.close();
+});
+
 test("updateStatus rejects an unknown session id", async () => {
   const store = await openStore();
   assert.throws(() => store.updateStatus("missing", "running"), /Session not found: missing/);

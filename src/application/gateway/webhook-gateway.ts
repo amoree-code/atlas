@@ -1,0 +1,155 @@
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
+import { runAgent, type ProviderExecutor } from '../runs/run-agent.js';
+
+export type GatewayRequest = {
+  profile: string;
+  prompt: string;
+  approved: true;
+};
+export type GatewayMessage = {
+  platform: string;
+  externalId: string;
+  profile: string;
+  prompt: string;
+  approved: boolean;
+};
+export type GatewayAdapter = {
+  id: string;
+  normalize(input: unknown): GatewayMessage;
+};
+
+export const telegramAdapter: GatewayAdapter = {
+  id: 'telegram',
+  normalize(input: unknown): GatewayMessage {
+    if (!input || typeof input !== 'object')
+      throw new Error('Invalid Telegram payload');
+    const message = (
+      input as {
+        message?: {
+          message_id?: number;
+          text?: string;
+          chat?: { id?: number };
+        };
+      }
+    ).message;
+    if (
+      !message?.message_id ||
+      !message.chat?.id ||
+      typeof message.text !== 'string' ||
+      !message.text.trim()
+    )
+      throw new Error('Invalid Telegram message');
+    const [profile = 'default', ...prompt] = message.text
+      .trim()
+      .replace(/^\/run\s+/i, '')
+      .split(/\s+/);
+    return {
+      platform: 'telegram',
+      externalId: `${message.chat.id}:${message.message_id}`,
+      profile,
+      prompt: prompt.join(' ') || profile,
+      approved: false,
+    };
+  },
+};
+
+export function createGatewayHandler(
+  expectedToken: string,
+  cwd: string,
+  execute?: ProviderExecutor,
+) {
+  const requestTimes: number[] = [];
+  return async (
+    input: unknown,
+    token: string | undefined,
+  ): Promise<{ status: number; body: string }> => {
+    if (!expectedToken || token !== expectedToken)
+      return { status: 401, body: 'Unauthorized' };
+    const now = Date.now();
+    while (requestTimes[0] !== undefined && requestTimes[0] < now - 60_000)
+      requestTimes.shift();
+    if (requestTimes.length >= 10)
+      return { status: 429, body: 'Rate limit exceeded' };
+    requestTimes.push(now);
+    if (
+      !input ||
+      typeof input !== 'object' ||
+      typeof (input as GatewayRequest).profile !== 'string' ||
+      typeof (input as GatewayRequest).prompt !== 'string' ||
+      (input as GatewayRequest).approved !== true
+    )
+      return { status: 400, body: 'Invalid or unapproved request' };
+    if ((input as GatewayRequest).prompt.length > 8_000)
+      return { status: 413, body: 'Prompt too large' };
+    const session = await runAgent(
+      {
+        profileName: (input as GatewayRequest).profile,
+        prompt: (input as GatewayRequest).prompt,
+        cwd,
+      },
+      execute,
+    );
+    return {
+      status: 200,
+      body: JSON.stringify({
+        sessionId: session.sessionId,
+        status: session.status,
+      }),
+    };
+  };
+}
+
+export async function handleGatewayRequest(
+  input: unknown,
+  token: string | undefined,
+  expectedToken: string,
+  cwd: string,
+  execute?: ProviderExecutor,
+): Promise<{ status: number; body: string }> {
+  return createGatewayHandler(expectedToken, cwd, execute)(input, token);
+}
+
+export function createWebhookGateway(
+  cwd: string,
+  expectedToken: string,
+  execute?: ProviderExecutor,
+) {
+  return createServer(
+    async (request: IncomingMessage, response: ServerResponse) => {
+      if (request.method !== 'POST') {
+        response.writeHead(405);
+        response.end('Method not allowed');
+        return;
+      }
+      let body = '';
+      request.on('data', (chunk) => {
+        body += chunk.toString();
+        if (body.length > 16_000) request.destroy();
+      });
+      request.on('end', async () => {
+        try {
+          const result = await handleGatewayRequest(
+            JSON.parse(body),
+            request.headers.authorization?.replace(/^Bearer\s+/i, ''),
+            expectedToken,
+            cwd,
+            execute,
+          );
+          response.writeHead(result.status, {
+            'content-type': 'application/json',
+          });
+          response.end(result.body);
+        } catch (error) {
+          response.writeHead(500);
+          response.end(
+            error instanceof Error ? error.message : 'Gateway request failed',
+          );
+        }
+      });
+    },
+  );
+}

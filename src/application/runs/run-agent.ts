@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { buildContext } from "../../infrastructure/filesystem/context-manager.js";
 import { loadSkills } from "../../infrastructure/filesystem/skill-loader.js";
 import { loadProfile } from "../../infrastructure/filesystem/profile-loader.js";
-import { profileIdentity } from "../../domain/profiles/profile.js";
+import { profileIdentity, selectProfileClient } from "../../domain/profiles/profile.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import type { Session } from "../../domain/sessions/session.js";
 import { runProvider, type HeadlessProvider, type ProviderRequest } from "../../infrastructure/providers/providers.js";
@@ -11,6 +11,10 @@ import { appendRuntimeLog, redactRuntimeText } from "../../infrastructure/observ
 import { syncCaptureInbox } from "../capture/inbox-sync.js";
 import { authorizeRun } from "./run-authorization.js";
 import type { RunContract } from "../../domain/runs/run-contract.js";
+import { executionPolicy } from "../../domain/profiles/profile-policy.js";
+import { formatProfileFacts, readProfileFacts } from "../memory/profile-facts.js";
+import { emitHook } from "../hooks/lifecycle-hooks.js";
+import { resolveClientHome } from "../../infrastructure/providers/client-home.js";
 
 export type AgentRunRequest = {
   profileName: string;
@@ -19,12 +23,15 @@ export type AgentRunRequest = {
   parentSessionId?: string;
   sessionId?: string;
   runContract?: RunContract;
+  client?: string;
 };
 
 export type ProviderExecutor = (request: ProviderRequest) => Promise<HeadlessResult>;
 
 export async function runAgent(request: AgentRunRequest, execute: ProviderExecutor = runProvider): Promise<Session> {
-  const profile = await loadProfile(request.profileName);
+  const profile = selectProfileClient(await loadProfile(request.profileName), request.client);
+  const clientHome = resolveClientHome(profile);
+  executionPolicy(profile, request.cwd);
   const sessionStore = await openSessionStore();
   const sessionId = request.sessionId ?? randomUUID();
   const session = sessionStore.create({
@@ -48,16 +55,19 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
 
   try {
     const context = await buildContext(profile, request.cwd);
+    const profileFacts = await readProfileFacts(profile.name);
     const skills = await loadSkills(profile.skills, 32_000, request.cwd);
     sessionStore.appendEvent(sessionId, "user_input", redactRuntimeText(request.prompt));
     sessionStore.appendEvent(sessionId, "context_manifest", JSON.stringify(context.manifest));
     sessionStore.updateStatus(sessionId, "running");
+    await emitHook("session.start", { sessionId, profile: profile.name, provider: profile.provider });
     const skillContent = skills.map((skill) => `## Skill: ${skill.name}\n${skill.instructions}`).join("\n\n");
-    const prompt = [request.prompt, skillContent, context.content].filter(Boolean).join("\n\n");
+    const prompt = [request.prompt, profile.instructions, skillContent, formatProfileFacts(profileFacts), context.content].filter(Boolean).join("\n\n");
     const result = await execute({
       provider: profile.provider as HeadlessProvider,
       prompt,
       cwd: request.cwd,
+      clientHome,
       timeoutMs: request.runContract?.budget.timeoutMs,
       maxOutputBytes: request.runContract?.budget.maxOutputBytes,
       onEvent: (event) => {
@@ -71,12 +81,14 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
     sessionStore.scanCaptureItems(sessionId);
     await syncCaptureInbox(sessionStore);
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: result.exitCode === 124 ? "provider_timeout" : "run_finished", correlationId: sessionId, sessionId, provider: profile.provider, status: result.exitCode === 0 ? "completed" : "failed", payload: JSON.stringify({ exitCode: result.exitCode }) });
+    await emitHook("session.end", { sessionId, status: result.exitCode === 0 ? "completed" : "failed", exitCode: result.exitCode });
     return sessionStore.get(sessionId) ?? session;
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
     await syncCaptureInbox(sessionStore);
     sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
+    await emitHook("run.error", { sessionId, error: error instanceof Error ? error.message : String(error) });
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: "run_failed", correlationId: sessionId, sessionId, provider: profile.provider, status: "failed" });
     throw error;
   } finally {

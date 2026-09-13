@@ -35,6 +35,20 @@ test("writes a bounded OpenShell filesystem policy", async () => {
   }
 });
 
+test("maps profile write policies into the sandbox filesystem policy", async () => {
+  const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(path.join(os.tmpdir(), "atlas-openshell-policy-")));
+  process.env.ATLAS_ROOT = root;
+  try {
+    const readOnly = await writeOpenShellPolicy({ command: "claude", args: [], cwd: "/workspace", writePolicy: "none" });
+    const readOnlyText = await readFile(readOnly.policyPath, "utf8");
+    assert.match(readOnlyText, /include_workdir: true/);
+    assert.doesNotMatch(readOnlyText, /^  workdir:/m);
+    const allowed = await writeOpenShellPolicy({ command: "claude", args: [], cwd: "/workspace", writePolicy: "allowed-paths", allowedPaths: ["/workspace/src"] });
+    assert.match(await readFile(allowed.policyPath, "utf8"), /- \/workspace\/src/);
+    await assert.rejects(() => writeOpenShellPolicy({ command: "claude", args: [], cwd: "/workspace", writePolicy: "allowed-paths", allowedPaths: [] }), /empty allowed paths/);
+  } finally { delete process.env.ATLAS_ROOT; }
+});
+
 test("adds Codex network policy without widening other providers", async () => {
   const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(path.join(os.tmpdir(), "atlas-openshell-")));
   const oldRoot = process.env.ATLAS_ROOT;

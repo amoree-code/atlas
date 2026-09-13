@@ -88,6 +88,8 @@ export async function intercept(command: string, args: string[]): Promise<number
         ...(process.env.ATLAS_OPENSHELL_AUTO_PROVIDERS === "1" ? { ATLAS_OPENSHELL_AUTO_PROVIDERS: "1" } : {}),
         ...resourceEnvironment(provider.id, resourceInjection),
       },
+      writePolicy: profile.writePolicy,
+      allowedPaths: profile.allowedPaths.map((entry) => path.resolve(workingDirectory, entry)),
     };
     const runProvider = async () => sandboxEnabled
       ? await new OpenShellRuntime().launchInteractive(processRequest)
@@ -158,5 +160,10 @@ function interceptedProfile(provider: string): Profile {
     allowedCommands: [],
     writePolicy: "none",
     contextSources: [],
+    clients: { [provider]: { enabled: true } },
+    defaultClient: provider as Profile["provider"],
+    memory: { enabled: true, scope: "profile" },
+    verification: { commands: [] },
+    instructions: "",
   };
 }

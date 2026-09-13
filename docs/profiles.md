@@ -1,13 +1,13 @@
 # Profiles
 
-A profile is a JSON file describing one agent configuration: which provider to run, which
-model, what role/skills to present to it, and what it is allowed to read, write, or run.
+A profile is one JSON file describing one agent configuration. `profile.json` is the machine-enforced
+contract, including concise instructions and verification commands.
 
 ## Storage and loading
 
 Profiles live at `<workspace>/system/profiles/<name>.json` (see [workspace.md](workspace.md)).
-`loadProfile(name)` (`src/infrastructure/filesystem/profile-loader.ts`) reads `<name>.json` from that
-directory and validates it against the schema below.
+`loadProfile(name)` (`src/infrastructure/filesystem/profile-loader.ts`) reads and validates the single
+canonical JSON file; legacy profile directories are read only for compatibility during migration.
 
 ## Schema (`src/domain/profiles/profile.ts`)
 
@@ -39,9 +39,10 @@ starts. `description` and `version` are both optional on disk (they default to `
 - `contextSources` and `allowedPaths` bound what `buildContext` reads into the prompt —
   a source path is only included if it resolves inside one of `allowedPaths`
   (see [context.md](context.md)).
-- `skills`, `allowedCommands`, `writePolicy`, and `role` are part of the schema and are
-  carried on every loaded profile, for provider-specific and policy use; the current
-  runtime does not yet enforce `allowedCommands` or `writePolicy` itself.
+- `allowedCommands` is checked before a run starts: when non-empty, the selected provider
+  command must appear in the list. `writePolicy` is validated at the same boundary;
+  `allowed-paths` requires at least one allowed path. Provider processes still need a
+  sandbox or client-native write boundary to enforce individual file writes.
 - `description` is a free-text summary of what the profile is for; it has no runtime effect.
 - `version` is a human-assigned label for a profile's configuration (bump it when you
   change a profile's fields); it participates in the identity described below.
@@ -107,15 +108,15 @@ A profile is loaded by name for a run; the run happens against a project's files
 ## Role profiles
 
 `templates/profiles/` also ships public starter templates for three other roles; unlike
-`default.json`, `atlas setup` does not install these automatically — copy the one you need
-into `system/profiles/` under the workspace root:
+`default`, `atlas setup` does not install these automatically — copy the one you need into
+`system/profiles/<name>.json` under the workspace root:
 
 - **`strategist.json`** — plans and reasons about approach; `writePolicy: "none"`.
 - **`developer.json`** — implements and fixes code; `writePolicy: "workspace"`.
 - **`reviewer.json`** — reviews changes and reports findings; `writePolicy: "none"`.
 
 The active instances a workspace actually runs with live only at `<workspace
-root>/system/profiles/*.json` — never inside `engine/`.
+root>/system/profiles/<name>.json` — never inside `engine/`.
 
 ## Skill roots
 

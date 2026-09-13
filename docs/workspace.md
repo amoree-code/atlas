@@ -15,13 +15,11 @@ this repository's git history.
 │   ├── sessions/
 │   │   └── sessions.sqlite   session store (see sessions.md)
 │   ├── config/
-│   │   ├── policies/
-│   │   ├── schemas/
 │   │   ├── startup/
-│   │   └── settings.json
+│   │   └── CONFIG.md
 │   ├── control-plane/        private governance and permissions
 │   └── integrations/         private client integrations
-└── archive/                  private retained legacy history
+└── system/archive/           private retained legacy history
 ```
 
 ## Root resolution (`src/paths.ts`)
@@ -44,15 +42,14 @@ isolated workspaces from one engine checkout.
 
 - Creates `personal/memory`, `personal/knowledge`, `personal/daily`, `personal/inbox`,
   `personal/templates`, and `projects/atlas/tickets` under the workspace root.
-- Creates `system/config/policies`, `system/config/schemas`, `system/config/startup`, `system/profiles`,
+- Creates `system/config/startup`, `system/profiles`,
   `system/sessions`, `system/control-plane`, `system/integrations`, and `system/archive` under the workspace root.
-- Writes `system/config/settings.json` and `system/profiles/default.json` from the
-  templates in `templates/`, without overwriting existing files.
+- Writes `system/profiles/default.json` from the template in `templates/`, without overwriting existing files.
 - Installs a per-OS startup entry that launches `engine/dist/main.js service` with the
   workspace root as its working directory: a macOS `launchd` plist under
   `~/Library/LaunchAgents`, a Linux `systemd --user` unit under
   `~/.config/systemd/user`, or a Windows Startup-folder launcher script.
-- Restricts `config` to `0700` permissions.
+- Restricts the private `system` tree to `0700` permissions.
 
 Startup always points at `engine/dist/main.js` (the built engine), never at `src/`, and
 always runs with the private workspace directory as its current working directory.
