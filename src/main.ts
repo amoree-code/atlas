@@ -19,6 +19,7 @@ import { createWebhookGateway } from "./application/gateway/webhook-gateway.js";
 import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "./application/skills/skill-curation.js";
 import { discoverObsidianVault, loadObsidianConnection } from "./application/obsidian/vault-discovery.js";
 import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/vault-sync.js";
+import { listInboxCandidates, promoteInboxNote } from "./application/obsidian/inbox-promotion.js";
 
 const command = process.argv[2] ?? "service";
 
@@ -88,13 +89,22 @@ if (command === "setup") {
   await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "obsidian") {
   const action = process.argv[3] ?? "discover";
-  if (!["discover", "sync", "watch"].includes(action)) {
-    console.error("Usage: atlas obsidian discover|sync|watch");
+  if (!["discover", "sync", "watch", "inbox"].includes(action)) {
+    console.error("Usage: atlas obsidian discover|sync|watch|inbox");
     process.exitCode = 1;
   } else {
     try {
       const connection = await loadObsidianConnection();
-      if (action === "discover") console.log(JSON.stringify(await discoverObsidianVault(connection), null, 2));
+      if (action === "inbox") {
+        const inboxAction = process.argv[4] ?? "list";
+        if (inboxAction === "list") console.log(JSON.stringify(await listInboxCandidates(connection), null, 2));
+        else if (inboxAction === "promote") {
+          const source = process.argv[5];
+          const target = process.argv[6];
+          if (!source || !target) throw new Error("Usage: atlas obsidian inbox promote <source.md> <target-directory> [--apply]");
+          console.log(JSON.stringify(await promoteInboxNote(connection, source, target, process.argv.includes("--apply")), null, 2));
+        } else throw new Error("Usage: atlas obsidian inbox list|promote <source.md> <target-directory> [--apply]");
+      } else if (action === "discover") console.log(JSON.stringify(await discoverObsidianVault(connection), null, 2));
       else if (action === "sync") console.log(JSON.stringify(await syncObsidianVault(connection), null, 2));
       else {
         const controller = new AbortController();
