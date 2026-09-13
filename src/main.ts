@@ -17,6 +17,7 @@ import { hasFailures, repairWorkspace, workspaceReport } from "./application/doc
 import { listSchedules, runDueSchedules, runSchedule, runSchedulerWorker, runSchedulerWorkerOnce, saveSchedule, setScheduleEnabled } from "./application/scheduler/local-scheduler.js";
 import { createWebhookGateway } from "./application/gateway/webhook-gateway.js";
 import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "./application/skills/skill-curation.js";
+import { discoverObsidianVault } from "./application/obsidian/vault-discovery.js";
 
 const command = process.argv[2] ?? "service";
 
@@ -84,6 +85,18 @@ if (command === "setup") {
   await runTicketsCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "memory") {
   await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
+} else if (command === "obsidian") {
+  if ((process.argv[3] ?? "discover") !== "discover") {
+    console.error("Usage: atlas obsidian discover");
+    process.exitCode = 1;
+  } else {
+    try {
+      console.log(JSON.stringify(await discoverObsidianVault(), null, 2));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+  }
 } else if (command === "capture") {
   await runCaptureCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "context") {
