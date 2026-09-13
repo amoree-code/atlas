@@ -8,7 +8,7 @@ const MAX_BYTES = 50 * 1024 * 1024;
 
 export type ObsidianConnection = {
   enabled: boolean;
-  mode: "read-only";
+  mode: "read-only" | "read-write";
   vaultPath: string;
 };
 
@@ -33,11 +33,11 @@ const connectionPath = (): string => atlasPath("system", "integrations", "obsidi
 export async function loadObsidianConnection(file = connectionPath()): Promise<ObsidianConnection> {
   const source = JSON.parse(await readFile(file, "utf8")) as Partial<ObsidianConnection>;
   if (source.enabled !== true) throw new Error("Obsidian integration is disabled");
-  if (source.mode !== "read-only") throw new Error("Obsidian discovery requires mode: read-only");
+  if (source.mode !== "read-only" && source.mode !== "read-write") throw new Error("Obsidian mode must be read-only or read-write");
   if (!source.vaultPath || !path.isAbsolute(source.vaultPath)) throw new Error("Obsidian vaultPath must be absolute");
   const vault = await stat(source.vaultPath);
   if (!vault.isDirectory()) throw new Error("Obsidian vaultPath must be a directory");
-  return { enabled: true, mode: "read-only", vaultPath: source.vaultPath };
+  return { enabled: true, mode: source.mode, vaultPath: source.vaultPath };
 }
 
 function properties(content: string): Record<string, string> {
