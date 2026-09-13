@@ -18,7 +18,7 @@ type SessionRow = Omit<Session, "sessionId" | "providerSessionId" | "parentSessi
 export class SessionStore {
   private readonly database: DatabaseSync;
 
-  constructor(databaseFile = atlasPath("sessions", "sessions.sqlite")) {
+  constructor(databaseFile = atlasPath("system", "sessions", "sessions.sqlite")) {
     this.database = new DatabaseSync(databaseFile);
     this.database.exec(`
       PRAGMA journal_mode = WAL;
@@ -47,6 +47,15 @@ export class SessionStore {
         parent_session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
         child_session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
         PRIMARY KEY (parent_session_id, child_session_id)
+      );
+      CREATE TABLE IF NOT EXISTS capture_items (
+        capture_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_event_id INTEGER NOT NULL UNIQUE REFERENCES session_events(event_id) ON DELETE CASCADE,
+        type TEXT NOT NULL DEFAULT 'unclassified',
+        status TEXT NOT NULL DEFAULT 'new',
+        target TEXT,
+        created_at TEXT NOT NULL,
+        reviewed_at TEXT
       );
       CREATE INDEX IF NOT EXISTS session_events_session_id ON session_events(session_id);
       CREATE INDEX IF NOT EXISTS session_links_parent_id ON session_links(parent_session_id);
@@ -118,6 +127,38 @@ export class SessionStore {
       });
   }
 
+  scanCaptureItems(sessionId?: string): number {
+    const query = sessionId
+      ? `SELECT event_id FROM session_events WHERE session_id = ? AND type = 'user_input'
+         AND event_id NOT IN (SELECT source_event_id FROM capture_items) ORDER BY event_id`
+      : `SELECT event_id FROM session_events WHERE type = 'user_input'
+         AND event_id NOT IN (SELECT source_event_id FROM capture_items) ORDER BY event_id`;
+    const rows = (sessionId ? this.database.prepare(query).all(sessionId) : this.database.prepare(query).all()) as Array<{ event_id: number }>;
+    const insert = this.database.prepare("INSERT INTO capture_items (source_event_id, created_at) VALUES (?, ?)");
+    const now = new Date().toISOString();
+    for (const row of rows) insert.run(row.event_id, now);
+    return rows.length;
+  }
+
+  listCaptureItems(status = "new"): Array<{ captureId: number; sourceEventId: number; sessionId: string; content: string; type: string; status: string; target: string | null; createdAt: string }> {
+    const rows = this.database.prepare(`
+      SELECT c.capture_id, c.source_event_id, e.session_id, e.data, c.type, c.status, c.target, c.created_at
+      FROM capture_items c JOIN session_events e ON e.event_id = c.source_event_id
+      WHERE c.status = ? ORDER BY c.capture_id
+    `).all(status) as Array<{ capture_id: number; source_event_id: number; session_id: string; data: string; type: string; status: string; target: string | null; created_at: string }>;
+    return rows.map((row) => ({ captureId: row.capture_id, sourceEventId: row.source_event_id, sessionId: row.session_id, content: row.data, type: row.type, status: row.status, target: row.target, createdAt: row.created_at }));
+  }
+
+  getCaptureItem(captureId: number): ReturnType<SessionStore["listCaptureItems"]>[number] | null {
+    return this.listCaptureItems("new").find((item) => item.captureId === captureId) ?? null;
+  }
+
+  updateCaptureStatus(captureId: number, status: "promoted" | "discarded", target?: string): void {
+    const result = this.database.prepare("UPDATE capture_items SET status = ?, target = ?, reviewed_at = ? WHERE capture_id = ?")
+      .run(status, target ?? null, new Date().toISOString(), captureId);
+    if (!result.changes) throw new Error(`Capture item not found: ${captureId}`);
+  }
+
   close(): void {
     this.database.close();
   }
@@ -140,6 +181,6 @@ export class SessionStore {
 }
 
 export async function openSessionStore(): Promise<SessionStore> {
-  await mkdir(atlasPath("sessions"), { recursive: true });
+  await mkdir(atlasPath("system", "sessions"), { recursive: true });
   return new SessionStore();
 }

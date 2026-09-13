@@ -6,10 +6,10 @@ import test from "node:test";
 import { loadProfile } from "../dist/infrastructure/filesystem/profile-loader.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
-test("loadProfile reads profiles from private ATLAS_ROOT/profiles, not the engine tree", async () => {
+test("loadProfile reads profiles from private ATLAS_ROOT/system/profiles, not the engine tree", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-"));
-  await mkdir(path.join(root, "profiles"), { recursive: true });
-  await writeFile(path.join(root, "profiles", "reviewer.json"), JSON.stringify({
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "reviewer.json"), JSON.stringify({
     name: "reviewer", provider: "claude", model: "sonnet", role: "review only",
   }));
 
@@ -33,7 +33,7 @@ test("loadProfile rejects a name whose file does not exist under ATLAS_ROOT", as
   }
 });
 
-test("openSessionStore persists sessions under ATLAS_ROOT/sessions/sessions.sqlite", async () => {
+test("openSessionStore persists sessions under ATLAS_ROOT/system/sessions/sessions.sqlite", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-persist-"));
   process.env.ATLAS_ROOT = root;
   try {

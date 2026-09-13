@@ -31,7 +31,7 @@ async function withEnvironment(run) {
 
 test("resolves the real provider outside Atlas's shim directory", async () => {
   await withEnvironment(async (root) => {
-    const shim = path.join(root, "runtime", "shims");
+    const shim = path.join(root, "system", "runtime", "shims");
     const real = path.join(root, "bin");
     await mkdir(shim, { recursive: true });
     await mkdir(real, { recursive: true });
@@ -48,9 +48,9 @@ test("sync creates Atlas wrappers and shell activation", async () => {
   await withEnvironment(async (root) => {
     const result = await syncProviderWrappers();
     assert.ok(result.providers.some((provider) => provider.id === "claude"));
-    const wrapper = await readFile(path.join(root, "runtime", "shims", "claude"), "utf8");
+    const wrapper = await readFile(path.join(root, "system", "runtime", "shims", "claude"), "utf8");
     assert.match(wrapper, /intercept --client/);
-    const atlasWrapper = await readFile(path.join(root, "runtime", "shims", "atlas"), "utf8");
+    const atlasWrapper = await readFile(path.join(root, "system", "runtime", "shims", "atlas"), "utf8");
     assert.match(atlasWrapper, /dist\/main\.js/);
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
@@ -197,7 +197,7 @@ test("doctor reports a shim that is present but ordered after another PATH entry
     await writeFile(executable, "#!/bin/sh\nexit 0\n");
     await chmod(executable, 0o755);
     await registerProvider("ordered", "ordered-ai");
-    process.env.PATH = `${bin}${path.delimiter}${path.join(root, "runtime", "shims")}`;
+    process.env.PATH = `${bin}${path.delimiter}${path.join(root, "system", "runtime", "shims")}`;
     const findings = await wrapperDoctor();
     assert.ok(findings.some((finding) => finding.includes("after 1 PATH entries")));
   });

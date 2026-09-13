@@ -10,6 +10,10 @@ import { installShellPath, registerProvider, syncProviderWrappers, wrapperDoctor
 import { findInstallSpec, installPlan, installProvider, listInstallSpecs, removeInstalledProvider, updateProvider } from "./application/install/provider-installer.js";
 import { runAuthCommand } from "./interfaces/cli/auth-command.js";
 import { runTicketsCommand } from "./interfaces/cli/tickets-command.js";
+import { runMemoryCommand } from "./interfaces/cli/memory-command.js";
+import { runCaptureCommand } from "./interfaces/cli/capture-command.js";
+import { runContextCommand } from "./interfaces/cli/context-command.js";
+import { hasFailures, repairWorkspace, workspaceReport } from "./application/doctor/workspace-doctor.js";
 
 const command = process.argv[2] ?? "service";
 
@@ -75,6 +79,12 @@ if (command === "setup") {
   await runAuthCommand(process.argv[3] ?? "", process.argv[4] ?? "");
 } else if (command === "tickets") {
   await runTicketsCommand(process.argv[3] ?? "", process.argv.slice(4));
+} else if (command === "memory") {
+  await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
+} else if (command === "capture") {
+  await runCaptureCommand(process.argv[3] ?? "", process.argv.slice(4));
+} else if (command === "context") {
+  await runContextCommand(process.argv.includes("--json"));
 } else if (command === "catalog") {
   console.log(JSON.stringify(listInstallSpecs().map((spec) => ({ id: spec.provider.id, command: spec.provider.command, installer: installPlan(spec.provider.id) })), null, 2));
 } else if (command === "env") {
@@ -96,13 +106,19 @@ if (command === "setup") {
     }
   }
 } else if (command === "doctor") {
-  const pathIndex = process.argv.indexOf("--path");
-  const findings = await wrapperDoctor(pathIndex >= 0 ? process.argv[pathIndex + 1] : undefined);
-  if (findings.length) {
-    findings.forEach((finding) => console.error(`NOT READY: ${finding}`));
-    process.exitCode = 1;
+  const report = await workspaceReport();
+  if (process.argv.includes("--json")) console.log(JSON.stringify(report, null, 2));
+  else report.findings.forEach((finding) => console.log(`${finding.severity}: ${finding.code} — ${finding.message}`));
+  if (hasFailures(report.findings)) process.exitCode = 1;
+} else if (command === "repair") {
+  const apply = process.argv.includes("--apply");
+  if (!apply) {
+    const report = await workspaceReport();
+    console.log(JSON.stringify({ dryRun: true, fixable: report.findings.filter((finding) => finding.fixable), findings: report.findings }, null, 2));
   } else {
-    console.log("PROVEN: Atlas wrappers are configured and provider binaries resolve outside the shim directory.");
+    const result = await repairWorkspace();
+    console.log(JSON.stringify({ applied: result.changes, findings: result.findings }, null, 2));
+    if (hasFailures(result.findings)) process.exitCode = 1;
   }
 } else if (command === "run") {
   const profileIndex = process.argv.indexOf("--profile");

@@ -3,9 +3,9 @@ import { atlasPath } from "../../paths.js";
 
 const atlasResourceFiles = [
   "personal/memory/MEMORY.md",
-  "personal/knowledge/README.md",
-  "projects/atlas/context/requirements.md",
-  "personal/brain-dump/MEMORY.md",
+  "personal/knowledge/KNOWLEDGE.md",
+  "personal/inbox/INBOX.md",
+  "projects/atlas/README.md",
 ];
 
 const maxBytes = 16_000;

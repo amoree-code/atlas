@@ -14,6 +14,10 @@ authentication is entirely the installed CLI's responsibility.
 - `antigravity`
 - `hermes`
 
+The private workspace may register additional clients for interactive interception. That registry does not
+make a client headless-capable; `atlas run` accepts only the five providers above until a provider-specific
+headless invocation contract is implemented and tested.
+
 ## Requirement
 
 The provider's CLI binary must be on `PATH`:

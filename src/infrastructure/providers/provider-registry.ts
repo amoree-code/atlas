@@ -18,7 +18,7 @@ const builtInProviders: ProviderRecord[] = [
   { id: "hermes", command: "hermes", interactive: true, headless: true },
 ];
 
-export const providerRegistryPath = (): string => atlasPath("control-plane", "registry", "providers.json");
+export const providerRegistryPath = (): string => atlasPath("system", "control-plane", "registry", "providers.json");
 
 export function builtInProviderRecords(): ProviderRecord[] {
   return builtInProviders.map((provider) => ({ ...provider }));
@@ -46,7 +46,7 @@ export function findProvider(value: string, providers = loadProviderRegistry()):
 }
 
 export function resolveOriginalExecutable(command: string, env = process.env): string {
-  const shimRoot = path.resolve(env.ATLAS_SHIM_DIR ?? atlasPath("runtime", "shims"));
+  const shimRoot = path.resolve(env.ATLAS_SHIM_DIR ?? atlasPath("system", "runtime", "shims"));
   const pathEntries = (env.PATH ?? "").split(path.delimiter).filter(Boolean);
   const names = process.platform === "win32" ? [command, `${command}.exe`, `${command}.cmd`, `${command}.bat`] : [command];
 

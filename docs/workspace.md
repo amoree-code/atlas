@@ -10,16 +10,17 @@ this repository's git history.
 <workspace root>/           default: the parent directory of engine/ (e.g. ~/atlas)
 ├── personal/                user-owned private data
 ├── projects/                 user-owned project data
-├── profiles/                 one JSON file per profile (see profiles.md)
-├── sessions/
-│   └── sessions.sqlite       session store (see sessions.md)
-├── config/
-│   ├── policies/
-│   ├── schemas/
-│   ├── startup/
-│   └── settings.json
-├── control-plane/            private governance and permissions
-├── integrations/             private client integrations
+├── system/
+│   ├── profiles/             one JSON file per profile (see profiles.md)
+│   ├── sessions/
+│   │   └── sessions.sqlite   session store (see sessions.md)
+│   ├── config/
+│   │   ├── policies/
+│   │   ├── schemas/
+│   │   ├── startup/
+│   │   └── settings.json
+│   ├── control-plane/        private governance and permissions
+│   └── integrations/         private client integrations
 └── archive/                  private retained legacy history
 ```
 
@@ -31,9 +32,8 @@ this repository's git history.
 - `atlasRoot()` — `process.env.ATLAS_ROOT` if set (resolved to an absolute path),
   otherwise the parent directory of `engineRoot()`. This is the default private-workspace
   location: `engine/` is expected to sit inside the workspace root as a sibling of
-  `personal/`, `projects/`, `profiles/`, `sessions/`, and `config/`.
-- `atlasPath(...)` — joins onto `atlasRoot()`, used for `personal/` and `projects/`.
-- `atlasPath(...)` — joins onto `<atlasRoot>/`, used for private workspace state.
+  `personal/`, `projects/`, and `system/`.
+- `atlasPath(...)` — joins onto `<atlasRoot>/`, used for all private workspace state.
 
 Set `ATLAS_ROOT` to point Atlas at a different workspace root, for example to run multiple
 isolated workspaces from one engine checkout.
@@ -44,9 +44,9 @@ isolated workspaces from one engine checkout.
 
 - Creates `personal/memory`, `personal/knowledge`, `personal/daily`, `personal/inbox`,
   `personal/templates`, and `projects/atlas/tickets` under the workspace root.
-- Creates `config/policies`, `config/schemas`, `config/startup`, `profiles`, `sessions`,
-  `control-plane`, `integrations`, and `archive` under the workspace root.
-- Writes `config/settings.json` and `profiles/default.json` from the
+- Creates `system/config/policies`, `system/config/schemas`, `system/config/startup`, `system/profiles`,
+  `system/sessions`, `system/control-plane`, `system/integrations`, and `system/archive` under the workspace root.
+- Writes `system/config/settings.json` and `system/profiles/default.json` from the
   templates in `templates/`, without overwriting existing files.
 - Installs a per-OS startup entry that launches `engine/dist/main.js service` with the
   workspace root as its working directory: a macOS `launchd` plist under

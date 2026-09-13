@@ -17,7 +17,7 @@ test("writes structured runtime logs outside engine", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-logs-"));
   process.env.ATLAS_ROOT = root;
   await appendRuntimeLog({ timestamp: "2026-09-10T00:00:00.000Z", event: "provider_exit", correlationId: "c1", sessionId: "s1", status: "completed", payload: "ok" });
-  const line = await readFile(path.join(root, "logs", "runtime.jsonl"), "utf8");
+  const line = await readFile(path.join(root, "system", "runtime", "logs", "runtime.jsonl"), "utf8");
   assert.deepEqual(JSON.parse(line), { timestamp: "2026-09-10T00:00:00.000Z", event: "provider_exit", correlationId: "c1", sessionId: "s1", status: "completed", payload: "ok" });
   delete process.env.ATLAS_ROOT;
 });

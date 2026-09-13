@@ -13,14 +13,8 @@ projects/*
 !personal/.gitkeep
 !projects/.gitkeep
 
-# Private application state lives beside engine/ (config, profiles, sessions,
-# control-plane, integrations, archive) — never commit any of it.
-config/*
-profiles/*
-sessions/*
-control-plane/*
-integrations/*
-archive/*
+# Private application state lives beside engine/ (system/) — never commit any of it.
+system/*
 
 # --- credentials ---
 .env

@@ -1,6 +1,6 @@
 # Atlas
 
-Atlas is a local-first runtime for running Claude, Codex, and Antigravity as
+Atlas is a local-first runtime for running Claude, Codex, Gemini, Antigravity, and Hermes as
 headless agents inside one workspace. It manages profiles, bounded context,
 sessions, artifacts, and local hooks without a hosted service.
 
@@ -34,6 +34,22 @@ node dist/main.js session show <session-id>
 node dist/main.js session resume <session-id> "Continue the review"
 ```
 
+Capture an idea without a provider subscription:
+
+```bash
+atlas capture add "An idea to review later"
+atlas capture list
+atlas capture promote <id> knowledge/results
+
+# Workspace health (read-only)
+atlas doctor
+atlas doctor --json
+
+# Safe repair preview; apply only after reviewing the output
+atlas repair
+atlas repair --apply
+```
+
 The installed provider must be available on `PATH`. Atlas does not store provider
 credentials.
 
@@ -48,16 +64,11 @@ atlas/
 │   └── package.json
 ├── personal/               private user data
 ├── projects/               private project data
-├── profiles/               private agent profiles
-├── sessions/               private session state
-├── config/                 private application config
-├── control-plane/          private governance and permissions
-├── integrations/           private client integrations
+├── system/                 private profiles, sessions, config, governance, integrations, and runtime
 └── archive/                private retained legacy history
 ```
 
-`personal/`, `projects/`, `profiles/`, `sessions/`, `config/`, `control-plane/`,
-`integrations/`, and `archive/` are private workspace data. They are ignored
+`personal/`, `projects/`, `system/`, and `archive/` are private workspace data. They are ignored
 by Git and are never part of a public commit. By default they resolve to a private
 workspace directory next to this repository; set `ATLAS_ROOT` to choose another
 workspace root. Startup entries execute the engine from `engine/dist/main.js` while

@@ -7,9 +7,9 @@ as the prompt text (`src/main.ts`), so pass it last.
 
 ## Profile load fails
 
-`loadProfile` reads `<workspace>/profiles/<name>.json` and validates it with Zod
+`loadProfile` reads `<workspace>/system/profiles/<name>.json` and validates it with Zod
 (see [profiles.md](profiles.md)). Failures mean either the file does not exist (run
-`atlas setup` to create `profiles/default.json`, or add the named profile yourself)
+`atlas setup` to create `system/profiles/default.json`, or add the named profile yourself)
 or it does not match the schema — check `provider` is one of `claude`/`codex`/`gemini`/`antigravity`/
 `hermes` and every required field is present.
 

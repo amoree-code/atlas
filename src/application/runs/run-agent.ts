@@ -7,7 +7,8 @@ import { openSessionStore } from "../../infrastructure/persistence/session-store
 import type { Session } from "../../domain/sessions/session.js";
 import { runProvider, type HeadlessProvider, type ProviderRequest } from "../../infrastructure/providers/providers.js";
 import type { HeadlessResult, RuntimeEvent } from "../../infrastructure/process/cli-process.js";
-import { appendRuntimeLog } from "../../infrastructure/observability/runtime-logger.js";
+import { appendRuntimeLog, redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
+import { syncCaptureInbox } from "../capture/inbox-sync.js";
 import { authorizeRun } from "./run-authorization.js";
 import type { RunContract } from "../../domain/runs/run-contract.js";
 
@@ -48,6 +49,7 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   try {
     const context = await buildContext(profile, request.cwd);
     const skills = await loadSkills(profile.skills, 32_000, request.cwd);
+    sessionStore.appendEvent(sessionId, "user_input", redactRuntimeText(request.prompt));
     sessionStore.appendEvent(sessionId, "context_manifest", JSON.stringify(context.manifest));
     sessionStore.updateStatus(sessionId, "running");
     const skillContent = skills.map((skill) => `## Skill: ${skill.name}\n${skill.instructions}`).join("\n\n");
@@ -66,10 +68,14 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
     sessionStore.updateStatus(sessionId, result.exitCode === 0 ? "completed" : "failed");
     sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: result.stderr }));
     sessionStore.appendEvent(sessionId, "evidence", JSON.stringify({ evidenceId: randomUUID(), sessionId, type: "provider_exit", source: "headless-process", observedAt: new Date().toISOString(), result: result.exitCode === 0 ? "proven" : "not_proven", criterion: "provider process exits successfully", payload: JSON.stringify({ exitCode: result.exitCode }) }));
+    sessionStore.scanCaptureItems(sessionId);
+    await syncCaptureInbox(sessionStore);
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: result.exitCode === 124 ? "provider_timeout" : "run_finished", correlationId: sessionId, sessionId, provider: profile.provider, status: result.exitCode === 0 ? "completed" : "failed", payload: JSON.stringify({ exitCode: result.exitCode }) });
     return sessionStore.get(sessionId) ?? session;
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
+    sessionStore.scanCaptureItems(sessionId);
+    await syncCaptureInbox(sessionStore);
     sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: "run_failed", correlationId: sessionId, sessionId, provider: profile.provider, status: "failed" });
     throw error;
@@ -89,6 +95,7 @@ export async function resumeAgent(sessionId: string, prompt: string, execute: Pr
   try {
     sessionStore.updateStatus(sessionId, "running");
     sessionStore.appendEvent(sessionId, "resume_requested", prompt);
+    sessionStore.appendEvent(sessionId, "user_input", redactRuntimeText(prompt));
     const result = await execute({
       provider: "claude",
       prompt,
@@ -101,9 +108,13 @@ export async function resumeAgent(sessionId: string, prompt: string, execute: Pr
     });
     sessionStore.updateStatus(sessionId, result.exitCode === 0 ? "completed" : "failed");
     sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: result.stderr }));
+    sessionStore.scanCaptureItems(sessionId);
+    await syncCaptureInbox(sessionStore);
     return sessionStore.get(sessionId) ?? existing;
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
+    sessionStore.scanCaptureItems(sessionId);
+    await syncCaptureInbox(sessionStore);
     sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
     throw error;
   } finally {

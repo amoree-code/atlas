@@ -8,7 +8,7 @@ inspected, or resumed later.
 ## Storage
 
 `SessionStore` (`src/infrastructure/persistence/session-store.ts`) opens
-`<workspace>/sessions/sessions.sqlite` (via `atlasPath("sessions", "sessions.sqlite")`,
+`<workspace>/system/sessions/sessions.sqlite` (via `atlasPath("system", "sessions", "sessions.sqlite")`,
 see [workspace.md](workspace.md)) with `node:sqlite`, in WAL mode, and creates three tables
 if absent:
 
@@ -20,7 +20,10 @@ if absent:
 - `session_links` — parent/child session id pairs, for sessions created by `resumeAgent`
   or with an explicit `parentSessionId`.
 
-`openSessionStore()` ensures the `sessions/` directory exists and returns a `SessionStore`;
+- `capture_items` — reviewable references to explicit `user_input` events. Use `atlas capture` to list,
+  promote, or discard candidates; raw session events remain the audit source.
+
+`openSessionStore()` ensures the `system/sessions/` directory exists and returns a `SessionStore`;
 callers must `close()` it when done.
 
 ## Session schema (`src/domain/sessions/session.ts`)

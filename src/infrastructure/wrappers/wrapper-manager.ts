@@ -9,7 +9,7 @@ import { builtInProviderRecords, loadProviderRegistry, resolveOriginalExecutable
 const execFile = promisify(execFileCallback);
 
 export function shimDirectory(): string {
-  return atlasPath("runtime", "shims");
+  return atlasPath("system", "runtime", "shims");
 }
 
 function shellQuote(value: string): string {

@@ -1,7 +1,7 @@
 # Architecture
 
 Atlas is a local-first Node.js runtime for running headless AI agent CLIs (Claude, Codex,
-Gemini, Antigravity) inside one workspace. The engine repository is public and
+Gemini, Antigravity, Hermes) inside one workspace. The engine repository is public and
 provider-neutral; all user data and technical state live in a private workspace next to it.
 
 Capabilities declare the operation, authority, idempotency, and independent verification
@@ -19,7 +19,7 @@ boundary and returns a content hash.
 
 ## Layers
 
-- **Interfaces** — `src/main.ts` (command dispatch: `setup`, `service`, `run`, `session`)
+- **Interfaces** — `src/main.ts` (command dispatch: `setup`, `service`, `run`, `session`, `capture`)
   and `src/interfaces/cli/setup-command.ts` (workspace bootstrap).
 - **Application** — `src/application/runs/run-agent.ts` (`runAgent` / `resumeAgent`, the orchestration
   entry points) and `src/infrastructure/process/service.ts` (long-running process for startup integration).

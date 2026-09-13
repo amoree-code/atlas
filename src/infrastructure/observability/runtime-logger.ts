@@ -24,6 +24,6 @@ export function redactRuntimeText(value: string): string {
 
 export async function appendRuntimeLog(log: RuntimeLog): Promise<void> {
   const safe = { ...log, payload: log.payload === undefined ? undefined : redactRuntimeText(log.payload) };
-  await mkdir(atlasPath("logs"), { recursive: true });
-  await appendFile(path.join(atlasPath("logs"), "runtime.jsonl"), `${JSON.stringify(safe)}\n`, "utf8");
+  await mkdir(atlasPath("system", "runtime", "logs"), { recursive: true });
+  await appendFile(path.join(atlasPath("system", "runtime", "logs"), "runtime.jsonl"), `${JSON.stringify(safe)}\n`, "utf8");
 }
