@@ -19,10 +19,10 @@ async function validate(file) {
   const relative = path.relative(root, file).split(path.sep);
   const name = relative.at(-2);
   const source = await readFile(file, "utf8");
-  if (!source.startsWith("---\n")) return errors.push(`${file}: missing frontmatter`);
+  if (!source.startsWith("---")) return errors.push(`${file}: missing frontmatter`);
   const end = source.indexOf("\n---", 4);
   if (end < 0) return errors.push(`${file}: unterminated frontmatter`);
-  const fields = Object.fromEntries(source.slice(4, end).split("\n").filter(Boolean).map((line) => {
+  const fields = Object.fromEntries(source.slice(4, end).split(/\r?\n/).filter(Boolean).map((line) => {
     const separator = line.indexOf(":");
     return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
   }));
@@ -35,7 +35,9 @@ async function validate(file) {
 }
 
 await walk(root);
-const skillFiles = (await readdir(root, { recursive: true })).filter((file) => file.endsWith("/SKILL.md") || file === "SKILL.md");
+const skillFiles = (await readdir(root, { recursive: true }))
+  .map((file) => file.split(path.sep).join("/"))
+  .filter((file) => file.endsWith("/SKILL.md") || file === "SKILL.md");
 for (const name of entries.keys()) if (!skillFiles.some((file) => file.split("/").at(-2) === name)) errors.push(`index.json: missing skill file for ${name}`);
 if (errors.length) {
   console.error(errors.join("\n"));
