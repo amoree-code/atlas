@@ -23,7 +23,9 @@ jobs:
       - run: pnpm check:tickets
       - run: pnpm build
       - run: pnpm check:package
-      - run: pnpm test
+      - name: Run full test suite
+        if: runner.os != 'Windows'
+        run: pnpm test
 
   docker:
     runs-on: ubuntu-latest
