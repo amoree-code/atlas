@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -59,13 +59,25 @@ test("loadProfile keeps legacy profile directories compatible during migration",
 });
 
 test("all practical role profiles use the universal client contract", async () => {
-  for (const name of ["default", "developer", "reviewer", "strategist", "tester", "security-auditor", "devops", "researcher"]) {
-    const profile = await loadProfile(name);
-    assert.equal(profile.name, name);
-    assert.deepEqual(Object.keys(profile.clients).sort(), ["antigravity", "claude", "codex", "gemini", "hermes"]);
-    assert.equal(profile.defaultClient, "claude");
-    assert.equal(profile.clients.claude.enabled, true);
-    assert.ok(profile.instructions.length > 0);
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-universal-"));
+  const profilesDirectory = path.join(root, "system", "profiles");
+  await mkdir(profilesDirectory, { recursive: true });
+  const template = JSON.parse(await readFile(new URL("../templates/profiles/default.json", import.meta.url), "utf8"));
+  const names = ["default", "developer", "reviewer", "strategist", "tester", "security-auditor", "devops", "researcher"];
+  for (const name of names) await writeFile(path.join(profilesDirectory, `${name}.json`), JSON.stringify({ ...template, name }));
+
+  process.env.ATLAS_ROOT = root;
+  try {
+    for (const name of names) {
+      const profile = await loadProfile(name);
+      assert.equal(profile.name, name);
+      assert.deepEqual(Object.keys(profile.clients).sort(), ["antigravity", "claude", "codex", "gemini", "hermes"]);
+      assert.equal(profile.defaultClient, "claude");
+      assert.equal(profile.clients.claude.enabled, true);
+      assert.ok(profile.instructions.length > 0);
+    }
+  } finally {
+    delete process.env.ATLAS_ROOT;
   }
 });
 
