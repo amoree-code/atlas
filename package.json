@@ -28,6 +28,9 @@
     "check:providers": "node scripts/provider-smoke.mjs",
     "test": "pnpm build && node --test tests/*.test.mjs"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["node-pty"]
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
