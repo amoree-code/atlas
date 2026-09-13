@@ -4,10 +4,12 @@ This matrix records observed Atlas interception boundaries. `NOT PROVEN` means t
 host was not available for live validation; it is not a compatibility claim. Windows/Linux live
 validation is intentionally deferred until supported hosts are available.
 
-The release gate runs the engine build and test suite on GitHub Actions `macOS`, `Linux`,
-and `Windows` runners. This proves cross-platform build and test compatibility only; it does
-not prove a live provider, shell shim, or authentication flow on every host. The Docker job
-validates the Linux build/test environment and does not package provider CLIs or credentials.
+The release gate runs the engine build and full test suite on GitHub Actions `macOS` and
+`Linux` runners, and the build plus static checks on `Windows`. The current full suite includes
+Unix-oriented PTY process tests, so Windows remains `NOT PROVEN` for that boundary until a
+Windows-specific PTY test path is added. These checks do not prove a live provider, shell shim,
+or authentication flow on every host. The Docker job validates the Linux build/test environment
+and does not package provider CLIs or credentials.
 
 | Boundary | macOS | Linux | Windows |
 |---|---|---|---|
