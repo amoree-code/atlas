@@ -20,6 +20,7 @@ import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "./
 import { discoverObsidianVault, loadObsidianConnection } from "./application/obsidian/vault-discovery.js";
 import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/vault-sync.js";
 import { listInboxCandidates, promoteInboxNote } from "./application/obsidian/inbox-promotion.js";
+import { writeObsidianNote } from "./application/obsidian/vault-writer.js";
 
 const command = process.argv[2] ?? "service";
 
@@ -89,13 +90,19 @@ if (command === "setup") {
   await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "obsidian") {
   const action = process.argv[3] ?? "discover";
-  if (!["discover", "sync", "watch", "inbox"].includes(action)) {
-    console.error("Usage: atlas obsidian discover|sync|watch|inbox");
+  if (!["discover", "sync", "watch", "inbox", "write"].includes(action)) {
+    console.error("Usage: atlas obsidian discover|sync|watch|inbox|write");
     process.exitCode = 1;
   } else {
     try {
       const connection = await loadObsidianConnection();
-      if (action === "inbox") {
+      if (action === "write") {
+        const relative = process.argv[4];
+        const content = process.argv[5];
+        const expectedSha256 = process.argv[6] ?? null;
+        if (!relative || content === undefined) throw new Error("Usage: atlas obsidian write <relative.md> <content> [expected-sha256] [--apply]");
+        console.log(JSON.stringify(await writeObsidianNote(connection, relative, content, expectedSha256 === "-" ? null : expectedSha256, process.argv.includes("--apply")), null, 2));
+      } else if (action === "inbox") {
         const inboxAction = process.argv[4] ?? "list";
         if (inboxAction === "list") console.log(JSON.stringify(await listInboxCandidates(connection), null, 2));
         else if (inboxAction === "promote") {
