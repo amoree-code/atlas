@@ -4,10 +4,14 @@
   "version": "1.0.0",
   "provider": "claude",
   "model": "sonnet",
+  "clients": { "claude": { "enabled": true, "model": "sonnet" }, "codex": { "enabled": true }, "gemini": { "enabled": true }, "antigravity": { "enabled": true }, "hermes": { "enabled": true } },
+  "defaultClient": "claude",
   "role": "strategist",
   "skills": [],
   "allowedPaths": ["."],
   "allowedCommands": [],
   "writePolicy": "none",
-  "contextSources": []
+  "contextSources": [],
+  "instructions": "Plan and reason about approach and risk without writing to the workspace.",
+  "verification": { "commands": [] }
 }

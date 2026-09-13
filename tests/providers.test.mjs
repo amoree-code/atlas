@@ -3,8 +3,9 @@ import { chmod, mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { buildProviderInvocation, runProvider } from "../dist/infrastructure/providers/providers.js";
+import { buildProviderInvocation, providerAdapterRegistry, runProvider } from "../dist/infrastructure/providers/providers.js";
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
+import { resolveClientHome } from "../dist/infrastructure/providers/client-home.js";
 
 test("builds the Claude CLI stream contract", () => {
   assert.deepEqual(buildProviderInvocation({
@@ -13,6 +14,11 @@ test("builds the Claude CLI stream contract", () => {
     command: "claude",
     args: ["-p", "hello", "--verbose", "--output-format", "stream-json"],
   });
+});
+
+test("exposes one adapter with capabilities for every registered headless provider", () => {
+  assert.deepEqual(Object.keys(providerAdapterRegistry).sort(), ["antigravity", "claude", "codex", "gemini", "hermes"]);
+  assert.ok(providerAdapterRegistry.claude.capabilities.includes("resume"));
 });
 
 test("builds the Codex JSON contract", () => {
@@ -84,5 +90,23 @@ test("headless providers bypass Atlas shims and run the original executable", as
     if (previousRoot === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previousRoot;
     if (previousShim === undefined) delete process.env.ATLAS_SHIM_DIR; else process.env.ATLAS_SHIM_DIR = previousShim;
     if (previousPath === undefined) delete process.env.PATH; else process.env.PATH = previousPath;
+  }
+});
+
+test("resolves a configured client home only inside Atlas system/clients", () => {
+  const previousRoot = process.env.ATLAS_ROOT;
+  const root = "/tmp/atlas-client-home-test";
+  process.env.ATLAS_ROOT = root;
+  try {
+    const profile = validateProfile({
+      name: "developer", role: "developer", clients: {
+        hermes: { enabled: true, home: "system/clients/hermes/developer" },
+      },
+    });
+    assert.equal(resolveClientHome(profile), path.join(root, "system/clients/hermes/developer"));
+    const unsafe = validateProfile({ name: "bad", role: "assistant", clients: { hermes: { enabled: true, home: "../secrets" } } });
+    assert.throws(() => resolveClientHome(unsafe), /must stay under Atlas system\/clients/);
+  } finally {
+    if (previousRoot === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previousRoot;
   }
 });

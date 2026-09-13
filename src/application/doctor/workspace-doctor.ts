@@ -150,6 +150,18 @@ async function checkDuplicates(): Promise<Finding[]> {
     : [{ code: "DUPLICATES_NONE", severity: "OK", message: "no identical active personal/project markdown files", fixable: false }];
 }
 
+async function checkProfileAuthority(): Promise<Finding[]> {
+  const root = atlasPath("system", "profiles");
+  if (!(await exists(root))) return [{ code: "PROFILES_UNCHECKED", severity: "WARN", message: "profiles root is missing", fixable: false }];
+  const legacy: string[] = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (entry.isDirectory() && await exists(path.join(root, entry.name, "profile.json"))) legacy.push(entry.name);
+  }
+  return legacy.length
+    ? [{ code: "PROFILE_AUTHORITY_DRIFT", severity: "WARN", message: `legacy profile directories remain active: ${legacy.join(", ")}`, fixable: false }]
+    : [{ code: "PROFILE_AUTHORITY_CANONICAL", severity: "OK", message: "profiles use canonical root-level JSON authority", fixable: false }];
+}
+
 async function checkVersion(): Promise<Finding[]> {
   const versionFile = path.join(atlasPath("engine"), "VERSION");
   const packageFile = path.join(atlasPath("engine"), "package.json");
@@ -162,7 +174,7 @@ async function checkVersion(): Promise<Finding[]> {
 }
 
 export async function scanWorkspace(): Promise<Finding[]> {
-  return [...await checkStructure(), ...await checkLinks(), ...await checkMemory(), ...await checkVersion(), ...await checkWrappers(), ...await checkDependencies(), ...await checkWorkspaceContracts(), ...await checkPermissions(), ...await checkDuplicates()];
+  return [...await checkStructure(), ...await checkLinks(), ...await checkMemory(), ...await checkVersion(), ...await checkWrappers(), ...await checkDependencies(), ...await checkWorkspaceContracts(), ...await checkPermissions(), ...await checkDuplicates(), ...await checkProfileAuthority()];
 }
 
 export function hasFailures(findings: Finding[]): boolean {

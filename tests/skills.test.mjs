@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "../dist/application/skills/skill-curation.js";
 import { listSkills, loadSkill, loadSkills } from "../dist/infrastructure/filesystem/skill-loader.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
@@ -54,4 +55,13 @@ test("the pinned local validator rejects malformed Agent Skills", async () => {
   });
   assert.notEqual(output.code, 0);
   assert.match(output.value, /invalid name/);
+});
+
+test("stores and requires review for skill candidates", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-skill-candidates-"));
+  process.env.ATLAS_ROOT = root;
+  await addSkillCandidate({ id: "review", name: "Review", instructions: "Check the diff." });
+  assert.equal((await listSkillCandidates())[0].status, "candidate");
+  assert.equal((await reviewSkillCandidate("review", "promoted")).status, "promoted");
+  delete process.env.ATLAS_ROOT;
 });

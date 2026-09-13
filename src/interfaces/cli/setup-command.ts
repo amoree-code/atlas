@@ -14,8 +14,6 @@ const personalDirectories = [
 ];
 
 const stateDirectories = [
-  "system/config/policies",
-  "system/config/schemas",
   "system/config/startup",
   "system/profiles",
   "system/sessions",
@@ -91,7 +89,6 @@ async function installWindowsStartup(): Promise<void> {
 export async function setup(): Promise<void> {
   await Promise.all(personalDirectories.map((directory) => mkdir(atlasPath(directory), { recursive: true })));
   await Promise.all(stateDirectories.map((directory) => mkdir(atlasPath(directory), { recursive: true })));
-  await ensureFile(atlasPath("system", "config", "settings.json"), await readFile(new URL("../../../templates/config/settings.json", import.meta.url), "utf8"));
   await ensureFile(atlasPath("system", "profiles", "default.json"), await readFile(new URL("../../../templates/profiles/default.json", import.meta.url), "utf8"));
   await ensureFile(atlasPath("system", "config", "startup", "STARTUP.md"), "# Atlas startup\n\nManaged by `atlas setup`.\n");
   await syncProviderWrappers();

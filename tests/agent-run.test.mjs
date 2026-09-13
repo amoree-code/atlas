@@ -5,19 +5,23 @@ import path from "node:path";
 import test from "node:test";
 import { runAgent, resumeAgent } from "../dist/application/runs/run-agent.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { clearHooks, registerHook } from "../dist/application/hooks/lifecycle-hooks.js";
 
 test("connects profile, context, headless execution, and session storage", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
-  await writeFile(path.join(root, "system", "profiles", "reviewer.json"), JSON.stringify({
+  const profileDirectory = path.join(root, "system", "profiles", "reviewer");
+  await mkdir(profileDirectory, { recursive: true });
+  await writeFile(path.join(profileDirectory, "profile.json"), JSON.stringify({
     name: "reviewer", provider: "claude", model: "sonnet", role: "review only", skills: ["verification"],
     allowedPaths: ["README.md"], contextSources: ["README.md"],
   }));
+  await writeFile(path.join(profileDirectory, "instructions.md"), "Inspect before reporting.");
   await writeFile(path.join(root, "README.md"), "project context");
   const database = path.join(root, "system", "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
   const session = await runAgent({ profileName: "reviewer", prompt: "Review", cwd: root }, async (request) => {
     assert.equal(request.provider, "claude");
+    assert.match(request.prompt, /Inspect before reporting/);
     assert.match(request.prompt, /project context/);
     assert.match(request.prompt, /Skill: verification/);
     request.onEvent?.({ type: "json", data: { text: "done" } });
@@ -28,6 +32,77 @@ test("connects profile, context, headless execution, and session storage", async
   assert.equal(session.status, "completed");
   assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["user_input", "context_manifest", "json", "process_exit", "evidence"]);
   store.close();
+  delete process.env.ATLAS_ROOT;
+});
+
+test("applies one universal policy through every registered client adapter", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-universal-profile-"));
+  const profileDirectory = path.join(root, "system", "profiles", "universal");
+  await mkdir(profileDirectory, { recursive: true });
+  await writeFile(path.join(profileDirectory, "profile.json"), JSON.stringify({
+    name: "universal", version: "2.0.0", role: "bounded verifier",
+    clients: Object.fromEntries(["claude", "codex", "gemini", "antigravity", "hermes"].map((client) => [client, { enabled: true, home: `system/clients/homes/${client}` }])),
+    defaultClient: "claude",
+    governance: { writePolicy: "none", allowedPaths: ["README.md"], approvalRequired: true },
+    verification: { commands: ["node --version"] },
+  }));
+  process.env.ATLAS_ROOT = root;
+  const seen = [];
+  try {
+    for (const client of ["claude", "codex", "gemini", "antigravity", "hermes"]) {
+      const session = await runAgent({ profileName: "universal", client, prompt: "verify policy", cwd: root }, async (request) => {
+        seen.push(request);
+        return { exitCode: 0, events: [], stderr: "" };
+      });
+      assert.equal(session.status, "completed");
+      assert.equal(session.provider, client);
+      assert.match(session.profileIdentity, /^[a-f0-9]{64}$/);
+    }
+  } finally {
+    delete process.env.ATLAS_ROOT;
+  }
+  assert.deepEqual(seen.map((request) => request.provider), ["claude", "codex", "gemini", "antigravity", "hermes"]);
+  assert.ok(seen.every((request) => request.prompt.includes("verify policy")));
+  assert.ok(seen.every((request) => request.clientHome.endsWith(path.join("system", "clients", "homes", request.provider))));
+});
+
+test("injects bounded profile facts into a run", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-facts-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", model: "sonnet", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  const facts = path.join(root, "system", "memory", "profiles");
+  await mkdir(facts, { recursive: true });
+  await writeFile(path.join(facts, "default.json"), JSON.stringify([{ key: "shell", value: "zsh", updatedAt: new Date().toISOString() }]));
+  await runAgent({ profileName: "default", prompt: "start", cwd: root }, async (request) => {
+    assert.match(request.prompt, /shell: zsh/);
+    return { exitCode: 0, events: [], stderr: "" };
+  });
+  delete process.env.ATLAS_ROOT;
+});
+
+test("runs registered lifecycle hooks around a session", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-hooks-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", model: "sonnet", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  const events = [];
+  registerHook("session.start", (event) => events.push(event));
+  registerHook("session.end", (event) => events.push(event));
+  await runAgent({ profileName: "default", prompt: "start", cwd: root }, async () => ({ exitCode: 0, events: [], stderr: "" }));
+  assert.deepEqual(events, ["session.start", "session.end"]);
+  clearHooks();
+  delete process.env.ATLAS_ROOT;
+});
+
+test("a throwing lifecycle hook blocks the run", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-block-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", model: "sonnet", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  registerHook("session.start", () => { throw new Error("blocked by hook"); });
+  await assert.rejects(() => runAgent({ profileName: "default", prompt: "start", cwd: root }, async () => ({ exitCode: 0, events: [], stderr: "" })), /blocked by hook/);
+  clearHooks();
   delete process.env.ATLAS_ROOT;
 });
 

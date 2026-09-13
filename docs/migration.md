@@ -4,12 +4,6 @@ There is no data-migration tooling in the current runtime: no schema-versioned m
 no CLI command, and no automatic transformation of existing workspace data. This document
 describes what changes between versions and what to check by hand.
 
-## Workspace state
-
-`system/config/settings.json` currently contains only `{ "version": 1 }`
-(`templates/config/settings.json`). Nothing in the runtime reads or acts on this field
-today; it exists as a placeholder for future compatibility checks.
-
 ## SQLite schema
 
 `SessionStore` (`src/infrastructure/persistence/session-store.ts`) creates its tables with

@@ -21,7 +21,9 @@ workspace outside of `engine/` (see [workspace.md](workspace.md)), which:
 
 Profiles declare `allowedPaths`, and `buildContext` only reads a `contextSources` entry if
 it resolves inside one of those paths (see [context.md](context.md)). The schema also
-carries `allowedCommands` and `writePolicy` per profile (see [profiles.md](profiles.md)). Direct
+carries `allowedCommands` and `writePolicy` per profile (see [profiles.md](profiles.md));
+the run boundary rejects an unauthorized provider command and an empty `allowed-paths`
+policy. Direct
 interception keeps provider-owned execution behavior. Set `ATLAS_SANDBOX_RUNTIME=openshell` to
 route the provider through an OpenShell sandbox with a bounded working directory, read-only
 system paths, temporary write access, and Landlock best-effort enforcement. The current

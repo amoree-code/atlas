@@ -4,10 +4,14 @@
   "version": "1.0.0",
   "provider": "claude",
   "model": "sonnet",
+  "clients": { "claude": { "enabled": true, "model": "sonnet" }, "codex": { "enabled": true }, "gemini": { "enabled": true }, "antigravity": { "enabled": true }, "hermes": { "enabled": true } },
+  "defaultClient": "claude",
   "role": "general assistant",
   "skills": [],
   "allowedPaths": ["."],
   "allowedCommands": [],
   "writePolicy": "workspace",
-  "contextSources": []
+  "contextSources": [],
+  "instructions": "Handle ad-hoc work carefully. Preserve unrelated changes and report what was verified.",
+  "verification": { "commands": [] }
 }

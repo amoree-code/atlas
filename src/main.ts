@@ -14,6 +14,9 @@ import { runMemoryCommand } from "./interfaces/cli/memory-command.js";
 import { runCaptureCommand } from "./interfaces/cli/capture-command.js";
 import { runContextCommand } from "./interfaces/cli/context-command.js";
 import { hasFailures, repairWorkspace, workspaceReport } from "./application/doctor/workspace-doctor.js";
+import { listSchedules, runDueSchedules, runSchedule, runSchedulerWorker, runSchedulerWorkerOnce, saveSchedule, setScheduleEnabled } from "./application/scheduler/local-scheduler.js";
+import { createWebhookGateway } from "./application/gateway/webhook-gateway.js";
+import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "./application/skills/skill-curation.js";
 
 const command = process.argv[2] ?? "service";
 
@@ -85,6 +88,44 @@ if (command === "setup") {
   await runCaptureCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "context") {
   await runContextCommand(process.argv.includes("--json"));
+} else if (command === "schedule") {
+  const action = process.argv[3] ?? "list";
+  if (action === "list") console.log(JSON.stringify(await listSchedules(), null, 2));
+  else if (action === "add") {
+    const [id, profile, intervalMs, ...prompt] = process.argv.slice(4);
+    if (!id || !profile || !intervalMs || !prompt.length) { console.error("Usage: atlas schedule add <id> <profile> <interval-ms> <prompt>"); process.exitCode = 1; }
+    else await saveSchedule({ id, profile, prompt: prompt.join(" "), intervalMs: Number(intervalMs), nextRunAt: new Date().toISOString(), enabled: true });
+  } else if (action === "run-due") console.log(JSON.stringify({ ran: await runDueSchedules(atlasRoot()) }, null, 2));
+  else if (action === "worker-once") console.log(JSON.stringify({ ran: await runSchedulerWorkerOnce(atlasRoot()) }, null, 2));
+  else if (action === "worker") {
+    const controller = new AbortController();
+    const stop = () => controller.abort(); process.once("SIGINT", stop); process.once("SIGTERM", stop);
+    await runSchedulerWorker(atlasRoot(), { signal: controller.signal, pollMs: Number(process.env.ATLAS_SCHEDULER_POLL_MS ?? 30_000) });
+    process.off("SIGINT", stop); process.off("SIGTERM", stop);
+  }
+  else if (action === "enable" || action === "disable") console.log(JSON.stringify(await setScheduleEnabled(process.argv[4] ?? "", action === "enable"), null, 2));
+  else if (action === "run-now") await runSchedule(process.argv[4] ?? "", atlasRoot());
+  else { console.error("Usage: atlas schedule list|add|enable|disable|run-due|run-now|worker-once|worker"); process.exitCode = 1; }
+} else if (command === "gateway") {
+  const port = Number(process.env.ATLAS_GATEWAY_PORT ?? 8787);
+  const token = process.env.ATLAS_GATEWAY_TOKEN;
+  if (!token) { console.error("ATLAS_GATEWAY_TOKEN is required"); process.exitCode = 1; }
+  else {
+    const server = createWebhookGateway(atlasRoot(), token);
+    server.listen(port, "127.0.0.1", () => console.log(`Atlas webhook gateway listening on 127.0.0.1:${port}`));
+  }
+} else if (command === "skill") {
+  const action = process.argv[3] ?? "list";
+  if (action === "list") console.log(JSON.stringify(await listSkillCandidates(), null, 2));
+  else if (action === "add") {
+    const [id, name, ...instructions] = process.argv.slice(4);
+    if (!id || !name || !instructions.length) { console.error("Usage: atlas skill add <id> <name> <instructions>"); process.exitCode = 1; }
+    else console.log(JSON.stringify(await addSkillCandidate({ id, name, instructions: instructions.join(" ") }), null, 2));
+  } else if (action === "review") {
+    const [id, status] = process.argv.slice(4);
+    if (!id || (status !== "promoted" && status !== "rejected")) { console.error("Usage: atlas skill review <id> promoted|rejected"); process.exitCode = 1; }
+    else console.log(JSON.stringify(await reviewSkillCandidate(id, status), null, 2));
+  } else { console.error("Usage: atlas skill list|add|review"); process.exitCode = 1; }
 } else if (command === "catalog") {
   console.log(JSON.stringify(listInstallSpecs().map((spec) => ({ id: spec.provider.id, command: spec.provider.command, installer: installPlan(spec.provider.id) })), null, 2));
 } else if (command === "env") {
@@ -123,13 +164,15 @@ if (command === "setup") {
 } else if (command === "run") {
   const profileIndex = process.argv.indexOf("--profile");
   const promptIndex = process.argv.indexOf("--prompt");
+  const clientIndex = process.argv.indexOf("--client");
   const profileName = profileIndex >= 0 ? process.argv[profileIndex + 1] : "default";
+  const client = clientIndex >= 0 ? process.argv[clientIndex + 1] : undefined;
   const prompt = promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
   if (!profileName || !prompt) {
-    console.error("Usage: atlas run --profile <name> --prompt <text>");
+    console.error("Usage: atlas run --profile <name> [--client <client>] --prompt <text>");
     process.exitCode = 1;
   } else {
-    const session = await runAgent({ profileName, prompt, cwd: atlasRoot() });
+    const session = await runAgent({ profileName, client, prompt, cwd: atlasRoot() });
     console.log(JSON.stringify({ sessionId: session.sessionId, status: session.status }));
   }
 } else if (command === "session") {
@@ -154,9 +197,22 @@ if (command === "setup") {
       const session = await resumeAgent(sessionId, prompt);
       console.log(JSON.stringify({ sessionId: session.sessionId, status: session.status }));
     }
+  } else if (action === "doctor") {
+    const thresholdHours = Number(process.argv[4] ?? "24");
+    const apply = process.argv.includes("--apply");
+    if (!Number.isFinite(thresholdHours) || thresholdHours <= 0) {
+      store.close();
+      console.error("Usage: atlas session doctor [hours] [--apply]");
+      process.exitCode = 1;
+    } else {
+      const thresholdMs = thresholdHours * 60 * 60 * 1000;
+      const stale = apply ? store.reconcileStaleRunning(thresholdMs) : store.listStaleRunning(thresholdMs);
+      console.log(JSON.stringify({ apply, thresholdHours, stale: stale.map((session) => ({ sessionId: session.sessionId, provider: session.provider, updatedAt: session.updatedAt })), integrity: store.integrityCheck() }));
+      store.close();
+    }
   } else {
     store.close();
-    console.error("Usage: atlas session list|show <session-id>|resume <session-id> <prompt>");
+    console.error("Usage: atlas session list|show <session-id>|resume <session-id> <prompt>|doctor [hours] [--apply]");
     process.exitCode = 1;
   }
 } else {

@@ -21,6 +21,9 @@ export async function writeOpenShellPolicy(request: SandboxLaunchRequest): Promi
   await mkdir(root, { recursive: true });
   const directory = await mkdtemp(path.join(root, "openshell-"));
   const policyPath = path.join(directory, "policy.yaml");
+  const writePolicy = request.writePolicy ?? "workspace";
+  const writablePaths = writePolicy === "none" ? [] : writePolicy === "allowed-paths" ? (request.allowedPaths ?? []) : [request.cwd];
+  if (writePolicy === "allowed-paths" && !writablePaths.length) throw new Error("OpenShell policy denied empty allowed paths");
   const policy = [
     "version: 1",
     "filesystem_policy:",
@@ -31,8 +34,9 @@ export async function writeOpenShellPolicy(request: SandboxLaunchRequest): Promi
     "    - /sbin",
     "    - /lib",
     "    - /etc",
+    ...(writePolicy === "none" ? [`    - ${request.cwd}`] : []),
     "  read_write:",
-    "    - /tmp",
+    ...(writablePaths.length ? writablePaths.map((entry) => `    - ${entry}`) : ["    - /tmp"]),
     "landlock:",
     "  compatibility: best_effort",
     ...providerNetworkPolicy(request.command),

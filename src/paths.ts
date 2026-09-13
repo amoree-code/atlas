@@ -8,7 +8,7 @@ const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const engineDirectory = path.resolve(moduleDirectory, "..");
 
 // The default runtime data root is the private workspace sibling of engine/, e.g.
-// ~/atlas/engine (this package) next to ~/atlas/personal, ~/atlas/sessions, etc.
+// ~/atlas/engine (this package) next to ~/atlas/personal, ~/atlas/projects, and ~/atlas/system.
 const defaultAtlasRoot = path.resolve(engineDirectory, "..");
 
 export function engineRoot(): string {
@@ -27,7 +27,7 @@ export function atlasPath(...parts: string[]): string {
   return path.join(atlasRoot(), ...parts);
 }
 
-// Private application state (config, profiles, sessions, logs, cache, and integrations)
+// Private application state (config, profiles, sessions, logs, and integrations)
 // lives at the workspace root, separate from the public engine and user data trees.
 export function atlasStatePath(...parts: string[]): string {
   return atlasPath(...parts);
