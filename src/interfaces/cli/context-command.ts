@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, enginePath } from "../../paths.js";
 import { listTickets } from "./tickets-command.js";
 
 export async function runContextCommand(json = false): Promise<void> {
-  const version = (await readFile(path.join(atlasPath("engine"), "VERSION"), "utf8")).trim();
+  const version = (await readFile(enginePath("VERSION"), "utf8")).trim();
   const tickets = (await listTickets()).filter((ticket) => ticket.state === "active" || ticket.state === "blocked");
   const context = { project: "atlas", version, roots: ["personal", "projects", "system"], tickets };
   if (json) {

@@ -3,10 +3,14 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { atlasPath } from "../../paths.js";
 
-export async function listTickets(state?: string) {
+export type TicketSummary = { id: string; title: string; state: string; goal: string; updatedAt: string };
+
+export async function listTickets(state?: string): Promise<TicketSummary[]> {
   const root = atlasPath("projects", "atlas", "tickets");
-  const records = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
+  const records: TicketSummary[] = [];
+  let entries;
+  try { entries = await readdir(root, { withFileTypes: true }); } catch { return records; }
+  for (const entry of entries) {
     if (!entry.isDirectory() || entry.name === "archive") continue;
     const file = path.join(root, entry.name, "task.md");
     let source: string;
