@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { buildContext } from "../../infrastructure/filesystem/context-manager.js";
 import { loadSkills } from "../../infrastructure/filesystem/skill-loader.js";
+import { loadPromotedSkills } from "../skills/skill-curation.js";
 import { loadProfile } from "../../infrastructure/filesystem/profile-loader.js";
 import { profileIdentity, selectProfileClient } from "../../domain/profiles/profile.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
@@ -61,12 +62,16 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
     const context = await buildContext(profile, request.cwd);
     const profileFacts = await readProfileFacts(profile.name);
     const skills = await loadSkills(profile.skills, 32_000, request.cwd);
+    const autoSkills = await loadPromotedSkills(request.prompt, Math.max(0, 32_000 - skills.reduce((bytes, skill) => bytes + Buffer.byteLength(skill.instructions), 0)));
+    for (const skill of autoSkills) {
+      sessionStore.appendEvent(sessionId, "skill_auto_activated", JSON.stringify({ id: skill.id, name: skill.name, sourceSessionId: skill.sourceSessionId ?? null }));
+    }
     sessionStore.appendEvent(sessionId, "user_input", redactRuntimeText(request.prompt));
     if (request.actor) sessionStore.appendEvent(sessionId, "actor_bound", request.actor);
     sessionStore.appendEvent(sessionId, "context_manifest", JSON.stringify(context.manifest));
     sessionStore.updateStatus(sessionId, "running");
     await emitHook("session.start", { sessionId, profile: profile.name, provider: profile.provider });
-    const skillContent = skills.map((skill) => `## Skill: ${skill.name}\n${skill.instructions}`).join("\n\n");
+    const skillContent = [...skills, ...autoSkills].map((skill) => `## Skill: ${skill.name}\n${skill.instructions}`).join("\n\n");
     const prompt = [request.prompt, profile.instructions, skillContent, formatProfileFacts(profileFacts), context.content].filter(Boolean).join("\n\n");
     const result = await execute({
       provider: profile.provider as HeadlessProvider,

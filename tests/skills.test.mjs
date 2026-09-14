@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addSkillCandidate, learnSkillFromSession, listSkillCandidates, reviewSkillCandidate } from "../dist/application/skills/skill-curation.js";
+import { addSkillCandidate, learnSkillFromSession, listSkillCandidates, loadPromotedSkills, reviewSkillCandidate } from "../dist/application/skills/skill-curation.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 import { listSkills, loadSkill, loadSkills } from "../dist/infrastructure/filesystem/skill-loader.js";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -29,6 +29,22 @@ test("loads profile skills in order, ignores duplicates, and enforces a byte bud
   const skills = await loadSkills(["verification", "verification", "core-thinking"], 80);
   assert.deepEqual(skills.map((skill) => skill.name), ["verification"]);
   assert.ok(Buffer.byteLength(skills[0].instructions) <= 80);
+});
+
+test("auto-activates only owner-reviewed promoted skills matching the prompt", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-auto-skills-"));
+  const previous = process.env.ATLAS_ROOT;
+  process.env.ATLAS_ROOT = root;
+  try {
+    await addSkillCandidate({ id: "typescript-review", name: "TypeScript Review", instructions: "Check strict typing." });
+    await addSkillCandidate({ id: "untrusted-review", name: "Untrusted Review", instructions: "Do not load me." });
+    await reviewSkillCandidate("typescript-review", "promoted");
+    const loaded = await loadPromotedSkills("Please apply TypeScript Review to this change");
+    assert.deepEqual(loaded.map((skill) => skill.id), ["typescript-review"]);
+    assert.deepEqual(await loadPromotedSkills("Please apply Untrusted Review"), []);
+  } finally {
+    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+  }
 });
 
 test("resolves private and project skills without reading them from engine", async () => {
