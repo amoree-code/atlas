@@ -84,6 +84,10 @@ atlas capture add "An idea to review later"
 atlas capture list
 atlas capture promote <id> knowledge/results
 
+# Learn a skill candidate from a completed session; review it before activation
+atlas skill learn <completed-session-id>
+atlas skill review <candidate-id> promoted
+
 # Workspace health (read-only)
 atlas doctor
 atlas doctor --json
