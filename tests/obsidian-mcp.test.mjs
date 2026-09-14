@@ -8,6 +8,7 @@ import { McpClient } from "../dist/infrastructure/mcp/mcp-client.js";
 
 test("Obsidian MCP exposes bounded tools and requires approval for writes", async () => {
   const vaultPath = await mkdtemp(path.join(os.tmpdir(), "atlas-obsidian-mcp-"));
+  await mkdir(path.join(vaultPath, ".obsidian"));
   await writeFile(path.join(vaultPath, "note.md"), "# Note\n");
   const connection = { enabled: true, mode: "read-only", vaultPath };
   const listed = await handleObsidianMcpRequest({ jsonrpc: "2.0", id: 1, method: "tools/list" }, connection);
@@ -23,6 +24,7 @@ test("MCP client completes a real Atlas-to-Obsidian round trip", async () => {
   const vaultPath = path.join(root, "vault");
   await mkdir(path.join(root, "system", "integrations", "obsidian"), { recursive: true });
   await mkdir(vaultPath);
+  await mkdir(path.join(vaultPath, ".obsidian"));
   await writeFile(path.join(root, "system", "integrations", "obsidian", "connection.json"), JSON.stringify({ enabled: true, mode: "read-write", vaultPath }));
   const client = new McpClient({ command: process.execPath, args: [path.resolve("dist/main.js"), "obsidian", "mcp"], cwd: path.resolve("."), env: { ATLAS_ROOT: root }, allowedTools: ["obsidian_write", "obsidian_read"] });
   try {

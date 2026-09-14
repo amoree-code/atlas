@@ -40,6 +40,20 @@ test("persists and runs a due local schedule once", async () => {
   delete process.env.ATLAS_ROOT;
 });
 
+test("run-due uses a cross-process lease for concurrent callers", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-schedule-lease-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", model: "sonnet", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  await saveSchedule({ id: "once", profile: "default", prompt: "once", intervalMs: 1000, nextRunAt: new Date(0).toISOString(), enabled: true });
+  let executions = 0;
+  const execute = async () => { executions += 1; await delay(25); return { exitCode: 0, events: [], stderr: "" }; };
+  const results = await Promise.all([runDueSchedules(root, execute), runDueSchedules(root, execute)]);
+  assert.equal(executions, 1);
+  assert.equal(results.flat().filter((id) => id === "once").length, 1);
+  delete process.env.ATLAS_ROOT;
+});
+
 test("gateway authenticates and triggers a bounded run request", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-"));
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });

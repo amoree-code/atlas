@@ -13,6 +13,13 @@ test("redacts secrets and private paths while bounding payloads", () => {
   assert.ok(safe.length <= 64_000);
 });
 
+test("redacts generic credentials before applying the payload bound", () => {
+  const safe = redactRuntimeText(`Bearer ${"a".repeat(24)} api_key=${"b".repeat(16)} ${"x".repeat(70_000)}`);
+  assert.doesNotMatch(safe, /Bearer/);
+  assert.doesNotMatch(safe, /api_key=/);
+  assert.ok(safe.length <= 64_000);
+});
+
 test("writes structured runtime logs outside engine", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-logs-"));
   process.env.ATLAS_ROOT = root;

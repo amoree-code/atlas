@@ -31,3 +31,12 @@ test("privacy scanner ignores license text and generated directories", async () 
   const result = await scan(root);
   assert.equal(result.code, 0);
 });
+
+test("privacy scanner catches generic bearer and key assignments", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-privacy-generic-"));
+  await writeFile(path.join(root, "bad.txt"), `Authorization: Bearer ${"a".repeat(24)}\napi_key=${"b".repeat(16)}`);
+  const result = await scan(root);
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /credential/);
+  assert.doesNotMatch(result.stderr, /a{24}|b{16}/);
+});

@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { listInboxCandidates, promoteInboxNote } from "../../application/obsidian/inbox-promotion.js";
-import { discoverObsidianVault, loadObsidianConnection, type ObsidianConnection } from "../../application/obsidian/vault-discovery.js";
+import { discoverObsidianVault, loadObsidianConnection, validateObsidianVault, type ObsidianConnection } from "../../application/obsidian/vault-discovery.js";
 import { syncObsidianVault } from "../../application/obsidian/vault-sync.js";
 import { resolveObsidianNotePath, writeObsidianNote } from "../../application/obsidian/vault-writer.js";
 import { atlasPath } from "../../paths.js";
@@ -46,6 +46,7 @@ async function conflicts(): Promise<unknown[]> {
 }
 
 async function callTool(name: string, args: Record<string, unknown>, connection: ObsidianConnection): Promise<unknown> {
+  await validateObsidianVault(connection);
   if (name === "obsidian_discover") {
     const result = await discoverObsidianVault(connection);
     return { noteCount: result.noteCount, totalBytes: result.totalBytes, notes: result.notes, issues: result.issues };
