@@ -132,3 +132,7 @@ The local Agent Skills validator runs with `pnpm check:skills`. CI runs the same
 Node.js script (`scripts/validate-skills.mjs`) and checks every public `SKILL.md` against its
 frontmatter, directory name, and `skills/index.json` entry. It is a development check only;
 runtime skill loading does not invoke CI tooling.
+
+Completed sessions can produce a bounded, redacted skill candidate with
+`atlas skill learn <session-id>`. The candidate is stored privately with its source session
+and remains inactive until an owner explicitly runs `atlas skill review <id> promoted`.

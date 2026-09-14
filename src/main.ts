@@ -17,7 +17,7 @@ import { runContextCommand } from "./interfaces/cli/context-command.js";
 import { hasFailures, repairWorkspace, workspaceReport } from "./application/doctor/workspace-doctor.js";
 import { listSchedules, runDueSchedules, runSchedule, runSchedulerWorker, runSchedulerWorkerOnce, saveSchedule, setScheduleEnabled } from "./application/scheduler/local-scheduler.js";
 import { createWebhookGateway } from "./application/gateway/webhook-gateway.js";
-import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "./application/skills/skill-curation.js";
+import { addSkillCandidate, learnSkillFromSession, listSkillCandidates, reviewSkillCandidate } from "./application/skills/skill-curation.js";
 import { connectObsidianVault, discoverObsidianVault, loadObsidianConnection } from "./application/obsidian/vault-discovery.js";
 import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/vault-sync.js";
 import { listInboxCandidates, promoteInboxNote } from "./application/obsidian/inbox-promotion.js";
@@ -195,7 +195,11 @@ if (!command) {
     const [id, status] = process.argv.slice(4);
     if (!id || (status !== "promoted" && status !== "rejected")) { console.error("Usage: atlas skill review <id> promoted|rejected"); process.exitCode = 1; }
     else console.log(JSON.stringify(await reviewSkillCandidate(id, status), null, 2));
-  } else { console.error("Usage: atlas skill list|add|review"); process.exitCode = 1; }
+  } else if (action === "learn") {
+    const sessionId = process.argv[4];
+    if (!sessionId) { console.error("Usage: atlas skill learn <completed-session-id>"); process.exitCode = 1; }
+    else console.log(JSON.stringify(await learnSkillFromSession(sessionId), null, 2));
+  } else { console.error("Usage: atlas skill list|add|learn|review"); process.exitCode = 1; }
 } else if (command === "catalog") {
   console.log(JSON.stringify(listInstallSpecs().map((spec) => ({ id: spec.provider.id, command: spec.provider.command, installer: installPlan(spec.provider.id) })), null, 2));
 } else if (command === "env") {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "../dist/application/skills/skill-curation.js";
+import { addSkillCandidate, learnSkillFromSession, listSkillCandidates, reviewSkillCandidate } from "../dist/application/skills/skill-curation.js";
+import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 import { listSkills, loadSkill, loadSkills } from "../dist/infrastructure/filesystem/skill-loader.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
@@ -63,5 +64,22 @@ test("stores and requires review for skill candidates", async () => {
   await addSkillCandidate({ id: "review", name: "Review", instructions: "Check the diff." });
   assert.equal((await listSkillCandidates())[0].status, "candidate");
   assert.equal((await reviewSkillCandidate("review", "promoted")).status, "promoted");
+  delete process.env.ATLAS_ROOT;
+});
+
+test("learns a bounded skill candidate from a completed session without auto-promoting it", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-skill-learning-"));
+  process.env.ATLAS_ROOT = root;
+  const sessionId = "learn-session";
+  const store = await openSessionStore();
+  store.create({ sessionId, provider: "codex", providerSessionId: null, parentSessionId: null, profile: "default", profileIdentity: "", workingDirectory: root, resumeData: null });
+  store.updateStatus(sessionId, "running");
+  store.appendEvent(sessionId, "provider_output", "Use a bounded review checklist.");
+  store.updateStatus(sessionId, "completed");
+  store.close();
+  const candidate = await learnSkillFromSession(sessionId);
+  assert.equal(candidate.status, "candidate");
+  assert.equal(candidate.sourceSessionId, sessionId);
+  assert.match(candidate.instructions, /bounded review/);
   delete process.env.ATLAS_ROOT;
 });
