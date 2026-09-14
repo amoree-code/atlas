@@ -18,16 +18,21 @@ export async function runService(): Promise<void> {
   }
   const heartbeat = setInterval(() => undefined, 60_000);
   await new Promise<void>((resolve) => {
-    const shutdown = (signal: NodeJS.Signals) => {
+    const shutdown = (signal: string) => {
       console.log(`Atlas runtime received ${signal}, shutting down.`);
       clearInterval(heartbeat);
       controller.abort();
       process.off("SIGINT", shutdown);
       process.off("SIGTERM", shutdown);
+      process.off("message", onMessage);
       resolve();
+    };
+    const onMessage = (message: unknown): void => {
+      if (message === "shutdown") shutdown("IPC");
     };
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
+    process.on("message", onMessage);
   });
   await watcher;
   console.log("Atlas runtime stopped.");
