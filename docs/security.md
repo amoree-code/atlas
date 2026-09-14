@@ -24,11 +24,12 @@ it resolves inside one of those paths (see [context.md](context.md)). The schema
 carries `allowedCommands` and `writePolicy` per profile (see [profiles.md](profiles.md));
 the run boundary rejects an unauthorized provider command and an empty `allowed-paths`
 policy. Direct
-interception keeps provider-owned execution behavior. Set `ATLAS_SANDBOX_RUNTIME=openshell` to
-route the provider through an OpenShell sandbox with a bounded working directory, read-only
+interception keeps provider-owned execution behavior. Set `ATLAS_SANDBOX_RUNTIME=openshell` on a
+supported platform to route the provider through an OpenShell sandbox with a bounded working directory, read-only
 system paths, temporary write access, and Landlock best-effort enforcement. The current
 sandbox-first path does not require an OpenShell provider attachment to create the sandbox;
-missing provider credentials remain an explicit authentication failure. Atlas does not copy or
+missing provider credentials remain an explicit authentication failure. On macOS, Atlas refuses
+this runtime because containment is not proven there. Atlas does not copy or
 invent credentials. Secure provider attachment is a separate authentication boundary. The official
 OpenShell local-credential bootstrap can be enabled only with the explicit
 `ATLAS_OPENSHELL_AUTO_PROVIDERS=1` runtime policy; the default remains `--no-auto-providers`.
