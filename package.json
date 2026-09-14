@@ -26,7 +26,7 @@
     "check:package": "node scripts/validate-package.mjs",
     "check:system": "sh scripts/health-check.sh",
     "check:providers": "node scripts/provider-smoke.mjs",
-    "test": "pnpm build && node --test tests/*.test.mjs"
+    "test": "pnpm build && node --test --test-concurrency=1 tests/*.test.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["node-pty"]
