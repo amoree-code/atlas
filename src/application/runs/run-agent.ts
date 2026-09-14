@@ -142,6 +142,10 @@ function boundedEventData(event: RuntimeEvent): string {
 function captureProviderSessionId(store: Awaited<ReturnType<typeof openSessionStore>>, sessionId: string, event: RuntimeEvent): void {
   if (event.type === "json" && typeof event.data === "object" && event.data !== null && "session_id" in event.data) {
     const providerSessionId = (event.data as { session_id?: unknown }).session_id;
-    if (typeof providerSessionId === "string") store.updateProviderSessionId(sessionId, providerSessionId);
+    if (typeof providerSessionId === "string" && isValidProviderSessionId(providerSessionId)) store.updateProviderSessionId(sessionId, providerSessionId);
   }
+}
+
+export function isValidProviderSessionId(value: string): boolean {
+  return value.length <= 256 && /^[A-Za-z0-9._:-]+$/.test(value);
 }

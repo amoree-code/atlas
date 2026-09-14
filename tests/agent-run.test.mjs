@@ -3,9 +3,15 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { runAgent, resumeAgent } from "../dist/application/runs/run-agent.js";
+import { isValidProviderSessionId, runAgent, resumeAgent } from "../dist/application/runs/run-agent.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
 import { clearHooks, registerHook } from "../dist/application/hooks/lifecycle-hooks.js";
+
+test("bounds provider session identifiers before persistence", () => {
+  assert.equal(isValidProviderSessionId("codex-session_1"), true);
+  assert.equal(isValidProviderSessionId("../../private"), false);
+  assert.equal(isValidProviderSessionId("x".repeat(257)), false);
+});
 
 test("connects profile, context, headless execution, and session storage", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-"));
