@@ -78,12 +78,12 @@ export function applyProviderResourceAdapter(provider: string, args: string[], i
     return { args: nextArgs, transport: "codex-exec-prompt", consumesContent: true };
   }
 
-  if (provider === "kilo") {
+  if (provider === "kilo" || provider === "kimi") {
     const nextArgs = [...args];
     const promptIndex = nextArgs.findIndex((arg) => arg === "--prompt");
     if (promptIndex >= 0 && promptIndex + 1 < nextArgs.length) {
       nextArgs[promptIndex + 1] = `${nextArgs[promptIndex + 1]}\n\n${injection.content}`;
-      return { args: nextArgs, transport: "kilo-prompt-option", consumesContent: true };
+      return { args: nextArgs, transport: provider === "kimi" ? "kimi-prompt-option" : "kilo-prompt-option", consumesContent: true };
     }
     if (nextArgs[0] === "run") {
       nextArgs.splice(1, 0, injection.content);

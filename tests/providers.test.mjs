@@ -17,7 +17,7 @@ test("builds the Claude CLI stream contract", () => {
 });
 
 test("exposes one adapter with capabilities for every registered headless provider", () => {
-  assert.deepEqual(Object.keys(providerAdapterRegistry).sort(), ["antigravity", "claude", "codex", "gemini", "hermes"]);
+  assert.deepEqual(Object.keys(providerAdapterRegistry).sort(), ["antigravity", "claude", "codex", "gemini", "hermes", "kilo", "kimi"]);
   assert.ok(providerAdapterRegistry.claude.capabilities.includes("resume"));
 });
 
@@ -45,6 +45,20 @@ test("builds the Hermes one-shot contract", () => {
   }), {
     command: "hermes",
     args: ["-z", "hello"],
+  });
+});
+
+test("builds the Kilo autonomous run contract", () => {
+  assert.deepEqual(buildProviderInvocation({ provider: "kilo", prompt: "hello", cwd: "/tmp" }), {
+    command: "kilo",
+    args: ["run", "--auto", "hello"],
+  });
+});
+
+test("builds the Kimi non-interactive stream contract", () => {
+  assert.deepEqual(buildProviderInvocation({ provider: "kimi", prompt: "hello", cwd: "/tmp" }), {
+    command: "kimi",
+    args: ["--prompt", "hello", "--output-format", "stream-json"],
   });
 });
 

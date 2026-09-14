@@ -2,7 +2,7 @@ import path from "node:path";
 import { runHeadless, type HeadlessResult, type RuntimeEvent } from "../process/cli-process.js";
 import { resolveOriginalExecutable } from "./provider-registry.js";
 
-export type HeadlessProvider = "claude" | "codex" | "gemini" | "antigravity" | "hermes";
+export type HeadlessProvider = "claude" | "codex" | "gemini" | "antigravity" | "hermes" | "kilo" | "kimi";
 export type ProviderAdapter = { provider: HeadlessProvider; capabilities: readonly string[]; build: (request: ProviderRequest) => string[] };
 
 export type ProviderRequest = {
@@ -22,6 +22,8 @@ export const providerAdapterRegistry: Readonly<Record<HeadlessProvider, Provider
   gemini: { provider: "gemini", capabilities: ["headless"], build: (request) => ["--prompt", request.prompt, "--output-format", "stream-json"] },
   antigravity: { provider: "antigravity", capabilities: ["headless"], build: (request) => ["--print", request.prompt, "--output-format", "stream-json"] },
   hermes: { provider: "hermes", capabilities: ["headless"], build: (request) => ["-z", request.prompt] },
+  kilo: { provider: "kilo", capabilities: ["headless"], build: (request) => ["run", "--auto", request.prompt] },
+  kimi: { provider: "kimi", capabilities: ["headless"], build: (request) => ["--prompt", request.prompt, "--output-format", "stream-json"] },
 };
 
 export function buildProviderInvocation(request: ProviderRequest): { command: string; args: string[] } {
