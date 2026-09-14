@@ -53,7 +53,7 @@ test("sync creates Atlas wrappers and shell activation", async () => {
     const wrapper = await readFile(providerWrapperPath("claude"), "utf8");
     assert.match(wrapper, /intercept --client/);
     const atlasWrapper = await readFile(providerWrapperPath("atlas"), "utf8");
-    assert.match(atlasWrapper, /dist\/main\.js/);
+    assert.match(atlasWrapper, /dist[\\/]main\.js/);
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
     assert.match(await readFile(profile, "utf8"), /atlas interception/);
