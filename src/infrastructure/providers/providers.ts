@@ -23,7 +23,7 @@ export const providerAdapterRegistry: Readonly<Record<HeadlessProvider, Provider
   antigravity: { provider: "antigravity", capabilities: ["headless"], build: (request) => ["--print", request.prompt, "--output-format", "stream-json"] },
   hermes: { provider: "hermes", capabilities: ["headless"], build: (request) => ["-z", request.prompt] },
   kilo: { provider: "kilo", capabilities: ["headless"], build: (request) => ["run", "--auto", request.prompt] },
-  kimi: { provider: "kimi", capabilities: ["headless"], build: (request) => ["--prompt", request.prompt, "--output-format", "stream-json"] },
+  kimi: { provider: "kimi", capabilities: ["headless"], build: (request) => ["--prompt", request.prompt, "--print", "--output-format", "stream-json"] },
 };
 
 export function buildProviderInvocation(request: ProviderRequest): { command: string; args: string[] } {

@@ -120,7 +120,7 @@ test("Kilo prompt mode receives Atlas context through its prompt option", async 
 
 test("Kimi prompt mode receives Atlas context through its prompt option", async () => {
   const injection = { content: "ATLAS_CONTEXT", manifest: { files: [], bytes: 0, source: "atlas", transport: "provider-adapter" } };
-  const result = applyProviderResourceAdapter("kimi", ["--prompt", "review this", "--output-format", "stream-json"], injection);
+  const result = applyProviderResourceAdapter("kimi", ["--prompt", "review this", "--print", "--output-format", "stream-json"], injection);
   assert.equal(result.transport, "kimi-prompt-option");
   assert.equal(result.consumesContent, true);
   assert.match(result.args[1], /review this[\s\S]*ATLAS_CONTEXT/);

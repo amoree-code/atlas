@@ -2,7 +2,7 @@ import path from "node:path";
 import type { Profile } from "./profile.js";
 
 const providerCommand: Record<Profile["provider"], string> = {
-  claude: "claude", codex: "codex", gemini: "gemini", antigravity: "agy", hermes: "hermes",
+  claude: "claude", codex: "codex", gemini: "gemini", antigravity: "agy", hermes: "hermes", kilo: "kilo", kimi: "kimi",
 };
 
 export type ExecutionPolicy = {
