@@ -34,6 +34,8 @@ test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, nev
       const info = await stat(path.join(privateRoot, directory));
       assert.ok(info.isDirectory(), `expected ${directory} under the private root`);
     }
+    await stat(path.join(privateRoot, "personal", "memory", "MEMORY.md"));
+    await stat(path.join(privateRoot, "personal", "knowledge", "KNOWLEDGE.md"));
     for (const directory of ["system/profiles", "system/sessions", "system/config/startup", "system/control-plane", "system/integrations", "system/archive"]) {
       const info = await stat(path.join(privateRoot, directory));
       assert.ok(info.isDirectory(), `expected ${directory} under the private root`);

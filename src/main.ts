@@ -1,4 +1,5 @@
-import { setup } from "./interfaces/cli/setup-command.js";
+#!/usr/bin/env node
+import { runFirstRunWizard, setup } from "./interfaces/cli/setup-command.js";
 import { runAgent } from "./application/runs/run-agent.js";
 import { resumeAgent } from "./application/runs/run-agent.js";
 import { runService } from "./infrastructure/process/service.js";
@@ -17,17 +18,28 @@ import { hasFailures, repairWorkspace, workspaceReport } from "./application/doc
 import { listSchedules, runDueSchedules, runSchedule, runSchedulerWorker, runSchedulerWorkerOnce, saveSchedule, setScheduleEnabled } from "./application/scheduler/local-scheduler.js";
 import { createWebhookGateway } from "./application/gateway/webhook-gateway.js";
 import { addSkillCandidate, listSkillCandidates, reviewSkillCandidate } from "./application/skills/skill-curation.js";
-import { discoverObsidianVault, loadObsidianConnection } from "./application/obsidian/vault-discovery.js";
+import { connectObsidianVault, discoverObsidianVault, loadObsidianConnection } from "./application/obsidian/vault-discovery.js";
 import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/vault-sync.js";
 import { listInboxCandidates, promoteInboxNote } from "./application/obsidian/inbox-promotion.js";
 import { writeObsidianNote } from "./application/obsidian/vault-writer.js";
 import { runObsidianMcpServer } from "./infrastructure/mcp/obsidian-server.js";
-import { obsidianMcpConfig } from "./application/mcp/mcp-connection.js";
+import { runAtlasMcpServer } from "./infrastructure/mcp/atlas-server.js";
+import { atlasMcpConfig } from "./application/mcp/mcp-connection.js";
+import { promoteSessionToKnowledge } from "./application/memory/session-promotion.js";
 
-const command = process.argv[2] ?? "service";
+const command = process.argv[2] === "--yes" ? undefined : process.argv[2];
 
-if (command === "setup") {
-  await setup();
+if (!command) {
+  await runFirstRunWizard(process.argv.includes("--yes"));
+} else if (command === "setup") {
+  const obsidianIndex = process.argv.indexOf("--obsidian");
+  const obsidianPath = obsidianIndex >= 0 ? process.argv[obsidianIndex + 1] : undefined;
+  if (obsidianIndex >= 0 && !obsidianPath) {
+    console.error("Usage: atlas setup [--obsidian <vault-path>] [--read-write]");
+    process.exitCode = 1;
+  } else {
+    await setup({ obsidianPath, obsidianMode: process.argv.includes("--read-write") ? "read-write" : "read-only" });
+  }
 } else if (command === "service") {
   await runService();
 } else if (command === "intercept") {
@@ -92,24 +104,34 @@ if (command === "setup") {
   await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "mcp") {
   const action = process.argv[3] ?? "config";
-  if (action === "config") console.log(JSON.stringify(obsidianMcpConfig(), null, 2));
-  else { console.error("Usage: atlas mcp config"); process.exitCode = 1; }
+  if (action === "config") console.log(JSON.stringify(atlasMcpConfig(), null, 2));
+  else if (action === "serve") await runAtlasMcpServer();
+  else { console.error("Usage: atlas mcp config|serve"); process.exitCode = 1; }
 } else if (command === "obsidian") {
   const action = process.argv[3] ?? "discover";
   if (action === "mcp") await runObsidianMcpServer();
-  else if (!["discover", "sync", "watch", "inbox", "write"].includes(action)) {
-    console.error("Usage: atlas obsidian discover|sync|watch|inbox|write");
+  else if (!["connect", "discover", "sync", "watch", "inbox", "write"].includes(action)) {
+    console.error("Usage: atlas obsidian connect <vault-path> [--read-write]|discover|sync|watch|inbox|write");
     process.exitCode = 1;
   } else {
     try {
-      const connection = await loadObsidianConnection();
-      if (action === "write") {
+      if (action === "connect") {
+        const vaultPath = process.argv[4];
+        if (!vaultPath) throw new Error("Usage: atlas obsidian connect <vault-path> [--read-write]");
+        const readWrite = process.argv.includes("--read-write");
+        const mode = readWrite ? "read-write" as const : "read-only" as const;
+        const result = await connectObsidianVault(vaultPath, mode);
+        const synced = await syncObsidianVault(await loadObsidianConnection());
+        console.log(JSON.stringify({ connected: true, mode, vaultPath: result.vaultPath, noteCount: synced.noteCount, added: synced.added, changed: synced.changed, removed: synced.removed, issues: synced.issues }, null, 2));
+      } else {
+        const connection = await loadObsidianConnection();
+        if (action === "write") {
         const relative = process.argv[4];
         const content = process.argv[5];
         const expectedSha256 = process.argv[6] ?? null;
         if (!relative || content === undefined) throw new Error("Usage: atlas obsidian write <relative.md> <content> [expected-sha256] [--apply]");
         console.log(JSON.stringify(await writeObsidianNote(connection, relative, content, expectedSha256 === "-" ? null : expectedSha256, process.argv.includes("--apply")), null, 2));
-      } else if (action === "inbox") {
+        } else if (action === "inbox") {
         const inboxAction = process.argv[4] ?? "list";
         if (inboxAction === "list") console.log(JSON.stringify(await listInboxCandidates(connection), null, 2));
         else if (inboxAction === "promote") {
@@ -118,13 +140,14 @@ if (command === "setup") {
           if (!source || !target) throw new Error("Usage: atlas obsidian inbox promote <source.md> <target-directory> [--apply]");
           console.log(JSON.stringify(await promoteInboxNote(connection, source, target, process.argv.includes("--apply")), null, 2));
         } else throw new Error("Usage: atlas obsidian inbox list|promote <source.md> <target-directory> [--apply]");
-      } else if (action === "discover") console.log(JSON.stringify(await discoverObsidianVault(connection), null, 2));
-      else if (action === "sync") console.log(JSON.stringify(await syncObsidianVault(connection), null, 2));
-      else {
+        } else if (action === "discover") console.log(JSON.stringify(await discoverObsidianVault(connection), null, 2));
+        else if (action === "sync") console.log(JSON.stringify(await syncObsidianVault(connection), null, 2));
+        else {
         const controller = new AbortController();
         process.once("SIGINT", () => controller.abort());
         process.once("SIGTERM", () => controller.abort());
         await watchObsidianVault(connection, undefined, controller.signal);
+        }
       }
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
@@ -244,6 +267,17 @@ if (command === "setup") {
       const session = await resumeAgent(sessionId, prompt);
       console.log(JSON.stringify({ sessionId: session.sessionId, status: session.status }));
     }
+  } else if (action === "promote") {
+    const sessionId = process.argv[4];
+    const target = process.argv[5] ?? "knowledge/results";
+    store.close();
+    if (!sessionId) {
+      console.error("Usage: atlas session promote <session-id> [knowledge/<kind>] --approve");
+      process.exitCode = 1;
+    } else {
+      try { console.log(JSON.stringify(await promoteSessionToKnowledge(sessionId, target, process.argv.includes("--approve")), null, 2)); }
+      catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
+    }
   } else if (action === "doctor") {
     const thresholdHours = Number(process.argv[4] ?? "24");
     const apply = process.argv.includes("--apply");
@@ -259,7 +293,7 @@ if (command === "setup") {
     }
   } else {
     store.close();
-    console.error("Usage: atlas session list|show <session-id>|resume <session-id> <prompt>|doctor [hours] [--apply]");
+    console.error("Usage: atlas session list|show <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]");
     process.exitCode = 1;
   }
 } else {
