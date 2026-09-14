@@ -19,6 +19,7 @@ test("promotes an approved completed session into knowledge and rejects missing 
   store.updateStatus(sessionId, "running");
   store.appendEvent(sessionId, "user_input", "Review the project");
   store.appendEvent(sessionId, "provider_output", "The project is healthy.");
+  store.appendEvent(sessionId, "evidence", JSON.stringify({ result: "proven" }));
   store.updateStatus(sessionId, "completed");
   store.close();
   await assert.rejects(promoteSessionToKnowledge(sessionId), /explicit approval/);

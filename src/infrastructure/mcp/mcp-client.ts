@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { mcpToolSchema, type McpTool } from "../../domain/mcp/mcp-contract.js";
+import { actionFingerprint, mcpToolSchema, type McpTool } from "../../domain/mcp/mcp-contract.js";
 
 type JsonRpc = { jsonrpc: "2.0"; id?: number; method?: string; params?: unknown; result?: unknown; error?: { message?: string } };
 export type McpClientOptions = { command: string; args?: string[]; cwd: string; env?: NodeJS.ProcessEnv; allowedTools?: string[] };
@@ -34,7 +34,10 @@ export class McpClient {
     if (!tool) throw new Error(`MCP tool is not allowed or unavailable: ${name}`);
     if (!this.isAllowed(name)) throw new Error(`MCP tool is not allowed: ${name}`);
     if (tool.annotations?.readOnlyHint === false && !approval) throw new Error(`MCP write requires explicit approval: ${name}`);
-    return this.request("tools/call", { name, arguments: arguments_ });
+    const args = tool.annotations?.readOnlyHint === false && approval
+      ? { ...arguments_, approval: { approved: true, fingerprint: actionFingerprint(name, arguments_) } }
+      : arguments_;
+    return this.request("tools/call", { name, arguments: args });
   }
 
   close(): void {

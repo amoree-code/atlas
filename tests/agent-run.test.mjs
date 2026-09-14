@@ -13,6 +13,18 @@ test("bounds provider session identifiers before persistence", () => {
   assert.equal(isValidProviderSessionId("x".repeat(257)), false);
 });
 
+test("rejects writable profiles when no enforcing sandbox is configured", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-policy-boundary-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "writer.json"), JSON.stringify({ name: "writer", provider: "claude", model: "sonnet", role: "writer", writePolicy: "workspace" }));
+  process.env.ATLAS_ROOT = root;
+  const previous = process.env.ATLAS_SANDBOX_RUNTIME;
+  delete process.env.ATLAS_SANDBOX_RUNTIME;
+  await assert.rejects(() => runAgent({ profileName: "writer", prompt: "write", cwd: root }, async () => ({ exitCode: 0, events: [], stderr: "" })), /cannot enforce writePolicy/);
+  if (previous === undefined) delete process.env.ATLAS_SANDBOX_RUNTIME; else process.env.ATLAS_SANDBOX_RUNTIME = previous;
+  delete process.env.ATLAS_ROOT;
+});
+
 test("connects profile, context, headless execution, and session storage", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-"));
   const profileDirectory = path.join(root, "system", "profiles", "reviewer");

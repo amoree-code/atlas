@@ -3,6 +3,7 @@ import { listTickets } from "../../interfaces/cli/tickets-command.js";
 import { hasFailures, workspaceReport } from "../../application/doctor/workspace-doctor.js";
 import { atlasPath } from "../../paths.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
+import { actionFingerprint, mcpApprovalSchema } from "../../domain/mcp/mcp-contract.js";
 
 type Request = { jsonrpc?: string; id?: number; method?: string; params?: Record<string, unknown> };
 type Response = { jsonrpc: "2.0"; id?: number; result?: unknown; error?: { code: number; message: string } };
@@ -12,7 +13,7 @@ const tools = [
   { name: "atlas_doctor", description: "Run the read-only Atlas workspace health checks.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "atlas_profiles_list", description: "List available Atlas profiles.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "atlas_tickets_list", description: "List Atlas tickets, optionally filtered by state.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { state: { type: "string" } }, additionalProperties: false } },
-  { name: "atlas_session_promote", description: "Promote a completed session result into reviewed Atlas knowledge.", annotations: { readOnlyHint: false }, inputSchema: { type: "object", properties: { sessionId: { type: "string" }, target: { type: "string" }, approved: { type: "boolean" } }, required: ["sessionId", "approved"], additionalProperties: false } },
+  { name: "atlas_session_promote", description: "Promote a completed session result into reviewed Atlas knowledge.", annotations: { readOnlyHint: false }, inputSchema: { type: "object", properties: { sessionId: { type: "string" }, target: { type: "string" }, approval: { type: "object" } }, required: ["sessionId", "approval"], additionalProperties: false } },
 ];
 
 const resources = [
@@ -44,7 +45,9 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
   if (name === "atlas_profiles_list") return { profiles: await profiles() };
   if (name === "atlas_tickets_list") return { tickets: await listTickets(typeof args.state === "string" ? args.state : undefined) };
   if (name === "atlas_session_promote") {
-    if (args.approved !== true) throw new Error("Session promotion requires approved: true");
+    const approval = mcpApprovalSchema.parse(args.approval);
+    const actionArgs = { sessionId: args.sessionId, target: typeof args.target === "string" ? args.target : "knowledge/results" };
+    if (approval.fingerprint !== actionFingerprint(name, actionArgs)) throw new Error("Session promotion approval does not match the requested action");
     return promoteSessionToKnowledge(requiredArgument(args, "sessionId"), typeof args.target === "string" ? args.target : "knowledge/results", true);
   }
   throw new Error(`Unknown MCP tool: ${name}`);

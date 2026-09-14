@@ -17,6 +17,8 @@ export async function promoteSessionToKnowledge(sessionId: string, target = "kno
     if (!session) throw new Error(`Session not found: ${sessionId}`);
     if (session.status !== "completed") throw new Error(`Only completed sessions can be promoted: ${session.status}`);
     const events = store.listEvents(sessionId);
+    const evidence = events.filter((event) => event.type === "evidence").map((event) => event.data).some((data) => /"result"\s*:\s*"proven"/.test(data));
+    if (!evidence) throw new Error("Session lacks independently recorded successful evidence");
     const input = events.find((event) => event.type === "user_input")?.data ?? "";
     const outputs = events.filter((event) => event.type === "provider_output" || event.type === "text" || event.type === "json").map((event) => redactRuntimeText(event.data).trim()).filter(Boolean);
     if (!outputs.length) throw new Error("Session has no provider output to promote");

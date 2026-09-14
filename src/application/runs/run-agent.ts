@@ -24,6 +24,7 @@ export type AgentRunRequest = {
   sessionId?: string;
   runContract?: RunContract;
   client?: string;
+  actor?: string;
 };
 
 export type ProviderExecutor = (request: ProviderRequest) => Promise<HeadlessResult>;
@@ -32,6 +33,9 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   const profile = selectProfileClient(await loadProfile(request.profileName), request.client);
   const clientHome = resolveClientHome(profile);
   executionPolicy(profile, request.cwd);
+  if (profile.writePolicy !== "none" && process.env.ATLAS_SANDBOX_RUNTIME !== "openshell") {
+    throw new Error("Writable profile runs require ATLAS_SANDBOX_RUNTIME=openshell; direct execution cannot enforce writePolicy");
+  }
   const sessionStore = await openSessionStore();
   const sessionId = request.sessionId ?? randomUUID();
   const session = sessionStore.create({
@@ -58,6 +62,7 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
     const profileFacts = await readProfileFacts(profile.name);
     const skills = await loadSkills(profile.skills, 32_000, request.cwd);
     sessionStore.appendEvent(sessionId, "user_input", redactRuntimeText(request.prompt));
+    if (request.actor) sessionStore.appendEvent(sessionId, "actor_bound", request.actor);
     sessionStore.appendEvent(sessionId, "context_manifest", JSON.stringify(context.manifest));
     sessionStore.updateStatus(sessionId, "running");
     await emitHook("session.start", { sessionId, profile: profile.name, provider: profile.provider });

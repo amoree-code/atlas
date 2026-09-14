@@ -67,3 +67,10 @@ detectable; it does not claim universal interception. Windows/Linux live proof a
 credential attachment through OpenShell require platform/provider capabilities not available
 to the current macOS runtime. See [platform-validation.md](platform-validation.md) for the
 current evidence matrix and reproduction commands.
+
+Gateway credentials support an identity and optional profile scope using the environment-only
+format `id@profile-a|profile-b=token`; an unscoped `token` remains the default identity. Each
+gateway request includes an approval fingerprint over its exact profile and prompt, and the
+resulting session records the gateway identity. MCP writes and promotions use the same
+action-bound approval model. These bindings constrain the request; they do not replace provider
+authentication.

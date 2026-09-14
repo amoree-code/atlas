@@ -4,11 +4,12 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { runAgent, type ProviderExecutor } from '../runs/run-agent.js';
+import { actionFingerprint } from '../../domain/mcp/mcp-contract.js';
 
 export type GatewayRequest = {
   profile: string;
   prompt: string;
-  approved: true;
+  approval: { approved: true; fingerprint: string };
 };
 export type GatewayMessage = {
   platform: string;
@@ -67,7 +68,15 @@ export function createGatewayHandler(
     input: unknown,
     token: string | undefined,
   ): Promise<{ status: number; body: string }> => {
-    if (!expectedToken || token !== expectedToken)
+    const credentials = expectedToken.split(',').map((entry) => {
+      const separator = entry.indexOf('=');
+      if (separator < 1) return { id: 'default', token: entry, profiles: undefined };
+      const label = entry.slice(0, separator);
+      const scopeIndex = label.indexOf('@');
+      return { id: scopeIndex < 1 ? label : label.slice(0, scopeIndex), token: entry.slice(separator + 1), profiles: scopeIndex < 1 ? undefined : new Set(label.slice(scopeIndex + 1).split('|').filter(Boolean)) };
+    });
+    const identity = credentials.find((credential) => credential.token === token && (!credential.profiles || (typeof input === 'object' && input !== null && credential.profiles.has((input as GatewayRequest).profile))))?.id;
+    if (!expectedToken || !identity)
       return { status: 401, body: 'Unauthorized' };
     const now = Date.now();
     while (requestTimes[0] !== undefined && requestTimes[0] < now - 60_000)
@@ -80,7 +89,9 @@ export function createGatewayHandler(
       typeof input !== 'object' ||
       typeof (input as GatewayRequest).profile !== 'string' ||
       typeof (input as GatewayRequest).prompt !== 'string' ||
-      (input as GatewayRequest).approved !== true
+      (input as GatewayRequest).approval?.approved !== true ||
+      typeof (input as GatewayRequest).approval?.fingerprint !== 'string' ||
+      (input as GatewayRequest).approval.fingerprint !== actionFingerprint('gateway.run', { profile: (input as GatewayRequest).profile, prompt: (input as GatewayRequest).prompt })
     )
       return { status: 400, body: 'Invalid or unapproved request' };
     if ((input as GatewayRequest).prompt.length > 8_000)
@@ -90,6 +101,7 @@ export function createGatewayHandler(
         profileName: (input as GatewayRequest).profile,
         prompt: (input as GatewayRequest).prompt,
         cwd,
+        actor: `gateway:${identity}`,
       },
       execute,
     );

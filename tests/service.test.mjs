@@ -7,6 +7,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { listSchedules, runDueSchedules, runSchedulerWorker, runSchedulerWorkerOnce, saveSchedule } from "../dist/application/scheduler/local-scheduler.js";
 import { handleGatewayRequest } from "../dist/application/gateway/webhook-gateway.js";
+import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
 import { telegramAdapter } from "../dist/application/gateway/webhook-gateway.js";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -59,7 +60,7 @@ test("gateway authenticates and triggers a bounded run request", async () => {
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
   await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", model: "sonnet", role: "assistant" }));
   process.env.ATLAS_ROOT = root;
-  const result = await handleGatewayRequest({ profile: "default", prompt: "ping", approved: true }, "secret", "secret", root, async () => ({ exitCode: 0, events: [], stderr: "" }));
+  const result = await handleGatewayRequest({ profile: "default", prompt: "ping", approval: { approved: true, fingerprint: actionFingerprint("gateway.run", { profile: "default", prompt: "ping" }) } }, "secret", "secret", root, async () => ({ exitCode: 0, events: [], stderr: "" }));
   assert.equal(result.status, 200);
   assert.equal((await handleGatewayRequest({}, "wrong", "secret", root)).status, 401);
   delete process.env.ATLAS_ROOT;
@@ -68,6 +69,17 @@ test("gateway authenticates and triggers a bounded run request", async () => {
 test("normalizes Telegram-shaped messages without credentials or implicit approval", () => {
   const result = telegramAdapter.normalize({ message: { message_id: 7, chat: { id: 42 }, text: "/run developer fix tests" } });
   assert.deepEqual(result, { platform: "telegram", externalId: "42:7", profile: "developer", prompt: "fix tests", approved: false });
+});
+
+test("gateway binds identities and profile scopes to the exact approved request", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-scope-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", model: "sonnet", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  const approval = { approved: true, fingerprint: actionFingerprint("gateway.run", { profile: "default", prompt: "ping" }) };
+  assert.equal((await handleGatewayRequest({ profile: "default", prompt: "ping", approval }, "worker-token", "worker@default=worker-token", root, async () => ({ exitCode: 0, events: [], stderr: "" }))).status, 200);
+  assert.equal((await handleGatewayRequest({ profile: "other", prompt: "ping", approval }, "worker-token", "worker@default=worker-token", root)).status, 401);
+  delete process.env.ATLAS_ROOT;
 });
 
 test("scheduler worker records retry state and releases its lease", async () => {

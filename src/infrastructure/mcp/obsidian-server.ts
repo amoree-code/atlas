@@ -5,6 +5,7 @@ import { discoverObsidianVault, loadObsidianConnection, validateObsidianVault, t
 import { syncObsidianVault } from "../../application/obsidian/vault-sync.js";
 import { resolveObsidianNotePath, writeObsidianNote } from "../../application/obsidian/vault-writer.js";
 import { atlasPath } from "../../paths.js";
+import { actionFingerprint, mcpApprovalSchema } from "../../domain/mcp/mcp-contract.js";
 
 type Request = { jsonrpc?: string; id?: number; method?: string; params?: Record<string, unknown> };
 type Response = { jsonrpc: "2.0"; id?: number; result?: unknown; error?: { code: number; message: string } };
@@ -62,11 +63,15 @@ async function callTool(name: string, args: Record<string, unknown>, connection:
   if (name === "obsidian_inbox_list") return listInboxCandidates(connection);
   if (name === "obsidian_conflicts_list") return conflicts();
   if (name === "obsidian_write") {
-    if (args.approved !== true) throw new Error("Obsidian write requires approved: true");
+    const approval = mcpApprovalSchema.parse(args.approval);
+    const actionArgs = { path: args.path, content: args.content, ...(args.expectedSha256 === undefined ? {} : { expectedSha256: args.expectedSha256 }) };
+    if (approval.fingerprint !== actionFingerprint(name, actionArgs)) throw new Error("Obsidian write approval does not match the requested action");
     return writeObsidianNote(connection, requiredString(args, "path"), requiredText(args, "content"), args.expectedSha256 === null || args.expectedSha256 === undefined ? null : requiredString(args, "expectedSha256"), true);
   }
   if (name === "obsidian_inbox_promote") {
-    if (args.approved !== true) throw new Error("Inbox promotion requires approved: true");
+    const approval = mcpApprovalSchema.parse(args.approval);
+    const actionArgs = { source: args.source, targetDirectory: args.targetDirectory };
+    if (approval.fingerprint !== actionFingerprint(name, actionArgs)) throw new Error("Inbox promotion approval does not match the requested action");
     return promoteInboxNote(connection, requiredString(args, "source"), requiredString(args, "targetDirectory"), true);
   }
   throw new Error(`Unknown MCP tool: ${name}`);
