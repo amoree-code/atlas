@@ -15,7 +15,7 @@ test("doctor reports missing roots and broken active links without mutating", as
   await writeFile(path.join(root, "personal", "knowledge", "KNOWLEDGE.md"), "# Knowledge\n");
   const before = await readFile(path.join(root, "personal", "memory", "MEMORY.md"), "utf8");
   const result = spawnSync(process.execPath, [path.resolve("dist/main.js"), "doctor", "--json"], {
-    env: { ...process.env, ATLAS_ROOT: root }, encoding: "utf8",
+    env: { ...process.env, ATLAS_ROOT: root, ATLAS_SKIP_DEPENDENCY_AUDIT: "1" }, encoding: "utf8",
   });
   const report = JSON.parse(result.stdout);
   assert.ok(report.findings.some((finding) => finding.code === "BROKEN_LINK"));

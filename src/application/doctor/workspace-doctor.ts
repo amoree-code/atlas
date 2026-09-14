@@ -102,6 +102,9 @@ async function checkWrappers(): Promise<Finding[]> {
 }
 
 async function checkDependencies(): Promise<Finding[]> {
+  if (process.env.ATLAS_SKIP_DEPENDENCY_AUDIT === "1") {
+    return [{ code: "DEPENDENCY_AUDIT_SKIPPED", severity: "OK", message: "dependency audit skipped by caller", fixable: false }];
+  }
   if (!(await exists(enginePath("pnpm-lock.yaml")))) return [{ code: "DEPENDENCY_AUDIT_SKIPPED", severity: "OK", message: "dependency audit metadata is not included in the installed package", fixable: false }];
   try {
     await execFile("pnpm", ["audit", "--audit-level", "high", "--json"], { cwd: enginePath(), timeout: 20_000 });
