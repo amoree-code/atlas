@@ -21,6 +21,7 @@ import { discoverObsidianVault, loadObsidianConnection } from "./application/obs
 import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/vault-sync.js";
 import { listInboxCandidates, promoteInboxNote } from "./application/obsidian/inbox-promotion.js";
 import { writeObsidianNote } from "./application/obsidian/vault-writer.js";
+import { runObsidianMcpServer } from "./infrastructure/mcp/obsidian-server.js";
 
 const command = process.argv[2] ?? "service";
 
@@ -90,7 +91,8 @@ if (command === "setup") {
   await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "obsidian") {
   const action = process.argv[3] ?? "discover";
-  if (!["discover", "sync", "watch", "inbox", "write"].includes(action)) {
+  if (action === "mcp") await runObsidianMcpServer();
+  else if (!["discover", "sync", "watch", "inbox", "write"].includes(action)) {
     console.error("Usage: atlas obsidian discover|sync|watch|inbox|write");
     process.exitCode = 1;
   } else {

@@ -13,7 +13,7 @@ export type ObsidianWriteResult = {
   conflict?: { record: string; expectedSha256: string | null; actualSha256: string | null };
 };
 
-function vaultFile(vaultPath: string, relative: string): string {
+export function resolveObsidianNotePath(vaultPath: string, relative: string): string {
   if (!relative || path.isAbsolute(relative) || relative.split(/[\\/]/).includes("..") || !relative.endsWith(".md")) {
     throw new Error("Obsidian write path must be a relative Markdown file inside the vault");
   }
@@ -43,7 +43,7 @@ export async function writeObsidianNote(
   expectedSha256: string | null = null,
   apply = false,
 ): Promise<ObsidianWriteResult> {
-  const file = vaultFile(connection.vaultPath, relative);
+  const file = resolveObsidianNotePath(connection.vaultPath, relative);
   if (Buffer.byteLength(content) > MAX_CONTENT_BYTES) throw new Error(`Obsidian note exceeds ${MAX_CONTENT_BYTES} bytes`);
   let current: Buffer | null = null;
   try { current = await readFile(file); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
