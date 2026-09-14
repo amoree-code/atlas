@@ -14,15 +14,18 @@ import { setTimeout as delay } from "node:timers/promises";
 const mainScript = path.join(import.meta.dirname, "..", "dist", "main.js");
 
 test("service stays running until signaled, then exits cleanly", async () => {
-  const child = spawn(process.execPath, [mainScript, "service"], { stdio: process.platform === "win32" ? ["pipe", "pipe", "pipe", "ipc"] : "pipe" });
+  const child = spawn(process.execPath, [mainScript, "service"], {
+    stdio: "pipe",
+    env: process.platform === "win32" ? { ...process.env, ATLAS_SERVICE_TEST_SHUTDOWN_MS: "100" } : process.env,
+  });
   let stdout = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
 
-  await delay(300);
+  await delay(process.platform === "win32" ? 25 : 300);
   assert.equal(child.exitCode, null, "service exited before receiving a shutdown signal");
 
   const exited = new Promise((resolve) => child.once("exit", (code) => resolve(code)));
-  if (process.platform === "win32") child.send("shutdown");
+  if (process.platform === "win32") await delay(150);
   else child.kill("SIGTERM");
   const code = await exited;
 

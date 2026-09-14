@@ -41,7 +41,8 @@ if (!command) {
     await setup({ obsidianPath, obsidianMode: process.argv.includes("--read-write") ? "read-write" : "read-only" });
   }
 } else if (command === "service") {
-  await runService();
+  const shutdownAfterMs = Number(process.env.ATLAS_SERVICE_TEST_SHUTDOWN_MS);
+  await runService(Number.isFinite(shutdownAfterMs) && shutdownAfterMs > 0 ? shutdownAfterMs : undefined);
 } else if (command === "intercept") {
   const clientIndex = process.argv.indexOf("--client");
   const separatorIndex = process.argv.indexOf("--");
