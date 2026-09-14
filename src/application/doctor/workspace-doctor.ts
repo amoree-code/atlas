@@ -80,11 +80,18 @@ async function checkLinks(): Promise<Finding[]> {
 }
 
 async function checkMemory(): Promise<Finding[]> {
-  const result = await doctorMemoryIndexes();
-  if (result.ok) return [{ code: "INDEXES_SYNCED", severity: "OK", message: "memory and knowledge indexes are synchronized", fixable: false }];
-  return [{
-    code: "INDEX_DRIFT", severity: "WARN", message: `index drift: ${[...result.missing, ...result.broken].join(", ")}`, fixable: true,
-  }];
+  try {
+    const result = await doctorMemoryIndexes();
+    if (result.ok) return [{ code: "INDEXES_SYNCED", severity: "OK", message: "memory and knowledge indexes are synchronized", fixable: false }];
+    return [{
+      code: "INDEX_DRIFT", severity: "WARN", message: `index drift: ${[...result.missing, ...result.broken].join(", ")}`, fixable: true,
+    }];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [{ code: "INDEXES_UNCHECKED", severity: "WARN", message: "memory and knowledge indexes are not initialized", fixable: true }];
+    }
+    throw error;
+  }
 }
 
 async function checkWrappers(): Promise<Finding[]> {
