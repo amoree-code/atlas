@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mcpToolSchema, type McpTool } from "../../domain/mcp/mcp-contract.js";
 
 type JsonRpc = { jsonrpc: "2.0"; id?: number; method?: string; params?: unknown; result?: unknown; error?: { message?: string } };
-export type McpClientOptions = { command: string; args?: string[]; cwd: string; allowedTools?: string[] };
+export type McpClientOptions = { command: string; args?: string[]; cwd: string; env?: NodeJS.ProcessEnv; allowedTools?: string[] };
 
 export class McpClient {
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -14,12 +14,12 @@ export class McpClient {
   constructor(private readonly options: McpClientOptions) {}
 
   async connect(): Promise<void> {
-    this.child = spawn(this.options.command, this.options.args ?? [], { cwd: this.options.cwd, stdio: "pipe" });
+    this.child = spawn(this.options.command, this.options.args ?? [], { cwd: this.options.cwd, env: { ...process.env, ...this.options.env }, stdio: "pipe" });
     this.child.stdout.on("data", (chunk: Buffer) => this.consume(chunk));
     this.child.once("error", (error) => this.failPending(error));
     this.child.once("close", () => this.failPending(new Error("MCP server stopped")));
     await this.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "atlas", version: "0.3.2" } });
-    await this.request("notifications/initialized", {});
+    this.notify("notifications/initialized", {});
   }
 
   async listTools(): Promise<McpTool[]> {
@@ -51,9 +51,14 @@ export class McpClient {
   private request(method: string, params: unknown): Promise<unknown> {
     if (!this.child?.stdin.writable) return Promise.reject(new Error("MCP client is not connected"));
     const id = this.nextId++;
-    const message = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
-    this.child.stdin.write(`Content-Length: ${message.length}\r\n\r\n`); this.child.stdin.write(message);
+    this.send({ jsonrpc: "2.0", id, method, params });
     return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+  }
+  private notify(method: string, params: unknown): void { this.send({ jsonrpc: "2.0", method, params }); }
+  private send(message: Record<string, unknown>): void {
+    if (!this.child?.stdin.writable) return;
+    const body = Buffer.from(JSON.stringify(message));
+    this.child.stdin.write(`Content-Length: ${body.length}\r\n\r\n`); this.child.stdin.write(body);
   }
   private consume(chunk: Buffer): void {
     this.buffer = Buffer.concat([this.buffer, chunk]);
