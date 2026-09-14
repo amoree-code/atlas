@@ -22,6 +22,7 @@ import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/va
 import { listInboxCandidates, promoteInboxNote } from "./application/obsidian/inbox-promotion.js";
 import { writeObsidianNote } from "./application/obsidian/vault-writer.js";
 import { runObsidianMcpServer } from "./infrastructure/mcp/obsidian-server.js";
+import { obsidianMcpConfig } from "./application/mcp/mcp-connection.js";
 
 const command = process.argv[2] ?? "service";
 
@@ -89,6 +90,10 @@ if (command === "setup") {
   await runTicketsCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "memory") {
   await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
+} else if (command === "mcp") {
+  const action = process.argv[3] ?? "config";
+  if (action === "config") console.log(JSON.stringify(obsidianMcpConfig(), null, 2));
+  else { console.error("Usage: atlas mcp config"); process.exitCode = 1; }
 } else if (command === "obsidian") {
   const action = process.argv[3] ?? "discover";
   if (action === "mcp") await runObsidianMcpServer();
