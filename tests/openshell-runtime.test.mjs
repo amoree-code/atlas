@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { buildOpenShellInvocation, writeOpenShellPolicy } from "../dist/infrastructure/sandbox/openshell-runtime.js";
+import { assertOpenShellSupportedPlatform, buildOpenShellInvocation, writeOpenShellPolicy } from "../dist/infrastructure/sandbox/openshell-runtime.js";
+
+test("refuses unproven OpenShell enforcement on macOS", () => {
+  assert.throws(() => assertOpenShellSupportedPlatform("darwin"), /not proven on macOS/);
+  assert.doesNotThrow(() => assertOpenShellSupportedPlatform("linux"));
+});
 
 test("builds a fail-closed OpenShell invocation", () => {
   const invocation = buildOpenShellInvocation({ command: "claude", args: ["-p", "hello"], cwd: "/workspace" }, "/tmp/policy.yaml");

@@ -5,6 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { authAdapter, authLogin, authStatus } from "../dist/application/auth/auth-orchestrator.js";
 
+const unixOnly = process.platform === "win32" ? test.skip : test;
+
 async function withFakeProvider(command, script, run) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-auth-"));
   const bin = path.join(root, "bin");
@@ -31,20 +33,20 @@ test("reports unsupported auth without invoking a client", async () => {
   assert.equal(await authStatus("hermes"), "not_supported");
 });
 
-test("recognizes an already-authenticated Claude status response", async () => {
+unixOnly("recognizes an already-authenticated Claude status response", async () => {
   await withFakeProvider("claude", "if [ \"$1\" = \"auth\" ] && [ \"$2\" = \"status\" ]; then printf '{\"loggedIn\":true}\\n'; exit 0; fi", async () => {
     assert.equal(await authStatus("claude"), "authenticated");
   });
 });
 
-test("reports failed provider status and failed login without exposing output", async () => {
+unixOnly("reports failed provider status and failed login without exposing output", async () => {
   await withFakeProvider("kilo", "printf 'login failed\n' >&2; exit 1", async () => {
     assert.equal(await authStatus("kilo"), "failed");
     assert.equal(await authLogin("kilo"), "failed");
   });
 });
 
-test("cancels and times out the official login flow", async () => {
+unixOnly("cancels and times out the official login flow", async () => {
   await withFakeProvider("kilo", "sleep 5", async () => {
     assert.equal(await authLogin("kilo", { timeoutMs: 25 }), "cancelled");
     const controller = new AbortController();

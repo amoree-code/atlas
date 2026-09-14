@@ -38,12 +38,18 @@ export async function runDueSchedules(cwd: string, execute?: ProviderExecutor): 
   const ran: string[] = [];
   for (const schedule of schedules) {
     if (!schedule.enabled || Date.parse(schedule.nextRunAt) > now || (schedule.retryAt && Date.parse(schedule.retryAt) > now) || running.has(schedule.id)) continue;
+    const lease = await acquireLease(schedule.id);
+    if (!lease) continue;
     running.add(schedule.id);
     try {
       await runAgent({ profileName: schedule.profile, prompt: schedule.prompt, cwd }, execute);
       schedule.nextRunAt = new Date(now + schedule.intervalMs).toISOString();
       ran.push(schedule.id);
-    } finally { running.delete(schedule.id); }
+    } finally {
+      running.delete(schedule.id);
+      await lease.close();
+      await unlink(leaseFile(schedule.id)).catch(() => undefined);
+    }
   }
   if (ran.length) await writeFile(file(), `${JSON.stringify(schedules, null, 2)}\n`, { mode: 0o600 });
   return ran;
@@ -85,3 +91,16 @@ export async function runSchedulerWorker(cwd: string, options: { pollMs?: number
 }
 
 function leaseFile(id: string): string { return atlasPath("system", "schedules", `${id}.lease`); }
+
+async function acquireLease(id: string): Promise<Awaited<ReturnType<typeof open>> | null> {
+  const lease = leaseFile(id);
+  await mkdir(path.dirname(lease), { recursive: true });
+  try {
+    const handle = await open(lease, "wx");
+    await handle.writeFile(`${process.pid}\n`);
+    return handle;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return null;
+    throw error;
+  }
+}

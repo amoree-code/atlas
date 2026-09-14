@@ -75,6 +75,7 @@ test("learns a bounded skill candidate from a completed session without auto-pro
   store.create({ sessionId, provider: "codex", providerSessionId: null, parentSessionId: null, profile: "default", profileIdentity: "", workingDirectory: root, resumeData: null });
   store.updateStatus(sessionId, "running");
   store.appendEvent(sessionId, "provider_output", "Use a bounded review checklist.");
+  store.appendEvent(sessionId, "evidence", JSON.stringify({ result: "proven" }));
   store.updateStatus(sessionId, "completed");
   store.close();
   const candidate = await learnSkillFromSession(sessionId);

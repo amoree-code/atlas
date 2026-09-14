@@ -47,6 +47,10 @@ starts. `description` and `version` are both optional on disk (they default to `
 - `version` is a human-assigned label for a profile's configuration (bump it when you
   change a profile's fields); it participates in the identity described below.
 
+Writable profiles fail closed unless `ATLAS_SANDBOX_RUNTIME=openshell` is enabled. Direct
+provider execution cannot enforce file writes, so `writePolicy` is not treated as advisory.
+OpenShell remains unavailable on macOS until its containment is proven there.
+
 ## Session reproducibility (`profileIdentity`)
 
 A profile file can be edited after a session has already been created from it, so a

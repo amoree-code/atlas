@@ -16,6 +16,10 @@ export function buildOpenShellInvocation(request: SandboxLaunchRequest, policyPa
   };
 }
 
+export function assertOpenShellSupportedPlatform(platform: NodeJS.Platform = process.platform): void {
+  if (platform === "darwin") throw new Error("OpenShell sandbox enforcement is not proven on macOS; refusing unverified sandbox execution");
+}
+
 export async function writeOpenShellPolicy(request: SandboxLaunchRequest): Promise<{ directory: string; policyPath: string }> {
   const root = atlasPath("system", "runtime", "temporary");
   await mkdir(root, { recursive: true });
@@ -86,6 +90,7 @@ export class OpenShellRuntime implements SandboxRuntime {
   readonly id = "openshell";
 
   async launch(request: SandboxLaunchRequest): Promise<SandboxLaunchResult> {
+    assertOpenShellSupportedPlatform();
     const { directory, policyPath } = await writeOpenShellPolicy(request);
     try {
       const invocation = buildOpenShellInvocation(request, policyPath);
@@ -97,6 +102,7 @@ export class OpenShellRuntime implements SandboxRuntime {
   }
 
   async launchInteractive(request: SandboxLaunchRequest): Promise<InteractiveProcessResult> {
+    assertOpenShellSupportedPlatform();
     const { directory, policyPath } = await writeOpenShellPolicy(request);
     try {
       const invocation = buildOpenShellInvocation(request, policyPath);

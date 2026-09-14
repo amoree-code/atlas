@@ -3,9 +3,27 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { runAgent, resumeAgent } from "../dist/application/runs/run-agent.js";
+import { isValidProviderSessionId, runAgent, resumeAgent } from "../dist/application/runs/run-agent.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
 import { clearHooks, registerHook } from "../dist/application/hooks/lifecycle-hooks.js";
+
+test("bounds provider session identifiers before persistence", () => {
+  assert.equal(isValidProviderSessionId("codex-session_1"), true);
+  assert.equal(isValidProviderSessionId("../../private"), false);
+  assert.equal(isValidProviderSessionId("x".repeat(257)), false);
+});
+
+test("rejects writable profiles when no enforcing sandbox is configured", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-policy-boundary-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "writer.json"), JSON.stringify({ name: "writer", provider: "claude", model: "sonnet", role: "writer", writePolicy: "workspace" }));
+  process.env.ATLAS_ROOT = root;
+  const previous = process.env.ATLAS_SANDBOX_RUNTIME;
+  delete process.env.ATLAS_SANDBOX_RUNTIME;
+  await assert.rejects(() => runAgent({ profileName: "writer", prompt: "write", cwd: root }, async () => ({ exitCode: 0, events: [], stderr: "" })), /cannot enforce writePolicy/);
+  if (previous === undefined) delete process.env.ATLAS_SANDBOX_RUNTIME; else process.env.ATLAS_SANDBOX_RUNTIME = previous;
+  delete process.env.ATLAS_ROOT;
+});
 
 test("connects profile, context, headless execution, and session storage", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-"));

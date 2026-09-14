@@ -6,7 +6,13 @@ const root = path.resolve(process.argv[2] ?? ".");
 const findings = [];
 const ignoredDirectories = new Set([".git", "node_modules", "dist"]);
 const ignoredFiles = new Set(["LICENSE", "pnpm-lock.yaml"]);
-const secretPatterns = [/sk-(?:ant-)?[A-Za-z0-9_-]{20,}/, /(?:AIza|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]{12,}/, /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----/];
+const secretPatterns = [
+  /(?:sk-(?:ant-)?|AIza|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]{8,}/i,
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/i,
+  /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|authorization)\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{12,}["']?/i,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
+  /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----/,
+];
 const privatePathPattern = /(?:^|[\s'"`])(?:\/Users\/[^\s'"`]+|\/home\/[^\s'"`]+|[A-Za-z]:\\Users\\[^\s'"`]+)/;
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 

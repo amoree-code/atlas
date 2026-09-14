@@ -24,7 +24,6 @@ jobs:
       - run: pnpm build
       - run: pnpm check:package
       - name: Run full test suite
-        if: runner.os != 'Windows'
         run: pnpm test
 
   docker:

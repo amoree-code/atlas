@@ -53,9 +53,16 @@ export async function loadObsidianConnection(file = connectionPath()): Promise<O
   if (source.enabled !== true) throw new Error("Obsidian integration is disabled");
   if (source.mode !== "read-only" && source.mode !== "read-write") throw new Error("Obsidian mode must be read-only or read-write");
   if (!source.vaultPath || !path.isAbsolute(source.vaultPath)) throw new Error("Obsidian vaultPath must be absolute");
-  const vault = await stat(source.vaultPath);
+  const connection = { enabled: true, mode: source.mode, vaultPath: source.vaultPath } as ObsidianConnection;
+  await validateObsidianVault(connection);
+  return connection;
+}
+
+export async function validateObsidianVault(connection: ObsidianConnection): Promise<void> {
+  const vault = await stat(connection.vaultPath);
   if (!vault.isDirectory()) throw new Error("Obsidian vaultPath must be a directory");
-  return { enabled: true, mode: source.mode, vaultPath: source.vaultPath };
+  const metadata = await stat(path.join(connection.vaultPath, ".obsidian"));
+  if (!metadata.isDirectory()) throw new Error("Path is not an Obsidian vault: missing .obsidian directory");
 }
 
 function properties(content: string): Record<string, string> {
@@ -86,7 +93,7 @@ async function collect(directory: string, root: string, notes: ObsidianNote[], t
     if (!Object.keys(parsed).length) issues.push("missing YAML properties");
     if (parsed.type === undefined) issues.push("missing property: type");
     notes.push({
-      path: path.relative(root, file),
+      path: path.relative(root, file).split(path.sep).join("/"),
       bytes: content.byteLength,
       sha256: createHash("sha256").update(content).digest("hex"),
       properties: parsed,

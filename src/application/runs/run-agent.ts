@@ -24,6 +24,7 @@ export type AgentRunRequest = {
   sessionId?: string;
   runContract?: RunContract;
   client?: string;
+  actor?: string;
 };
 
 export type ProviderExecutor = (request: ProviderRequest) => Promise<HeadlessResult>;
@@ -32,6 +33,9 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   const profile = selectProfileClient(await loadProfile(request.profileName), request.client);
   const clientHome = resolveClientHome(profile);
   executionPolicy(profile, request.cwd);
+  if (profile.writePolicy !== "none" && process.env.ATLAS_SANDBOX_RUNTIME !== "openshell") {
+    throw new Error("Writable profile runs require ATLAS_SANDBOX_RUNTIME=openshell; direct execution cannot enforce writePolicy");
+  }
   const sessionStore = await openSessionStore();
   const sessionId = request.sessionId ?? randomUUID();
   const session = sessionStore.create({
@@ -58,6 +62,7 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
     const profileFacts = await readProfileFacts(profile.name);
     const skills = await loadSkills(profile.skills, 32_000, request.cwd);
     sessionStore.appendEvent(sessionId, "user_input", redactRuntimeText(request.prompt));
+    if (request.actor) sessionStore.appendEvent(sessionId, "actor_bound", request.actor);
     sessionStore.appendEvent(sessionId, "context_manifest", JSON.stringify(context.manifest));
     sessionStore.updateStatus(sessionId, "running");
     await emitHook("session.start", { sessionId, profile: profile.name, provider: profile.provider });
@@ -142,6 +147,10 @@ function boundedEventData(event: RuntimeEvent): string {
 function captureProviderSessionId(store: Awaited<ReturnType<typeof openSessionStore>>, sessionId: string, event: RuntimeEvent): void {
   if (event.type === "json" && typeof event.data === "object" && event.data !== null && "session_id" in event.data) {
     const providerSessionId = (event.data as { session_id?: unknown }).session_id;
-    if (typeof providerSessionId === "string") store.updateProviderSessionId(sessionId, providerSessionId);
+    if (typeof providerSessionId === "string" && isValidProviderSessionId(providerSessionId)) store.updateProviderSessionId(sessionId, providerSessionId);
   }
+}
+
+export function isValidProviderSessionId(value: string): boolean {
+  return value.length <= 256 && /^[A-Za-z0-9._:-]+$/.test(value);
 }
