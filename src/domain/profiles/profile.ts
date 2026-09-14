@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-const providerSchema = z.enum(["claude", "codex", "gemini", "antigravity", "hermes"]);
+const providerSchema = z.enum(["claude", "codex", "gemini", "antigravity", "hermes", "kilo", "kimi"]);
 const clientBindingSchema = z.object({
   enabled: z.boolean().default(true),
   model: z.string().min(1).optional(),

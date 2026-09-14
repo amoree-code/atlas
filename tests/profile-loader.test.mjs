@@ -71,7 +71,7 @@ test("all practical role profiles use the universal client contract", async () =
     for (const name of names) {
       const profile = await loadProfile(name);
       assert.equal(profile.name, name);
-      assert.deepEqual(Object.keys(profile.clients).sort(), ["antigravity", "claude", "codex", "gemini", "hermes"]);
+  assert.deepEqual(Object.keys(profile.clients).sort(), ["antigravity", "claude", "codex", "gemini", "hermes"]);
       assert.equal(profile.defaultClient, "claude");
       assert.equal(profile.clients.claude.enabled, true);
       assert.ok(profile.instructions.length > 0);

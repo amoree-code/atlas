@@ -58,7 +58,7 @@ test("builds the Kilo autonomous run contract", () => {
 test("builds the Kimi non-interactive stream contract", () => {
   assert.deepEqual(buildProviderInvocation({ provider: "kimi", prompt: "hello", cwd: "/tmp" }), {
     command: "kimi",
-    args: ["--prompt", "hello", "--output-format", "stream-json"],
+    args: ["--prompt", "hello", "--print", "--output-format", "stream-json"],
   });
 });
 
