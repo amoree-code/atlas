@@ -7,6 +7,8 @@ import { buildProviderInvocation, providerAdapterRegistry, runProvider } from ".
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
 import { resolveClientHome } from "../dist/infrastructure/providers/client-home.js";
 
+const unixOnly = process.platform === "win32" ? test.skip : test;
+
 test("builds the Claude CLI stream contract", () => {
   assert.deepEqual(buildProviderInvocation({
     provider: "claude", prompt: "hello", cwd: "/tmp",
@@ -74,7 +76,7 @@ test("adds Claude resume ids without changing the CLI stream contract", () => {
   }).args, ["--resume", "session-1", "-p", "continue", "--verbose", "--output-format", "stream-json"]);
 });
 
-test("headless providers bypass Atlas shims and run the original executable", async () => {
+unixOnly("headless providers bypass Atlas shims and run the original executable", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-headless-provider-"));
   const shim = path.join(root, "shims");
   const staleShim = path.join(root, "old", "runtime", "shims");
@@ -109,7 +111,7 @@ test("headless providers bypass Atlas shims and run the original executable", as
 
 test("resolves a configured client home only inside Atlas system/clients", () => {
   const previousRoot = process.env.ATLAS_ROOT;
-  const root = "/tmp/atlas-client-home-test";
+  const root = path.join(os.tmpdir(), "atlas-client-home-test");
   process.env.ATLAS_ROOT = root;
   try {
     const profile = validateProfile({

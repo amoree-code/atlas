@@ -93,7 +93,7 @@ async function collect(directory: string, root: string, notes: ObsidianNote[], t
     if (!Object.keys(parsed).length) issues.push("missing YAML properties");
     if (parsed.type === undefined) issues.push("missing property: type");
     notes.push({
-      path: path.relative(root, file),
+      path: path.relative(root, file).split(path.sep).join("/"),
       bytes: content.byteLength,
       sha256: createHash("sha256").update(content).digest("hex"),
       properties: parsed,

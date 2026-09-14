@@ -8,6 +8,8 @@ import { intercept } from "../dist/interfaces/cli/intercept-command.js";
 import { registerProvider } from "../dist/infrastructure/wrappers/wrapper-manager.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
+const unixOnly = process.platform === "win32" ? test.skip : test;
+
 test("Atlas selects allowlisted resources and bounds the injected context", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-resources-"));
   const memory = path.join(root, "personal", "memory");
@@ -26,7 +28,7 @@ test("Atlas selects allowlisted resources and bounds the injected context", asyn
   }
 });
 
-test("Hermes interception passes Atlas context and records its manifest", async () => {
+unixOnly("Hermes interception passes Atlas context and records its manifest", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-hermes-context-"));
   const bin = path.join(root, "bin");
   await mkdir(path.join(root, "personal", "memory"), { recursive: true });

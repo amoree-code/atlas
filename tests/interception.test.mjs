@@ -6,9 +6,11 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { resolveOriginalExecutable } from "../dist/infrastructure/providers/provider-registry.js";
 import { resolveOriginalExecutable as resolveProviderExecutable } from "../dist/infrastructure/providers/provider-registry.js";
-import { absolutePathBypassFinding, registerProvider, syncProviderWrappers, installShellIntegration, shellKind, wrapperDoctor } from "../dist/infrastructure/wrappers/wrapper-manager.js";
+import { absolutePathBypassFinding, providerWrapperPath, registerProvider, syncProviderWrappers, installShellIntegration, shellKind, wrapperDoctor } from "../dist/infrastructure/wrappers/wrapper-manager.js";
 import { intercept } from "../dist/interfaces/cli/intercept-command.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
+
+const unixOnly = process.platform === "win32" ? test.skip : test;
 
 async function withEnvironment(run) {
   const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(path.join(os.tmpdir(), "atlas-intercept-")));
@@ -48,9 +50,9 @@ test("sync creates Atlas wrappers and shell activation", async () => {
   await withEnvironment(async (root) => {
     const result = await syncProviderWrappers();
     assert.ok(result.providers.some((provider) => provider.id === "claude"));
-    const wrapper = await readFile(path.join(root, "system", "runtime", "shims", "claude"), "utf8");
+    const wrapper = await readFile(providerWrapperPath("claude"), "utf8");
     assert.match(wrapper, /intercept --client/);
-    const atlasWrapper = await readFile(path.join(root, "system", "runtime", "shims", "atlas"), "utf8");
+    const atlasWrapper = await readFile(providerWrapperPath("atlas"), "utf8");
     assert.match(atlasWrapper, /dist\/main\.js/);
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
@@ -58,7 +60,7 @@ test("sync creates Atlas wrappers and shell activation", async () => {
   });
 });
 
-test("the Atlas wrapper forwards CLI commands to the engine", async () => {
+unixOnly("the Atlas wrapper forwards CLI commands to the engine", async () => {
   await withEnvironment(async (root) => {
     const { directory } = await syncProviderWrappers();
     const result = spawnSync(path.join(directory, "atlas"), ["client", "list"], {
@@ -75,7 +77,7 @@ test("prefers the active parent shell over a stale login-shell environment", () 
   assert.equal(shellKind("/opt/homebrew/bin/fish", "/bin/zsh"), "fish");
 });
 
-test("the generated command wrapper routes the unchanged command through Atlas", async () => {
+unixOnly("the generated command wrapper routes the unchanged command through Atlas", async () => {
   await withEnvironment(async (root) => {
     const bin = path.join(root, "bin");
     await mkdir(bin, { recursive: true });
@@ -90,7 +92,7 @@ test("the generated command wrapper routes the unchanged command through Atlas",
   });
 });
 
-test("intercepts a registered CLI and persists the execution", async () => {
+unixOnly("intercepts a registered CLI and persists the execution", async () => {
   await withEnvironment(async (root) => {
     const bin = path.join(root, "bin");
     await mkdir(bin, { recursive: true });
@@ -112,7 +114,7 @@ test("intercepts a registered CLI and persists the execution", async () => {
   });
 });
 
-test("redacts provider secrets and private paths before session persistence", async () => {
+unixOnly("redacts provider secrets and private paths before session persistence", async () => {
   await withEnvironment(async (root) => {
     const bin = path.join(root, "bin");
     await mkdir(bin, { recursive: true });
@@ -135,7 +137,7 @@ test("redacts provider secrets and private paths before session persistence", as
   });
 });
 
-test("records missing provider authentication as a bounded block", async () => {
+unixOnly("records missing provider authentication as a bounded block", async () => {
   await withEnvironment(async (root) => {
     const bin = path.join(root, "bin");
     await mkdir(bin, { recursive: true });
@@ -154,7 +156,7 @@ test("records missing provider authentication as a bounded block", async () => {
   });
 });
 
-test("recovers an authenticated provider failure and resumes the original run once", async () => {
+unixOnly("recovers an authenticated provider failure and resumes the original run once", async () => {
   await withEnvironment(async (root) => {
     const bin = path.join(root, "bin");
     await mkdir(bin, { recursive: true });
@@ -189,7 +191,7 @@ exit 1
   });
 });
 
-test("doctor reports a shim that is present but ordered after another PATH entry", async () => {
+unixOnly("doctor reports a shim that is present but ordered after another PATH entry", async () => {
   await withEnvironment(async (root) => {
     const bin = path.join(root, "bin");
     await mkdir(bin, { recursive: true });
@@ -203,7 +205,7 @@ test("doctor reports a shim that is present but ordered after another PATH entry
   });
 });
 
-test("doctor reports an absolute-path provider bypass", async () => {
+unixOnly("doctor reports an absolute-path provider bypass", async () => {
   await withEnvironment(async (root) => {
     const bin = path.join(root, "bin");
     await mkdir(bin, { recursive: true });
