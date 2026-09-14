@@ -19,6 +19,24 @@ export async function addSkillCandidate(candidate: Omit<SkillCandidate, "version
 
 export async function listSkillCandidates(): Promise<SkillCandidate[]> { return load(); }
 
+export async function loadPromotedSkills(prompt: string, maxBytes = 32_000): Promise<SkillCandidate[]> {
+  const normalizedPrompt = prompt.toLocaleLowerCase();
+  const candidates = (await load()).filter((candidate) => candidate.status === "promoted" && candidate.verification === "owner-reviewed");
+  const selected: SkillCandidate[] = [];
+  let bytes = 0;
+  for (const candidate of candidates) {
+    const aliases = [candidate.id, candidate.name].map((value) => value.toLocaleLowerCase().replaceAll("-", " "));
+    if (!aliases.some((alias) => normalizedPrompt.includes(alias))) continue;
+    const remaining = maxBytes - bytes;
+    if (remaining <= 0) break;
+    const instructions = candidate.instructions.slice(0, remaining);
+    if (!instructions) break;
+    selected.push({ ...candidate, instructions });
+    bytes += Buffer.byteLength(instructions);
+  }
+  return selected;
+}
+
 export async function learnSkillFromSession(sessionId: string): Promise<SkillCandidate> {
   const store = await openSessionStore();
   try {
