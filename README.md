@@ -6,6 +6,18 @@ sessions, artifacts, and local hooks without a hosted service.
 
 ## Quick start
 
+Install the published package when available:
+
+```bash
+npm install --global atlas
+atlas setup
+```
+
+After installation, `atlas` opens a short first-run wizard automatically when the private
+workspace does not exist. Use `atlas --yes` for the recommended non-interactive defaults.
+
+For a local checkout, use the development commands below instead.
+
 ```bash
 git clone https://github.com/amoree-code/atlas.git atlas
 cd atlas
@@ -13,6 +25,33 @@ pnpm install
 pnpm build
 node dist/main.js setup
 ```
+
+Connect an Obsidian vault during setup, or connect it later:
+
+```bash
+atlas setup --obsidian /path/to/Obsidian
+atlas obsidian connect /path/to/Obsidian
+atlas obsidian discover
+atlas obsidian sync
+```
+
+The connection is read-only by default. Use `--read-write` only when Atlas is explicitly
+allowed to write notes. The local runtime watches the connected vault while `atlas service`
+is running.
+
+Expose the same vault tools to an AI client through a provider-neutral stdio MCP server:
+
+```bash
+atlas mcp config
+atlas obsidian mcp
+```
+
+`atlas mcp config` prints the client configuration; it does not write into client-owned
+configuration files or store credentials.
+
+The Atlas MCP server exposes read-only workspace tools, resources, and review prompts.
+Local `stdio` clients provide the connection consent; Atlas keeps write and execution
+approval inside its policy boundary.
 
 By default, `setup` creates the Atlas workspace as a private sibling directory next to
 this repository (e.g. `atlas/` next to `atlas/engine/`), not inside it, and installs
@@ -32,7 +71,11 @@ Inspect or resume a saved session:
 node dist/main.js session list
 node dist/main.js session show <session-id>
 node dist/main.js session resume <session-id> "Continue the review"
+node dist/main.js session promote <session-id> knowledge/results --approve
 ```
+
+Promotion is explicit: it copies a bounded, redacted provider result into private Atlas
+knowledge and records the source session. It never promotes a session implicitly.
 
 Capture an idea without a provider subscription:
 

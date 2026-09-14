@@ -18,7 +18,7 @@ export type ProviderRequest = {
 
 export const providerAdapterRegistry: Readonly<Record<HeadlessProvider, ProviderAdapter>> = {
   claude: { provider: "claude", capabilities: ["headless", "resume"], build: (request) => [...(request.resumeId ? ["--resume", request.resumeId] : []), "-p", request.prompt, "--verbose", "--output-format", "stream-json"] },
-  codex: { provider: "codex", capabilities: ["headless"], build: (request) => ["exec", "--json", request.prompt] },
+  codex: { provider: "codex", capabilities: ["headless"], build: (request) => ["exec", "--json", "--skip-git-repo-check", request.prompt] },
   gemini: { provider: "gemini", capabilities: ["headless"], build: (request) => ["--prompt", request.prompt, "--output-format", "stream-json"] },
   antigravity: { provider: "antigravity", capabilities: ["headless"], build: (request) => ["--print", request.prompt, "--output-format", "stream-json"] },
   hermes: { provider: "hermes", capabilities: ["headless"], build: (request) => ["-z", request.prompt] },

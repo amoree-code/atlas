@@ -16,7 +16,6 @@
     "atlas": "./dist/main.js"
   },
   "scripts": {
-    "postinstall": "node scripts/prepare-node-pty.mjs",
     "prebuild": "node scripts/prepare-node-pty.mjs && node scripts/clean-dist.mjs",
     "build": "tsc",
     "dev": "tsx src/main.ts",

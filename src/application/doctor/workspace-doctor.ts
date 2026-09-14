@@ -3,7 +3,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import path from "node:path";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, enginePath } from "../../paths.js";
 import { doctorMemoryIndexes, syncMemoryIndexes } from "../memory/index-sync.js";
 import { syncProviderWrappers, wrapperDoctor } from "../../infrastructure/wrappers/wrapper-manager.js";
 
@@ -95,8 +95,9 @@ async function checkWrappers(): Promise<Finding[]> {
 }
 
 async function checkDependencies(): Promise<Finding[]> {
+  if (!(await exists(enginePath("pnpm-lock.yaml")))) return [{ code: "DEPENDENCY_AUDIT_SKIPPED", severity: "OK", message: "dependency audit metadata is not included in the installed package", fixable: false }];
   try {
-    await execFile("pnpm", ["audit", "--audit-level", "high", "--json"], { cwd: atlasPath("engine"), timeout: 20_000 });
+    await execFile("pnpm", ["audit", "--audit-level", "high", "--json"], { cwd: enginePath(), timeout: 20_000 });
     return [{ code: "DEPENDENCIES_CLEAN", severity: "OK", message: "no high-severity dependency advisories reported", fixable: false }];
   } catch {
     return [{ code: "DEPENDENCY_AUDIT_FAILED", severity: "WARN", message: "dependency audit failed or reported high-severity advisories; run pnpm audit manually", fixable: false }];
@@ -111,8 +112,13 @@ async function checkWorkspaceContracts(): Promise<Finding[]> {
   ] as const;
   const findings: Finding[] = [];
   for (const [code, command, args] of checks) {
+    const script = args[0];
+    if (!(await exists(enginePath(script)))) {
+      findings.push({ code, severity: "OK", message: `${code.toLowerCase().replaceAll("_", " ")} not included in the installed package`, fixable: false });
+      continue;
+    }
     try {
-      await execFile(command, [...args], { cwd: atlasPath("engine"), timeout: 20_000 });
+      await execFile(command, [...args], { cwd: enginePath(), timeout: 20_000 });
       findings.push({ code, severity: "OK", message: `${code.toLowerCase().replaceAll("_", " ")} passed`, fixable: false });
     } catch {
       findings.push({ code, severity: "WARN", message: `${code.toLowerCase().replaceAll("_", " ")} failed; inspect its dedicated check`, fixable: false });
@@ -163,11 +169,12 @@ async function checkProfileAuthority(): Promise<Finding[]> {
 }
 
 async function checkVersion(): Promise<Finding[]> {
-  const versionFile = path.join(atlasPath("engine"), "VERSION");
-  const packageFile = path.join(atlasPath("engine"), "package.json");
-  if (!(await exists(versionFile)) || !(await exists(packageFile))) return [{ code: "VERSION_UNCHECKED", severity: "WARN", message: "engine version files are missing", fixable: false }];
-  const version = (await readFile(versionFile, "utf8")).trim();
+  const versionFile = enginePath("VERSION");
+  const packageFile = enginePath("package.json");
+  if (!(await exists(packageFile))) return [{ code: "VERSION_UNCHECKED", severity: "WARN", message: "package version file is missing", fixable: false }];
   const pkg = JSON.parse(await readFile(packageFile, "utf8")) as { version?: string };
+  if (!(await exists(versionFile))) return [{ code: "PACKAGE_VERSION", severity: "OK", message: `installed package version ${pkg.version ?? "unknown"}`, fixable: false }];
+  const version = (await readFile(versionFile, "utf8")).trim();
   return version === pkg.version
     ? [{ code: "VERSION_ALIGNED", severity: "OK", message: `engine version ${version} is aligned`, fixable: false }]
     : [{ code: "VERSION_DRIFT", severity: "WARN", message: `VERSION=${version} but package.json=${pkg.version ?? "missing"}`, fixable: false }];

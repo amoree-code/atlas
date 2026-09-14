@@ -26,7 +26,7 @@ test("builds the Codex JSON contract", () => {
     provider: "codex", prompt: "hello", cwd: "/tmp",
   }), {
     command: "codex",
-    args: ["exec", "--json", "hello"],
+    args: ["exec", "--json", "--skip-git-repo-check", "hello"],
   });
 });
 
