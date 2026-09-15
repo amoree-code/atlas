@@ -18,10 +18,7 @@ test("rejects writable profiles when no enforcing sandbox is configured", async 
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
   await writeFile(path.join(root, "system", "profiles", "writer.json"), JSON.stringify({ name: "writer", provider: "claude", model: "sonnet", role: "writer", writePolicy: "workspace" }));
   process.env.ATLAS_ROOT = root;
-  const previous = process.env.ATLAS_SANDBOX_RUNTIME;
-  delete process.env.ATLAS_SANDBOX_RUNTIME;
   await assert.rejects(() => runAgent({ profileName: "writer", prompt: "write", cwd: root }, async () => ({ exitCode: 0, events: [], stderr: "" })), /cannot enforce writePolicy/);
-  if (previous === undefined) delete process.env.ATLAS_SANDBOX_RUNTIME; else process.env.ATLAS_SANDBOX_RUNTIME = previous;
   delete process.env.ATLAS_ROOT;
 });
 

@@ -179,7 +179,6 @@ exit 1
 `);
     await chmod(executable, 0o755);
     process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
-    delete process.env.ATLAS_SANDBOX_RUNTIME;
     assert.equal(await intercept("codex", ["continue"]), 0);
 
     const store = await openSessionStore();

@@ -34,8 +34,8 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   const profile = selectProfileClient(await loadProfile(request.profileName), request.client);
   const clientHome = resolveClientHome(profile);
   executionPolicy(profile, request.cwd);
-  if (profile.writePolicy !== "none" && process.env.ATLAS_SANDBOX_RUNTIME !== "openshell") {
-    throw new Error("Writable profile runs require ATLAS_SANDBOX_RUNTIME=openshell; direct execution cannot enforce writePolicy");
+  if (profile.writePolicy !== "none") {
+    throw new Error("Writable profile runs require an enforcing sandbox; direct execution cannot enforce writePolicy");
   }
   const sessionStore = await openSessionStore();
   const sessionId = request.sessionId ?? randomUUID();
