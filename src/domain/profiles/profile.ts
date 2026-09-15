@@ -8,6 +8,8 @@ const clientBindingSchema = z.object({
   profile: z.string().min(1).optional(),
   home: z.string().min(1).optional(),
   mode: z.string().min(1).optional(),
+  capabilities: z.array(z.string()).default([]),
+  limitations: z.array(z.string()).default([]),
 });
 const governanceSchema = z.object({
   allowedPaths: z.array(z.string()).optional(),

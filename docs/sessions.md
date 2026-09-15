@@ -20,8 +20,10 @@ if absent:
 - `session_links` — parent/child session id pairs, for sessions created by `resumeAgent`
   or with an explicit `parentSessionId`.
 
+- `handoffs` — compact provider-neutral task continuity records linked to tickets and sessions.
+- `ideas` — explicit raw idea records; ordinary conversation is not written here.
 - `capture_items` — reviewable references to explicit `user_input` events. Use `atlas capture` to list,
-  promote, or discard candidates; raw session events remain the audit source.
+  promote, or discard candidates; provider completion does not sync them into the inbox view.
 
 `openSessionStore()` ensures the `system/sessions/` directory exists and returns a `SessionStore`;
 callers must `close()` it when done.
@@ -31,6 +33,9 @@ callers must `close()` it when done.
 ```ts
 {
   sessionId: string,
+  title: string,
+  ticketId: string | null,
+  handoffId: string | null,
   provider: string,
   providerSessionId: string | null,
   parentSessionId: string | null,
@@ -41,6 +46,10 @@ callers must `close()` it when done.
   createdAt: string,
   updatedAt: string,
   resumeData: string | null,
+  contextHash: string | null,
+  contextBytes: number,
+  nextAction: string,
+  verificationStatus: "unknown" | "proven" | "not_proven" | "blocked",
 }
 ```
 
@@ -96,3 +105,20 @@ not a verified fact until a check records the corresponding result.
 Runtime diagnostics are written as bounded JSON Lines at the private workspace path
 `logs/runtime.jsonl`. Records contain correlation/session ids and lifecycle status only;
 secrets, private home paths, prompts, and provider documents are redacted or excluded.
+
+## Cross-client handoff
+
+```bash
+atlas handoff create --ticket T-193 --session <session-id> --next "Run verification"
+atlas handoff context <handoff-id>
+atlas handoff list --ticket T-193
+atlas run --profile reviewer --client codex --ticket T-193 --handoff <handoff-id> --prompt "Continue"
+atlas client open hermes --ticket T-193 --handoff <handoff-id>
+```
+
+The handoff contains compact task metadata, decisions, changed files, verification, limitations,
+permissions, context manifest, profile identity, and one next action. It never copies the source
+provider transcript or credentials. MCP exposes the same bounded retrieval path.
+
+`atlas idea save` is the explicit raw-idea path; it does not create an inbox file. `atlas daily
+start` previews one dated brief and `--apply` writes it only when that day's file is empty.

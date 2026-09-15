@@ -11,6 +11,7 @@ export type BuiltContext = { manifest: ContextManifest; content: string };
 export async function buildContext(profile: Profile, root: string, maxBytes = 32_000): Promise<BuiltContext> {
   const chunks: string[] = [];
   const files: string[] = [];
+  const omitted: string[] = [];
   let bytes = 0;
 
   for (const relativePath of profile.contextSources) {
@@ -20,7 +21,7 @@ export async function buildContext(profile: Profile, root: string, maxBytes = 32
       const boundary = path.resolve(root, allowedPath);
       return absolutePath === boundary || absolutePath.startsWith(`${boundary}${path.sep}`);
     });
-    if (!allowed) continue;
+    if (!allowed) { omitted.push(relativePath); continue; }
 
     const content = (await readFile(absolutePath, "utf8")).slice(0, maxBytes - bytes);
     chunks.push(`## ${relativePath}\n${content}`);
@@ -35,6 +36,8 @@ export async function buildContext(profile: Profile, root: string, maxBytes = 32
       bytes,
       compactedSummary: null,
       lastContextCheckpoint: new Date().toISOString(),
+      maxBytes,
+      omitted,
     }),
   };
 }

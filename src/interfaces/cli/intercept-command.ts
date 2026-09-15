@@ -11,12 +11,14 @@ import { applyProviderResourceAdapter, buildAtlasResourceInjection, resourceEnvi
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { authAdapter, authLogin, authStatus } from "../../application/auth/auth-orchestrator.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
-import { syncCaptureInbox } from "../../application/capture/inbox-sync.js";
 
 export type InterceptOptions = {
   entryPoint?: "terminal-shim" | "interactive-managed" | "desktop-wrapper";
   controlLevel?: "observed" | "managed-partial";
   originalExecutable?: string;
+  title?: string;
+  ticketId?: string;
+  handoffId?: string;
 };
 
 export async function intercept(command: string, args: string[], options: InterceptOptions = {}): Promise<number> {
@@ -45,6 +47,9 @@ export async function intercept(command: string, args: string[], options: Interc
 
   store.create({
     sessionId,
+    title: options.title ?? `${provider.id} session`,
+    ticketId: options.ticketId ?? null,
+    handoffId: options.handoffId ?? null,
     provider: provider.id,
     providerSessionId: null,
     parentSessionId: null,
@@ -63,6 +68,7 @@ export async function intercept(command: string, args: string[], options: Interc
     resume: provider.id === "claude" ? "provider-owned-if-exposed" : "unsupported",
   })));
   store.appendEvent(sessionId, "intercept_requested", JSON.stringify({ runId, command: provider.command, args: args.map(redactRuntimeText) }));
+  if (options.handoffId) store.appendEvent(sessionId, "handoff_bound", JSON.stringify({ handoffId: options.handoffId, ticketId: options.ticketId ?? null }));
   store.appendEvent(sessionId, "atlas_resource_manifest", JSON.stringify({
     provider: provider.id,
     ...resourceInjection.manifest,
@@ -137,7 +143,6 @@ export async function intercept(command: string, args: string[], options: Interc
       criterion: evidence.criterion,
     }));
     store.scanCaptureItems(sessionId);
-    await syncCaptureInbox(store);
     await appendSessionSummary({ sessionId, provider: provider.id, status, exitCode: result.exitCode });
     return result.exitCode;
   } catch (error) {
@@ -171,7 +176,7 @@ function interceptedProfile(provider: string): Profile {
     allowedCommands: [],
     writePolicy: "none",
     contextSources: [],
-    clients: { [provider]: { enabled: true } },
+    clients: { [provider]: { enabled: true, capabilities: [], limitations: [] } },
     defaultClient: provider as Profile["provider"],
     memory: { enabled: true, scope: "profile" },
     verification: { commands: [] },

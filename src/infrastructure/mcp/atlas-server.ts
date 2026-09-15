@@ -4,6 +4,8 @@ import { hasFailures, workspaceReport } from "../../application/doctor/workspace
 import { atlasPath } from "../../paths.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
 import { actionFingerprint, mcpApprovalSchema } from "../../domain/mcp/mcp-contract.js";
+import { getHandoff, getTicket, listHandoffs } from "../../application/handoff/handoff-service.js";
+import { openSessionStore } from "../persistence/session-store.js";
 
 type Request = { jsonrpc?: string; id?: number; method?: string; params?: Record<string, unknown> };
 type Response = { jsonrpc: "2.0"; id?: number; result?: unknown; error?: { code: number; message: string } };
@@ -13,6 +15,11 @@ const tools = [
   { name: "atlas_doctor", description: "Run the read-only Atlas workspace health checks.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "atlas_profiles_list", description: "List available Atlas profiles.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "atlas_tickets_list", description: "List Atlas tickets, optionally filtered by state.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { state: { type: "string" } }, additionalProperties: false } },
+  { name: "atlas_ticket_get", description: "Read one bounded Atlas ticket record.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { ticketId: { type: "string" } }, required: ["ticketId"], additionalProperties: false } },
+  { name: "atlas_handoffs_list", description: "List compact cross-client session handoffs.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { ticketId: { type: "string" } }, additionalProperties: false } },
+  { name: "atlas_handoff_get", description: "Read one bounded cross-client session handoff.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { handoffId: { type: "string" }, maxBytes: { type: "number" } }, required: ["handoffId"], additionalProperties: false } },
+  { name: "atlas_session_get", description: "Read one session metadata record without its transcript.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { sessionId: { type: "string" } }, required: ["sessionId"], additionalProperties: false } },
+  { name: "atlas_session_events", description: "Read one bounded session event log explicitly requested by id.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { sessionId: { type: "string" }, maxEvents: { type: "number" } }, required: ["sessionId"], additionalProperties: false } },
   { name: "atlas_session_promote", description: "Promote a completed session result into reviewed Atlas knowledge.", annotations: { readOnlyHint: false }, inputSchema: { type: "object", properties: { sessionId: { type: "string" }, target: { type: "string" }, approval: { type: "object" } }, required: ["sessionId", "approval"], additionalProperties: false } },
 ];
 
@@ -20,6 +27,7 @@ const resources = [
   { uri: "atlas://status", name: "Atlas status", description: "Current Atlas workspace health." },
   { uri: "atlas://profiles", name: "Atlas profiles", description: "Available Atlas role profiles." },
   { uri: "atlas://tickets", name: "Atlas tickets", description: "Current Atlas tickets." },
+  { uri: "atlas://handoffs", name: "Atlas handoffs", description: "Compact cross-client session handoffs." },
 ];
 
 const prompts = [
@@ -44,6 +52,19 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
   }
   if (name === "atlas_profiles_list") return { profiles: await profiles() };
   if (name === "atlas_tickets_list") return { tickets: await listTickets(typeof args.state === "string" ? args.state : undefined) };
+  if (name === "atlas_ticket_get") return await getTicket(requiredArgument(args, "ticketId"));
+  if (name === "atlas_handoffs_list") return { handoffs: await listHandoffs(typeof args.ticketId === "string" ? args.ticketId : undefined) };
+  if (name === "atlas_handoff_get") return await getHandoff(requiredArgument(args, "handoffId"), typeof args.maxBytes === "number" ? Math.min(16_000, Math.max(512, args.maxBytes)) : 8_000);
+  if (name === "atlas_session_get") {
+    const store = await openSessionStore();
+    try { const session = store.get(requiredArgument(args, "sessionId")); if (!session) throw new Error("Session not found"); return session; }
+    finally { store.close(); }
+  }
+  if (name === "atlas_session_events") {
+    const store = await openSessionStore();
+    try { const events = store.listEvents(requiredArgument(args, "sessionId")); const max = typeof args.maxEvents === "number" ? Math.min(100, Math.max(1, args.maxEvents)) : 20; return { events: events.slice(-max) }; }
+    finally { store.close(); }
+  }
   if (name === "atlas_session_promote") {
     const approval = mcpApprovalSchema.parse(args.approval);
     const actionArgs = { sessionId: args.sessionId, target: typeof args.target === "string" ? args.target : "knowledge/results" };
@@ -60,6 +81,7 @@ async function readResource(uri: string): Promise<{ uri: string; mimeType: strin
     value = { name: "Atlas", version: "0.3.6", workspace: atlasPath(), healthy: !hasFailures(report.findings), findings: report.findings };
   } else if (uri === "atlas://profiles") value = { profiles: await profiles() };
   else if (uri === "atlas://tickets") value = { tickets: await listTickets() };
+  else if (uri === "atlas://handoffs") value = { handoffs: await listHandoffs() };
   else throw new Error(`Unknown Atlas resource: ${uri}`);
   return { uri, mimeType: "application/json", text: JSON.stringify(value, null, 2) };
 }

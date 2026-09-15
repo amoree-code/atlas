@@ -5,6 +5,8 @@ export const contextManifestSchema = z.object({
   bytes: z.number().int().nonnegative(),
   compactedSummary: z.string().nullable(),
   lastContextCheckpoint: z.string().min(1),
+  maxBytes: z.number().int().positive().default(32_000),
+  omitted: z.array(z.string()).default([]),
 });
 
 export type ContextManifest = z.infer<typeof contextManifestSchema>;

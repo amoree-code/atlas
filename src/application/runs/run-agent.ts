@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { buildContext } from "../../infrastructure/filesystem/context-manager.js";
 import { loadSkills } from "../../infrastructure/filesystem/skill-loader.js";
 import { loadPromotedSkills } from "../skills/skill-curation.js";
@@ -9,7 +9,7 @@ import type { Session } from "../../domain/sessions/session.js";
 import { runProvider, type HeadlessProvider, type ProviderRequest } from "../../infrastructure/providers/providers.js";
 import type { HeadlessResult, RuntimeEvent } from "../../infrastructure/process/cli-process.js";
 import { appendRuntimeLog, redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
-import { syncCaptureInbox } from "../capture/inbox-sync.js";
+import { getHandoff } from "../handoff/handoff-service.js";
 import { authorizeRun } from "./run-authorization.js";
 import type { RunContract } from "../../domain/runs/run-contract.js";
 import { executionPolicy } from "../../domain/profiles/profile-policy.js";
@@ -27,12 +27,17 @@ export type AgentRunRequest = {
   runContract?: RunContract;
   client?: string;
   actor?: string;
+  title?: string;
+  ticketId?: string;
+  handoffId?: string;
 };
 
 export type ProviderExecutor = (request: ProviderRequest) => Promise<HeadlessResult>;
 
 export async function runAgent(request: AgentRunRequest, execute: ProviderExecutor = runProvider): Promise<Session> {
   const profile = selectProfileClient(await loadProfile(request.profileName), request.client);
+  const handoff = request.handoffId ? await getHandoff(request.handoffId) : null;
+  const effectiveTicketId = request.ticketId ?? (typeof handoff?.ticketId === "string" ? handoff.ticketId : null);
   const clientHome = resolveClientHome(profile);
   executionPolicy(profile, request.cwd);
   if (profile.writePolicy !== "none") {
@@ -42,6 +47,9 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   const sessionId = request.sessionId ?? randomUUID();
   const session = sessionStore.create({
     sessionId,
+    title: request.title ?? (typeof handoff?.title === "string" ? handoff.title : request.prompt.slice(0, 120)),
+    ticketId: effectiveTicketId,
+    handoffId: request.handoffId ?? null,
     provider: profile.provider,
     providerSessionId: null,
     parentSessionId: request.parentSessionId ?? null,
@@ -82,7 +90,19 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
     sessionStore.updateStatus(sessionId, "running");
     await emitHook("session.start", { sessionId, profile: profile.name, provider: profile.provider });
     const skillContent = [...skills, ...autoSkills].map((skill) => `## Skill: ${skill.name}\n${skill.instructions}`).join("\n\n");
-    const prompt = [request.prompt, profile.instructions, skillContent, formatProfileFacts(profileFacts), context.content].filter(Boolean).join("\n\n");
+    const profileContract = JSON.stringify({
+      profile: profile.name, role: profile.role, provider: profile.provider, model: profile.model,
+      clientBinding: profile.clients[profile.provider] ?? { enabled: true, capabilities: [], limitations: [] },
+      allowedPaths: profile.allowedPaths, allowedCommands: profile.allowedCommands, writePolicy: profile.writePolicy,
+      approvalRequired: profile.governance?.approvalRequired ?? false, verification: profile.verification.commands,
+      memoryScope: profile.memory.enabled ? profile.memory.scope : "disabled", ticketId: effectiveTicketId,
+      handoffId: request.handoffId ?? null,
+    });
+    const handoffContent = typeof handoff?.compactContext === "string" ? `## Atlas handoff\n${handoff.compactContext}` : "";
+    const prompt = [request.prompt, `## Effective Atlas profile\n${profileContract}`, profile.instructions, skillContent, formatProfileFacts(profileFacts), handoffContent, context.content].filter(Boolean).join("\n\n");
+    const contextHash = createHash("sha256").update(prompt).digest("hex");
+    sessionStore.updateContext(sessionId, contextHash, Buffer.byteLength(prompt));
+    sessionStore.appendEvent(sessionId, "context_cost", JSON.stringify({ bytes: Buffer.byteLength(prompt), sources: context.manifest.files, handoffId: request.handoffId ?? null, selectedSkills: [...skills, ...autoSkills].map((skill) => skill.name) }));
     const result = await execute({
       provider: profile.provider as HeadlessProvider,
       prompt,
@@ -99,14 +119,12 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
     sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: result.stderr }));
     sessionStore.appendEvent(sessionId, "evidence", JSON.stringify({ evidenceId: randomUUID(), sessionId, type: "provider_exit", source: "headless-process", observedAt: new Date().toISOString(), result: result.exitCode === 0 ? "proven" : "not_proven", criterion: "provider process exits successfully", payload: JSON.stringify({ exitCode: result.exitCode }) }));
     sessionStore.scanCaptureItems(sessionId);
-    await syncCaptureInbox(sessionStore);
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: result.exitCode === 124 ? "provider_timeout" : "run_finished", correlationId: sessionId, sessionId, provider: profile.provider, status: result.exitCode === 0 ? "completed" : "failed", payload: JSON.stringify({ exitCode: result.exitCode }) });
     await emitHook("session.end", { sessionId, status: result.exitCode === 0 ? "completed" : "failed", exitCode: result.exitCode });
     return sessionStore.get(sessionId) ?? session;
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
-    await syncCaptureInbox(sessionStore);
     sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
     await emitHook("run.error", { sessionId, error: error instanceof Error ? error.message : String(error) });
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: "run_failed", correlationId: sessionId, sessionId, provider: profile.provider, status: "failed" });
@@ -141,12 +159,10 @@ export async function resumeAgent(sessionId: string, prompt: string, execute: Pr
     sessionStore.updateStatus(sessionId, result.exitCode === 0 ? "completed" : "failed");
     sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: result.stderr }));
     sessionStore.scanCaptureItems(sessionId);
-    await syncCaptureInbox(sessionStore);
     return sessionStore.get(sessionId) ?? existing;
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
-    await syncCaptureInbox(sessionStore);
     sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
     throw error;
   } finally {

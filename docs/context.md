@@ -29,6 +29,8 @@ The result is a `BuiltContext`:
 {
   files: string[],                  // context sources actually included
   bytes: number,                    // total bytes included
+  maxBytes: number,                 // hard source budget
+  omitted: string[],                // disallowed or budget-excluded sources
   compactedSummary: string | null,  // not populated by buildContext today
   lastContextCheckpoint: string,    // ISO timestamp of this build
 }
@@ -44,3 +46,15 @@ Validated by `validateContextManifest` (Zod). `agent-run.ts` records the manifes
 `allowedPaths` entry is silently skipped, not read. This is the same `allowedPaths` list
 declared on the profile (see [profiles.md](profiles.md)); there is currently no separate
 context-specific allow list.
+
+## Loading phases
+
+Atlas does not scan all sessions, tickets, personal files, daily files, or transcripts at startup:
+
+1. Bootstrap session metadata and the selected profile.
+2. Load the requested ticket or compact handoff, when supplied.
+3. Load selected profile facts, skills, and context sources within their byte budgets.
+4. Read full artifacts only through an explicit CLI or MCP retrieval.
+
+Each run records `context_manifest` and `context_cost` events with selected sources, bytes, hash,
+handoff id, and selected skills. Handoffs and MCP reads are bounded independently.

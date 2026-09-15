@@ -28,6 +28,9 @@ import { atlasMcpConfig } from "./application/mcp/mcp-connection.js";
 import { promoteSessionToKnowledge } from "./application/memory/session-promotion.js";
 import { runBrowserCommand } from "./interfaces/cli/browser-command.js";
 import { configureClaudeCodeWrapper } from "./application/integrations/claude-vscode.js";
+import { runHandoffCommand } from "./interfaces/cli/handoff-command.js";
+import { runIdeaCommand } from "./interfaces/cli/idea-command.js";
+import { runDailyCommand } from "./interfaces/cli/daily-command.js";
 
 const command = process.argv[2] === "--yes" ? undefined : process.argv[2];
 
@@ -69,7 +72,17 @@ if (!command) {
       console.error("Usage: atlas client open <provider> [provider-args]");
       process.exitCode = 1;
     } else {
-      process.exitCode = await intercept(provider, process.argv.slice(5), { entryPoint: "interactive-managed", controlLevel: "managed-partial" });
+      const providerArgs = process.argv.slice(5);
+      const ticketIndex = providerArgs.indexOf("--ticket");
+      const handoffIndex = providerArgs.indexOf("--handoff");
+      const ticketId = ticketIndex >= 0 ? providerArgs[ticketIndex + 1] : undefined;
+      const handoffId = handoffIndex >= 0 ? providerArgs[handoffIndex + 1] : undefined;
+      const metadataFlags = new Set<number>();
+      if (ticketIndex >= 0) { metadataFlags.add(ticketIndex); metadataFlags.add(ticketIndex + 1); }
+      if (handoffIndex >= 0) { metadataFlags.add(handoffIndex); metadataFlags.add(handoffIndex + 1); }
+      process.exitCode = await intercept(provider, providerArgs.filter((_, index) => !metadataFlags.has(index)), {
+        entryPoint: "interactive-managed", controlLevel: "managed-partial", ticketId, handoffId,
+      });
     }
   } else if (action === "sync") {
     const result = await syncProviderWrappers();
@@ -176,8 +189,17 @@ if (!command) {
   }
 } else if (command === "capture") {
   await runCaptureCommand(process.argv[3] ?? "", process.argv.slice(4));
+} else if (command === "handoff") {
+  try { await runHandoffCommand(process.argv[3] ?? "list", process.argv.slice(4)); }
+  catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
 } else if (command === "context") {
   await runContextCommand(process.argv.includes("--json"));
+} else if (command === "idea") {
+  try { await runIdeaCommand(process.argv[3] ?? "list", process.argv.slice(4)); }
+  catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
+} else if (command === "daily") {
+  try { await runDailyCommand(process.argv[3] ?? "start", process.argv.slice(4)); }
+  catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
 } else if (command === "schedule") {
   const action = process.argv[3] ?? "list";
   if (action === "list") console.log(JSON.stringify(await listSchedules(), null, 2));
@@ -261,14 +283,18 @@ if (!command) {
   const profileIndex = process.argv.indexOf("--profile");
   const promptIndex = process.argv.indexOf("--prompt");
   const clientIndex = process.argv.indexOf("--client");
+  const ticketIndex = process.argv.indexOf("--ticket");
+  const handoffIndex = process.argv.indexOf("--handoff");
   const profileName = profileIndex >= 0 ? process.argv[profileIndex + 1] : "default";
   const client = clientIndex >= 0 ? process.argv[clientIndex + 1] : undefined;
+  const ticketId = ticketIndex >= 0 ? process.argv[ticketIndex + 1] : undefined;
+  const handoffId = handoffIndex >= 0 ? process.argv[handoffIndex + 1] : undefined;
   const prompt = promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
   if (!profileName || !prompt) {
-    console.error("Usage: atlas run --profile <name> [--client <client>] --prompt <text>");
+    console.error("Usage: atlas run --profile <name> [--client <client>] [--ticket <id>] [--handoff <id>] --prompt <text>");
     process.exitCode = 1;
   } else {
-    const session = await runAgent({ profileName, client, prompt, cwd: atlasRoot() });
+    const session = await runAgent({ profileName, client, ticketId, handoffId, prompt, cwd: atlasRoot() });
     console.log(JSON.stringify({ sessionId: session.sessionId, status: session.status }));
   }
 } else if (command === "session") {
