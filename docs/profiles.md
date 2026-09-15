@@ -47,9 +47,9 @@ starts. `description` and `version` are both optional on disk (they default to `
 - `version` is a human-assigned label for a profile's configuration (bump it when you
   change a profile's fields); it participates in the identity described below.
 
-Writable profiles fail closed unless `ATLAS_SANDBOX_RUNTIME=openshell` is enabled. Direct
-provider execution cannot enforce file writes, so `writePolicy` is not treated as advisory.
-OpenShell remains unavailable on macOS until its containment is proven there.
+Writable profiles fail closed because direct provider execution cannot enforce file writes.
+`writePolicy` is therefore not treated as advisory; an enforcing sandbox must be added before
+profiles with write access can run.
 
 ## Session reproducibility (`profileIdentity`)
 

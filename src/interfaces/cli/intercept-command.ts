@@ -9,7 +9,6 @@ import { findProvider, resolveOriginalExecutable } from "../../infrastructure/pr
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { applyProviderResourceAdapter, buildAtlasResourceInjection, resourceEnvironment } from "../../application/context/resource-injection.js";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
-import { OpenShellRuntime } from "../../infrastructure/sandbox/openshell-runtime.js";
 import { authAdapter, authLogin, authStatus } from "../../application/auth/auth-orchestrator.js";
 
 export async function intercept(command: string, args: string[]): Promise<number> {
@@ -54,56 +53,45 @@ export async function intercept(command: string, args: string[]): Promise<number
     store.updateStatus(sessionId, "running");
     authorizeRun(store, contract);
     const executable = resolveOriginalExecutable(provider.command);
-    const sandboxEnabled = process.env.ATLAS_SANDBOX_RUNTIME === "openshell";
-    if (sandboxEnabled) {
-      store.appendEvent(sessionId, "auth_deferred", JSON.stringify({ provider: provider.id, reason: "sandbox-first execution has no credential attachment" }));
-    } else {
-      const authState = await authStatus(provider.id);
-      store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: authState }));
-      if (authState === "login_required") {
-        store.appendEvent(sessionId, "auth_login_started", JSON.stringify({ provider: provider.id }));
-        const verifiedState = await authLogin(provider.id);
-        store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: verifiedState }));
-        if (verifiedState !== "authenticated") {
-          store.updateStatus(sessionId, "failed");
-          store.appendEvent(sessionId, "evidence", JSON.stringify({
-            sessionId,
-            type: "auth",
-            source: "atlas-interceptor",
-            result: "blocked_by_client_authentication",
-            criterion: "provider login did not verify successfully",
-          }));
-          await appendSessionSummary({ sessionId, provider: provider.id, status: "failed", exitCode: 1 });
-          return 1;
-        }
+    const authState = await authStatus(provider.id);
+    store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: authState }));
+    if (authState === "login_required") {
+      store.appendEvent(sessionId, "auth_login_started", JSON.stringify({ provider: provider.id }));
+      const verifiedState = await authLogin(provider.id);
+      store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: verifiedState }));
+      if (verifiedState !== "authenticated") {
+        store.updateStatus(sessionId, "failed");
+        store.appendEvent(sessionId, "evidence", JSON.stringify({
+          sessionId,
+          type: "auth",
+          source: "atlas-interceptor",
+          result: "blocked_by_client_authentication",
+          criterion: "provider login did not verify successfully",
+        }));
+        await appendSessionSummary({ sessionId, provider: provider.id, status: "failed", exitCode: 1 });
+        return 1;
       }
     }
-    store.appendEvent(sessionId, "provider_resolved", JSON.stringify({ executable, runtime: sandboxEnabled ? "openshell" : "direct" }));
+    store.appendEvent(sessionId, "provider_resolved", JSON.stringify({ executable, runtime: "direct" }));
     const processRequest = {
       command: provider.command,
       args: resourceAdapter.args,
       cwd: workingDirectory,
       environment: {
         ATLAS_INTERCEPTED: "1",
-        ...(process.env.ATLAS_OPENSHELL_AUTO_PROVIDERS === "1" ? { ATLAS_OPENSHELL_AUTO_PROVIDERS: "1" } : {}),
         ...resourceEnvironment(provider.id, resourceInjection),
       },
-      writePolicy: profile.writePolicy,
-      allowedPaths: profile.allowedPaths.map((entry) => path.resolve(workingDirectory, entry)),
     };
-    const runProvider = async () => sandboxEnabled
-      ? await new OpenShellRuntime().launchInteractive(processRequest)
-      : await runInteractive({
-          command: executable,
-          args: resourceAdapter.args,
-          cwd: workingDirectory,
-          env: processRequest.environment,
-          onData: (data) => store.appendEvent(sessionId, "provider_output", redactRuntimeText(data)),
-        });
+    const runProvider = async () => await runInteractive({
+      command: executable,
+      args: resourceAdapter.args,
+      cwd: workingDirectory,
+      env: processRequest.environment,
+      onData: (data) => store.appendEvent(sessionId, "provider_output", redactRuntimeText(data)),
+    });
     let result = await runProvider();
-    if (sandboxEnabled && result.output) store.appendEvent(sessionId, "provider_output", redactRuntimeText(result.output));
     let evidence = classifyProviderResult(result.exitCode, result.output);
-    if (evidence.result === "blocked_by_client_authentication" && !sandboxEnabled && authAdapter(provider.id)) {
+    if (evidence.result === "blocked_by_client_authentication" && authAdapter(provider.id)) {
       store.appendEvent(sessionId, "auth_recovery_started", JSON.stringify({ provider: provider.id, reason: evidence.criterion }));
       const recoveredState = await authLogin(provider.id);
       store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: recoveredState, phase: "recovery" }));
