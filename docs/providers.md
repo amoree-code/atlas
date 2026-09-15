@@ -13,10 +13,12 @@ authentication is entirely the installed CLI's responsibility.
 - `gemini`
 - `antigravity`
 - `hermes`
+- `kilo`
+- `kimi`
 
-The private workspace may register additional clients for interactive interception. That registry does not
-make a client headless-capable; `atlas run` accepts only the five providers above until a provider-specific
-headless invocation contract is implemented and tested.
+The private workspace may register additional clients for interactive interception. The registered providers
+above are headless-capable through provider-specific invocation contracts; the executable smoke check verifies
+that all seven command names are available, while authenticated execution still depends on each provider account.
 
 ## Requirement
 
@@ -25,6 +27,8 @@ The provider's CLI binary must be on `PATH`:
 - `claude`, `codex`, `gemini` are invoked by their own command name.
 - `antigravity` is invoked as `agy`.
 - `hermes` is invoked by its own command name.
+- `kilo` is invoked by its own command name.
+- `kimi` is invoked by its own command name.
 
 If the binary is missing, the spawn fails at run time (surfaced as an `error` session
 event); Atlas performs no live verification that a provider is installed or authenticated
@@ -39,6 +43,8 @@ before invoking it.
 | `gemini` | `gemini` | `--prompt <prompt> --output-format stream-json` |
 | `antigravity` | `agy` | `--print <prompt> --output-format stream-json` |
 | `hermes` | `hermes` | `-z <prompt>` |
+| `kilo` | `kilo` | `run --auto <prompt>` |
+| `kimi` | `kimi` | `--prompt <prompt> --print --output-format stream-json` |
 
 Only `claude` currently supports `--resume`; `resumeAgent` in
 [sessions.md](sessions.md#cli-usage) rejects resume for any other provider.
