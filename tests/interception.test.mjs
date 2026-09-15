@@ -108,9 +108,57 @@ unixOnly("intercepts a registered CLI and persists the execution", async () => {
     assert.equal(sessions.length, 1);
     assert.equal(sessions[0].provider, "demo");
     assert.equal(sessions[0].status, "completed");
-    assert.match(store.listEvents(sessions[0].sessionId).map((event) => event.data).join("\n"), /demo-output/);
+    const events = store.listEvents(sessions[0].sessionId);
+    assert.match(events.map((event) => event.data).join("\n"), /demo-output/);
+    const entry = JSON.parse(events.find((event) => event.type === "session_entry_contract").data);
+    assert.deepEqual(entry, {
+      entryPoint: "terminal-shim",
+      controlLevel: "observed",
+      inputCapture: "bounded-terminal",
+      contextTransport: "manifest-only",
+      policyEnforcement: "shim-lifecycle-and-provider-owned-policy",
+      promotion: "explicit-review",
+      resume: "unsupported",
+    });
     store.close();
     assert.equal(resolveProviderExecutable("demo-ai"), executable);
+  });
+});
+
+unixOnly("managed interactive entry records its stronger but partial control contract", async () => {
+  await withEnvironment(async (root) => {
+    const bin = path.join(root, "bin");
+    await mkdir(bin, { recursive: true });
+    const executable = path.join(bin, "managed-ai");
+    await writeFile(executable, "#!/bin/sh\nprintf 'managed-output\\n'\nexit 0\n");
+    await chmod(executable, 0o755);
+    process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+    await registerProvider("managed", "managed-ai");
+    assert.equal(await intercept("managed", [], { entryPoint: "interactive-managed", controlLevel: "managed-partial" }), 0);
+    const store = await openSessionStore();
+    const event = store.listEvents(store.list()[0].sessionId).find((candidate) => candidate.type === "session_entry_contract");
+    assert.equal(JSON.parse(event.data).controlLevel, "managed-partial");
+    assert.equal(JSON.parse(event.data).entryPoint, "interactive-managed");
+    store.close();
+  });
+});
+
+unixOnly("desktop wrapper entry uses an explicit executable and records passthrough limits", async () => {
+  await withEnvironment(async (root) => {
+    const bin = path.join(root, "bin");
+    await mkdir(bin, { recursive: true });
+    const executable = path.join(bin, "desktop-ai");
+    await writeFile(executable, "#!/bin/sh\nprintf 'desktop-output\\n'\nexit 0\n");
+    await chmod(executable, 0o755);
+    await registerProvider("desktop", "desktop-ai");
+    assert.equal(await intercept("desktop", [], { entryPoint: "desktop-wrapper", controlLevel: "managed-partial", originalExecutable: executable }), 0);
+    const store = await openSessionStore();
+    const event = store.listEvents(store.list()[0].sessionId).find((candidate) => candidate.type === "session_entry_contract");
+    const contract = JSON.parse(event.data);
+    assert.equal(contract.entryPoint, "desktop-wrapper");
+    assert.equal(contract.inputCapture, "none");
+    assert.equal(contract.contextTransport, "desktop-passthrough");
+    store.close();
   });
 });
 

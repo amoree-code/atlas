@@ -7,7 +7,7 @@ import { atlasRoot } from "./paths.js";
 import { openSessionStore } from "./infrastructure/persistence/session-store.js";
 import { intercept } from "./interfaces/cli/intercept-command.js";
 import { loadProviderRegistry } from "./infrastructure/providers/provider-registry.js";
-import { installShellPath, registerProvider, syncProviderWrappers, wrapperDoctor } from "./infrastructure/wrappers/wrapper-manager.js";
+import { installShellPath, registerProvider, syncProviderWrappers, wrapperDoctor, wrapperStatus } from "./infrastructure/wrappers/wrapper-manager.js";
 import { findInstallSpec, installPlan, installProvider, listInstallSpecs, removeInstalledProvider, updateProvider } from "./application/install/provider-installer.js";
 import { runAuthCommand } from "./interfaces/cli/auth-command.js";
 import { runTicketsCommand } from "./interfaces/cli/tickets-command.js";
@@ -26,6 +26,8 @@ import { runObsidianMcpServer } from "./infrastructure/mcp/obsidian-server.js";
 import { runAtlasMcpServer } from "./infrastructure/mcp/atlas-server.js";
 import { atlasMcpConfig } from "./application/mcp/mcp-connection.js";
 import { promoteSessionToKnowledge } from "./application/memory/session-promotion.js";
+import { runBrowserCommand } from "./interfaces/cli/browser-command.js";
+import { configureClaudeCodeWrapper } from "./application/integrations/claude-vscode.js";
 
 const command = process.argv[2] === "--yes" ? undefined : process.argv[2];
 
@@ -45,6 +47,7 @@ if (!command) {
   await runService(Number.isFinite(shutdownAfterMs) && shutdownAfterMs > 0 ? shutdownAfterMs : undefined);
 } else if (command === "intercept") {
   const clientIndex = process.argv.indexOf("--client");
+  const executableIndex = process.argv.indexOf("--executable");
   const separatorIndex = process.argv.indexOf("--");
   const client = clientIndex >= 0 ? process.argv[clientIndex + 1] : "";
   const args = separatorIndex >= 0 ? process.argv.slice(separatorIndex + 1) : [];
@@ -52,12 +55,22 @@ if (!command) {
     console.error("Usage: atlas intercept --client <provider> -- [args]");
     process.exitCode = 1;
   } else {
-    process.exitCode = await intercept(client, args);
+    process.exitCode = await intercept(client, args, executableIndex >= 0
+      ? { originalExecutable: process.argv[executableIndex + 1], entryPoint: "desktop-wrapper", controlLevel: "managed-partial" }
+      : undefined);
   }
 } else if (command === "client") {
   const action = process.argv[3] ?? "list";
   if (action === "list") {
     console.log(JSON.stringify(loadProviderRegistry(), null, 2));
+  } else if (action === "open") {
+    const provider = process.argv[4];
+    if (!provider) {
+      console.error("Usage: atlas client open <provider> [provider-args]");
+      process.exitCode = 1;
+    } else {
+      process.exitCode = await intercept(provider, process.argv.slice(5), { entryPoint: "interactive-managed", controlLevel: "managed-partial" });
+    }
   } else if (action === "sync") {
     const result = await syncProviderWrappers();
     console.log(JSON.stringify({ directory: result.directory, providers: result.providers }, null, 2));
@@ -66,15 +79,21 @@ if (!command) {
     const provider = await registerProvider(id ?? "", process.argv[5] ?? id ?? "");
     console.log(JSON.stringify(provider, null, 2));
   } else if (action === "doctor") {
-    const findings = await wrapperDoctor();
+    const findings = await wrapperDoctor(process.argv[4]);
     if (findings.length) {
       findings.forEach((finding) => console.error(`NOT READY: ${finding}`));
       process.exitCode = 1;
     } else {
       console.log("PROVEN: Atlas wrappers are configured and provider binaries resolve outside the shim directory.");
     }
+  } else if (action === "status") {
+    console.log(JSON.stringify(await wrapperStatus(), null, 2));
+  } else if (action === "vscode-wrapper") {
+    const settingsIndex = process.argv.indexOf("--settings");
+    const settingsPath = settingsIndex >= 0 ? process.argv[settingsIndex + 1] : undefined;
+    console.log(JSON.stringify(await configureClaudeCodeWrapper(settingsPath, process.argv.includes("--apply")), null, 2));
   } else {
-    console.error("Usage: atlas client list|sync|register <id> [command]|doctor");
+    console.error("Usage: atlas client list|status|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|doctor [absolute-provider-path]");
     process.exitCode = 1;
   }
 } else if (command === "install") {
@@ -236,6 +255,8 @@ if (!command) {
     console.log(JSON.stringify({ applied: result.changes, findings: result.findings }, null, 2));
     if (hasFailures(result.findings)) process.exitCode = 1;
   }
+} else if (command === "browser") {
+  await runBrowserCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "run") {
   const profileIndex = process.argv.indexOf("--profile");
   const promptIndex = process.argv.indexOf("--prompt");
@@ -257,10 +278,19 @@ if (!command) {
     console.log(JSON.stringify(store.list()));
     store.close();
   } else if (action === "show") {
-    const session = store.get(process.argv[4] ?? "");
+    const sessionId = process.argv[4] ?? "";
+    const session = store.get(sessionId);
+    const entryEvent = session ? store.listEvents(sessionId).find((event) => event.type === "session_entry_contract") : undefined;
     store.close();
     if (!session) { console.error("Session not found"); process.exitCode = 1; }
-    else console.log(JSON.stringify(session));
+    else console.log(JSON.stringify({ ...session, entryContract: entryEvent ? JSON.parse(entryEvent.data) : null }));
+  } else if (action === "events") {
+    const sessionId = process.argv[4] ?? "";
+    const session = store.get(sessionId);
+    const events = session ? store.listEvents(sessionId) : [];
+    store.close();
+    if (!session) { console.error("Session not found"); process.exitCode = 1; }
+    else console.log(JSON.stringify(events, null, 2));
   } else if (action === "resume") {
     const sessionId = process.argv[4];
     const prompt = process.argv.slice(5).join(" ");
@@ -298,7 +328,7 @@ if (!command) {
     }
   } else {
     store.close();
-    console.error("Usage: atlas session list|show <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]");
+    console.error("Usage: atlas session list|show <session-id>|events <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]");
     process.exitCode = 1;
   }
 } else {

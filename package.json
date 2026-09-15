@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "node-pty": "^1.1.0",
+    "playwright-core": "^1.48.0",
     "zod": "^3.25.0"
   }
 }

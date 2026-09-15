@@ -1,4 +1,5 @@
 import { spawn as spawnPty, type IPty } from "node-pty";
+import { spawn } from "node:child_process";
 
 export type InteractiveProcessRequest = {
   command: string;
@@ -6,6 +7,7 @@ export type InteractiveProcessRequest = {
   cwd: string;
   env?: Record<string, string>;
   onData?: (data: string) => void;
+  onInput?: (data: string) => void;
   timeoutMs?: number;
   signal?: AbortSignal;
 };
@@ -47,7 +49,11 @@ export function runInteractive(request: InteractiveProcessRequest): Promise<Inte
     terminal.onData(onData);
 
     const stdinIsTTY = Boolean(process.stdin.isTTY && process.stdin.setRawMode);
-    const onStdin = (data: Buffer): void => terminal.write(data.toString());
+    const onStdin = (data: Buffer): void => {
+      const input = data.toString();
+      request.onInput?.(input);
+      terminal.write(input);
+    };
     if (stdinIsTTY) {
       process.stdin.setRawMode?.(true);
       process.stdin.resume();
@@ -78,6 +84,29 @@ export function runInteractive(request: InteractiveProcessRequest): Promise<Inte
       }
       process.stdout.off("resize", onResize);
       resolve({ exitCode, output, timedOut, cancelled });
+    });
+  });
+}
+
+export function runPassthrough(request: InteractiveProcessRequest): Promise<InteractiveProcessResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(request.command, request.args, {
+      cwd: request.cwd,
+      env: { ...process.env, ...request.env },
+      stdio: "inherit",
+    });
+    const timer = request.timeoutMs === undefined ? undefined : setTimeout(() => child.kill("SIGTERM"), request.timeoutMs);
+    const onAbort = (): void => { child.kill("SIGTERM"); };
+    request.signal?.addEventListener("abort", onAbort, { once: true });
+    child.once("error", (error) => {
+      if (timer) clearTimeout(timer);
+      request.signal?.removeEventListener("abort", onAbort);
+      reject(error);
+    });
+    child.once("close", (exitCode) => {
+      if (timer) clearTimeout(timer);
+      request.signal?.removeEventListener("abort", onAbort);
+      resolve({ exitCode: exitCode ?? 1, output: "", cancelled: request.signal?.aborted });
     });
   });
 }

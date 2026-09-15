@@ -16,6 +16,7 @@ import { executionPolicy } from "../../domain/profiles/profile-policy.js";
 import { formatProfileFacts, readProfileFacts } from "../memory/profile-facts.js";
 import { emitHook } from "../hooks/lifecycle-hooks.js";
 import { resolveClientHome } from "../../infrastructure/providers/client-home.js";
+import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 
 export type AgentRunRequest = {
   profileName: string;
@@ -59,6 +60,15 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   }
 
   try {
+    sessionStore.appendEvent(sessionId, "session_entry_contract", JSON.stringify(validateSessionEntryContract({
+      entryPoint: "atlas-run",
+      controlLevel: "full-head",
+      inputCapture: "semantic",
+      contextTransport: "profile-context-and-provider-adapter",
+      policyEnforcement: "profile-and-run-contract",
+      promotion: "explicit-review",
+      resume: profile.provider === "claude" ? "provider-session-id" : "unsupported",
+    })));
     const context = await buildContext(profile, request.cwd);
     const profileFacts = await readProfileFacts(profile.name);
     const skills = await loadSkills(profile.skills, 32_000, request.cwd);

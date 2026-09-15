@@ -63,11 +63,13 @@ to `running` on resume. `cancelled` has no outgoing transitions.
 ```bash
 node dist/main.js session list
 node dist/main.js session show <session-id>
+node dist/main.js session events <session-id>
 node dist/main.js session resume <session-id> "<prompt>"
 ```
 
 - `list` prints all sessions as JSON, newest first.
 - `show <id>` prints one session or exits 1 if not found.
+- `show <id>` includes the validated `entryContract`; `events <id>` prints the ordered evidence log.
 - `resume <id> "<prompt>"` currently only supports sessions whose `provider` is `claude`
   and that already have a `providerSessionId`; it re-invokes the provider with
   `--resume <providerSessionId>` (see [providers.md](providers.md)) and appends a
@@ -79,6 +81,12 @@ Every provider event and lifecycle transition is appended to `session_events` vi
 `appendEvent`, including `context_manifest` (the built context, see [context.md](context.md)),
 each provider stdout event (bounded to 64,000 characters), `process_exit`, and `error` on
 failure. `listEvents(sessionId)` returns the full ordered log for a session.
+
+Every governed session also records a `session_entry_contract` event. It declares
+the entry point (`atlas-run`, `terminal-shim`, `interactive-managed`, or
+`desktop-wrapper`), control level, input-capture boundary, context transport,
+policy enforcement, promotion rule, and resume capability. The contract prevents
+a successful command resolution from being misreported as full Atlas governance.
 
 Successful and unsuccessful provider exits also append a bounded `evidence` event. Evidence
 records include a source, timestamp, result (`proven`, `not_proven`, or `limitation`), an

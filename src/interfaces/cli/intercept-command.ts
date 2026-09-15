@@ -4,15 +4,26 @@ import { appendSessionSummary } from "../../application/memory/session-summary.j
 import { profileIdentity, type Profile } from "../../domain/profiles/profile.js";
 import { validateRunContract } from "../../domain/runs/run-contract.js";
 import { authorizeRun } from "../../application/runs/run-authorization.js";
-import { runInteractive } from "../../infrastructure/process/interactive-process.js";
-import { findProvider, resolveOriginalExecutable } from "../../infrastructure/providers/provider-registry.js";
+import { runInteractive, runPassthrough } from "../../infrastructure/process/interactive-process.js";
+import { findProvider, resolveOriginalExecutable, validateExplicitExecutable } from "../../infrastructure/providers/provider-registry.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { applyProviderResourceAdapter, buildAtlasResourceInjection, resourceEnvironment } from "../../application/context/resource-injection.js";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { authAdapter, authLogin, authStatus } from "../../application/auth/auth-orchestrator.js";
+import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
+import { syncCaptureInbox } from "../../application/capture/inbox-sync.js";
 
-export async function intercept(command: string, args: string[]): Promise<number> {
+export type InterceptOptions = {
+  entryPoint?: "terminal-shim" | "interactive-managed" | "desktop-wrapper";
+  controlLevel?: "observed" | "managed-partial";
+  originalExecutable?: string;
+};
+
+export async function intercept(command: string, args: string[], options: InterceptOptions = {}): Promise<number> {
   const provider = findProvider(command);
+  const entryPoint = options.entryPoint ?? (options.originalExecutable ? "desktop-wrapper" : "terminal-shim");
+  const controlLevel = options.controlLevel ?? (options.originalExecutable ? "managed-partial" : "observed");
+  const inputCapture = options.originalExecutable ? "none" : "bounded-terminal";
   const sessionId = randomUUID();
   const profile = interceptedProfile(provider.id);
   const store = await openSessionStore();
@@ -42,6 +53,15 @@ export async function intercept(command: string, args: string[]): Promise<number
     workingDirectory,
     resumeData: null,
   });
+  store.appendEvent(sessionId, "session_entry_contract", JSON.stringify(validateSessionEntryContract({
+    entryPoint,
+    controlLevel,
+    inputCapture,
+    contextTransport: options.originalExecutable ? "desktop-passthrough" : resourceAdapter.transport,
+    policyEnforcement: "shim-lifecycle-and-provider-owned-policy",
+    promotion: "explicit-review",
+    resume: provider.id === "claude" ? "provider-owned-if-exposed" : "unsupported",
+  })));
   store.appendEvent(sessionId, "intercept_requested", JSON.stringify({ runId, command: provider.command, args: args.map(redactRuntimeText) }));
   store.appendEvent(sessionId, "atlas_resource_manifest", JSON.stringify({
     provider: provider.id,
@@ -52,7 +72,7 @@ export async function intercept(command: string, args: string[]): Promise<number
   try {
     store.updateStatus(sessionId, "running");
     authorizeRun(store, contract);
-    const executable = resolveOriginalExecutable(provider.command);
+    const executable = options.originalExecutable ? validateExplicitExecutable(options.originalExecutable) : resolveOriginalExecutable(provider.command);
     const authState = await authStatus(provider.id);
     store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: authState }));
     if (authState === "login_required") {
@@ -82,12 +102,13 @@ export async function intercept(command: string, args: string[]): Promise<number
         ...resourceEnvironment(provider.id, resourceInjection),
       },
     };
-    const runProvider = async () => await runInteractive({
+    const runProvider = async () => await (options.originalExecutable ? runPassthrough : runInteractive)({
       command: executable,
       args: resourceAdapter.args,
       cwd: workingDirectory,
       env: processRequest.environment,
       onData: (data) => store.appendEvent(sessionId, "provider_output", redactRuntimeText(data)),
+      onInput: (data) => store.appendEvent(sessionId, "terminal_input", redactRuntimeText(data)),
     });
     let result = await runProvider();
     let evidence = classifyProviderResult(result.exitCode, result.output);
@@ -115,6 +136,8 @@ export async function intercept(command: string, args: string[]): Promise<number
       result: evidence.result,
       criterion: evidence.criterion,
     }));
+    store.scanCaptureItems(sessionId);
+    await syncCaptureInbox(store);
     await appendSessionSummary({ sessionId, provider: provider.id, status, exitCode: result.exitCode });
     return result.exitCode;
   } catch (error) {

@@ -24,6 +24,10 @@ export function providerWrapperPath(command: string): string {
   return wrapperPath(command);
 }
 
+export function desktopWrapperPath(provider = "claude"): string {
+  return wrapperPath(`${provider}-vscode`);
+}
+
 function wrapperContents(provider: ProviderRecord): string {
   const node = shellQuote(process.execPath);
   const entry = shellQuote(enginePath("dist", "main.js"));
@@ -40,6 +44,21 @@ function atlasWrapperContents(): string {
   return `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(enginePath("dist", "main.js"))} "$@"\n`;
 }
 
+function desktopWrapperContents(provider: string): string {
+  if (process.platform === "win32") {
+    return `@echo off\r\nif "%~1"=="" exit /b 64\r\nset "native=%~1"\r\nshift\r\n"${process.execPath}" "${enginePath("dist", "main.js")}" intercept --client "${provider}" --executable "%native%" -- %*\r\n`;
+  }
+  return `#!/bin/sh
+if [ "$#" -lt 1 ]; then
+  echo "Atlas desktop wrapper requires the native ${provider} executable path" >&2
+  exit 64
+fi
+native="$1"
+shift
+exec ${shellQuote(process.execPath)} ${shellQuote(enginePath("dist", "main.js"))} intercept --client ${shellQuote(provider)} --executable "$native" -- "$@"
+`;
+}
+
 export async function syncProviderWrappers(): Promise<{ providers: ProviderRecord[]; directory: string }> {
   const providers = loadProviderRegistry();
   await mkdir(shimDirectory(), { recursive: true });
@@ -51,6 +70,9 @@ export async function syncProviderWrappers(): Promise<{ providers: ProviderRecor
     await writeFile(file, wrapperContents(provider));
     if (process.platform !== "win32") await chmod(file, 0o755);
   }
+  const desktopWrapper = desktopWrapperPath("claude");
+  await writeFile(desktopWrapper, desktopWrapperContents("claude"));
+  if (process.platform !== "win32") await chmod(desktopWrapper, 0o755);
   await saveProviderRegistry(providers);
   return { providers, directory: shimDirectory() };
 }
@@ -85,14 +107,20 @@ export function shellKind(parentCommand: string, loginShell: string): "fish" | "
   return path.basename(loginShell) === "fish" ? "fish" : "posix";
 }
 
-async function currentShellKind(): Promise<"fish" | "posix"> {
-  if (process.platform === "win32") return "posix";
+async function currentShellName(): Promise<string> {
+  if (process.platform === "win32") return "powershell";
   try {
     const { stdout } = await execFile("ps", ["-p", String(process.ppid), "-o", "comm="]);
-    return shellKind(stdout, process.env.SHELL ?? "");
+    const parent = path.basename(stdout.trim().split(/\s+/, 1)[0] ?? "");
+    if (["ash", "bash", "dash", "fish", "ksh", "sh", "zsh"].includes(parent)) return parent;
   } catch {
-    return shellKind("", process.env.SHELL ?? "");
+    // Fall through to the configured login shell.
   }
+  return path.basename(process.env.SHELL ?? "");
+}
+
+async function currentShellKind(): Promise<"fish" | "posix"> {
+  return (await currentShellName()) === "fish" ? "fish" : "posix";
 }
 
 export async function installShellPath(): Promise<string> {
@@ -101,7 +129,7 @@ export async function installShellPath(): Promise<string> {
     return `$env:Path = "${directory};$env:Path"`;
   }
   if (await currentShellKind() === "fish") {
-    return `set -gx PATH ${shellQuote(directory)} $PATH`;
+    return `fish_add_path --global --prepend --move ${shellQuote(directory)}`;
   }
   return `export PATH=${shellQuote(directory)}:$PATH`;
 }
@@ -109,8 +137,12 @@ export async function installShellPath(): Promise<string> {
 async function shellProfilePath(): Promise<string> {
   const home = os.homedir();
   if (process.platform === "win32") return process.env.ATLAS_SHELL_PROFILE ?? path.join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
-  if (await currentShellKind() === "fish") return process.env.ATLAS_SHELL_PROFILE ?? path.join(home, ".config", "fish", "conf.d", "atlas.fish");
-  return process.env.ATLAS_SHELL_PROFILE ?? (process.platform === "darwin" ? path.join(home, ".zshrc") : path.join(home, ".profile"));
+  if (process.env.ATLAS_SHELL_PROFILE) return process.env.ATLAS_SHELL_PROFILE;
+  const shell = await currentShellName();
+  if (shell === "fish") return path.join(home, ".config", "fish", "config.fish");
+  if (shell === "zsh") return path.join(home, ".zshrc");
+  if (shell === "bash") return path.join(home, ".bashrc");
+  return path.join(home, ".profile");
 }
 
 export async function installShellIntegration(): Promise<string> {
@@ -168,13 +200,13 @@ export function absolutePathBypassFinding(commandPath: string): string | null {
   return `BYPASS_DETECTED: ${provider.id} was invoked by absolute path outside Atlas shims: ${resolved}`;
 }
 
-export async function wrapperStatus(): Promise<Array<ProviderRecord & { wrapper: string; installed: boolean; realExecutable: string | null }>> {
+export async function wrapperStatus(): Promise<Array<ProviderRecord & { wrapper: string; installed: boolean; realExecutable: string | null; entryPoint: "terminal-shim"; controlLevel: "observed" }>> {
   const providers = loadProviderRegistry();
   return Promise.all(providers.map(async (provider) => {
     let realExecutable: string | null = null;
     try { realExecutable = resolveOriginalExecutable(provider.command); } catch { /* reported by doctor */ }
     let installed = true;
     try { await access(wrapperPath(provider.command)); } catch { installed = false; }
-    return { ...provider, wrapper: wrapperPath(provider.command), installed, realExecutable };
+    return { ...provider, wrapper: wrapperPath(provider.command), installed, realExecutable, entryPoint: "terminal-shim", controlLevel: "observed" };
   }));
 }

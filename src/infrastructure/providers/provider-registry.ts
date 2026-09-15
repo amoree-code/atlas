@@ -65,6 +65,17 @@ export function resolveOriginalExecutable(command: string, env = process.env): s
   throw new Error(`Provider executable not found outside Atlas shims: ${command}`);
 }
 
+export function validateExplicitExecutable(commandPath: string): string {
+  if (!path.isAbsolute(commandPath)) throw new Error(`Provider executable must be an absolute path: ${commandPath}`);
+  const resolved = path.resolve(commandPath);
+  try {
+    accessSync(resolved, constants.X_OK);
+  } catch {
+    throw new Error(`Provider executable is missing or not executable: ${resolved}`);
+  }
+  return resolved;
+}
+
 function isAtlasShimDirectory(directory: string): boolean {
   const resolved = path.resolve(directory);
   return path.basename(resolved) === "shims" && path.basename(path.dirname(resolved)) === "runtime";

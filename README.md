@@ -65,6 +65,19 @@ Run an agent:
 node dist/main.js run --profile default --prompt "Review this project"
 ```
 
+Open a provider through Atlas's managed PTY boundary when interactive use is
+required:
+
+```bash
+atlas client open hermes
+atlas client open claude
+atlas client status
+```
+
+`atlas run` is the full-head path. Direct provider commands remain transparent
+terminal-shim compatibility paths with an explicitly recorded `observed`
+control level. See [entry-point contract](docs/entry-points.md).
+
 Inspect or resume a saved session:
 
 ```bash
