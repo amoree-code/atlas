@@ -5,6 +5,9 @@ const providers = [
   ["codex", ["--help"]],
   ["gemini", ["--help"]],
   ["agy", ["--help"]],
+  ["hermes", ["--help"]],
+  ["kilo", ["--help"]],
+  ["kimi", ["--help"]],
 ];
 
 const failures = [];
