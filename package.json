@@ -27,7 +27,7 @@
     "check:system": "sh scripts/health-check.sh",
     "check:providers": "node scripts/provider-smoke.mjs",
     "test": "pnpm build && node --test --test-concurrency=1 --test-timeout=30000 tests/*.test.mjs",
-    "prepare": "lefthook install"
+    "prepare": "if [ -d .git ]; then lefthook install; fi"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["node-pty"]
