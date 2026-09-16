@@ -174,10 +174,12 @@ unixOnly("finalizes a shim session when the interceptor receives SIGTERM", async
     let session;
     for (let attempt = 0; attempt < 50; attempt += 1) {
       session = store.list()[0];
-      if (session?.status === "running") break;
+      const started = session && store.listEvents(session.sessionId).some((event) => event.type === "provider_output");
+      if (session?.status === "running" && started) break;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
     assert.equal(session?.status, "running");
+    assert.ok(store.listEvents(session.sessionId).some((event) => event.type === "provider_output"));
     child.kill("SIGTERM");
     const exitCode = await new Promise((resolve) => child.once("close", resolve));
     assert.equal(exitCode, 143);
