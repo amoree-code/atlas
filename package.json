@@ -26,13 +26,15 @@
     "check:package": "node scripts/validate-package.mjs",
     "check:system": "sh scripts/health-check.sh",
     "check:providers": "node scripts/provider-smoke.mjs",
-    "test": "pnpm build && node --test --test-concurrency=1 --test-timeout=30000 tests/*.test.mjs"
+    "test": "pnpm build && node --test --test-concurrency=1 --test-timeout=30000 tests/*.test.mjs",
+    "prepare": "node scripts/prepare-hooks.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["node-pty"]
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "lefthook": "^2.1.14",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },

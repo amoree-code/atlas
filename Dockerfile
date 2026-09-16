@@ -8,7 +8,7 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
 RUN mkdir -p scripts
-COPY scripts/prepare-node-pty.mjs ./scripts/prepare-node-pty.mjs
+COPY scripts/prepare-node-pty.mjs scripts/prepare-hooks.mjs ./scripts/
 RUN corepack enable && pnpm install --frozen-lockfile
 
 COPY . .
