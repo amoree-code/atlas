@@ -1,0 +1,16 @@
+pre-commit:
+  parallel: true
+  commands:
+    typecheck:
+      glob: "*.ts"
+      run: pnpm exec tsc --noEmit
+    privacy:
+      run: pnpm check:privacy
+    skills:
+      glob: "skills/**"
+      run: pnpm check:skills
+
+pre-push:
+  commands:
+    test:
+      run: pnpm test
