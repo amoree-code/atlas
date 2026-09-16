@@ -34,6 +34,7 @@ import { configureClaudeCodeWrapper } from "./application/integrations/claude-vs
 import { runHandoffCommand } from "./interfaces/cli/handoff-command.js";
 import { runIdeaCommand } from "./interfaces/cli/idea-command.js";
 import { runDailyCommand } from "./interfaces/cli/daily-command.js";
+import { runClientTestCommand } from "./interfaces/cli/client-test-command.js";
 
 const command = process.argv[2] === "--yes" ? undefined : process.argv[2];
 
@@ -108,8 +109,11 @@ if (!command) {
     const settingsIndex = process.argv.indexOf("--settings");
     const settingsPath = settingsIndex >= 0 ? process.argv[settingsIndex + 1] : undefined;
     console.log(JSON.stringify(await configureClaudeCodeWrapper(settingsPath, process.argv.includes("--apply")), null, 2));
+  } else if (action === "test") {
+    const provider = process.argv[4] === "--json" ? "" : (process.argv[4] ?? "");
+    await runClientTestCommand(provider, process.argv.includes("--json"));
   } else {
-    console.error("Usage: atlas client list|status|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|doctor [absolute-provider-path]");
+    console.error("Usage: atlas client list|status|test [provider] [--json]|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|doctor [absolute-provider-path]");
     process.exitCode = 1;
   }
 } else if (command === "install") {
