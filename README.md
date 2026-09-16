@@ -65,6 +65,19 @@ Run an agent:
 node dist/main.js run --profile default --prompt "Review this project"
 ```
 
+Open a provider through Atlas's managed PTY boundary when interactive use is
+required:
+
+```bash
+atlas client open hermes
+atlas client open claude
+atlas client status
+```
+
+`atlas run` is the full-head path. Direct provider commands remain transparent
+terminal-shim compatibility paths with an explicitly recorded `observed`
+control level. See [entry-point contract](docs/entry-points.md).
+
 Inspect or resume a saved session:
 
 ```bash
@@ -76,6 +89,16 @@ node dist/main.js session promote <session-id> knowledge/results --approve
 
 Promotion is explicit: it copies a bounded, redacted provider result into private Atlas
 knowledge and records the source session. It never promotes a session implicitly.
+
+Continue the same task from any registered client with a compact Atlas-owned handoff:
+
+```bash
+atlas handoff create --ticket T-193 --next "Run verification"
+atlas handoff context <handoff-id>
+atlas run --profile reviewer --client codex --ticket T-193 --handoff <handoff-id> --prompt "Continue"
+atlas idea save "Short title" "Raw idea text"
+atlas daily start
+```
 
 Capture an idea without a provider subscription:
 

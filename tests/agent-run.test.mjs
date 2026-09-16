@@ -45,7 +45,9 @@ test("connects profile, context, headless execution, and session storage", async
 
   const store = new SessionStore(database);
   assert.equal(session.status, "completed");
-  assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["user_input", "context_manifest", "json", "process_exit", "evidence"]);
+  assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["session_entry_contract", "user_input", "context_manifest", "context_cost", "json", "process_exit", "evidence", "session_summary"]);
+  assert.equal(session.closeoutStatus, "completed");
+  assert.ok(session.summaryPath);
   store.close();
   delete process.env.ATLAS_ROOT;
 });
@@ -179,7 +181,7 @@ test("marks the session failed and records the error event when the provider thr
   const store = new SessionStore(database);
   const [session] = store.list();
   assert.equal(session.status, "failed");
-  assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["user_input", "context_manifest", "error"]);
+  assert.deepEqual(store.listEvents(session.sessionId).map((event) => event.type), ["session_entry_contract", "user_input", "context_manifest", "context_cost", "error", "session_summary"]);
   store.close();
   delete process.env.ATLAS_ROOT;
 });

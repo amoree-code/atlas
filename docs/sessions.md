@@ -20,8 +20,20 @@ if absent:
 - `session_links` — parent/child session id pairs, for sessions created by `resumeAgent`
   or with an explicit `parentSessionId`.
 
+- `handoffs` — compact provider-neutral task continuity records linked to tickets and sessions.
+- `ideas` — explicit raw idea records; ordinary conversation is not written here.
 - `capture_items` — reviewable references to explicit `user_input` events. Use `atlas capture` to list,
-  promote, or discard candidates; raw session events remain the audit source.
+  promote, or discard candidates; provider completion does not sync them into the inbox view.
+
+Completed proven sessions may also produce bounded observations in
+`<workspace>/system/skills/observations.json`. Observations link source sessions, tickets,
+profiles, signal types, confidence, and evidence references. They are not skills or memory,
+and normal runs never promote them automatically. Review with:
+
+```bash
+atlas skill observe [session-id]
+atlas skill observation-review <observation-id> discarded
+```
 
 `openSessionStore()` ensures the `system/sessions/` directory exists and returns a `SessionStore`;
 callers must `close()` it when done.
@@ -31,6 +43,9 @@ callers must `close()` it when done.
 ```ts
 {
   sessionId: string,
+  title: string,
+  ticketId: string | null,
+  handoffId: string | null,
   provider: string,
   providerSessionId: string | null,
   parentSessionId: string | null,
@@ -41,6 +56,10 @@ callers must `close()` it when done.
   createdAt: string,
   updatedAt: string,
   resumeData: string | null,
+  contextHash: string | null,
+  contextBytes: number,
+  nextAction: string,
+  verificationStatus: "unknown" | "proven" | "not_proven" | "blocked",
 }
 ```
 
@@ -63,11 +82,17 @@ to `running` on resume. `cancelled` has no outgoing transitions.
 ```bash
 node dist/main.js session list
 node dist/main.js session show <session-id>
+node dist/main.js session summary <session-id>
+node dist/main.js session events <session-id>
 node dist/main.js session resume <session-id> "<prompt>"
 ```
 
 - `list` prints all sessions as JSON, newest first.
 - `show <id>` prints one session or exits 1 if not found.
+- `show <id>` includes the validated `entryContract`; `events <id>` prints the ordered evidence log.
+- `summary <id>` prints the bounded human-readable Markdown closeout written under
+  `<workspace>/system/sessions/summaries/`. The session row stores its relative summary path,
+  SHA-256, byte count, closeout status, version, and close timestamp.
 - `resume <id> "<prompt>"` currently only supports sessions whose `provider` is `claude`
   and that already have a `providerSessionId`; it re-invokes the provider with
   `--resume <providerSessionId>` (see [providers.md](providers.md)) and appends a
@@ -80,11 +105,40 @@ Every provider event and lifecycle transition is appended to `session_events` vi
 each provider stdout event (bounded to 64,000 characters), `process_exit`, and `error` on
 failure. `listEvents(sessionId)` returns the full ordered log for a session.
 
+Every governed session also records a `session_entry_contract` event. It declares
+the entry point (`atlas-run`, `terminal-shim`, `interactive-managed`, or
+`desktop-wrapper`), control level, input-capture boundary, context transport,
+policy enforcement, promotion rule, and resume capability. The contract prevents
+a successful command resolution from being misreported as full Atlas governance.
+
 Successful and unsuccessful provider exits also append a bounded `evidence` event. Evidence
 records include a source, timestamp, result (`proven`, `not_proven`, or `limitation`), an
 optional acceptance criterion, and bounded payload. Provider output is evidence input; it is
 not a verified fact until a check records the corresponding result.
 
+Every governed closeout runs one idempotent finalizer. It writes one concise Markdown summary,
+updates structured session metadata in `system/sessions/sessions.sqlite`, and creates a bounded
+handoff draft when the session has enough task evidence. It never promotes the session to memory,
+knowledge, inbox, daily, or skills automatically, and it never copies the complete provider
+transcript into the summary or database.
+
 Runtime diagnostics are written as bounded JSON Lines at the private workspace path
 `logs/runtime.jsonl`. Records contain correlation/session ids and lifecycle status only;
 secrets, private home paths, prompts, and provider documents are redacted or excluded.
+
+## Cross-client handoff
+
+```bash
+atlas handoff create --ticket T-193 --session <session-id> --next "Run verification"
+atlas handoff context <handoff-id>
+atlas handoff list --ticket T-193
+atlas run --profile reviewer --client codex --ticket T-193 --handoff <handoff-id> --prompt "Continue"
+atlas client open hermes --ticket T-193 --handoff <handoff-id>
+```
+
+The handoff contains compact task metadata, decisions, changed files, verification, limitations,
+permissions, context manifest, profile identity, and one next action. It never copies the source
+provider transcript or credentials. MCP exposes the same bounded retrieval path.
+
+`atlas idea save` is the explicit raw-idea path; it does not create an inbox file. `atlas daily
+start` previews one dated brief and `--apply` writes it only when that day's file is empty.

@@ -1,4 +1,4 @@
-import { archiveDoneTickets } from "../../application/tickets/archive-tickets.js";
+import { archiveDoneTickets, completeTicket } from "../../application/tickets/archive-tickets.js";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { atlasPath } from "../../paths.js";
@@ -28,11 +28,23 @@ export async function runTicketsCommand(action: string, args: string[]): Promise
     console.log(JSON.stringify(await listTickets(args[0]), null, 2));
     return;
   }
+  if (action === "complete") {
+    const id = args[0];
+    if (!id) {
+      console.error("Usage: atlas tickets complete <id>");
+      process.exitCode = 1;
+      return;
+    }
+    try { console.log(JSON.stringify(await completeTicket(id), null, 2)); }
+    catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
+    return;
+  }
   if (action !== "archive") {
-    console.error("Usage: atlas tickets list [state]|archive [--apply]");
+    console.error("Usage: atlas tickets list [state]|complete <id>|archive [--apply|--auto]");
     process.exitCode = 1;
     return;
   }
-  const result = await archiveDoneTickets(undefined, args.includes("--apply"));
-  console.log(JSON.stringify({ dryRun: !args.includes("--apply"), ...result }, null, 2));
+  const apply = args.includes("--apply") || args.includes("--auto");
+  const result = await archiveDoneTickets(undefined, apply);
+  console.log(JSON.stringify({ dryRun: !apply, ...result }, null, 2));
 }

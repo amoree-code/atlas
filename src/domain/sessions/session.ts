@@ -5,6 +5,9 @@ export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 
 export const sessionSchema = z.object({
   sessionId: z.string().min(1),
+  title: z.string().default(""),
+  ticketId: z.string().nullable().default(null),
+  handoffId: z.string().nullable().default(null),
   provider: z.string().min(1),
   providerSessionId: z.string().nullable(),
   parentSessionId: z.string().nullable(),
@@ -15,6 +18,16 @@ export const sessionSchema = z.object({
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
   resumeData: z.string().nullable(),
+  contextHash: z.string().nullable().default(null),
+  contextBytes: z.number().int().nonnegative().default(0),
+  nextAction: z.string().default(""),
+  verificationStatus: z.enum(["unknown", "proven", "not_proven", "blocked"]).default("unknown"),
+  summaryPath: z.string().nullable().default(null),
+  summaryHash: z.string().nullable().default(null),
+  summaryBytes: z.number().int().nonnegative().default(0),
+  closeoutStatus: z.enum(["pending", "completed", "failed"]).default("pending"),
+  closeoutVersion: z.string().default("1"),
+  closedAt: z.string().nullable().default(null),
 });
 
 export type Session = z.infer<typeof sessionSchema>;

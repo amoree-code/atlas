@@ -16,14 +16,17 @@ canonical JSON file; legacy profile directories are read only for compatibility 
   name: string,                                        // non-empty
   description: string,                                  // default ""
   version: string,                                      // non-empty, default "1.0.0"
-  provider: "claude" | "codex" | "gemini" | "antigravity" | "hermes",
+  provider: "claude" | "codex" | "gemini" | "antigravity" | "hermes" | "kilo" | "kimi",
   model: string,                                        // non-empty
   role: string,                                         // non-empty
-  skills: string[],                                      // default []
+  skills: string[],                                      // default core-thinking + verification
   allowedPaths: string[],                                // default []
   allowedCommands: string[],                             // default []
   writePolicy: "none" | "workspace" | "allowed-paths",  // default "none"
   contextSources: string[],                              // default []
+  contextCompression: "none" | "atlas-bounded",        // default "none"
+  clients: { [client: string]: { enabled: boolean, model?: string, profile?: string,
+    home?: string, mode?: string, capabilities: string[], limitations: string[] } },
 }
 ```
 
@@ -44,8 +47,17 @@ starts. `description` and `version` are both optional on disk (they default to `
   `allowed-paths` requires at least one allowed path. Provider processes still need a
   sandbox or client-native write boundary to enforce individual file writes.
 - `description` is a free-text summary of what the profile is for; it has no runtime effect.
+- `clients` is the provider capability overlay. It does not duplicate role policy: the same role,
+  paths, commands, approval, verification, and skills apply to every enabled client. Only the
+  selected client's model/home/mode/capabilities/limitations are added to effective context.
 - `version` is a human-assigned label for a profile's configuration (bump it when you
   change a profile's fields); it participates in the identity described below.
+
+When `skills` is empty, Atlas selects only `core-thinking` and `verification`. This is the
+small default set; expensive or promoted skills remain prompt-matched and owner-reviewed.
+`contextCompression: "atlas-bounded"` opts a profile into the local bounded compression
+trial. It records source hashes, byte counts, omitted sections, and recovery references;
+unsafe compression falls back to the bounded original.
 
 Writable profiles fail closed because direct provider execution cannot enforce file writes.
 `writePolicy` is therefore not treated as advisory; an enforcing sandbox must be added before
@@ -121,6 +133,9 @@ A profile is loaded by name for a run; the run happens against a project's files
 
 The active instances a workspace actually runs with live only at `<workspace
 root>/system/profiles/<name>.json` — never inside `engine/`.
+
+The root-level JSON form is canonical. The older directory form with `profile.json` and
+`instructions.md` remains read-compatible during migration; it is not a second authority.
 
 ## Skill roots
 

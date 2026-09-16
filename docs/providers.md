@@ -30,6 +30,20 @@ The provider's CLI binary must be on `PATH`:
 - `kilo` is invoked by its own command name.
 - `kimi` is invoked by its own command name.
 
+## Interactive limits
+
+`atlas run` is the full-head path. A direct provider command enters through the
+terminal shim with `observed` control: Atlas records the entry contract,
+provider resolution, bounded output, terminal input when a TTY is available,
+lifecycle, and evidence, but it does not claim provider-native policy control.
+
+Context transport is provider-specific. Hermes currently receives a partial
+environment hint; Claude's verified context injection is limited to print mode;
+the other provider adapters are proven for headless prompt transport, not for
+interactive context injection. `atlas client status` and `atlas session show`
+expose the actual entry contract instead of treating every interactive CLI as a
+full Atlas head.
+
 If the binary is missing, the spawn fails at run time (surfaced as an `error` session
 event); Atlas performs no live verification that a provider is installed or authenticated
 before invoking it.

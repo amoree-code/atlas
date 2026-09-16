@@ -7,7 +7,7 @@ const findings = [];
 const ignoredDirectories = new Set([".git", "node_modules", "dist"]);
 const ignoredFiles = new Set(["LICENSE", "pnpm-lock.yaml"]);
 const secretPatterns = [
-  /(?:sk-(?:ant-)?|AIza|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]{8,}/i,
+  /(?:^|[^A-Za-z0-9_-])(?:sk-(?:ant-)?|AIza|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]{8,}/i,
   /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/i,
   /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|authorization)\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{12,}["']?/i,
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,

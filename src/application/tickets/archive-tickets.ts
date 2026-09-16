@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, readFile, rename, rmdir } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atlasPath } from "../../paths.js";
 
@@ -9,10 +9,26 @@ export type ArchiveResult = {
   repaired: string[];
 };
 
+export type CompletionResult = ArchiveResult & { id: string; state: "done" };
+
 const field = (source: string, name: string): string =>
   source.match(new RegExp(`^${name}:\\s*(.+)$`, "m"))?.[1]?.trim().replace(/^['"]|['"]$/g, "") ?? "";
 
 const projectArchiveName = (project: string): string => project.toLowerCase() === "atlas" ? "Atlas" : project;
+
+function setState(source: string, state: string): string {
+  return source.replace(/^state:\s*.+$/m, `state: ${state}`);
+}
+
+export async function completeTicket(id: string, root = atlasPath("projects", "atlas", "tickets")): Promise<CompletionResult> {
+  const sourceDirectory = path.join(root, id);
+  const taskFile = path.join(sourceDirectory, "task.md");
+  const source = await readFile(taskFile, "utf8");
+  if (source.match(/- "\[ \] /)) throw new Error(`Cannot complete ${id}: unchecked work`);
+  if (field(source, "state") !== "done") await writeFile(taskFile, setState(source, "done"));
+  const archived = await archiveDoneTickets(root, true);
+  return { id, state: "done", ...archived };
+}
 
 export async function archiveDoneTickets(root = atlasPath("projects", "atlas", "tickets"), apply = false): Promise<ArchiveResult> {
   const result: ArchiveResult = { candidates: [], skipped: [], moved: [], repaired: [] };

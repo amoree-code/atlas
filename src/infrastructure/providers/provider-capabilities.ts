@@ -10,9 +10,14 @@ export async function discoverProviderCapabilities(provider: HeadlessProvider): 
   const command = commands[provider];
   let installed = false;
   try { await execFileAsync("which", [command]); installed = true; } catch { /* represented as unavailable */ }
+  const contextTransport = provider === "hermes" ? "environment-hint" : provider === "claude" ? "print-system-prompt-only" : "provider-prompt-option-headless-only";
   return providerCapabilitySchema.parse({
     provider, command, installed, headless: true, resume: provider === "claude",
     streaming: true, structuredOutput: true, authentication: "cli-managed",
+    interactive: true,
+    interactiveContext: provider === "hermes" ? "partial" : "not-proven",
+    contextTransport,
+    inputCapture: "bounded-terminal",
   });
 }
 

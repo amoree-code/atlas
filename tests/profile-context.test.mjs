@@ -51,7 +51,7 @@ test("rejects a profile with an unknown write policy", () => {
 
 test("defaults skills, allowedPaths, allowedCommands, contextSources, and writePolicy", () => {
   const profile = validateProfile({ name: "minimal", provider: "claude", model: "sonnet", role: "assistant" });
-  assert.deepEqual(profile.skills, []);
+  assert.deepEqual(profile.skills, ["core-thinking", "verification"]);
   assert.deepEqual(profile.allowedPaths, []);
   assert.deepEqual(profile.allowedCommands, []);
   assert.deepEqual(profile.contextSources, []);

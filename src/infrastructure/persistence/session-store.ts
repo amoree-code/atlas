@@ -6,6 +6,9 @@ import { validateSession } from "./session-validator.js";
 
 type SessionRow = Omit<Session, "sessionId" | "providerSessionId" | "parentSessionId" | "profileIdentity" | "workingDirectory" | "resumeData" | "createdAt" | "updatedAt"> & {
   session_id: string;
+  title: string;
+  ticket_id: string | null;
+  handoff_id: string | null;
   provider_session_id: string | null;
   parent_session_id: string | null;
   profile_identity: string;
@@ -13,6 +16,16 @@ type SessionRow = Omit<Session, "sessionId" | "providerSessionId" | "parentSessi
   created_at: string;
   updated_at: string;
   resume_data: string | null;
+  context_hash: string | null;
+  context_bytes: number;
+  next_action: string;
+  verification_status: "unknown" | "proven" | "not_proven" | "blocked";
+  summary_path: string | null;
+  summary_hash: string | null;
+  summary_bytes: number;
+  closeout_status: "pending" | "completed" | "failed";
+  closeout_version: string;
+  closed_at: string | null;
 };
 
 export class SessionStore {
@@ -25,6 +38,9 @@ export class SessionStore {
       PRAGMA busy_timeout = 5000;
       CREATE TABLE IF NOT EXISTS sessions (
         session_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL DEFAULT '',
+        ticket_id TEXT,
+        handoff_id TEXT,
         provider TEXT NOT NULL,
         provider_session_id TEXT,
         parent_session_id TEXT,
@@ -34,8 +50,55 @@ export class SessionStore {
         status TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        resume_data TEXT
+        resume_data TEXT,
+        context_hash TEXT,
+        context_bytes INTEGER NOT NULL DEFAULT 0,
+        next_action TEXT NOT NULL DEFAULT '',
+        verification_status TEXT NOT NULL DEFAULT 'unknown',
+        summary_path TEXT,
+        summary_hash TEXT,
+        summary_bytes INTEGER NOT NULL DEFAULT 0,
+        closeout_status TEXT NOT NULL DEFAULT 'pending',
+        closeout_version TEXT NOT NULL DEFAULT '1',
+        closed_at TEXT
       );
+      CREATE TABLE IF NOT EXISTS handoffs (
+        handoff_id TEXT PRIMARY KEY,
+        ticket_id TEXT,
+        title TEXT NOT NULL,
+        objective TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'paused',
+        profile_id TEXT NOT NULL DEFAULT '',
+        profile_identity TEXT NOT NULL DEFAULT '',
+        source_session_id TEXT,
+        provider TEXT NOT NULL DEFAULT '',
+        parent_session_id TEXT,
+        decisions_json TEXT NOT NULL DEFAULT '[]',
+        changed_files_json TEXT NOT NULL DEFAULT '[]',
+        commit_ref TEXT,
+        verification_json TEXT NOT NULL DEFAULT '[]',
+        not_proven_json TEXT NOT NULL DEFAULT '[]',
+        blocked_json TEXT NOT NULL DEFAULT '[]',
+        permissions_json TEXT NOT NULL DEFAULT '{}',
+        context_manifest_json TEXT NOT NULL DEFAULT '{}',
+        next_action TEXT NOT NULL DEFAULT '',
+        source_summary_path TEXT,
+        content TEXT NOT NULL DEFAULT '',
+        content_bytes INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS ideas (
+        idea_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        source_session_id TEXT,
+        status TEXT NOT NULL DEFAULT 'raw',
+        target TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS ideas_status_updated_at ON ideas(status, updated_at);
       CREATE TABLE IF NOT EXISTS session_events (
         event_id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
@@ -60,8 +123,11 @@ export class SessionStore {
       CREATE INDEX IF NOT EXISTS session_events_session_id ON session_events(session_id);
       CREATE INDEX IF NOT EXISTS session_links_parent_id ON session_links(parent_session_id);
       CREATE INDEX IF NOT EXISTS sessions_status_updated_at ON sessions(status, updated_at);
+      CREATE INDEX IF NOT EXISTS handoffs_ticket_id ON handoffs(ticket_id);
+      CREATE INDEX IF NOT EXISTS handoffs_updated_at ON handoffs(updated_at);
     `);
     this.migrateProfileIdentityColumn();
+    this.migrateHandoffSummaryColumn();
   }
 
   // CREATE TABLE IF NOT EXISTS does not add columns to a table that already exists, so a
@@ -71,17 +137,39 @@ export class SessionStore {
     if (!columns.some((column) => column.name === "profile_identity")) {
       this.database.exec("ALTER TABLE sessions ADD COLUMN profile_identity TEXT NOT NULL DEFAULT ''");
     }
+    const additions: Array<[string, string]> = [
+      ["title", "TEXT NOT NULL DEFAULT ''"], ["ticket_id", "TEXT"], ["handoff_id", "TEXT"],
+      ["context_hash", "TEXT"], ["context_bytes", "INTEGER NOT NULL DEFAULT 0"],
+      ["next_action", "TEXT NOT NULL DEFAULT ''"], ["verification_status", "TEXT NOT NULL DEFAULT 'unknown'"],
+      ["summary_path", "TEXT"], ["summary_hash", "TEXT"], ["summary_bytes", "INTEGER NOT NULL DEFAULT 0"],
+      ["closeout_status", "TEXT NOT NULL DEFAULT 'pending'"], ["closeout_version", "TEXT NOT NULL DEFAULT '1'"],
+      ["closed_at", "TEXT"],
+    ];
+    for (const [name, definition] of additions) {
+      if (!columns.some((column) => column.name === name)) this.database.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${definition}`);
+    }
   }
 
-  create(input: Omit<Session, "createdAt" | "updatedAt" | "status"> & { status?: SessionStatus }): Session {
+  private migrateHandoffSummaryColumn(): void {
+    const columns = this.database.prepare("PRAGMA table_info(handoffs)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "source_summary_path")) {
+      this.database.exec("ALTER TABLE handoffs ADD COLUMN source_summary_path TEXT");
+    }
+  }
+
+  create(input: Omit<Session, "createdAt" | "updatedAt" | "status" | "title" | "ticketId" | "handoffId" | "contextHash" | "contextBytes" | "nextAction" | "verificationStatus" | "summaryPath" | "summaryHash" | "summaryBytes" | "closeoutStatus" | "closeoutVersion" | "closedAt"> & {
+    status?: SessionStatus; title?: string; ticketId?: string | null; handoffId?: string | null; contextHash?: string | null;
+    contextBytes?: number; nextAction?: string; verificationStatus?: "unknown" | "proven" | "not_proven" | "blocked";
+  }): Session {
     const now = new Date().toISOString();
     const session = validateSession({ ...input, status: input.status ?? "created", createdAt: now, updatedAt: now });
     this.database.prepare(`
-      INSERT INTO sessions (session_id, provider, provider_session_id, parent_session_id, profile,
-        profile_identity, working_directory, status, created_at, updated_at, resume_data)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(session.sessionId, session.provider, session.providerSessionId, session.parentSessionId,
-      session.profile, session.profileIdentity, session.workingDirectory, session.status, now, now, session.resumeData);
+      INSERT INTO sessions (session_id, title, ticket_id, handoff_id, provider, provider_session_id, parent_session_id, profile,
+        profile_identity, working_directory, status, created_at, updated_at, resume_data, context_hash, context_bytes, next_action, verification_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(session.sessionId, session.title, session.ticketId, session.handoffId, session.provider, session.providerSessionId,
+      session.parentSessionId, session.profile, session.profileIdentity, session.workingDirectory, session.status, now, now,
+      session.resumeData, session.contextHash, session.contextBytes, session.nextAction, session.verificationStatus);
 
     if (session.parentSessionId) {
       this.database.prepare("INSERT INTO session_links (parent_session_id, child_session_id) VALUES (?, ?)")
@@ -106,6 +194,101 @@ export class SessionStore {
   updateProviderSessionId(sessionId: string, providerSessionId: string): void {
     this.database.prepare("UPDATE sessions SET provider_session_id = ?, updated_at = ? WHERE session_id = ?")
       .run(providerSessionId, new Date().toISOString(), sessionId);
+  }
+
+  updateContext(sessionId: string, contextHash: string, contextBytes: number): void {
+    this.database.prepare("UPDATE sessions SET context_hash = ?, context_bytes = ?, updated_at = ? WHERE session_id = ?")
+      .run(contextHash, contextBytes, new Date().toISOString(), sessionId);
+  }
+
+  updateHandoff(sessionId: string, handoffId: string, nextAction = ""): void {
+    this.database.prepare("UPDATE sessions SET handoff_id = ?, next_action = ?, updated_at = ? WHERE session_id = ?")
+      .run(handoffId, nextAction, new Date().toISOString(), sessionId);
+  }
+
+  updateCloseout(sessionId: string, input: { summaryPath: string; summaryHash: string; summaryBytes: number; closeoutStatus: "completed" | "failed"; closedAt: string }): void {
+    this.database.prepare(`UPDATE sessions SET summary_path = ?, summary_hash = ?, summary_bytes = ?, closeout_status = ?, closeout_version = '1', closed_at = ?, updated_at = ? WHERE session_id = ?`)
+      .run(input.summaryPath, input.summaryHash, input.summaryBytes, input.closeoutStatus, input.closedAt, input.closedAt, sessionId);
+  }
+
+  saveHandoff(input: Record<string, unknown>): void {
+    const now = new Date().toISOString();
+    const value = (key: string, fallback: string | number | null): string | number | null => {
+      const candidate = input[key] ?? fallback;
+      return typeof candidate === "string" || typeof candidate === "number" || candidate === null ? candidate : String(candidate);
+    };
+    const jsonValue = (key: string, fallback: unknown): string => JSON.stringify(input[key] ?? fallback);
+    this.database.prepare(`
+      INSERT INTO handoffs (handoff_id, ticket_id, title, objective, state, profile_id, profile_identity,
+        source_session_id, provider, parent_session_id, decisions_json, changed_files_json, commit_ref,
+        verification_json, not_proven_json, blocked_json, permissions_json, context_manifest_json,
+        next_action, source_summary_path, content, content_bytes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(handoff_id) DO UPDATE SET ticket_id=excluded.ticket_id, title=excluded.title,
+        objective=excluded.objective, state=excluded.state, profile_id=excluded.profile_id,
+        profile_identity=excluded.profile_identity, source_session_id=excluded.source_session_id,
+        provider=excluded.provider, parent_session_id=excluded.parent_session_id,
+        decisions_json=excluded.decisions_json, changed_files_json=excluded.changed_files_json,
+        commit_ref=excluded.commit_ref, verification_json=excluded.verification_json,
+        not_proven_json=excluded.not_proven_json, blocked_json=excluded.blocked_json,
+        permissions_json=excluded.permissions_json, context_manifest_json=excluded.context_manifest_json,
+        next_action=excluded.next_action, source_summary_path=excluded.source_summary_path,
+        content=excluded.content, content_bytes=excluded.content_bytes,
+        updated_at=excluded.updated_at
+    `).run(value("handoffId", ""), value("ticketId", null), value("title", ""), value("objective", ""),
+      value("state", "paused"), value("profileId", ""), value("profileIdentity", ""), value("sourceSessionId", null),
+      value("provider", ""), value("parentSessionId", null), jsonValue("decisions", []),
+      jsonValue("changedFiles", []), value("commit", null), jsonValue("verification", []),
+      jsonValue("notProven", []), jsonValue("blocked", []), jsonValue("permissions", {}),
+      jsonValue("contextManifest", {}), value("nextAction", ""), value("sourceSummaryPath", null), value("content", ""),
+      value("contentBytes", 0), value("createdAt", now), now);
+  }
+
+  getHandoff(handoffId: string): Record<string, unknown> | null {
+    const row = this.database.prepare("SELECT * FROM handoffs WHERE handoff_id = ?").get(handoffId) as Record<string, unknown> | undefined;
+    return row ? this.deserializeHandoff(row) : null;
+  }
+
+  listHandoffs(ticketId?: string): Array<Record<string, unknown>> {
+    const rows = (ticketId
+      ? this.database.prepare("SELECT * FROM handoffs WHERE ticket_id = ? ORDER BY updated_at DESC").all(ticketId)
+      : this.database.prepare("SELECT * FROM handoffs ORDER BY updated_at DESC").all()) as Array<Record<string, unknown>>;
+    return rows.map((row) => this.deserializeHandoff(row));
+  }
+
+  saveIdea(input: { ideaId: string; title: string; content: string; sourceSessionId?: string | null }): void {
+    const now = new Date().toISOString();
+    this.database.prepare(`INSERT INTO ideas (idea_id, title, content, source_session_id, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'raw', ?, ?)`)
+      .run(input.ideaId, input.title, input.content, input.sourceSessionId ?? null, now, now);
+  }
+
+  listIdeas(status?: string): Array<Record<string, unknown>> {
+    const rows = (status
+      ? this.database.prepare("SELECT * FROM ideas WHERE status = ? ORDER BY created_at DESC").all(status)
+      : this.database.prepare("SELECT * FROM ideas ORDER BY created_at DESC").all()) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({ ideaId: row.idea_id, title: row.title, content: row.content, sourceSessionId: row.source_session_id, status: row.status, target: row.target, createdAt: row.created_at, updatedAt: row.updated_at }));
+  }
+
+  updateIdea(ideaId: string, status: "classified" | "discarded", target?: string): void {
+    const result = this.database.prepare("UPDATE ideas SET status = ?, target = ?, updated_at = ? WHERE idea_id = ?")
+      .run(status, target ?? null, new Date().toISOString(), ideaId);
+    if (!result.changes) throw new Error(`Idea not found: ${ideaId}`);
+  }
+
+  private deserializeHandoff(row: Record<string, unknown>): Record<string, unknown> {
+    const json = (key: string, fallback: unknown): unknown => {
+      try { return JSON.parse(String(row[key] ?? "")); } catch { return fallback; }
+    };
+    return {
+      handoffId: row.handoff_id, ticketId: row.ticket_id, title: row.title, objective: row.objective, state: row.state,
+      profileId: row.profile_id, profileIdentity: row.profile_identity, sourceSessionId: row.source_session_id,
+      provider: row.provider, parentSessionId: row.parent_session_id, decisions: json("decisions_json", []),
+      changedFiles: json("changed_files_json", []), commit: row.commit_ref, verification: json("verification_json", []),
+      notProven: json("not_proven_json", []), blocked: json("blocked_json", []), permissions: json("permissions_json", {}),
+      contextManifest: json("context_manifest_json", {}), nextAction: row.next_action, sourceSummaryPath: row.source_summary_path ?? null, content: row.content,
+      contentBytes: row.content_bytes, createdAt: row.created_at, updatedAt: row.updated_at,
+    };
   }
 
   list(): Session[] {
@@ -189,6 +372,9 @@ export class SessionStore {
   private toSession(row: SessionRow): Session {
     return validateSession({
       sessionId: row.session_id,
+      title: row.title,
+      ticketId: row.ticket_id,
+      handoffId: row.handoff_id,
       provider: row.provider,
       providerSessionId: row.provider_session_id,
       parentSessionId: row.parent_session_id,
@@ -199,6 +385,16 @@ export class SessionStore {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       resumeData: row.resume_data,
+      contextHash: row.context_hash,
+      contextBytes: row.context_bytes,
+      nextAction: row.next_action,
+      verificationStatus: row.verification_status,
+      summaryPath: row.summary_path,
+      summaryHash: row.summary_hash,
+      summaryBytes: row.summary_bytes,
+      closeoutStatus: row.closeout_status,
+      closeoutVersion: row.closeout_version,
+      closedAt: row.closed_at,
     });
   }
 }

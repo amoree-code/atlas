@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { defaultSkillNames } from "../skills/default-skills.js";
 
 const providerSchema = z.enum(["claude", "codex", "gemini", "antigravity", "hermes", "kilo", "kimi"]);
 const clientBindingSchema = z.object({
@@ -8,6 +9,8 @@ const clientBindingSchema = z.object({
   profile: z.string().min(1).optional(),
   home: z.string().min(1).optional(),
   mode: z.string().min(1).optional(),
+  capabilities: z.array(z.string()).default([]),
+  limitations: z.array(z.string()).default([]),
 });
 const governanceSchema = z.object({
   allowedPaths: z.array(z.string()).optional(),
@@ -34,6 +37,7 @@ const rawProfileSchema = z.object({
   governance: governanceSchema.optional(),
   memory: z.object({ enabled: z.boolean().default(true), scope: z.string().min(1).default("profile") }).default({}),
   verification: z.object({ commands: z.array(z.string()).default([]) }).default({}),
+  contextCompression: z.enum(["none", "atlas-bounded"]).default("none"),
   instructions: z.string().default(""),
 });
 
@@ -50,6 +54,7 @@ export const profileSchema = rawProfileSchema.superRefine((input, context) => {
   const governance = input.governance ?? {};
   return {
     ...input,
+    skills: input.skills.length ? input.skills : defaultSkillNames(input.role),
     provider,
     model,
     defaultClient: input.defaultClient ?? provider,
@@ -93,6 +98,7 @@ export function profileIdentity(profile: Profile): string {
     defaultClient: profile.defaultClient,
     memory: profile.memory,
     verification: profile.verification,
+    contextCompression: profile.contextCompression,
     instructions: profile.instructions,
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");

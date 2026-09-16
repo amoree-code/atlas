@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { authLogin, authStatus } from "../../application/auth/auth-orchestrator.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
+import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 
 export async function runAuthCommand(action: string, provider: string): Promise<void> {
   if (!provider || !["status", "login"].includes(action)) {
@@ -20,6 +21,15 @@ export async function runAuthCommand(action: string, provider: string): Promise<
     workingDirectory: process.cwd(),
     resumeData: null,
   });
+  store.appendEvent(sessionId, "session_entry_contract", JSON.stringify(validateSessionEntryContract({
+    entryPoint: "atlas-run",
+    controlLevel: "full-head",
+    inputCapture: "none",
+    contextTransport: "provider-owned-auth",
+    policyEnforcement: "provider-owned-auth-boundary",
+    promotion: "explicit-review",
+    resume: "unsupported",
+  })));
   store.updateStatus(sessionId, "running");
   store.appendEvent(sessionId, "auth_started", JSON.stringify({ action, provider }));
   const state = action === "status" ? await authStatus(provider) : await authLogin(provider);

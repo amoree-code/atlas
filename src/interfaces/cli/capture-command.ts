@@ -7,6 +7,7 @@ import { syncCaptureInbox } from "../../application/capture/inbox-sync.js";
 import { randomUUID } from "node:crypto";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { atlasRoot } from "../../paths.js";
+import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 
 export async function runCaptureCommand(action: string, args: string[]): Promise<void> {
   const store = await openSessionStore();
@@ -17,6 +18,15 @@ export async function runCaptureCommand(action: string, args: string[]): Promise
       const sessionId = randomUUID();
       store.create({ sessionId, provider: "manual", providerSessionId: null, parentSessionId: null,
         profile: "manual-capture", profileIdentity: "", workingDirectory: atlasRoot(), resumeData: null });
+      store.appendEvent(sessionId, "session_entry_contract", JSON.stringify(validateSessionEntryContract({
+        entryPoint: "atlas-run",
+        controlLevel: "full-head",
+        inputCapture: "semantic",
+        contextTransport: "manual-capture",
+        policyEnforcement: "explicit-capture-operation",
+        promotion: "explicit-review",
+        resume: "unsupported",
+      })));
       store.updateStatus(sessionId, "running");
       store.appendEvent(sessionId, "user_input", content);
       store.updateStatus(sessionId, "completed");

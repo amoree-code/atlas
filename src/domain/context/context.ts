@@ -5,6 +5,13 @@ export const contextManifestSchema = z.object({
   bytes: z.number().int().nonnegative(),
   compactedSummary: z.string().nullable(),
   lastContextCheckpoint: z.string().min(1),
+  maxBytes: z.number().int().positive().default(32_000),
+  omitted: z.array(z.string()).default([]),
+  compression: z.object({
+    sourceId: z.string().min(1), sourceHash: z.string().min(1), originalBytes: z.number().int().nonnegative(),
+    compressedBytes: z.number().int().nonnegative(), method: z.string().min(1), budget: z.number().int().positive(),
+    omittedSections: z.array(z.string()), recoveryRef: z.string().min(1), safeToUse: z.boolean(),
+  }).nullable().default(null),
 });
 
 export type ContextManifest = z.infer<typeof contextManifestSchema>;
