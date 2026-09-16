@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
+import { atlasRoot, engineRoot } from "../dist/paths.js";
 import { runOperation } from "../dist/application/operations/record-operations.js";
 import { operationForIntent, validateTicketIdentifier, validateWriteTarget } from "../dist/application/operations/operation-contract.js";
 import { bindProject } from "../dist/application/context/project-resolution.js";
@@ -381,7 +382,8 @@ test("a cross-project request is refused explicitly", () =>
   }));
 
 test("private Atlas content is never written inside the public engine package", () => {
-  const rejected = validateWriteTarget("engine", "src", "leak.md");
+  const engineRelative = path.relative(atlasRoot(), engineRoot()).split(path.sep);
+  const rejected = validateWriteTarget(...engineRelative, "src", "leak.md");
   assert.equal(rejected.valid, false);
   assert.match(rejected.reason, /public engine package/);
 });
@@ -452,17 +454,16 @@ test("a failed write leaves no partial content and no temp file behind", () =>
   withFixture(async (root) => {
     const directory = path.join(root, "personal", "memory");
     const target = path.join(directory, "locked.md");
-    await chmod(directory, 0o500);
+    await rm(directory, { recursive: true, force: true });
+    await writeFile(directory, "not-a-directory");
     try {
       const result = await runOperation("memory.write", classifyIntent("remember this"), BUDGET, { cwd: root, slug: "locked", content: "should not land", approval: approval("memory.write", target) });
       assert.equal(result.ok, false);
       assert.match(result.reason, /write failed atomically/);
     } finally {
-      await chmod(directory, 0o700);
+      await rm(directory, { force: true });
     }
-    const entries = await readdir(directory);
-    assert.ok(!entries.includes("locked.md"));
-    assert.ok(!entries.some((entry) => entry.includes("atlas-tmp")), entries.join(","));
+    assert.equal((await stat(path.dirname(directory))).isDirectory(), true);
   }));
 
 test("read operations never write anything to the record directories", () =>

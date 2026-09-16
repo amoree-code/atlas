@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, atlasRoot, resolveWithin } from "../../paths.js";
+import { atlasRoot, resolveWithin } from "../../paths.js";
 import type { IntentClassification } from "./intent-router.js";
 
 // Context ladder: startup identity only -> project metadata -> ranked references -> exact
@@ -97,7 +97,7 @@ const TICKET_ID_SHAPE = /^T-\d+$/i;
 
 // Only ever resolves a single, already-validated ticket id to its task.md path, and only
 // ever stats it (size), never reads its content — the actual compact read is a later slice.
-async function planExactTicketRecord(identifier: string, budget: ContextBudget): Promise<BoundedReadResult> {
+async function planExactTicketRecord(identifier: string, budget: ContextBudget, root = atlasRoot()): Promise<BoundedReadResult> {
   const rung: LadderRung = "exact-record";
   if (!TICKET_ID_SHAPE.test(identifier)) {
     return budgetRejection(rung, `'${identifier}' is not a valid ticket identifier shape (expected T-<digits>) — refusing to guess a path`, null);
@@ -112,7 +112,7 @@ async function planExactTicketRecord(identifier: string, budget: ContextBudget):
   const normalized = `T-${identifier.replace(/^T-/i, "")}`;
   let resolvedPath: string;
   try {
-    resolvedPath = resolveWithin(atlasPath("projects", "atlas", "tickets"), normalized, "task.md");
+    resolvedPath = resolveWithin(path.join(root, "projects", "atlas", "tickets"), normalized, "task.md");
   } catch {
     return budgetRejection(rung, "resolved ticket path escapes the Atlas ticket root — refusing to read outside scope", null);
   }
@@ -125,7 +125,7 @@ async function planExactTicketRecord(identifier: string, budget: ContextBudget):
   if (size > budget.maxBytes) {
     return budgetRejection(rung, `ticket ${normalized} is ${size} bytes, budget.maxBytes allows ${budget.maxBytes} — refusing to silently truncate`, "max-bytes-exceeded");
   }
-  const relative = path.relative(atlasRoot(), resolvedPath);
+  const relative = path.relative(root, resolvedPath);
   return withinCharBudget({ rung, files: [relative], bytes: size, truncated: false, reason: `ticket ${normalized} is within budget (${size}/${budget.maxBytes} bytes)` }, budget, rung);
 }
 
@@ -150,14 +150,14 @@ function planRankedReferences(intent: string, budget: ContextBudget): BoundedRea
 // Top-level entry point reused across CLI/shim/hook/MCP callers: resolves the ladder rung
 // from a slice-4 classification, validates the budget before touching anything, and stops
 // immediately at the first violation with a clear, non-silent reason.
-export async function planContextRead(classification: IntentClassification, budget: unknown): Promise<BoundedReadResult> {
+export async function planContextRead(classification: IntentClassification, budget: unknown, root = atlasRoot()): Promise<BoundedReadResult> {
   const { rung, reason } = resolveLadderRung(classification);
   const validation = validateBudget(budget);
   if (!validation.valid) return budgetRejection(rung, validation.reason, "invalid-budget");
   const bounded = budget as ContextBudget;
 
   if (rung === "identity") return { rung, allowed: true, reason, violation: null, files: [], bytes: 0, truncated: false };
-  if (rung === "exact-record") return planExactTicketRecord(classification.identifier ?? "", bounded);
+  if (rung === "exact-record") return planExactTicketRecord(classification.identifier ?? "", bounded, root);
   if (rung === "project-metadata") return planProjectMetadata(bounded);
   return planRankedReferences(classification.intent, bounded);
 }

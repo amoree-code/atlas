@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -19,7 +20,10 @@ test("unbound and ambiguous project resolution each produce one focused confirma
 });
 
 test("atlas operate routes deterministic natural-language reads through the Atlas operation layer", () => {
-  const result = spawnSync(process.execPath, ["dist/main.js", "operate", "show", "T-198"], { encoding: "utf8" });
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "atlas-t198-cli-")));
+  fs.mkdirSync(path.join(root, "projects", "atlas", "tickets", "T-198"), { recursive: true });
+  fs.writeFileSync(path.join(root, "projects", "atlas", "tickets", "T-198", "task.md"), "---\nid: T-198\ntitle: Test ticket\nstate: active\nproject: atlas\ngoal: test\npriority: level_2\nupdated_at: 2026-09-16\n---\n");
+  const result = spawnSync(process.execPath, [path.resolve("dist/main.js"), "operate", "show", "T-198"], { cwd: root, env: { ...process.env, ATLAS_ROOT: root }, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
   assert.equal(output.classification.intent, "ticket-lookup");

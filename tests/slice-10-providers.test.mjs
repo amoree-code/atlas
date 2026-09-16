@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -19,6 +20,9 @@ const SESSION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 // tests below prove the invocation boundary's error handling, never compatibility.
 const LIVE = process.env.ATLAS_LIVE_PROVIDER_TESTS === "1";
 const live = LIVE ? test : test.skip;
+const installedEnvironment = existsSync(path.join(os.homedir(), "atlas", "system", "runtime", "shims", "atlas"));
+const installed = installedEnvironment ? test : test.skip;
+const unixOnly = process.platform === "win32" ? test.skip : test;
 
 function guardFor(provider, { approved = true, classification = classifyIntent("run the build") } = {}) {
   const scope = { action: "provider.invoke", target: provider, identifier: null, projectId: "atlas" };
@@ -135,7 +139,7 @@ test("invalid provider command produces a structured unavailable/failed result, 
   assert.match(result.reason, /could not be executed|not available/);
 });
 
-test("timeout produces a structured timeout result and kills the process", async () => {
+unixOnly("timeout produces a structured timeout result and kills the process", async () => {
   const { file } = await fakeProvider("#!/bin/sh\nsleep 30\n");
   const started = Date.now();
   const result = await invokeProviderHeadless({
@@ -146,7 +150,7 @@ test("timeout produces a structured timeout result and kills the process", async
   assert.ok(Date.now() - started < 15_000, "must not wait for the full sleep");
 });
 
-test("non-zero exit produces a structured failed result with the exit code", async () => {
+unixOnly("non-zero exit produces a structured failed result with the exit code", async () => {
   const { file } = await fakeProvider("#!/bin/sh\necho boom >&2\nexit 3\n");
   const result = await invokeProviderHeadless({
     provider: "claude", prompt: "x", atlasSessionId: SESSION, cwd: os.tmpdir(), executable: file,
@@ -226,7 +230,7 @@ test("Arabic and English intents are guarded identically before provider invocat
 
 // ---------------------------------------------------------------- hook & shim verification
 
-test("live shim verification: the Atlas shim executes and routes through the engine", () => {
+installed("live shim verification: the Atlas shim executes and routes through the engine", () => {
   const shim = path.join(os.homedir(), "atlas", "system", "runtime", "shims", "atlas");
   const result = spawnSync(shim, ["context", "--json"], { encoding: "utf8", timeout: 60_000 });
   assert.equal(result.status, 0, result.stderr);
@@ -234,7 +238,7 @@ test("live shim verification: the Atlas shim executes and routes through the eng
   assert.ok("projectResolution" in packet, "shim must reach the current engine build");
 });
 
-test("live hook verification: the Atlas SessionStart hook script executes and emits bounded context", () => {
+installed("live hook verification: the Atlas SessionStart hook script executes and emits bounded context", () => {
   const hook = path.join(os.homedir(), "atlas", "system", "integrations", "claude-code", "hooks", "atlas-session-bootstrap");
   const payload = JSON.stringify({ cwd: os.tmpdir(), session_id: "slice10", hook_event_name: "SessionStart" });
   const result = spawnSync(hook, [], { input: payload, encoding: "utf8", timeout: 60_000 });
@@ -244,7 +248,7 @@ test("live hook verification: the Atlas SessionStart hook script executes and em
   assert.ok(Buffer.byteLength(parsed.hookSpecificOutput.additionalContext) <= 256);
 });
 
-test("hook registration status is reported honestly, not assumed from the script's existence", async () => {
+installed("hook registration status is reported honestly, not assumed from the script's existence", async () => {
   const status = await claudeNativeHookStatus();
   assert.equal(status.scriptInstalled, true);
   assert.equal(typeof status.registered, "boolean");
@@ -252,7 +256,7 @@ test("hook registration status is reported honestly, not assumed from the script
   assert.match(status.settingsPath, /\.claude\/settings\.json$/);
 });
 
-test("CLI/direct-import parity: the shim and a direct engine call produce the same context packet", () => {
+installed("CLI/direct-import parity: the shim and a direct engine call produce the same context packet", () => {
   const shim = path.join(os.homedir(), "atlas", "system", "runtime", "shims", "atlas");
   const viaShim = spawnSync(shim, ["context", "--json"], { encoding: "utf8", timeout: 60_000 });
   const direct = spawnSync(process.execPath, [path.resolve("dist/main.js"), "context", "--json"], { encoding: "utf8", timeout: 60_000 });

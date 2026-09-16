@@ -81,9 +81,9 @@ function recordTypeForIntent(intent: IntentClassification["intent"]): RecordType
   }
 }
 
-async function freshnessOf(relativeSourcePath: string): Promise<Freshness> {
+async function freshnessOf(relativeSourcePath: string, root = atlasRoot()): Promise<Freshness> {
   try {
-    const resolved = resolveWithin(atlasRoot(), relativeSourcePath);
+    const resolved = resolveWithin(root, relativeSourcePath);
     const info = await stat(resolved);
     return Date.now() - info.mtimeMs <= STALE_AFTER_MS ? "current" : "stale";
   } catch {
@@ -160,7 +160,7 @@ export async function buildContextPacket(classification: IntentClassification, b
     ? activeProjectSummary(await resolveProject(cwd))
     : { status: "unbound" as const, projectId: null, confidence: "none" as const };
 
-  const readPlan = budgetCheck.valid ? await planContextRead(classification, budget) : null;
+  const readPlan = budgetCheck.valid ? await planContextRead(classification, budget, atlasRoot()) : null;
   if (readPlan && !readPlan.allowed) violations.push(`${readPlan.violation ?? "rejected"}: ${readPlan.reason}`);
 
   let candidates: RawReferenceCandidate[] = [];
@@ -170,7 +170,7 @@ export async function buildContextPacket(classification: IntentClassification, b
       identifier: classification.identifier,
       recordType: recordTypeForIntent(classification.intent),
       sourcePath,
-      freshness: await freshnessOf(sourcePath),
+      freshness: await freshnessOf(sourcePath, atlasRoot()),
       confidence: classification.confidence,
       selectionReason: readPlan.reason,
     }];
