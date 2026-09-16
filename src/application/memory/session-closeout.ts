@@ -49,7 +49,7 @@ export async function finalizeSession(store: SessionStore, sessionId: string, in
   const files = await changedFiles(session.workingDirectory);
   const summary = await writeSessionSummary({ session, events, changedFiles: files, exitCode, nextAction: input.nextAction });
   let handoffId = session.handoffId;
-  const enoughEvidence = Boolean(session.ticketId || events.some((event) => ["user_input", "provider_output", "text", "json"].includes(event.type)));
+  const enoughEvidence = Boolean(session.ticketId || (closeoutStatus === "completed" && events.some((event) => ["user_input", "provider_output", "text", "json"].includes(event.type))));
   if (!handoffId && enoughEvidence) {
     try {
       const handoff = await createHandoffWithStore(store, {
