@@ -1,147 +1,91 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { applyProviderResourceAdapter, buildAtlasResourceInjection, resourceAdapterStatus } from "../dist/application/context/resource-injection.js";
-import { intercept } from "../dist/interfaces/cli/intercept-command.js";
-import { registerProvider } from "../dist/infrastructure/wrappers/wrapper-manager.js";
-import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { ATLAS_BOOTSTRAP_MAX_BYTES, bootstrapEnvironment, buildAtlasBootstrap } from "../dist/application/context/resource-injection.js";
+import { bindProject, resolveProject } from "../dist/application/context/project-resolution.js";
 
-const unixOnly = process.platform === "win32" ? test.skip : test;
-
-test("Atlas selects allowlisted resources and bounds the injected context", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-resources-"));
-  const memory = path.join(root, "personal", "memory");
-  await mkdir(memory, { recursive: true });
-  await writeFile(path.join(memory, "MEMORY.md"), "atlas-owned-memory-marker");
-  await writeFile(path.join(root, "secret.txt"), "must-not-enter-context");
+async function withTempAtlasRoot(fn) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-bootstrap-"));
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = root;
   try {
-    const result = await buildAtlasResourceInjection();
-    assert.deepEqual(result.manifest.files, ["personal/memory/MEMORY.md"]);
-    assert.match(result.content, /atlas-owned-memory-marker/);
-    assert.doesNotMatch(result.content, /must-not-enter-context/);
+    return await fn(root);
   } finally {
     if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
   }
+}
+
+test("bound project bootstrap stays within the 256-byte budget and carries no Atlas file content", () => {
+  const bootstrap = buildAtlasBootstrap({ status: "bound", projectId: "atlas", name: "Atlas", path: "/x", matchedOn: "atlas-root", confidence: "high" });
+  assert.ok(bootstrap.manifest.bytes <= ATLAS_BOOTSTRAP_MAX_BYTES, `${bootstrap.manifest.bytes} exceeds ${ATLAS_BOOTSTRAP_MAX_BYTES}`);
+  assert.equal(bootstrap.manifest.transport, "bootstrap-env");
+  assert.match(bootstrap.content, /project=atlas/);
+  assert.doesNotMatch(bootstrap.content, /##\s*Atlas resource/);
 });
 
-unixOnly("Hermes interception passes Atlas context and records its manifest", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-hermes-context-"));
-  const bin = path.join(root, "bin");
-  await mkdir(path.join(root, "personal", "memory"), { recursive: true });
-  await mkdir(bin, { recursive: true });
-  await writeFile(path.join(root, "personal", "memory", "MEMORY.md"), "atlas-context-proof");
-  const executable = path.join(bin, "hermes");
-  await writeFile(executable, "#!/bin/sh\nprintf '%s\\n' \"$HERMES_ENVIRONMENT_HINT\"\nexit 0\n");
-  await chmod(executable, 0o755);
-  const previousRoot = process.env.ATLAS_ROOT;
-  const previousPath = process.env.PATH;
-  process.env.ATLAS_ROOT = root;
-  process.env.PATH = `${bin}${path.delimiter}${previousPath}`;
-  try {
-    await registerProvider("hermes", "hermes");
-    assert.equal(await intercept("hermes", ["--version"]), 0);
-    const store = await openSessionStore();
-    const session = store.list()[0];
-    const events = store.listEvents(session.sessionId);
-    assert.ok(events.some((event) => event.type === "atlas_resource_manifest"));
-    assert.match(events.map((event) => event.data).join("\n"), /atlas-context-proof/);
-    store.close();
-  } finally {
-    if (previousRoot === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previousRoot;
-    if (previousPath === undefined) delete process.env.PATH; else process.env.PATH = previousPath;
-  }
+test("unbound project bootstrap reports unbound rather than guessing a project", () => {
+  const bootstrap = buildAtlasBootstrap({ status: "unbound", cwd: "/tmp/somewhere", gitRoot: null, confidence: "none" });
+  assert.match(bootstrap.content, /project=unbound/);
+  assert.match(bootstrap.content, /confidence=none/);
 });
 
-test("resource injection selects a provider adapter without pretending unsupported clients consumed content", () => {
-  assert.deepEqual(resourceAdapterStatus("hermes"), { transport: "hermes-environment-hint", consumesContent: true });
-  for (const provider of ["claude", "codex", "gemini", "kimi", "kilo"]) {
-    assert.deepEqual(resourceAdapterStatus(provider), { transport: "manifest-only", consumesContent: false });
-  }
+test("bootstrap is delivered only as environment variables, never as file content or provider args", () => {
+  const bootstrap = buildAtlasBootstrap({ status: "unbound", cwd: "/tmp", gitRoot: null, confidence: "none" });
+  const env = bootstrapEnvironment(bootstrap);
+  assert.equal(env.ATLAS_BOOTSTRAP, bootstrap.content);
+  assert.equal(Object.keys(env).length, 2);
+  assert.ok(Buffer.byteLength(env.ATLAS_BOOTSTRAP) <= ATLAS_BOOTSTRAP_MAX_BYTES);
 });
 
-test("Claude print mode receives Atlas context through its official append-system-prompt flag", async () => {
-  const injection = await buildAtlasResourceInjection();
-  const result = applyProviderResourceAdapter("claude", ["-p", "check this"], injection);
-  assert.equal(result.transport, "claude-append-system-prompt");
-  assert.equal(result.consumesContent, true);
-  assert.equal(result.args[0], "-p");
-  assert.equal(result.args[1], "check this");
-  assert.equal(result.args.at(-2), "--append-system-prompt");
-  assert.match(result.args.at(-1), /# Atlas Resource Context/);
+test("resolveProject reports unbound for an arbitrary cwd with no binding and no git root", async () => {
+  await withTempAtlasRoot(async (root) => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-outside-"));
+    const resolution = await resolveProject(outside);
+    assert.equal(resolution.status, "unbound");
+  });
 });
 
-test("Claude interactive mode stays unchanged until an interactive adapter is proven", async () => {
-  const injection = await buildAtlasResourceInjection();
-  const args = ["--continue"];
-  const result = applyProviderResourceAdapter("claude", args, injection);
-  assert.deepEqual(result.args, args);
-  assert.equal(result.transport, "manifest-only");
-  assert.equal(result.consumesContent, false);
+test("resolveProject resolves a cwd inside the Atlas root itself to the atlas project", async () => {
+  await withTempAtlasRoot(async (root) => {
+    const resolution = await resolveProject(root);
+    assert.equal(resolution.status, "bound");
+    assert.equal(resolution.projectId, "atlas");
+    assert.equal(resolution.confidence, "high");
+  });
 });
 
-test("Codex exec mode receives Atlas context in its official prompt position", async () => {
-  const injection = await buildAtlasResourceInjection();
-  const result = applyProviderResourceAdapter("codex", ["exec", "--json", "review this"], injection);
-  assert.equal(result.transport, "codex-exec-prompt");
-  assert.equal(result.consumesContent, true);
-  assert.equal(result.args[0], "exec");
-  assert.equal(result.args[1], "--json");
-  assert.match(result.args[2], /^review this\n\n# Atlas Resource Context/);
+test("bindProject creates a binding and resolveProject then finds it from that exact cwd", async () => {
+  await withTempAtlasRoot(async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-"));
+    const bound = await bindProject("demo", projectDir);
+    assert.equal(bound.created, true);
+    assert.equal(bound.conflict, undefined);
+    const resolution = await resolveProject(projectDir);
+    assert.equal(resolution.status, "bound");
+    assert.equal(resolution.projectId, "demo");
+    assert.equal(resolution.matchedOn, "cwd");
+  });
 });
 
-test("Codex interactive mode stays unchanged until an interactive adapter is proven", async () => {
-  const injection = await buildAtlasResourceInjection();
-  const args = [];
-  const result = applyProviderResourceAdapter("codex", args, injection);
-  assert.deepEqual(result.args, args);
-  assert.equal(result.transport, "manifest-only");
-  assert.equal(result.consumesContent, false);
+test("bindProject reports a conflict instead of silently overwriting an existing binding", async () => {
+  await withTempAtlasRoot(async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-"));
+    await bindProject("demo", projectDir);
+    const second = await bindProject("other-name", projectDir);
+    assert.equal(second.created, false);
+    assert.ok(second.conflict);
+    assert.equal(second.conflict.name, "demo");
+  });
 });
 
-test("Kilo run mode receives Atlas context as an additional message", async () => {
-  const injection = await buildAtlasResourceInjection();
-  const result = applyProviderResourceAdapter("kilo", ["run", "review this", "--format", "json"], injection);
-  assert.equal(result.transport, "kilo-run-message");
-  assert.equal(result.consumesContent, true);
-  assert.equal(result.args[0], "run");
-  assert.match(result.args[1], /^# Atlas Resource Context/);
-  assert.equal(result.args[2], "review this");
-});
-
-test("Kilo prompt mode receives Atlas context through its prompt option", async () => {
-  const injection = await buildAtlasResourceInjection();
-  const result = applyProviderResourceAdapter("kilo", ["--prompt", "review this"], injection);
-  assert.equal(result.transport, "kilo-prompt-option");
-  assert.equal(result.consumesContent, true);
-  assert.match(result.args[1], /^review this\n\n# Atlas Resource Context/);
-});
-
-test("Kimi prompt mode receives Atlas context through its prompt option", async () => {
-  const injection = { content: "ATLAS_CONTEXT", manifest: { files: [], bytes: 0, source: "atlas", transport: "provider-adapter" } };
-  const result = applyProviderResourceAdapter("kimi", ["--prompt", "review this", "--print", "--output-format", "stream-json"], injection);
-  assert.equal(result.transport, "kimi-prompt-option");
-  assert.equal(result.consumesContent, true);
-  assert.match(result.args[1], /review this[\s\S]*ATLAS_CONTEXT/);
-});
-
-test("Kilo interactive mode stays unchanged until an interactive adapter is proven", async () => {
-  const injection = await buildAtlasResourceInjection();
-  const args = [];
-  const result = applyProviderResourceAdapter("kilo", args, injection);
-  assert.deepEqual(result.args, args);
-  assert.equal(result.transport, "manifest-only");
-  assert.equal(result.consumesContent, false);
-});
-
-test("Copilot prompt mode receives Atlas context through its prompt option", async () => {
-  const injection = await buildAtlasResourceInjection();
-  const result = applyProviderResourceAdapter("copilot", ["-p", "review this", "--model", "auto"], injection);
-  assert.equal(result.transport, "copilot-prompt-option");
-  assert.equal(result.consumesContent, true);
-  assert.match(result.args[1], /^review this\n\n# Atlas Resource Context/);
-  assert.equal(result.args[2], "--model");
+test("bindProject repeated with the same name and path is idempotent, not a conflict", async () => {
+  await withTempAtlasRoot(async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-"));
+    await bindProject("demo", projectDir);
+    const second = await bindProject("demo", projectDir);
+    assert.equal(second.created, false);
+    assert.equal(second.conflict, undefined);
+  });
 });

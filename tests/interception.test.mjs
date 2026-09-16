@@ -120,7 +120,7 @@ unixOnly("intercepts a registered CLI and persists the execution", async () => {
       entryPoint: "terminal-shim",
       controlLevel: "observed",
       inputCapture: "bounded-terminal",
-      contextTransport: "manifest-only",
+      contextTransport: "bootstrap-env",
       policyEnforcement: "shim-lifecycle-and-provider-owned-policy",
       promotion: "explicit-review",
       resume: "unsupported",

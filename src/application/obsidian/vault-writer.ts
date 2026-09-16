@@ -28,8 +28,8 @@ function hash(content: Buffer | string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-async function recordConflict(relative: string, expectedSha256: string | null, actualSha256: string | null, content: string): Promise<string> {
-  const directory = atlasPath("system", "integrations", "obsidian", "conflicts");
+async function recordConflict(relative: string, expectedSha256: string | null, actualSha256: string | null, content: string, conflictsDirectory = atlasPath("system", "integrations", "obsidian", "conflicts")): Promise<string> {
+  const directory = conflictsDirectory;
   await mkdir(directory, { recursive: true });
   const record = path.join(directory, `${new Date().toISOString().replaceAll(/[:.]/g, "-")}-${randomUUID()}.json`);
   await writeFile(record, `${JSON.stringify({ version: 1, path: relative, expectedSha256, actualSha256, proposedContent: content, createdAt: new Date().toISOString() }, null, 2)}\n`);
@@ -42,6 +42,7 @@ export async function writeObsidianNote(
   content: string,
   expectedSha256: string | null = null,
   apply = false,
+  conflictsDirectory?: string,
 ): Promise<ObsidianWriteResult> {
   const file = resolveObsidianNotePath(connection.vaultPath, relative);
   if (Buffer.byteLength(content) > MAX_CONTENT_BYTES) throw new Error(`Obsidian note exceeds ${MAX_CONTENT_BYTES} bytes`);
@@ -49,11 +50,11 @@ export async function writeObsidianNote(
   try { current = await readFile(file); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   const actualSha256 = current ? hash(current) : null;
   if (current && actualSha256 !== expectedSha256) {
-    const record = await recordConflict(relative, expectedSha256, actualSha256, content);
+    const record = await recordConflict(relative, expectedSha256, actualSha256, content, conflictsDirectory);
     return { applied: false, path: relative, conflict: { record, expectedSha256, actualSha256 } };
   }
   if (!current && expectedSha256 !== null) {
-    const record = await recordConflict(relative, expectedSha256, null, content);
+    const record = await recordConflict(relative, expectedSha256, null, content, conflictsDirectory);
     return { applied: false, path: relative, conflict: { record, expectedSha256, actualSha256: null } };
   }
   if (!apply) return { applied: false, path: relative, sha256: hash(content) };
