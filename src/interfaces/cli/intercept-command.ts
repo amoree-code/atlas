@@ -7,7 +7,8 @@ import { authorizeRun } from "../../application/runs/run-authorization.js";
 import { runInteractive, runPassthrough } from "../../infrastructure/process/interactive-process.js";
 import { findProvider, resolveOriginalExecutable, validateExplicitExecutable } from "../../infrastructure/providers/provider-registry.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
-import { applyProviderResourceAdapter, buildAtlasResourceInjection, resourceEnvironment } from "../../application/context/resource-injection.js";
+import { bootstrapEnvironment, buildAtlasBootstrap } from "../../application/context/resource-injection.js";
+import { resolveProject } from "../../application/context/project-resolution.js";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { authAdapter, authLogin, authStatus } from "../../application/auth/auth-orchestrator.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
@@ -29,9 +30,9 @@ export async function intercept(command: string, args: string[], options: Interc
   const sessionId = randomUUID();
   const profile = interceptedProfile(provider.id);
   const store = await openSessionStore();
-  const resourceInjection = await buildAtlasResourceInjection();
-  const resourceAdapter = applyProviderResourceAdapter(provider.id, args, resourceInjection);
   const workingDirectory = path.resolve(process.cwd());
+  const projectResolution = await resolveProject(workingDirectory);
+  const bootstrap = buildAtlasBootstrap(projectResolution);
   const runId = randomUUID();
   const contract = validateRunContract({
     runId,
@@ -62,17 +63,17 @@ export async function intercept(command: string, args: string[], options: Interc
     entryPoint,
     controlLevel,
     inputCapture,
-    contextTransport: options.originalExecutable ? "desktop-passthrough" : resourceAdapter.transport,
+    contextTransport: options.originalExecutable ? "desktop-passthrough" : bootstrap.manifest.transport,
     policyEnforcement: "shim-lifecycle-and-provider-owned-policy",
     promotion: "explicit-review",
     resume: provider.id === "claude" ? "provider-owned-if-exposed" : "unsupported",
   })));
   store.appendEvent(sessionId, "intercept_requested", JSON.stringify({ runId, command: provider.command, args: args.map(redactRuntimeText) }));
   if (options.handoffId) store.appendEvent(sessionId, "handoff_bound", JSON.stringify({ handoffId: options.handoffId, ticketId: options.ticketId ?? null }));
-  store.appendEvent(sessionId, "atlas_resource_manifest", JSON.stringify({
+  store.appendEvent(sessionId, "project_resolved", JSON.stringify({ workingDirectory, ...projectResolution }));
+  store.appendEvent(sessionId, "atlas_bootstrap", JSON.stringify({
     provider: provider.id,
-    ...resourceInjection.manifest,
-    adapter: { transport: resourceAdapter.transport, consumesContent: resourceAdapter.consumesContent },
+    ...bootstrap.manifest,
   }));
 
   try {
@@ -101,16 +102,16 @@ export async function intercept(command: string, args: string[], options: Interc
     store.appendEvent(sessionId, "provider_resolved", JSON.stringify({ executable, runtime: "direct" }));
     const processRequest = {
       command: provider.command,
-      args: resourceAdapter.args,
+      args,
       cwd: workingDirectory,
       environment: {
         ATLAS_INTERCEPTED: "1",
-        ...resourceEnvironment(provider.id, resourceInjection),
+        ...bootstrapEnvironment(bootstrap),
       },
     };
     const runProvider = async (signal: AbortSignal) => await (options.originalExecutable ? runPassthrough : runInteractive)({
       command: executable,
-      args: resourceAdapter.args,
+      args,
       cwd: workingDirectory,
       env: processRequest.environment,
       signal,

@@ -25,6 +25,7 @@ import { connectObsidianVault, discoverObsidianVault, loadObsidianConnection } f
 import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/vault-sync.js";
 import { listInboxCandidates, promoteInboxNote } from "./application/obsidian/inbox-promotion.js";
 import { writeObsidianNote } from "./application/obsidian/vault-writer.js";
+import { resolveConflict } from "./application/obsidian/conflict-log.js";
 import { runObsidianMcpServer } from "./infrastructure/mcp/obsidian-server.js";
 import { runAtlasMcpServer } from "./infrastructure/mcp/atlas-server.js";
 import { atlasMcpConfig } from "./application/mcp/mcp-connection.js";
@@ -35,6 +36,10 @@ import { runHandoffCommand } from "./interfaces/cli/handoff-command.js";
 import { runIdeaCommand } from "./interfaces/cli/idea-command.js";
 import { runDailyCommand } from "./interfaces/cli/daily-command.js";
 import { runClientTestCommand } from "./interfaces/cli/client-test-command.js";
+import { bindProject, listProjectBindings, resolveProject } from "./application/context/project-resolution.js";
+import { claudeSessionStartHook, readBoundedStdin } from "./application/hooks/session-start-hook.js";
+import { classifyIntent } from "./application/context/intent-router.js";
+import { runOperateCommand } from "./interfaces/cli/operate-command.js";
 
 const command = process.argv[2] === "--yes" ? undefined : process.argv[2];
 
@@ -150,8 +155,8 @@ if (!command) {
 } else if (command === "obsidian") {
   const action = process.argv[3] ?? "discover";
   if (action === "mcp") await runObsidianMcpServer();
-  else if (!["connect", "discover", "sync", "watch", "inbox", "write"].includes(action)) {
-    console.error("Usage: atlas obsidian connect <vault-path> [--read-write]|discover|sync|watch|inbox|write");
+  else if (!["connect", "discover", "sync", "watch", "inbox", "write", "conflicts"].includes(action)) {
+    console.error("Usage: atlas obsidian connect <vault-path> [--read-write]|discover|sync|watch|inbox|write|conflicts resolve <id> --keep=vault|atlas");
     process.exitCode = 1;
   } else {
     try {
@@ -165,7 +170,14 @@ if (!command) {
         console.log(JSON.stringify({ connected: true, mode, vaultPath: result.vaultPath, noteCount: synced.noteCount, added: synced.added, changed: synced.changed, removed: synced.removed, issues: synced.issues }, null, 2));
       } else {
         const connection = await loadObsidianConnection();
-        if (action === "write") {
+        if (action === "conflicts") {
+        if (process.argv[4] !== "resolve") throw new Error("Usage: atlas obsidian conflicts resolve <id> --keep=vault|atlas");
+        const id = process.argv[5];
+        const keepArg = process.argv.find((arg) => arg.startsWith("--keep="));
+        const keep = keepArg?.slice("--keep=".length);
+        if (!id || (keep !== "vault" && keep !== "atlas")) throw new Error("Usage: atlas obsidian conflicts resolve <id> --keep=vault|atlas");
+        console.log(JSON.stringify(await resolveConflict(id, keep), null, 2));
+        } else if (action === "write") {
         const relative = process.argv[4];
         const content = process.argv[5];
         const expectedSha256 = process.argv[6] ?? null;
@@ -201,6 +213,53 @@ if (!command) {
   catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
 } else if (command === "context") {
   await runContextCommand(process.argv.includes("--json"));
+} else if (command === "project") {
+  const action = process.argv[3] ?? "resolve";
+  if (action === "resolve") {
+    console.log(JSON.stringify(await resolveProject(process.argv[4] ?? process.cwd()), null, 2));
+  } else if (action === "bind") {
+    const [name, targetPath] = process.argv.slice(4);
+    if (!name || !targetPath) {
+      console.error("Usage: atlas project bind <name> <path>");
+      process.exitCode = 1;
+    } else {
+      const result = await bindProject(name, targetPath);
+      console.log(JSON.stringify(result, null, 2));
+      if (result.conflict) process.exitCode = 2;
+    }
+  } else if (action === "list") {
+    console.log(JSON.stringify(await listProjectBindings(), null, 2));
+  } else {
+    console.error("Usage: atlas project resolve [path]|bind <name> <path>|list");
+    process.exitCode = 1;
+  }
+} else if (command === "hook") {
+  const action = process.argv[3] ?? "";
+  if (action === "session-start") {
+    try {
+      const raw = await readBoundedStdin();
+      const payload = raw.trim() ? JSON.parse(raw) : {};
+      console.log(JSON.stringify(await claudeSessionStartHook(payload)));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+  } else {
+    console.error("Usage: atlas hook session-start (reads a Claude Code hook payload from stdin)");
+    process.exitCode = 1;
+  }
+} else if (command === "intent") {
+  const action = process.argv[3] ?? "classify";
+  if (action !== "classify") {
+    console.error("Usage: atlas intent classify <text>");
+    process.exitCode = 1;
+  } else {
+    const text = process.argv.slice(4).join(" ");
+    console.log(JSON.stringify(classifyIntent(text)));
+  }
+} else if (command === "operate") {
+  const text = process.argv.slice(3).join(" ");
+  await runOperateCommand(text);
 } else if (command === "idea") {
   try { await runIdeaCommand(process.argv[3] ?? "list", process.argv.slice(4)); }
   catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }

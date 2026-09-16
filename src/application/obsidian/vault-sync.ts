@@ -1,6 +1,10 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { renameSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { atlasPath } from "../../paths.js";
 import { discoverObsidianVault, type ObsidianConnection, type ObsidianDiscovery } from "./vault-discovery.js";
+import { ingestVaultChanges, type VaultIngestionResult } from "./vault-ingestion.js";
 
 type SyncEntry = { sha256: string; bytes: number };
 type SyncState = Record<string, SyncEntry>;
@@ -9,6 +13,7 @@ export type ObsidianSyncResult = ObsidianDiscovery & {
   added: string[];
   changed: string[];
   removed: string[];
+  ingestion?: VaultIngestionResult;
 };
 
 const defaultStatePath = (): string => atlasPath("system", "integrations", "obsidian", "sync-state.json");
@@ -28,8 +33,12 @@ export async function syncObsidianVault(connection: ObsidianConnection, stateFil
   const added = Object.keys(current).filter((file) => !previous[file]);
   const changed = Object.keys(current).filter((file) => previous[file] && previous[file]?.sha256 !== current[file]?.sha256);
   const removed = Object.keys(previous).filter((file) => !current[file]);
-  await writeFile(stateFile, `${JSON.stringify({ version: 1, vaultPath: connection.vaultPath, notes: current }, null, 2)}\n`);
-  return { ...discovery, added, changed, removed };
+  await mkdir(path.dirname(stateFile), { recursive: true });
+  const temporary = `${stateFile}.tmp-${randomUUID()}`;
+  writeFileSync(temporary, `${JSON.stringify({ version: 1, vaultPath: connection.vaultPath, notes: current }, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  renameSync(temporary, stateFile);
+  const result = { ...discovery, added, changed, removed };
+  return { ...result, ingestion: await ingestVaultChanges(connection, result, undefined, previous) };
 }
 
 export async function watchObsidianVault(
