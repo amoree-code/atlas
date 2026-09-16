@@ -2,7 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { atlasPath, engineRoot } from "../../paths.js";
+import { atlasPath, engineRoot, resolveWithin } from "../../paths.js";
 import { compactHandoff, validateHandoff, type Handoff } from "../../domain/sessions/handoff.js";
 import { openSessionStore, type SessionStore } from "../../infrastructure/persistence/session-store.js";
 
@@ -95,9 +95,10 @@ export async function listHandoffs(ticketId?: string): Promise<Array<Record<stri
 }
 
 export async function getTicket(id: string): Promise<Ticket> {
+  const ticketsRoot = atlasPath("projects", "atlas", "tickets");
   const candidates = [
-    atlasPath("projects", "atlas", "tickets", id, "task.md"),
-    atlasPath("projects", "atlas", "tickets", "archive", "Atlas", id, "task.md"),
+    resolveWithin(ticketsRoot, id, "task.md"),
+    resolveWithin(ticketsRoot, "archive", "Atlas", id, "task.md"),
   ];
   let file = "";
   for (const candidate of candidates) {

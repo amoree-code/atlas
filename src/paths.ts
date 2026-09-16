@@ -27,6 +27,15 @@ export function atlasPath(...parts: string[]): string {
   return path.join(atlasRoot(), ...parts);
 }
 
+export function resolveWithin(root: string, ...parts: string[]): string {
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(resolvedRoot, ...parts);
+  if (resolved !== resolvedRoot && !resolved.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error("Path escapes its allowed root");
+  }
+  return resolved;
+}
+
 // Private application state (config, profiles, sessions, logs, and integrations)
 // lives at the workspace root, separate from the public engine and user data trees.
 export function atlasStatePath(...parts: string[]): string {

@@ -3,8 +3,10 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { runAgent, type ProviderExecutor } from '../runs/run-agent.js';
 import { actionFingerprint } from '../../domain/mcp/mcp-contract.js';
+import { loadProfile } from '../../infrastructure/filesystem/profile-loader.js';
 
 export type GatewayRequest = {
   profile: string;
@@ -22,6 +24,13 @@ export type GatewayAdapter = {
   id: string;
   normalize(input: unknown): GatewayMessage;
 };
+
+function sameSecret(expected: string, actual: string | undefined): boolean {
+  if (actual === undefined) return false;
+  const expectedBytes = Buffer.from(expected);
+  const actualBytes = Buffer.from(actual);
+  return expectedBytes.length === actualBytes.length && timingSafeEqual(expectedBytes, actualBytes);
+}
 
 export const telegramAdapter: GatewayAdapter = {
   id: 'telegram',
@@ -75,7 +84,7 @@ export function createGatewayHandler(
       const scopeIndex = label.indexOf('@');
       return { id: scopeIndex < 1 ? label : label.slice(0, scopeIndex), token: entry.slice(separator + 1), profiles: scopeIndex < 1 ? undefined : new Set(label.slice(scopeIndex + 1).split('|').filter(Boolean)) };
     });
-    const identity = credentials.find((credential) => credential.token === token && (!credential.profiles || (typeof input === 'object' && input !== null && credential.profiles.has((input as GatewayRequest).profile))))?.id;
+    const identity = credentials.find((credential) => sameSecret(credential.token, token) && (!credential.profiles || (typeof input === 'object' && input !== null && credential.profiles.has((input as GatewayRequest).profile))))?.id;
     if (!expectedToken || !identity)
       return { status: 401, body: 'Unauthorized' };
     const now = Date.now();
@@ -96,6 +105,8 @@ export function createGatewayHandler(
       return { status: 400, body: 'Invalid or unapproved request' };
     if ((input as GatewayRequest).prompt.length > 8_000)
       return { status: 413, body: 'Prompt too large' };
+    try { await loadProfile((input as GatewayRequest).profile); }
+    catch { return { status: 400, body: 'Invalid profile' }; }
     const session = await runAgent(
       {
         profileName: (input as GatewayRequest).profile,
@@ -157,9 +168,7 @@ export function createWebhookGateway(
           response.end(result.body);
         } catch (error) {
           response.writeHead(500);
-          response.end(
-            error instanceof Error ? error.message : 'Gateway request failed',
-          );
+          response.end('Gateway request failed');
         }
       });
     },

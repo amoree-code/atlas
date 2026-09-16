@@ -52,6 +52,36 @@ test("connects profile, context, headless execution, and session storage", async
   delete process.env.ATLAS_ROOT;
 });
 
+test("redacts provider output, stderr, errors, and secrets near the payload bound", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-redaction-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", model: "sonnet", role: "assistant" }));
+  const database = path.join(root, "system", "sessions", "sessions.sqlite");
+  const secret = "api_key=" + "s".repeat(20);
+  process.env.ATLAS_ROOT = root;
+  const session = await runAgent({ profileName: "default", prompt: "start", cwd: root }, async (request) => {
+    request.onEvent?.({ type: "provider_output", data: "x".repeat(63_980) + secret });
+    return { exitCode: 1, events: [], stderr: secret };
+  });
+  const store = new SessionStore(database);
+  const events = store.listEvents(session.sessionId);
+  assert.ok(events.every((event) => !event.data.includes(secret)));
+  assert.ok(events.find((event) => event.type === "provider_output").data.includes("[REDACTED]"));
+  assert.equal(JSON.parse(events.find((event) => event.type === "process_exit").data).stderr, "[REDACTED]");
+  store.close();
+  delete process.env.ATLAS_ROOT;
+
+  process.env.ATLAS_ROOT = root;
+  await assert.rejects(runAgent({ profileName: "default", prompt: "start", cwd: root }, async () => {
+    throw new Error(secret);
+  }), /api_key=/);
+  const failedStore = new SessionStore(database);
+  const failedEvents = failedStore.list().flatMap((item) => failedStore.listEvents(item.sessionId));
+  assert.ok(failedEvents.every((event) => !event.data.includes(secret)));
+  failedStore.close();
+  delete process.env.ATLAS_ROOT;
+});
+
 test("applies one universal policy through every registered client adapter", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-universal-profile-"));
   const profileDirectory = path.join(root, "system", "profiles", "universal");

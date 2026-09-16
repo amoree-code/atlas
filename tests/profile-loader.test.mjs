@@ -34,6 +34,18 @@ test("loadProfile rejects a name whose file does not exist under ATLAS_ROOT", as
   }
 });
 
+test("loadProfile rejects traversal names before reading outside the profiles root", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-traversal-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "outside.json"), JSON.stringify({ name: "outside", provider: "claude", model: "sonnet", role: "outside" }));
+  process.env.ATLAS_ROOT = root;
+  try {
+    await assert.rejects(loadProfile("../outside"), /Invalid profile name/);
+  } finally {
+    delete process.env.ATLAS_ROOT;
+  }
+});
+
 test("loadProfile keeps legacy profile directories compatible during migration", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-directory-"));
   const directory = path.join(root, "system", "profiles", "developer");
