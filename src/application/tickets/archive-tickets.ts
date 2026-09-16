@@ -1,6 +1,6 @@
 import { access, mkdir, readdir, readFile, rename, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, resolveWithin } from "../../paths.js";
 
 export type ArchiveResult = {
   candidates: string[];
@@ -21,8 +21,8 @@ function setState(source: string, state: string): string {
 }
 
 export async function completeTicket(id: string, root = atlasPath("projects", "atlas", "tickets")): Promise<CompletionResult> {
-  const sourceDirectory = path.join(root, id);
-  const taskFile = path.join(sourceDirectory, "task.md");
+  const sourceDirectory = resolveWithin(root, id);
+  const taskFile = resolveWithin(root, id, "task.md");
   const source = await readFile(taskFile, "utf8");
   if (source.match(/- "\[ \] /)) throw new Error(`Cannot complete ${id}: unchecked work`);
   if (field(source, "state") !== "done") await writeFile(taskFile, setState(source, "done"));
@@ -32,20 +32,21 @@ export async function completeTicket(id: string, root = atlasPath("projects", "a
 
 export async function archiveDoneTickets(root = atlasPath("projects", "atlas", "tickets"), apply = false): Promise<ArchiveResult> {
   const result: ArchiveResult = { candidates: [], skipped: [], moved: [], repaired: [] };
+  const archiveRoot = resolveWithin(root, "archive");
   let entries;
   try { entries = await readdir(root, { withFileTypes: true }); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return result; throw error; }
 
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name === "archive") continue;
-    const sourceDirectory = path.join(root, entry.name);
-    const taskFile = path.join(sourceDirectory, "task.md");
+    const sourceDirectory = resolveWithin(root, entry.name);
+    const taskFile = resolveWithin(root, entry.name, "task.md");
     try { await access(taskFile); } catch {
-      const archivedDirectory = path.join(root, "archive", "Atlas", entry.name);
+      const archivedDirectory = resolveWithin(archiveRoot, "Atlas", entry.name);
       try { await access(path.join(archivedDirectory, "task.md")); } catch { continue; }
       if (!apply) continue;
       for (const artifact of await readdir(sourceDirectory, { withFileTypes: true })) {
-        const destination = path.join(archivedDirectory, artifact.name);
+        const destination = resolveWithin(archivedDirectory, artifact.name);
         try { await access(destination); result.skipped.push({ id: entry.name, reason: `archive artifact exists: ${artifact.name}` }); continue; }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
         await rename(path.join(sourceDirectory, artifact.name), destination);
@@ -68,7 +69,7 @@ export async function archiveDoneTickets(root = atlasPath("projects", "atlas", "
     if (!apply) continue;
 
     const project = field(source, "project") || "atlas";
-    const destinationDirectory = path.join(root, "archive", projectArchiveName(project), id);
+    const destinationDirectory = resolveWithin(archiveRoot, projectArchiveName(project), id);
     try { await access(destinationDirectory); result.skipped.push({ id, reason: "archive destination exists" }); continue; }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     await mkdir(path.dirname(destinationDirectory), { recursive: true });

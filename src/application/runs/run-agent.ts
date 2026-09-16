@@ -118,7 +118,7 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
       },
     });
     sessionStore.updateStatus(sessionId, result.exitCode === 0 ? "completed" : "failed");
-    sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: result.stderr }));
+    sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: redactRuntimeText(result.stderr) }));
     sessionStore.appendEvent(sessionId, "evidence", JSON.stringify({ evidenceId: randomUUID(), sessionId, type: "provider_exit", source: "headless-process", observedAt: new Date().toISOString(), result: result.exitCode === 0 ? "proven" : "not_proven", criterion: "provider process exits successfully", payload: JSON.stringify({ exitCode: result.exitCode }) }));
     sessionStore.scanCaptureItems(sessionId);
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: result.exitCode === 124 ? "provider_timeout" : "run_finished", correlationId: sessionId, sessionId, provider: profile.provider, status: result.exitCode === 0 ? "completed" : "failed", payload: JSON.stringify({ exitCode: result.exitCode }) });
@@ -128,7 +128,7 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
-    sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
+    sessionStore.appendEvent(sessionId, "error", redactRuntimeText(error instanceof Error ? error.message : String(error)));
     await finalizeSession(sessionStore, sessionId, { exitCode: 1 });
     await emitHook("run.error", { sessionId, error: error instanceof Error ? error.message : String(error) });
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: "run_failed", correlationId: sessionId, sessionId, provider: profile.provider, status: "failed" });
@@ -148,7 +148,7 @@ export async function resumeAgent(sessionId: string, prompt: string, execute: Pr
 
   try {
     sessionStore.updateStatus(sessionId, "running");
-    sessionStore.appendEvent(sessionId, "resume_requested", prompt);
+    sessionStore.appendEvent(sessionId, "resume_requested", redactRuntimeText(prompt));
     sessionStore.appendEvent(sessionId, "user_input", redactRuntimeText(prompt));
     const result = await execute({
       provider: "claude",
@@ -161,14 +161,14 @@ export async function resumeAgent(sessionId: string, prompt: string, execute: Pr
       },
     });
     sessionStore.updateStatus(sessionId, result.exitCode === 0 ? "completed" : "failed");
-    sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: result.stderr }));
+    sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: redactRuntimeText(result.stderr) }));
     sessionStore.scanCaptureItems(sessionId);
     await finalizeSession(sessionStore, sessionId, { exitCode: result.exitCode });
     return sessionStore.get(sessionId) ?? existing;
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
-    sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
+    sessionStore.appendEvent(sessionId, "error", redactRuntimeText(error instanceof Error ? error.message : String(error)));
     await finalizeSession(sessionStore, sessionId, { exitCode: 1 });
     throw error;
   } finally {
@@ -178,7 +178,7 @@ export async function resumeAgent(sessionId: string, prompt: string, execute: Pr
 
 function boundedEventData(event: RuntimeEvent): string {
   const serialized = typeof event.data === "string" ? event.data : JSON.stringify(event.data);
-  return serialized.slice(0, 64_000);
+  return redactRuntimeText(serialized);
 }
 
 function captureProviderSessionId(store: Awaited<ReturnType<typeof openSessionStore>>, sessionId: string, event: RuntimeEvent): void {

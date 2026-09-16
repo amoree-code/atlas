@@ -86,6 +86,19 @@ test("gateway binds identities and profile scopes to the exact approved request"
   delete process.env.ATLAS_ROOT;
 });
 
+test("gateway rejects traversal profiles and hides profile loading errors", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-security-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "outside.json"), JSON.stringify({ name: "outside", provider: "claude", model: "sonnet", role: "outside" }));
+  process.env.ATLAS_ROOT = root;
+  const profile = "../outside";
+  const approval = { approved: true, fingerprint: actionFingerprint("gateway.run", { profile, prompt: "ping" }) };
+  const result = await handleGatewayRequest({ profile, prompt: "ping", approval }, "secret", "secret", root);
+  assert.equal(result.status, 400);
+  assert.equal(result.body, "Invalid profile");
+  delete process.env.ATLAS_ROOT;
+});
+
 test("scheduler worker records retry state and releases its lease", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-worker-"));
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });

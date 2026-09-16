@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { archiveDoneTickets, completeTicket } from "../dist/application/tickets/archive-tickets.js";
+import { getTicket } from "../dist/application/handoff/handoff-service.js";
 
 const ticket = (id, state = "done", checklist = "[x]") => `---\nid: ${id}\nproject: atlas\nstate: ${state}\n---\n\nchecklist:\n  - "${checklist} work"\n`;
 
@@ -64,4 +65,25 @@ test("completion refuses an unchecked ticket without changing it", async () => {
 
   await assert.rejects(completeTicket("T-006", root), /unchecked work/);
   assert.equal(await readFile(path.join(root, "T-006", "task.md"), "utf8"), source);
+});
+
+test("rejects traversal in ticket reads and archive metadata", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ticket-traversal-"));
+  const ticketsRoot = path.join(root, "projects", "atlas", "tickets");
+  await mkdir(ticketsRoot, { recursive: true });
+  await writeFile(path.join(root, "outside.md"), ticket("outside"));
+  process.env.ATLAS_ROOT = root;
+  try {
+    await assert.rejects(getTicket("../outside"), /Path escapes its allowed root/);
+  } finally {
+    delete process.env.ATLAS_ROOT;
+  }
+
+  await mkdir(path.join(ticketsRoot, "T-007"), { recursive: true });
+  await writeFile(path.join(ticketsRoot, "T-007", "task.md"), ticket("../../outside"));
+  await assert.rejects(archiveDoneTickets(ticketsRoot, true), /Path escapes its allowed root/);
+
+  await mkdir(path.join(ticketsRoot, "T-008"), { recursive: true });
+  await writeFile(path.join(ticketsRoot, "T-008", "task.md"), ticket("T-008").replace("project: atlas", "project: ../../outside"));
+  await assert.rejects(archiveDoneTickets(ticketsRoot, true), /Path escapes its allowed root/);
 });
