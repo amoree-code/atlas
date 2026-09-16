@@ -61,6 +61,12 @@ provider still owns its native authentication and UI behavior; provider-specific
 context injection and semantic prompt capture remain capability claims that must
 be proven separately.
 
+Every governed entry point runs the shared session closeout when the provider exits. The closeout
+writes a bounded human-readable summary under `system/sessions/summaries/`, stores only essential
+summary metadata in `system/sessions/sessions.sqlite`, and may create a bounded handoff draft.
+It does not automatically promote conversation content to memory, knowledge, inbox, daily files,
+or skills.
+
 ### Desktop wrapper
 
 Desktop clients may launch a provider by absolute path and bypass `PATH`. A

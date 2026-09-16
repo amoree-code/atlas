@@ -20,6 +20,12 @@ type SessionRow = Omit<Session, "sessionId" | "providerSessionId" | "parentSessi
   context_bytes: number;
   next_action: string;
   verification_status: "unknown" | "proven" | "not_proven" | "blocked";
+  summary_path: string | null;
+  summary_hash: string | null;
+  summary_bytes: number;
+  closeout_status: "pending" | "completed" | "failed";
+  closeout_version: string;
+  closed_at: string | null;
 };
 
 export class SessionStore {
@@ -48,7 +54,13 @@ export class SessionStore {
         context_hash TEXT,
         context_bytes INTEGER NOT NULL DEFAULT 0,
         next_action TEXT NOT NULL DEFAULT '',
-        verification_status TEXT NOT NULL DEFAULT 'unknown'
+        verification_status TEXT NOT NULL DEFAULT 'unknown',
+        summary_path TEXT,
+        summary_hash TEXT,
+        summary_bytes INTEGER NOT NULL DEFAULT 0,
+        closeout_status TEXT NOT NULL DEFAULT 'pending',
+        closeout_version TEXT NOT NULL DEFAULT '1',
+        closed_at TEXT
       );
       CREATE TABLE IF NOT EXISTS handoffs (
         handoff_id TEXT PRIMARY KEY,
@@ -70,6 +82,7 @@ export class SessionStore {
         permissions_json TEXT NOT NULL DEFAULT '{}',
         context_manifest_json TEXT NOT NULL DEFAULT '{}',
         next_action TEXT NOT NULL DEFAULT '',
+        source_summary_path TEXT,
         content TEXT NOT NULL DEFAULT '',
         content_bytes INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
@@ -114,6 +127,7 @@ export class SessionStore {
       CREATE INDEX IF NOT EXISTS handoffs_updated_at ON handoffs(updated_at);
     `);
     this.migrateProfileIdentityColumn();
+    this.migrateHandoffSummaryColumn();
   }
 
   // CREATE TABLE IF NOT EXISTS does not add columns to a table that already exists, so a
@@ -127,13 +141,23 @@ export class SessionStore {
       ["title", "TEXT NOT NULL DEFAULT ''"], ["ticket_id", "TEXT"], ["handoff_id", "TEXT"],
       ["context_hash", "TEXT"], ["context_bytes", "INTEGER NOT NULL DEFAULT 0"],
       ["next_action", "TEXT NOT NULL DEFAULT ''"], ["verification_status", "TEXT NOT NULL DEFAULT 'unknown'"],
+      ["summary_path", "TEXT"], ["summary_hash", "TEXT"], ["summary_bytes", "INTEGER NOT NULL DEFAULT 0"],
+      ["closeout_status", "TEXT NOT NULL DEFAULT 'pending'"], ["closeout_version", "TEXT NOT NULL DEFAULT '1'"],
+      ["closed_at", "TEXT"],
     ];
     for (const [name, definition] of additions) {
       if (!columns.some((column) => column.name === name)) this.database.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${definition}`);
     }
   }
 
-  create(input: Omit<Session, "createdAt" | "updatedAt" | "status" | "title" | "ticketId" | "handoffId" | "contextHash" | "contextBytes" | "nextAction" | "verificationStatus"> & {
+  private migrateHandoffSummaryColumn(): void {
+    const columns = this.database.prepare("PRAGMA table_info(handoffs)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "source_summary_path")) {
+      this.database.exec("ALTER TABLE handoffs ADD COLUMN source_summary_path TEXT");
+    }
+  }
+
+  create(input: Omit<Session, "createdAt" | "updatedAt" | "status" | "title" | "ticketId" | "handoffId" | "contextHash" | "contextBytes" | "nextAction" | "verificationStatus" | "summaryPath" | "summaryHash" | "summaryBytes" | "closeoutStatus" | "closeoutVersion" | "closedAt"> & {
     status?: SessionStatus; title?: string; ticketId?: string | null; handoffId?: string | null; contextHash?: string | null;
     contextBytes?: number; nextAction?: string; verificationStatus?: "unknown" | "proven" | "not_proven" | "blocked";
   }): Session {
@@ -182,6 +206,11 @@ export class SessionStore {
       .run(handoffId, nextAction, new Date().toISOString(), sessionId);
   }
 
+  updateCloseout(sessionId: string, input: { summaryPath: string; summaryHash: string; summaryBytes: number; closeoutStatus: "completed" | "failed"; closedAt: string }): void {
+    this.database.prepare(`UPDATE sessions SET summary_path = ?, summary_hash = ?, summary_bytes = ?, closeout_status = ?, closeout_version = '1', closed_at = ?, updated_at = ? WHERE session_id = ?`)
+      .run(input.summaryPath, input.summaryHash, input.summaryBytes, input.closeoutStatus, input.closedAt, input.closedAt, sessionId);
+  }
+
   saveHandoff(input: Record<string, unknown>): void {
     const now = new Date().toISOString();
     const value = (key: string, fallback: string | number | null): string | number | null => {
@@ -193,8 +222,8 @@ export class SessionStore {
       INSERT INTO handoffs (handoff_id, ticket_id, title, objective, state, profile_id, profile_identity,
         source_session_id, provider, parent_session_id, decisions_json, changed_files_json, commit_ref,
         verification_json, not_proven_json, blocked_json, permissions_json, context_manifest_json,
-        next_action, content, content_bytes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        next_action, source_summary_path, content, content_bytes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(handoff_id) DO UPDATE SET ticket_id=excluded.ticket_id, title=excluded.title,
         objective=excluded.objective, state=excluded.state, profile_id=excluded.profile_id,
         profile_identity=excluded.profile_identity, source_session_id=excluded.source_session_id,
@@ -203,14 +232,15 @@ export class SessionStore {
         commit_ref=excluded.commit_ref, verification_json=excluded.verification_json,
         not_proven_json=excluded.not_proven_json, blocked_json=excluded.blocked_json,
         permissions_json=excluded.permissions_json, context_manifest_json=excluded.context_manifest_json,
-        next_action=excluded.next_action, content=excluded.content, content_bytes=excluded.content_bytes,
+        next_action=excluded.next_action, source_summary_path=excluded.source_summary_path,
+        content=excluded.content, content_bytes=excluded.content_bytes,
         updated_at=excluded.updated_at
     `).run(value("handoffId", ""), value("ticketId", null), value("title", ""), value("objective", ""),
       value("state", "paused"), value("profileId", ""), value("profileIdentity", ""), value("sourceSessionId", null),
       value("provider", ""), value("parentSessionId", null), jsonValue("decisions", []),
       jsonValue("changedFiles", []), value("commit", null), jsonValue("verification", []),
       jsonValue("notProven", []), jsonValue("blocked", []), jsonValue("permissions", {}),
-      jsonValue("contextManifest", {}), value("nextAction", ""), value("content", ""),
+      jsonValue("contextManifest", {}), value("nextAction", ""), value("sourceSummaryPath", null), value("content", ""),
       value("contentBytes", 0), value("createdAt", now), now);
   }
 
@@ -256,7 +286,7 @@ export class SessionStore {
       provider: row.provider, parentSessionId: row.parent_session_id, decisions: json("decisions_json", []),
       changedFiles: json("changed_files_json", []), commit: row.commit_ref, verification: json("verification_json", []),
       notProven: json("not_proven_json", []), blocked: json("blocked_json", []), permissions: json("permissions_json", {}),
-      contextManifest: json("context_manifest_json", {}), nextAction: row.next_action, content: row.content,
+      contextManifest: json("context_manifest_json", {}), nextAction: row.next_action, sourceSummaryPath: row.source_summary_path ?? null, content: row.content,
       contentBytes: row.content_bytes, createdAt: row.created_at, updatedAt: row.updated_at,
     };
   }
@@ -359,6 +389,12 @@ export class SessionStore {
       contextBytes: row.context_bytes,
       nextAction: row.next_action,
       verificationStatus: row.verification_status,
+      summaryPath: row.summary_path,
+      summaryHash: row.summary_hash,
+      summaryBytes: row.summary_bytes,
+      closeoutStatus: row.closeout_status,
+      closeoutVersion: row.closeout_version,
+      closedAt: row.closed_at,
     });
   }
 }

@@ -1,7 +1,8 @@
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import path from "node:path";
 import { listTickets } from "../../interfaces/cli/tickets-command.js";
 import { hasFailures, workspaceReport } from "../../application/doctor/workspace-doctor.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, atlasRoot } from "../../paths.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
 import { actionFingerprint, mcpApprovalSchema } from "../../domain/mcp/mcp-contract.js";
 import { getHandoff, getTicket, listHandoffs } from "../../application/handoff/handoff-service.js";
@@ -19,6 +20,7 @@ const tools = [
   { name: "atlas_handoffs_list", description: "List compact cross-client session handoffs.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { ticketId: { type: "string" } }, additionalProperties: false } },
   { name: "atlas_handoff_get", description: "Read one bounded cross-client session handoff.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { handoffId: { type: "string" }, maxBytes: { type: "number" } }, required: ["handoffId"], additionalProperties: false } },
   { name: "atlas_session_get", description: "Read one session metadata record without its transcript.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { sessionId: { type: "string" } }, required: ["sessionId"], additionalProperties: false } },
+  { name: "atlas_session_summary", description: "Read one bounded human-readable session summary.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { sessionId: { type: "string" }, maxBytes: { type: "number" } }, required: ["sessionId"], additionalProperties: false } },
   { name: "atlas_session_events", description: "Read one bounded session event log explicitly requested by id.", annotations: { readOnlyHint: true }, inputSchema: { type: "object", properties: { sessionId: { type: "string" }, maxEvents: { type: "number" } }, required: ["sessionId"], additionalProperties: false } },
   { name: "atlas_session_promote", description: "Promote a completed session result into reviewed Atlas knowledge.", annotations: { readOnlyHint: false }, inputSchema: { type: "object", properties: { sessionId: { type: "string" }, target: { type: "string" }, approval: { type: "object" } }, required: ["sessionId", "approval"], additionalProperties: false } },
 ];
@@ -59,6 +61,19 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
     const store = await openSessionStore();
     try { const session = store.get(requiredArgument(args, "sessionId")); if (!session) throw new Error("Session not found"); return session; }
     finally { store.close(); }
+  }
+  if (name === "atlas_session_summary") {
+    const store = await openSessionStore();
+    try {
+      const session = store.get(requiredArgument(args, "sessionId"));
+      if (!session) throw new Error("Session not found");
+      if (!session.summaryPath) throw new Error("Session summary not available");
+      const summaryPath = path.resolve(atlasRoot(), session.summaryPath);
+      const root = `${path.resolve(atlasPath("system", "sessions", "summaries"))}${path.sep}`;
+      if (!summaryPath.startsWith(root)) throw new Error("Session summary path is outside the Atlas summary directory");
+      const maxBytes = typeof args.maxBytes === "number" ? Math.min(12_000, Math.max(512, args.maxBytes)) : 12_000;
+      return { sessionId: session.sessionId, summaryPath: session.summaryPath, summary: (await readFile(summaryPath, "utf8")).slice(0, maxBytes) };
+    } finally { store.close(); }
   }
   if (name === "atlas_session_events") {
     const store = await openSessionStore();

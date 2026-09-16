@@ -4,7 +4,7 @@ import { handleAtlasMcpRequest } from "../dist/infrastructure/mcp/atlas-server.j
 
 test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", async () => {
   const listed = await handleAtlasMcpRequest({ jsonrpc: "2.0", id: 1, method: "tools/list" });
-  assert.deepEqual(listed.result.tools.map((tool) => tool.name), ["atlas_status", "atlas_doctor", "atlas_profiles_list", "atlas_tickets_list", "atlas_ticket_get", "atlas_handoffs_list", "atlas_handoff_get", "atlas_session_get", "atlas_session_events", "atlas_session_promote"]);
+  assert.deepEqual(listed.result.tools.map((tool) => tool.name), ["atlas_status", "atlas_doctor", "atlas_profiles_list", "atlas_tickets_list", "atlas_ticket_get", "atlas_handoffs_list", "atlas_handoff_get", "atlas_session_get", "atlas_session_summary", "atlas_session_events", "atlas_session_promote"]);
   const status = await handleAtlasMcpRequest({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "atlas_status", arguments: {} } });
   assert.match(status.result.content[0].text, /"name":"Atlas"/);
 });

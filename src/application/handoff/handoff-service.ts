@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { atlasPath, engineRoot } from "../../paths.js";
 import { compactHandoff, validateHandoff, type Handoff } from "../../domain/sessions/handoff.js";
-import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
+import { openSessionStore, type SessionStore } from "../../infrastructure/persistence/session-store.js";
 
 const execFile = promisify(execFileCallback);
 const maxContentBytes = 16_000;
@@ -17,44 +17,66 @@ export async function createHandoff(input: {
   profileId?: string;
   nextAction?: string;
   provider?: string;
+  sourceSummaryPath?: string | null;
+  changedFiles?: string[];
+  verification?: string[];
+  notProven?: string[];
+  blocked?: string[];
 }): Promise<Handoff> {
   const ticket = input.ticketId ? await getTicket(input.ticketId) : null;
   const store = await openSessionStore();
-  try {
-    const session = input.sessionId ? store.get(input.sessionId) : null;
-    if (input.sessionId && !session) throw new Error(`Session not found: ${input.sessionId}`);
-    const commit = await currentCommit();
-    const now = new Date().toISOString();
-    const content = (ticket?.body ?? "").slice(0, maxContentBytes);
-    const handoff = validateHandoff({
-      handoffId: `handoff-${randomUUID()}`,
-      ticketId: ticket?.id ?? session?.ticketId ?? null,
-      title: ticket?.title ?? session?.title ?? "Atlas session handoff",
-      objective: ticket?.objective ?? "Continue the selected Atlas session with bounded context.",
-      state: ticket?.state ?? session?.status ?? "paused",
-      profileId: input.profileId ?? session?.profile ?? "",
-      profileIdentity: session?.profileIdentity ?? "",
-      sourceSessionId: session?.sessionId ?? null,
-      provider: input.provider ?? session?.provider ?? "",
-      parentSessionId: session?.parentSessionId ?? null,
-      decisions: [],
-      changedFiles: [],
-      commit,
-      verification: [],
-      notProven: [],
-      blocked: [],
-      permissions: { profile: input.profileId ?? session?.profile ?? null },
-      contextManifest: { bytes: session?.contextBytes ?? 0, hash: session?.contextHash ?? null, mode: "bounded" },
-      nextAction: input.nextAction ?? session?.nextAction ?? "Verify the current state before changing files.",
-      content,
-      contentBytes: Buffer.byteLength(content),
-      createdAt: now,
-      updatedAt: now,
-    });
-    store.saveHandoff(handoff);
-    if (session) store.updateHandoff(session.sessionId, handoff.handoffId, handoff.nextAction);
-    return handoff;
-  } finally { store.close(); }
+  try { return await createHandoffWithStore(store, { ...input, ticket }); }
+  finally { store.close(); }
+}
+
+export async function createHandoffWithStore(store: SessionStore, input: {
+  ticketId?: string;
+  sessionId?: string;
+  profileId?: string;
+  nextAction?: string;
+  provider?: string;
+  sourceSummaryPath?: string | null;
+  changedFiles?: string[];
+  verification?: string[];
+  notProven?: string[];
+  blocked?: string[];
+  ticket?: Ticket | null;
+}): Promise<Handoff> {
+  const ticket = input.ticket === undefined && input.ticketId ? await getTicket(input.ticketId) : input.ticket ?? null;
+  const session = input.sessionId ? store.get(input.sessionId) : null;
+  if (input.sessionId && !session) throw new Error(`Session not found: ${input.sessionId}`);
+  const commit = await currentCommit();
+  const now = new Date().toISOString();
+  const content = (ticket?.body ?? "").slice(0, maxContentBytes);
+  const handoff = validateHandoff({
+    handoffId: `handoff-${randomUUID()}`,
+    ticketId: ticket?.id ?? session?.ticketId ?? null,
+    title: ticket?.title ?? session?.title ?? "Atlas session handoff",
+    objective: ticket?.objective ?? "Continue the selected Atlas session with bounded context.",
+    state: ticket?.state ?? session?.status ?? "paused",
+    profileId: input.profileId ?? session?.profile ?? "",
+    profileIdentity: session?.profileIdentity ?? "",
+    sourceSessionId: session?.sessionId ?? null,
+    provider: input.provider ?? session?.provider ?? "",
+    parentSessionId: session?.parentSessionId ?? null,
+    decisions: [],
+    changedFiles: input.changedFiles ?? [],
+    commit,
+    verification: input.verification ?? [],
+    notProven: input.notProven ?? [],
+    blocked: input.blocked ?? [],
+    permissions: { profile: input.profileId ?? session?.profile ?? null },
+    contextManifest: { bytes: session?.contextBytes ?? 0, hash: session?.contextHash ?? null, mode: "bounded" },
+    nextAction: input.nextAction ?? session?.nextAction ?? "Verify the current state before changing files.",
+    sourceSummaryPath: input.sourceSummaryPath ?? null,
+    content,
+    contentBytes: Buffer.byteLength(content),
+    createdAt: now,
+    updatedAt: now,
+  });
+  store.saveHandoff(handoff);
+  if (session) store.updateHandoff(session.sessionId, handoff.handoffId, handoff.nextAction);
+  return handoff;
 }
 
 export async function getHandoff(handoffId: string, maxBytes = 8_000): Promise<Record<string, unknown>> {

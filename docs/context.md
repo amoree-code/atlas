@@ -32,6 +32,11 @@ The result is a `BuiltContext`:
   maxBytes: number,                 // hard source budget
   omitted: string[],                // disallowed or budget-excluded sources
   compactedSummary: string | null,  // not populated by buildContext today
+  compression: {                    // null unless profile compression is enabled
+    sourceId: string, sourceHash: string, originalBytes: number, compressedBytes: number,
+    method: string, budget: number, omittedSections: string[], recoveryRef: string,
+    safeToUse: boolean,
+  } | null,
   lastContextCheckpoint: string,    // ISO timestamp of this build
 }
 ```
@@ -58,3 +63,7 @@ Atlas does not scan all sessions, tickets, personal files, daily files, or trans
 
 Each run records `context_manifest` and `context_cost` events with selected sources, bytes, hash,
 handoff id, and selected skills. Handoffs and MCP reads are bounded independently.
+
+`contextCompression: "atlas-bounded"` is opt-in and deterministic. It preserves changed files,
+approvals, errors, security warnings, verification, and next action when they fit the budget.
+If required evidence cannot fit safely, the result is marked unsafe and uses the bounded original.

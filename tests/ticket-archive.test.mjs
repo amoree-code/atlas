@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { archiveDoneTickets } from "../dist/application/tickets/archive-tickets.js";
+import { archiveDoneTickets, completeTicket } from "../dist/application/tickets/archive-tickets.js";
 
 const ticket = (id, state = "done", checklist = "[x]") => `---\nid: ${id}\nproject: atlas\nstate: ${state}\n---\n\nchecklist:\n  - "${checklist} work"\n`;
 
@@ -41,4 +41,27 @@ test("repairs artifacts left by the old task-only archiver", async () => {
   assert.deepEqual(repaired.repaired, ["T-004"]);
   assert.equal(await readFile(path.join(root, "archive", "Atlas", "T-004", "migration-manifest.md"), "utf8"), "legacy artifact");
   await assert.rejects(access(path.join(root, "T-004")));
+});
+
+test("completes and archives a ticket in one governed transition", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ticket-complete-"));
+  await mkdir(path.join(root, "T-005"), { recursive: true });
+  await writeFile(path.join(root, "T-005", "task.md"), ticket("T-005", "active"));
+  await writeFile(path.join(root, "T-005", "notes.md"), "preserve me");
+
+  const result = await completeTicket("T-005", root);
+  assert.deepEqual(result.moved, ["T-005"]);
+  assert.equal(await readFile(path.join(root, "archive", "Atlas", "T-005", "task.md"), "utf8"), ticket("T-005"));
+  assert.equal(await readFile(path.join(root, "archive", "Atlas", "T-005", "notes.md"), "utf8"), "preserve me");
+  await assert.rejects(access(path.join(root, "T-005")));
+});
+
+test("completion refuses an unchecked ticket without changing it", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ticket-complete-blocked-"));
+  await mkdir(path.join(root, "T-006"), { recursive: true });
+  const source = ticket("T-006", "active", "[ ]");
+  await writeFile(path.join(root, "T-006", "task.md"), source);
+
+  await assert.rejects(completeTicket("T-006", root), /unchecked work/);
+  assert.equal(await readFile(path.join(root, "T-006", "task.md"), "utf8"), source);
 });

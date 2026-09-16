@@ -19,11 +19,12 @@ canonical JSON file; legacy profile directories are read only for compatibility 
   provider: "claude" | "codex" | "gemini" | "antigravity" | "hermes" | "kilo" | "kimi",
   model: string,                                        // non-empty
   role: string,                                         // non-empty
-  skills: string[],                                      // default []
+  skills: string[],                                      // default core-thinking + verification
   allowedPaths: string[],                                // default []
   allowedCommands: string[],                             // default []
   writePolicy: "none" | "workspace" | "allowed-paths",  // default "none"
   contextSources: string[],                              // default []
+  contextCompression: "none" | "atlas-bounded",        // default "none"
   clients: { [client: string]: { enabled: boolean, model?: string, profile?: string,
     home?: string, mode?: string, capabilities: string[], limitations: string[] } },
 }
@@ -51,6 +52,12 @@ starts. `description` and `version` are both optional on disk (they default to `
   selected client's model/home/mode/capabilities/limitations are added to effective context.
 - `version` is a human-assigned label for a profile's configuration (bump it when you
   change a profile's fields); it participates in the identity described below.
+
+When `skills` is empty, Atlas selects only `core-thinking` and `verification`. This is the
+small default set; expensive or promoted skills remain prompt-matched and owner-reviewed.
+`contextCompression: "atlas-bounded"` opts a profile into the local bounded compression
+trial. It records source hashes, byte counts, omitted sections, and recovery references;
+unsafe compression falls back to the bounded original.
 
 Writable profiles fail closed because direct provider execution cannot enforce file writes.
 `writePolicy` is therefore not treated as advisory; an enforcing sandbox must be added before

@@ -22,6 +22,12 @@ export const sessionSchema = z.object({
   contextBytes: z.number().int().nonnegative().default(0),
   nextAction: z.string().default(""),
   verificationStatus: z.enum(["unknown", "proven", "not_proven", "blocked"]).default("unknown"),
+  summaryPath: z.string().nullable().default(null),
+  summaryHash: z.string().nullable().default(null),
+  summaryBytes: z.number().int().nonnegative().default(0),
+  closeoutStatus: z.enum(["pending", "completed", "failed"]).default("pending"),
+  closeoutVersion: z.string().default("1"),
+  closedAt: z.string().nullable().default(null),
 });
 
 export type Session = z.infer<typeof sessionSchema>;

@@ -20,6 +20,7 @@ export const handoffSchema = z.object({
   permissions: z.record(z.unknown()).default({}),
   contextManifest: z.record(z.unknown()).default({}),
   nextAction: z.string().default(""),
+  sourceSummaryPath: z.string().nullable().default(null),
   content: z.string().max(16_000).default(""),
   contentBytes: z.number().int().nonnegative().default(0),
   createdAt: z.string().min(1),
@@ -38,7 +39,7 @@ export function compactHandoff(handoff: Handoff, maxBytes = 8_000): string {
     state: handoff.state, profileId: handoff.profileId, provider: handoff.provider, commit: handoff.commit,
     decisions: handoff.decisions, changedFiles: handoff.changedFiles, verification: handoff.verification,
     notProven: handoff.notProven, blocked: handoff.blocked, permissions: handoff.permissions,
-    contextManifest: handoff.contextManifest, nextAction: handoff.nextAction,
+    contextManifest: handoff.contextManifest, nextAction: handoff.nextAction, sourceSummaryPath: handoff.sourceSummaryPath,
   };
   const serialize = (candidate: typeof value) => JSON.stringify(candidate);
   let serialized = serialize(value);

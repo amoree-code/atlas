@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { runFirstRunWizard, setup } from "./interfaces/cli/setup-command.js";
 import { runAgent } from "./application/runs/run-agent.js";
 import { resumeAgent } from "./application/runs/run-agent.js";
@@ -18,6 +20,7 @@ import { hasFailures, repairWorkspace, workspaceReport } from "./application/doc
 import { listSchedules, runDueSchedules, runSchedule, runSchedulerWorker, runSchedulerWorkerOnce, saveSchedule, setScheduleEnabled } from "./application/scheduler/local-scheduler.js";
 import { createWebhookGateway } from "./application/gateway/webhook-gateway.js";
 import { addSkillCandidate, learnSkillFromSession, listSkillCandidates, reviewSkillCandidate } from "./application/skills/skill-curation.js";
+import { listObservations, observeSession, reviewObservation } from "./application/skills/task-observer.js";
 import { connectObsidianVault, discoverObsidianVault, loadObsidianConnection } from "./application/obsidian/vault-discovery.js";
 import { syncObsidianVault, watchObsidianVault } from "./application/obsidian/vault-sync.js";
 import { listInboxCandidates, promoteInboxNote } from "./application/obsidian/inbox-promotion.js";
@@ -229,6 +232,15 @@ if (!command) {
 } else if (command === "skill") {
   const action = process.argv[3] ?? "list";
   if (action === "list") console.log(JSON.stringify(await listSkillCandidates(), null, 2));
+  else if (action === "observe") {
+    const sessionId = process.argv[4];
+    if (sessionId) console.log(JSON.stringify(await observeSession(sessionId), null, 2));
+    else console.log(JSON.stringify(await listObservations(), null, 2));
+  } else if (action === "observation-review") {
+    const [observationId, status] = process.argv.slice(4);
+    if (!observationId || !["approved", "promoted", "discarded", "rejected"].includes(status)) { console.error("Usage: atlas skill observation-review <id> approved|promoted|discarded|rejected"); process.exitCode = 1; }
+    else console.log(JSON.stringify(await reviewObservation(observationId, status as "approved" | "promoted" | "discarded" | "rejected"), null, 2));
+  }
   else if (action === "add") {
     const [id, name, ...instructions] = process.argv.slice(4);
     if (!id || !name || !instructions.length) { console.error("Usage: atlas skill add <id> <name> <instructions>"); process.exitCode = 1; }
@@ -241,7 +253,7 @@ if (!command) {
     const sessionId = process.argv[4];
     if (!sessionId) { console.error("Usage: atlas skill learn <completed-session-id>"); process.exitCode = 1; }
     else console.log(JSON.stringify(await learnSkillFromSession(sessionId), null, 2));
-  } else { console.error("Usage: atlas skill list|add|learn|review"); process.exitCode = 1; }
+  } else { console.error("Usage: atlas skill list|observe [session-id]|observation-review <id> approved|promoted|discarded|rejected|add|learn|review"); process.exitCode = 1; }
 } else if (command === "catalog") {
   console.log(JSON.stringify(listInstallSpecs().map((spec) => ({ id: spec.provider.id, command: spec.provider.command, installer: installPlan(spec.provider.id) })), null, 2));
 } else if (command === "env") {
@@ -310,6 +322,16 @@ if (!command) {
     store.close();
     if (!session) { console.error("Session not found"); process.exitCode = 1; }
     else console.log(JSON.stringify({ ...session, entryContract: entryEvent ? JSON.parse(entryEvent.data) : null }));
+  } else if (action === "summary") {
+    const sessionId = process.argv[4] ?? "";
+    const session = store.get(sessionId);
+    store.close();
+    if (!session) { console.error("Session not found"); process.exitCode = 1; }
+    else if (!session.summaryPath) { console.error("Session summary not available"); process.exitCode = 1; }
+    else {
+      try { console.log(await readFile(path.resolve(atlasRoot(), session.summaryPath), "utf8")); }
+      catch { console.error("Session summary file is missing"); process.exitCode = 1; }
+    }
   } else if (action === "events") {
     const sessionId = process.argv[4] ?? "";
     const session = store.get(sessionId);
@@ -354,7 +376,7 @@ if (!command) {
     }
   } else {
     store.close();
-    console.error("Usage: atlas session list|show <session-id>|events <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]");
+    console.error("Usage: atlas session list|show <session-id>|summary <session-id>|events <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]");
     process.exitCode = 1;
   }
 } else {

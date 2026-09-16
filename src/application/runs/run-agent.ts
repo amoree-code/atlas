@@ -9,6 +9,7 @@ import type { Session } from "../../domain/sessions/session.js";
 import { runProvider, type HeadlessProvider, type ProviderRequest } from "../../infrastructure/providers/providers.js";
 import type { HeadlessResult, RuntimeEvent } from "../../infrastructure/process/cli-process.js";
 import { appendRuntimeLog, redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
+import { finalizeSession } from "../memory/session-closeout.js";
 import { getHandoff } from "../handoff/handoff-service.js";
 import { authorizeRun } from "./run-authorization.js";
 import type { RunContract } from "../../domain/runs/run-contract.js";
@@ -77,7 +78,7 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
       promotion: "explicit-review",
       resume: profile.provider === "claude" ? "provider-session-id" : "unsupported",
     })));
-    const context = await buildContext(profile, request.cwd);
+    const context = await buildContext(profile, request.cwd, 32_000, { compression: profile.contextCompression });
     const profileFacts = await readProfileFacts(profile.name);
     const skills = await loadSkills(profile.skills, 32_000, request.cwd);
     const autoSkills = await loadPromotedSkills(request.prompt, Math.max(0, 32_000 - skills.reduce((bytes, skill) => bytes + Buffer.byteLength(skill.instructions), 0)));
@@ -97,6 +98,7 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
       approvalRequired: profile.governance?.approvalRequired ?? false, verification: profile.verification.commands,
       memoryScope: profile.memory.enabled ? profile.memory.scope : "disabled", ticketId: effectiveTicketId,
       handoffId: request.handoffId ?? null,
+      contextCompression: profile.contextCompression,
     });
     const handoffContent = typeof handoff?.compactContext === "string" ? `## Atlas handoff\n${handoff.compactContext}` : "";
     const prompt = [request.prompt, `## Effective Atlas profile\n${profileContract}`, profile.instructions, skillContent, formatProfileFacts(profileFacts), handoffContent, context.content].filter(Boolean).join("\n\n");
@@ -120,12 +122,14 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
     sessionStore.appendEvent(sessionId, "evidence", JSON.stringify({ evidenceId: randomUUID(), sessionId, type: "provider_exit", source: "headless-process", observedAt: new Date().toISOString(), result: result.exitCode === 0 ? "proven" : "not_proven", criterion: "provider process exits successfully", payload: JSON.stringify({ exitCode: result.exitCode }) }));
     sessionStore.scanCaptureItems(sessionId);
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: result.exitCode === 124 ? "provider_timeout" : "run_finished", correlationId: sessionId, sessionId, provider: profile.provider, status: result.exitCode === 0 ? "completed" : "failed", payload: JSON.stringify({ exitCode: result.exitCode }) });
+    await finalizeSession(sessionStore, sessionId, { exitCode: result.exitCode });
     await emitHook("session.end", { sessionId, status: result.exitCode === 0 ? "completed" : "failed", exitCode: result.exitCode });
     return sessionStore.get(sessionId) ?? session;
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
     sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
+    await finalizeSession(sessionStore, sessionId, { exitCode: 1 });
     await emitHook("run.error", { sessionId, error: error instanceof Error ? error.message : String(error) });
     await appendRuntimeLog({ timestamp: new Date().toISOString(), event: "run_failed", correlationId: sessionId, sessionId, provider: profile.provider, status: "failed" });
     throw error;
@@ -159,11 +163,13 @@ export async function resumeAgent(sessionId: string, prompt: string, execute: Pr
     sessionStore.updateStatus(sessionId, result.exitCode === 0 ? "completed" : "failed");
     sessionStore.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode, stderr: result.stderr }));
     sessionStore.scanCaptureItems(sessionId);
+    await finalizeSession(sessionStore, sessionId, { exitCode: result.exitCode });
     return sessionStore.get(sessionId) ?? existing;
   } catch (error) {
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
     sessionStore.appendEvent(sessionId, "error", error instanceof Error ? error.message : String(error));
+    await finalizeSession(sessionStore, sessionId, { exitCode: 1 });
     throw error;
   } finally {
     sessionStore.close();

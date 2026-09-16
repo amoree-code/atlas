@@ -25,6 +25,16 @@ if absent:
 - `capture_items` — reviewable references to explicit `user_input` events. Use `atlas capture` to list,
   promote, or discard candidates; provider completion does not sync them into the inbox view.
 
+Completed proven sessions may also produce bounded observations in
+`<workspace>/system/skills/observations.json`. Observations link source sessions, tickets,
+profiles, signal types, confidence, and evidence references. They are not skills or memory,
+and normal runs never promote them automatically. Review with:
+
+```bash
+atlas skill observe [session-id]
+atlas skill observation-review <observation-id> discarded
+```
+
 `openSessionStore()` ensures the `system/sessions/` directory exists and returns a `SessionStore`;
 callers must `close()` it when done.
 
@@ -72,6 +82,7 @@ to `running` on resume. `cancelled` has no outgoing transitions.
 ```bash
 node dist/main.js session list
 node dist/main.js session show <session-id>
+node dist/main.js session summary <session-id>
 node dist/main.js session events <session-id>
 node dist/main.js session resume <session-id> "<prompt>"
 ```
@@ -79,6 +90,9 @@ node dist/main.js session resume <session-id> "<prompt>"
 - `list` prints all sessions as JSON, newest first.
 - `show <id>` prints one session or exits 1 if not found.
 - `show <id>` includes the validated `entryContract`; `events <id>` prints the ordered evidence log.
+- `summary <id>` prints the bounded human-readable Markdown closeout written under
+  `<workspace>/system/sessions/summaries/`. The session row stores its relative summary path,
+  SHA-256, byte count, closeout status, version, and close timestamp.
 - `resume <id> "<prompt>"` currently only supports sessions whose `provider` is `claude`
   and that already have a `providerSessionId`; it re-invokes the provider with
   `--resume <providerSessionId>` (see [providers.md](providers.md)) and appends a
@@ -101,6 +115,12 @@ Successful and unsuccessful provider exits also append a bounded `evidence` even
 records include a source, timestamp, result (`proven`, `not_proven`, or `limitation`), an
 optional acceptance criterion, and bounded payload. Provider output is evidence input; it is
 not a verified fact until a check records the corresponding result.
+
+Every governed closeout runs one idempotent finalizer. It writes one concise Markdown summary,
+updates structured session metadata in `system/sessions/sessions.sqlite`, and creates a bounded
+handoff draft when the session has enough task evidence. It never promotes the session to memory,
+knowledge, inbox, daily, or skills automatically, and it never copies the complete provider
+transcript into the summary or database.
 
 Runtime diagnostics are written as bounded JSON Lines at the private workspace path
 `logs/runtime.jsonl`. Records contain correlation/session ids and lifecycle status only;

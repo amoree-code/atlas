@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { resolveOriginalExecutable } from "../dist/infrastructure/providers/provider-registry.js";
 import { resolveOriginalExecutable as resolveProviderExecutable } from "../dist/infrastructure/providers/provider-registry.js";
@@ -108,6 +108,11 @@ unixOnly("intercepts a registered CLI and persists the execution", async () => {
     assert.equal(sessions.length, 1);
     assert.equal(sessions[0].provider, "demo");
     assert.equal(sessions[0].status, "completed");
+    assert.equal(sessions[0].closeoutStatus, "completed");
+    assert.ok(sessions[0].summaryPath);
+    assert.match(await readFile(path.join(root, sessions[0].summaryPath), "utf8"), /# Session Summary/);
+    assert.ok(sessions[0].handoffId);
+    assert.equal(store.getHandoff(sessions[0].handoffId).sourceSummaryPath, sessions[0].summaryPath);
     const events = store.listEvents(sessions[0].sessionId);
     assert.match(events.map((event) => event.data).join("\n"), /demo-output/);
     const entry = JSON.parse(events.find((event) => event.type === "session_entry_contract").data);
@@ -122,6 +127,67 @@ unixOnly("intercepts a registered CLI and persists the execution", async () => {
     });
     store.close();
     assert.equal(resolveProviderExecutable("demo-ai"), executable);
+  });
+});
+
+unixOnly("finalizes a shim session when launched outside the Atlas directory", async () => {
+  await withEnvironment(async (root) => {
+    const bin = path.join(root, "bin");
+    await mkdir(bin, { recursive: true });
+    const executable = path.join(bin, "outside-ai");
+    await writeFile(executable, "#!/bin/sh\nprintf 'outside-output\\n'\nexit 0\n");
+    await chmod(executable, 0o755);
+    process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+    await registerProvider("outside", "outside-ai");
+    const previous = process.cwd();
+    process.chdir(os.tmpdir());
+    const outsideWorkingDirectory = process.cwd();
+    try {
+      assert.equal(await intercept("outside", []), 0);
+    } finally {
+      process.chdir(previous);
+    }
+    const store = await openSessionStore();
+    const [session] = store.list();
+    assert.equal(session.workingDirectory, outsideWorkingDirectory);
+    assert.equal(session.closeoutStatus, "completed");
+    assert.match(await readFile(path.join(root, session.summaryPath), "utf8"), /outside-output/);
+    store.close();
+  });
+});
+
+unixOnly("finalizes a shim session when the interceptor receives SIGTERM", async () => {
+  await withEnvironment(async (root) => {
+    const bin = path.join(root, "bin");
+    await mkdir(bin, { recursive: true });
+    const executable = path.join(bin, "signal-ai");
+    await writeFile(executable, "#!/bin/sh\nprintf 'signal-output\\n'\nwhile :; do sleep 1; done\n");
+    await chmod(executable, 0o755);
+    process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+    await registerProvider("signal", "signal-ai");
+    const child = spawn(process.execPath, [path.join(process.cwd(), "dist", "main.js"), "intercept", "--client", "signal", "--"], {
+      cwd: process.cwd(),
+      env: { ...process.env, ATLAS_ROOT: root },
+      stdio: "ignore",
+    });
+    const store = await openSessionStore();
+    let session;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      session = store.list()[0];
+      if (session?.status === "running") break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(session?.status, "running");
+    child.kill("SIGTERM");
+    const exitCode = await new Promise((resolve) => child.once("close", resolve));
+    assert.equal(exitCode, 143);
+    const finalized = store.list()[0];
+    assert.equal(finalized.status, "failed");
+    assert.equal(finalized.closeoutStatus, "failed");
+    assert.ok(finalized.summaryPath);
+    assert.equal(finalized.handoffId, null);
+    assert.equal(store.listEvents(finalized.sessionId).filter((event) => event.type === "session_summary").length, 1);
+    store.close();
   });
 });
 

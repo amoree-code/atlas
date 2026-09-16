@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { appendSessionSummary } from "../../application/memory/session-summary.js";
+import { finalizeSession } from "../../application/memory/session-closeout.js";
 import { profileIdentity, type Profile } from "../../domain/profiles/profile.js";
 import { validateRunContract } from "../../domain/runs/run-contract.js";
 import { authorizeRun } from "../../application/runs/run-authorization.js";
@@ -94,7 +94,7 @@ export async function intercept(command: string, args: string[], options: Interc
           result: "blocked_by_client_authentication",
           criterion: "provider login did not verify successfully",
         }));
-        await appendSessionSummary({ sessionId, provider: provider.id, status: "failed", exitCode: 1 });
+        await finalizeSession(store, sessionId, { exitCode: 1 });
         return 1;
       }
     }
@@ -108,30 +108,47 @@ export async function intercept(command: string, args: string[], options: Interc
         ...resourceEnvironment(provider.id, resourceInjection),
       },
     };
-    const runProvider = async () => await (options.originalExecutable ? runPassthrough : runInteractive)({
+    const runProvider = async (signal: AbortSignal) => await (options.originalExecutable ? runPassthrough : runInteractive)({
       command: executable,
       args: resourceAdapter.args,
       cwd: workingDirectory,
       env: processRequest.environment,
+      signal,
       onData: (data) => store.appendEvent(sessionId, "provider_output", redactRuntimeText(data)),
       onInput: (data) => store.appendEvent(sessionId, "terminal_input", redactRuntimeText(data)),
     });
-    let result = await runProvider();
-    let evidence = classifyProviderResult(result.exitCode, result.output);
+    const abortController = new AbortController();
+    let terminationSignal: NodeJS.Signals | undefined;
+    const onTermination = (signal: NodeJS.Signals): void => {
+      terminationSignal = signal;
+      abortController.abort();
+    };
+    process.once("SIGINT", onTermination);
+    process.once("SIGTERM", onTermination);
+    let result;
+    try {
+      result = await runProvider(abortController.signal);
+    } finally {
+      process.off("SIGINT", onTermination);
+      process.off("SIGTERM", onTermination);
+    }
+    const exitCode = terminationSignal ? (terminationSignal === "SIGINT" ? 130 : 143) : result.exitCode;
+    let evidence = classifyProviderResult(exitCode, result.output);
     if (evidence.result === "blocked_by_client_authentication" && authAdapter(provider.id)) {
       store.appendEvent(sessionId, "auth_recovery_started", JSON.stringify({ provider: provider.id, reason: evidence.criterion }));
       const recoveredState = await authLogin(provider.id);
       store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: recoveredState, phase: "recovery" }));
       if (recoveredState === "authenticated") {
         store.appendEvent(sessionId, "run_resumed", JSON.stringify({ provider: provider.id, reason: "authentication verified" }));
-        result = await runProvider();
+        result = await runProvider(new AbortController().signal);
         if (result.output) store.appendEvent(sessionId, "provider_output", redactRuntimeText(result.output));
         evidence = classifyProviderResult(result.exitCode, result.output);
       }
     }
-    const status = result.exitCode === 0 ? "completed" : "failed";
+    const finalExitCode = terminationSignal ? exitCode : result.exitCode;
+    const status = finalExitCode === 0 ? "completed" : "failed";
     store.updateStatus(sessionId, status);
-    store.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: result.exitCode }));
+    store.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: finalExitCode, signal: terminationSignal ?? null }));
     if (evidence.result === "blocked_by_client_authentication") {
       store.appendEvent(sessionId, "provider_blocked", JSON.stringify({ reason: evidence.criterion }));
     }
@@ -143,12 +160,12 @@ export async function intercept(command: string, args: string[], options: Interc
       criterion: evidence.criterion,
     }));
     store.scanCaptureItems(sessionId);
-    await appendSessionSummary({ sessionId, provider: provider.id, status, exitCode: result.exitCode });
-    return result.exitCode;
+    await finalizeSession(store, sessionId, { exitCode: finalExitCode, nextAction: terminationSignal ? `Session ended by ${terminationSignal}.` : undefined });
+    return finalExitCode;
   } catch (error) {
     store.updateStatus(sessionId, "failed");
     store.appendEvent(sessionId, "error", redactRuntimeText(error instanceof Error ? error.message : String(error)));
-    await appendSessionSummary({ sessionId, provider: provider.id, status: "failed", exitCode: 1 });
+    await finalizeSession(store, sessionId, { exitCode: 1 });
     throw error;
   } finally {
     store.close();
@@ -180,6 +197,7 @@ function interceptedProfile(provider: string): Profile {
     defaultClient: provider as Profile["provider"],
     memory: { enabled: true, scope: "profile" },
     verification: { commands: [] },
+    contextCompression: "none",
     instructions: "",
   };
 }
