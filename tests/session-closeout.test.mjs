@@ -37,6 +37,13 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   const summary = await readFile(path.join(root, result.summaryPath), "utf8");
   const saved = store.get(sessionId);
 
+  const today = new Date().toISOString().slice(0, 10);
+  const daily = await readFile(path.join(root, "personal", "daily", `${today}.md`), "utf8");
+  assert.match(daily, /^# Daily/);
+  assert.match(daily, /## Work log/);
+  assert.match(daily, /Review the session closeout behavior/);
+  assert.doesNotMatch(daily, new RegExp(providerSecret));
+
   assert.match(summary, /# Session Summary/);
   assert.match(summary, /Review the session closeout behavior/);
   assert.match(summary, /Inspected the session flow/);
