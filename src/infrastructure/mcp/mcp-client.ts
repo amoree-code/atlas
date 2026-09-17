@@ -8,14 +8,15 @@ export class McpClient {
   private child: ChildProcessWithoutNullStreams | null = null;
   private nextId = 1;
   private pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
-  private buffer = Buffer.alloc(0);
+  private buffer = "";
   private tools = new Map<string, McpTool>();
 
   constructor(private readonly options: McpClientOptions) {}
 
   async connect(): Promise<void> {
     this.child = spawn(this.options.command, this.options.args ?? [], { cwd: this.options.cwd, env: { ...process.env, ...this.options.env }, stdio: "pipe" });
-    this.child.stdout.on("data", (chunk: Buffer) => this.consume(chunk));
+    this.child.stdout.setEncoding("utf8");
+    this.child.stdout.on("data", (chunk: string) => this.consume(chunk));
     this.child.once("error", (error) => this.failPending(error));
     this.child.once("close", () => this.failPending(new Error("MCP server stopped")));
     await this.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "atlas", version: "0.3.2" } });
@@ -60,17 +61,16 @@ export class McpClient {
   private notify(method: string, params: unknown): void { this.send({ jsonrpc: "2.0", method, params }); }
   private send(message: Record<string, unknown>): void {
     if (!this.child?.stdin.writable) return;
-    const body = Buffer.from(JSON.stringify(message));
-    this.child.stdin.write(`Content-Length: ${body.length}\r\n\r\n`); this.child.stdin.write(body);
+    this.child.stdin.write(`${JSON.stringify(message)}\n`);
   }
-  private consume(chunk: Buffer): void {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
+  private consume(chunk: string): void {
+    this.buffer += chunk;
     while (true) {
-      const separator = this.buffer.indexOf("\r\n\r\n"); if (separator < 0) return;
-      const match = /^Content-Length:\s*(\d+)/i.exec(this.buffer.subarray(0, separator).toString()); if (!match) throw new Error("Invalid MCP response headers");
-      const length = Number(match[1]); const start = separator + 4; if (this.buffer.length < start + length) return;
-      const response = JSON.parse(this.buffer.subarray(start, start + length).toString()) as JsonRpc;
-      this.buffer = this.buffer.subarray(start + length); if (response.id === undefined) continue;
+      const newline = this.buffer.indexOf("\n"); if (newline < 0) return;
+      const line = this.buffer.slice(0, newline).trim(); this.buffer = this.buffer.slice(newline + 1);
+      if (!line) continue;
+      const response = JSON.parse(line) as JsonRpc;
+      if (response.id === undefined) continue;
       const pending = this.pending.get(response.id); if (!pending) continue; this.pending.delete(response.id);
       if (response.error) pending.reject(new Error(`MCP ${response.error.message ?? "request failed"}`)); else pending.resolve(response.result);
     }

@@ -90,22 +90,20 @@ export async function handleObsidianMcpRequest(request: Request, connection: Obs
 
 export async function runObsidianMcpServer(): Promise<void> {
   const connection = await loadObsidianConnection();
-  let buffer = Buffer.alloc(0);
-  process.stdin.on("data", async (chunk: Buffer) => {
-    buffer = Buffer.concat([buffer, chunk]);
+  let buffer = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", async (chunk: string) => {
+    buffer += chunk;
     while (true) {
-      const separator = buffer.indexOf("\r\n\r\n");
-      if (separator < 0) return;
-      const match = /^Content-Length:\s*(\d+)/i.exec(buffer.subarray(0, separator).toString());
-      if (!match) throw new Error("Invalid MCP request headers");
-      const length = Number(match[1]); const start = separator + 4;
-      if (buffer.length < start + length) return;
-      const request = JSON.parse(buffer.subarray(start, start + length).toString()) as Request;
-      buffer = buffer.subarray(start + length);
+      const newline = buffer.indexOf("\n");
+      if (newline < 0) return;
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+      const request = JSON.parse(line) as Request;
       const response = await handleObsidianMcpRequest(request, connection);
       if (!response) continue;
-      const body = Buffer.from(JSON.stringify(response));
-      process.stdout.write(`Content-Length: ${body.length}\r\n\r\n`); process.stdout.write(body);
+      process.stdout.write(`${JSON.stringify(response)}\n`);
     }
   });
   await new Promise<void>((resolve) => { process.stdin.once("end", resolve); });
