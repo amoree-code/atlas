@@ -5,6 +5,8 @@ import { createHandoffWithStore } from "../handoff/handoff-service.js";
 import { openSessionStore, type SessionStore } from "../../infrastructure/persistence/session-store.js";
 import { writeSessionSummary, type SessionSummaryResult } from "./session-summary.js";
 import { observeSessionWithStore } from "../skills/task-observer.js";
+import { generateModelNarrative } from "./model-narrative.js";
+import { appendDailyNarrative } from "./daily-narrative.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -64,6 +66,12 @@ export async function finalizeSession(store: SessionStore, sessionId: string, in
   }
   const closedAt = new Date().toISOString();
   store.updateCloseout(sessionId, { ...summary, closeoutStatus, closedAt });
+  try {
+    const narrative = await generateModelNarrative({ session, events, changedFiles: files, nextAction: input.nextAction });
+    await appendDailyNarrative({ session, events, exitCode, nextAction: input.nextAction, narrative });
+  } catch (error) {
+    store.appendEvent(sessionId, "closeout_warning", error instanceof Error ? error.message : String(error));
+  }
   try { await observeSessionWithStore(store, sessionId); } catch (error) { store.appendEvent(sessionId, "closeout_warning", error instanceof Error ? error.message : String(error)); }
   if (!store.listEvents(sessionId).some((event) => event.type === "session_summary")) {
     store.appendEvent(sessionId, "session_summary", JSON.stringify({ ...summary, handoffId, closeoutStatus, closedAt }));
