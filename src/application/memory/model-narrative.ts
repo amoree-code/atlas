@@ -40,9 +40,16 @@ function buildPrompt(input: { session: Session; events: SessionEvent[]; changedF
   return lines.filter(Boolean).join("\n");
 }
 
-function parseResult(stdout: string): ModelNarrative | null {
+export function parseResult(stdout: string): ModelNarrative | null {
+  // --output-format json prints one JSON object, but non-interactive terminal
+  // control sequences (e.g. a trailing cursor-show code) can follow it on
+  // stdout even when not attached to a TTY — trim to the outermost braces
+  // before parsing rather than parsing the whole stream verbatim.
+  const start = stdout.indexOf("{");
+  const end = stdout.lastIndexOf("}");
+  if (start < 0 || end < start) return null;
   let envelope: { result?: unknown };
-  try { envelope = JSON.parse(stdout); } catch { return null; }
+  try { envelope = JSON.parse(stdout.slice(start, end + 1)); } catch { return null; }
   if (typeof envelope.result !== "string") return null;
   const text = envelope.result.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   let parsed: unknown;
