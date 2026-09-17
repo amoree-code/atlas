@@ -156,24 +156,24 @@ export async function buildContextPacket(classification: IntentClassification, b
 
   const { reason: rungReason } = resolveLadderRung(classification);
 
-  const activeProject = budgetCheck.valid
-    ? activeProjectSummary(await resolveProject(cwd))
+  const resolution = budgetCheck.valid ? await resolveProject(cwd) : null;
+  const activeProject = resolution
+    ? activeProjectSummary(resolution)
     : { status: "unbound" as const, projectId: null, confidence: "none" as const };
 
-  const readPlan = budgetCheck.valid ? await planContextRead(classification, budget, atlasRoot()) : null;
+  const readPlan = budgetCheck.valid ? await planContextRead(classification, budget, atlasRoot(), activeProject.projectId ?? "atlas") : null;
   if (readPlan && !readPlan.allowed) violations.push(`${readPlan.violation ?? "rejected"}: ${readPlan.reason}`);
 
   let candidates: RawReferenceCandidate[] = [];
-  if (readPlan?.allowed && readPlan.rung === "exact-record" && readPlan.files.length > 0 && classification.identifier) {
-    const sourcePath = readPlan.files[0];
-    candidates = [{
-      identifier: classification.identifier,
+  if (readPlan?.allowed && readPlan.files.length > 0) {
+    candidates = await Promise.all(readPlan.files.map(async (sourcePath) => ({
+      identifier: readPlan.rung === "exact-record" && classification.identifier ? classification.identifier : path.basename(sourcePath, path.extname(sourcePath)),
       recordType: recordTypeForIntent(classification.intent),
       sourcePath,
       freshness: await freshnessOf(sourcePath, atlasRoot()),
       confidence: classification.confidence,
       selectionReason: readPlan.reason,
-    }];
+    })));
   }
 
   const { references, violations: referenceViolations } = buildSelectedReferences(candidates);

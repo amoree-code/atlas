@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { atlasRoot, resolveWithin } from "../../paths.js";
 import type { IntentClassification } from "./intent-router.js";
@@ -162,6 +162,7 @@ async function planExactTicketRecord(
   identifier: string,
   budget: ContextBudget,
   root = atlasRoot(),
+  projectId = "atlas",
 ): Promise<BoundedReadResult> {
   const rung: LadderRung = "exact-record";
   if (!TICKET_ID_SHAPE.test(identifier)) {
@@ -190,7 +191,7 @@ async function planExactTicketRecord(
   let resolvedPath: string;
   try {
     resolvedPath = resolveWithin(
-      path.join(root, "projects", "atlas", "tickets"),
+      resolveWithin(path.join(root, "projects"), projectId, "tickets"),
       normalized,
       "task.md",
     );
@@ -256,7 +257,7 @@ function planProjectMetadata(budget: ContextBudget): BoundedReadResult {
   );
 }
 
-function planRankedReferences(intent: string, budget: ContextBudget): BoundedReadResult {
+async function planRankedReferences(intent: string, budget: ContextBudget, root: string): Promise<BoundedReadResult> {
   const rung: LadderRung = "ranked-references";
   const cost = READ_RUNG_COST[rung];
   if (cost > budget.maxOperationCost) {
@@ -266,13 +267,34 @@ function planRankedReferences(intent: string, budget: ContextBudget): BoundedRea
       "max-operation-cost-exceeded",
     );
   }
+  const candidates: string[] = [];
+  if (intent === "memory-lookup" || intent === "work-style-lookup") candidates.push("personal/memory/MEMORY.md");
+  if (intent === "knowledge-lookup") candidates.push("personal/knowledge/KNOWLEDGE.md");
+  if (intent === "decision-lookup") {
+    const directory = path.join(root, "personal", "knowledge", "decisions");
+    try {
+      for (const entry of (await readdir(directory, { withFileTypes: true })).filter((item) => item.isFile() && item.name.endsWith(".md")).sort((a, b) => a.name.localeCompare(b.name))) {
+        candidates.push(path.posix.join("personal/knowledge/decisions", entry.name));
+      }
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
+  const files: string[] = [];
+  let bytes = 0;
+  for (const relative of candidates) {
+    if (files.length >= budget.maxFiles) break;
+    try {
+      const size = (await stat(resolveWithin(root, relative))).size;
+      if (bytes + size > budget.maxBytes) break;
+      files.push(relative); bytes += size;
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
   return withinCharBudget(
     {
       rung,
-      files: [],
-      bytes: 0,
+      files,
+      bytes,
       truncated: false,
-      reason: `budget validated for '${intent}'; ranked-reference search is not implemented by this slice — no read performed`,
+      reason: files.length ? `selected ${files.length} authoritative '${intent}' reference(s) within budget` : `no authoritative '${intent}' references were available within budget`,
     },
     budget,
     rung,
@@ -286,6 +308,7 @@ export async function planContextRead(
   classification: IntentClassification,
   budget: unknown,
   root = atlasRoot(),
+  projectId = "atlas",
 ): Promise<BoundedReadResult> {
   const { rung, reason } = resolveLadderRung(classification);
   const validation = validateBudget(budget);
@@ -295,7 +318,7 @@ export async function planContextRead(
   if (rung === "identity")
     return { rung, allowed: true, reason, violation: null, files: [], bytes: 0, truncated: false };
   if (rung === "exact-record")
-    return planExactTicketRecord(classification.identifier ?? "", bounded, root);
+    return planExactTicketRecord(classification.identifier ?? "", bounded, root, projectId);
   if (rung === "project-metadata") return planProjectMetadata(bounded);
-  return planRankedReferences(classification.intent, bounded);
+  return planRankedReferences(classification.intent, bounded, root);
 }

@@ -22,6 +22,16 @@ test("rejects writable profiles when no enforcing sandbox is configured", async 
   delete process.env.ATLAS_ROOT;
 });
 
+test("approval-required profiles fail closed without an approved run contract", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-approval-boundary-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "reviewed.json"), JSON.stringify({ name: "reviewed", provider: "claude", role: "reviewer", governance: { approvalRequired: true } }));
+  process.env.ATLAS_ROOT = root;
+  try {
+    await assert.rejects(() => runAgent({ profileName: "reviewed", prompt: "review", cwd: root }, async () => ({ exitCode: 0, events: [], stderr: "" })), /requires an approved run contract/);
+  } finally { delete process.env.ATLAS_ROOT; }
+});
+
 test("connects profile, context, headless execution, and session storage", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-"));
   const profileDirectory = path.join(root, "system", "profiles", "reviewer");
@@ -88,15 +98,15 @@ test("applies one universal policy through every registered client adapter", asy
   await mkdir(profileDirectory, { recursive: true });
   await writeFile(path.join(profileDirectory, "profile.json"), JSON.stringify({
     name: "universal", version: "2.0.0", role: "bounded verifier",
-    clients: Object.fromEntries(["claude", "codex", "gemini", "antigravity", "hermes"].map((client) => [client, { enabled: true, home: `system/clients/homes/${client}` }])),
+    clients: Object.fromEntries(["claude", "codex", "gemini", "antigravity", "kimi"].map((client) => [client, { enabled: true, home: `system/clients/homes/${client}` }])),
     defaultClient: "claude",
-    governance: { writePolicy: "none", allowedPaths: ["README.md"], approvalRequired: true },
+    governance: { writePolicy: "none", allowedPaths: ["README.md"], approvalRequired: false },
     verification: { commands: ["node --version"] },
   }));
   process.env.ATLAS_ROOT = root;
   const seen = [];
   try {
-    for (const client of ["claude", "codex", "gemini", "antigravity", "hermes"]) {
+    for (const client of ["claude", "codex", "gemini", "antigravity", "kimi"]) {
       const session = await runAgent({ profileName: "universal", client, prompt: "verify policy", cwd: root }, async (request) => {
         seen.push(request);
         return { exitCode: 0, events: [], stderr: "" };
@@ -108,7 +118,8 @@ test("applies one universal policy through every registered client adapter", asy
   } finally {
     delete process.env.ATLAS_ROOT;
   }
-  assert.deepEqual(seen.map((request) => request.provider), ["claude", "codex", "gemini", "antigravity", "hermes"]);
+  assert.deepEqual(seen.map((request) => request.provider), ["claude", "codex", "gemini", "antigravity", "kimi"]);
+  assert.ok(seen.every((request) => request.readOnly === true));
   assert.ok(seen.every((request) => request.prompt.includes("verify policy")));
   assert.ok(seen.every((request) => request.clientHome.endsWith(path.join("system", "clients", "homes", request.provider))));
 });

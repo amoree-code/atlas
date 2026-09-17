@@ -23,9 +23,18 @@ test("approval and refusal decisions persist as session events", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-run-contract-"));
   const store = new SessionStore(path.join(root, "sessions.sqlite"));
   store.create({ sessionId: "session-1", provider: "claude", providerSessionId: null, parentSessionId: null, profile: "default", workingDirectory: root, resumeData: null });
-  authorizeRun(store, contract({ sessionId: "session-1" }));
+  authorizeRun(store, contract({ sessionId: "session-1", workingDirectory: root }));
   assert.deepEqual(JSON.parse(store.listEvents("session-1")[0].data), { runId: "run-1", approved: true, attempt: 1 });
-  assert.throws(() => authorizeRun(store, contract({ sessionId: "session-1", approval: { required: true, approved: false } })), /approval required/);
+  assert.throws(() => authorizeRun(store, contract({ sessionId: "session-1", workingDirectory: root, approval: { required: true, approved: false } })), /approval required/);
   assert.equal(store.listEvents("session-1")[1].type, "run_refusal");
+  store.close();
+});
+
+test("run contracts are bound to the session profile and working directory", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-run-scope-"));
+  const store = new SessionStore(path.join(root, "sessions.sqlite"));
+  store.create({ sessionId: "session-1", provider: "claude", providerSessionId: null, parentSessionId: null, profile: "default", workingDirectory: root, resumeData: null });
+  assert.throws(() => authorizeRun(store, contract({ sessionId: "session-1", profile: "other", workingDirectory: root })), /profile does not match/);
+  assert.throws(() => authorizeRun(store, contract({ sessionId: "session-1", workingDirectory: "/elsewhere" })), /working directory does not match/);
   store.close();
 });

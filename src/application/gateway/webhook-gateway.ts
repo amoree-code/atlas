@@ -141,6 +141,7 @@ export function createWebhookGateway(
   expectedToken: string,
   execute?: ProviderExecutor,
 ) {
+  const handleRequest = createGatewayHandler(expectedToken, cwd, execute);
   return createServer(
     async (request: IncomingMessage, response: ServerResponse) => {
       if (request.method !== 'POST') {
@@ -155,12 +156,9 @@ export function createWebhookGateway(
       });
       request.on('end', async () => {
         try {
-          const result = await handleGatewayRequest(
+          const result = await handleRequest(
             JSON.parse(body),
             request.headers.authorization?.replace(/^Bearer\s+/i, ''),
-            expectedToken,
-            cwd,
-            execute,
           );
           response.writeHead(result.status, {
             'content-type': 'application/json',

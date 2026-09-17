@@ -40,10 +40,17 @@ import { bindProject, listProjectBindings, resolveProject } from "./application/
 import { claudeSessionStartHook, readBoundedStdin } from "./application/hooks/session-start-hook.js";
 import { classifyIntent } from "./application/context/intent-router.js";
 import { runOperateCommand } from "./interfaces/cli/operate-command.js";
+import { runLifecycleCommand, runPolicyCommand } from "./interfaces/cli/governance-command.js";
+import { runObserveCommand } from "./interfaces/cli/observe-command.js";
+import { runMigrateCommand } from "./interfaces/cli/migrate-command.js";
 
 const command = process.argv[2] === "--yes" ? undefined : process.argv[2];
 
-if (!command) {
+if (command === "--version" || command === "-v") {
+  console.log((await readFile(new URL("../VERSION", import.meta.url), "utf8")).trim());
+} else if (command === "--help" || command === "-h") {
+  console.log("Usage: atlas <command> [options]\n\nCore commands: setup, context, project, tickets, policy, lifecycle, doctor, repair, run, session, service");
+} else if (!command) {
   await runFirstRunWizard(process.argv.includes("--yes"));
 } else if (command === "setup") {
   const obsidianIndex = process.argv.indexOf("--obsidian");
@@ -145,6 +152,16 @@ if (!command) {
   await runAuthCommand(process.argv[3] ?? "", process.argv[4] ?? "");
 } else if (command === "tickets") {
   await runTicketsCommand(process.argv[3] ?? "", process.argv.slice(4));
+} else if (command === "policy") {
+  try { await runPolicyCommand(process.argv[3] ?? "list"); }
+  catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
+} else if (command === "lifecycle") {
+  await runLifecycleCommand(process.argv.slice(3));
+} else if (command === "observe") {
+  try { await runObserveCommand(process.argv.slice(3)); }
+  catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
+} else if (command === "migrate") {
+  await runMigrateCommand(process.argv.includes("--apply"));
 } else if (command === "memory") {
   await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "mcp") {

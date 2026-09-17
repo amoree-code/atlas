@@ -23,6 +23,21 @@ async function withTempTicket(bytes, fn) {
   }
 }
 
+async function withTempDecision(bytes, fn) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-"));
+  const decisionsDir = path.join(root, "personal", "knowledge", "decisions");
+  await mkdir(decisionsDir, { recursive: true });
+  const file = path.join(decisionsDir, "decision-001.md");
+  await writeFile(file, "x".repeat(bytes));
+  const previous = process.env.ATLAS_ROOT;
+  process.env.ATLAS_ROOT = root;
+  try {
+    return await fn(root, file);
+  } finally {
+    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+  }
+}
+
 // --- valid packet from a clear intent ---
 
 test("a valid, high-confidence ticket-lookup with a real ticket produces a packet with exactly one selected reference", () =>
@@ -64,12 +79,15 @@ test("ambiguous intent ('continue the login work') stays fail-closed with medium
 
 // --- missing identifier ---
 
-test("missing identifier on a search-type intent (decision-lookup) never selects a reference", async () => {
-  const classification = classifyIntent("what did we decide about auth");
-  assert.equal(classification.identifier, null);
-  const packet = await buildContextPacket(classification, GOOD_BUDGET);
-  assert.deepEqual(packet.selectedReferences, []);
-});
+test("decision lookup selects bounded authoritative decision references", () =>
+  withTempDecision(500, async (root) => {
+    const classification = classifyIntent("what did we decide about auth");
+    assert.equal(classification.identifier, null);
+    const packet = await buildContextPacket(classification, GOOD_BUDGET, root);
+    assert.ok(packet.selectedReferences.length > 0 && packet.selectedReferences.length <= GOOD_BUDGET.maxFiles);
+    assert.ok(packet.selectedReferences.every((reference) => reference.recordType === "decision"));
+    assert.ok(packet.sourcePaths.every((sourcePath) => sourcePath.startsWith("personal/knowledge/decisions/")));
+  }));
 
 // --- invalid identifier ---
 
