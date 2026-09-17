@@ -20,7 +20,7 @@ export type ProjectResolution =
       projectId: string;
       name: string;
       path: string;
-      matchedOn: "git-root" | "cwd" | "atlas-root";
+      matchedOn: "git-root" | "cwd" | "path" | "atlas-root";
       confidence: "high";
     }
   | { status: "unbound"; cwd: string; gitRoot: string | null; confidence: "none" }
@@ -74,6 +74,21 @@ export async function resolveProject(cwd: string): Promise<ProjectResolution> {
   const gitRoot = findGitRoot(resolvedCwd);
   const bindings = await listProjectBindings();
 
+  const containing = bindings
+    .filter((binding) => {
+      const bound = path.resolve(binding.path);
+      return resolvedCwd === bound || resolvedCwd.startsWith(`${bound}${path.sep}`);
+    })
+    .sort((a, b) => path.resolve(b.path).length - path.resolve(a.path).length);
+  if (containing.length && (!containing[1] || path.resolve(containing[0].path).length > path.resolve(containing[1].path).length)) {
+    const binding = containing[0];
+    return {
+      status: "bound", projectId: binding.id, name: binding.name, path: binding.path,
+      matchedOn: path.resolve(binding.path) === resolvedCwd ? "cwd" : "path", confidence: "high",
+    };
+  }
+  if (containing.length > 1) return { status: "ambiguous", cwd: resolvedCwd, candidates: containing, confidence: "low" };
+
   const gitRootMatch = gitRoot
     ? bindings.filter((binding) => path.resolve(binding.path) === gitRoot)
     : [];
@@ -89,21 +104,6 @@ export async function resolveProject(cwd: string): Promise<ProjectResolution> {
   }
   if (gitRootMatch.length > 1) {
     return { status: "ambiguous", cwd: resolvedCwd, candidates: gitRootMatch, confidence: "low" };
-  }
-
-  const cwdMatch = bindings.filter((binding) => path.resolve(binding.path) === resolvedCwd);
-  if (cwdMatch.length === 1) {
-    return {
-      status: "bound",
-      projectId: cwdMatch[0].id,
-      name: cwdMatch[0].name,
-      path: cwdMatch[0].path,
-      matchedOn: "cwd",
-      confidence: "high",
-    };
-  }
-  if (cwdMatch.length > 1) {
-    return { status: "ambiguous", cwd: resolvedCwd, candidates: cwdMatch, confidence: "low" };
   }
 
   const root = atlasRoot();

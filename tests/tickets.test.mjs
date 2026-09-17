@@ -34,3 +34,17 @@ test("tickets list returns live ticket summaries and filters by state", async ()
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), [{ id: "T-001", title: "First", state: "active", goal: "Test goal", updatedAt: "2026-09-13" }]);
 });
+
+test("tickets list reads the selected project instead of Atlas only", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-project-tickets-"));
+  await mkdir(path.join(root, "projects", "frontend", "tickets", "T-101"), { recursive: true });
+  await writeFile(path.join(root, "projects", "frontend", "tickets", "T-101", "task.md"), "---\nid: T-101\ntitle: Frontend\nstate: active\ngoal: Ship UI\n---\n");
+  const previous = process.env.ATLAS_ROOT;
+  process.env.ATLAS_ROOT = root;
+  try {
+    const { listTickets } = await import("../dist/interfaces/cli/tickets-command.js");
+    assert.deepEqual((await listTickets(undefined, "frontend")).map((item) => item.id), ["T-101"]);
+  } finally {
+    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+  }
+});

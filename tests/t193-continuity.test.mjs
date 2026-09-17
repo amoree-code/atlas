@@ -7,7 +7,7 @@ import { createHandoff, getHandoff } from "../dist/application/handoff/handoff-s
 import { runAgent } from "../dist/application/runs/run-agent.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
-test("one bounded handoff keeps semantic context equivalent across all registered clients", async () => {
+test("one bounded handoff keeps semantic context equivalent across read-only clients", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t193-"));
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
   await mkdir(path.join(root, "projects", "atlas", "tickets", "T-193"), { recursive: true });
@@ -22,7 +22,7 @@ test("one bounded handoff keeps semantic context equivalent across all registere
   try {
     const handoff = await createHandoff({ ticketId: "T-193", nextAction: "Run the bounded verification" });
     const seen = [];
-    for (const client of ["claude", "codex", "gemini", "antigravity", "hermes", "kilo", "kimi"]) {
+    for (const client of ["claude", "codex", "gemini", "antigravity", "kimi"]) {
       const session = await runAgent({ profileName: "universal", client, ticketId: "T-193", handoffId: handoff.handoffId, prompt: "Continue the task", cwd: root }, async (request) => {
         seen.push({ provider: request.provider, prompt: request.prompt });
         return { exitCode: 0, events: [], stderr: "" };
@@ -30,8 +30,11 @@ test("one bounded handoff keeps semantic context equivalent across all registere
       assert.equal(session.ticketId, "T-193");
       assert.equal(session.handoffId, handoff.handoffId);
     }
-    assert.deepEqual(seen.map((item) => item.provider), ["claude", "codex", "gemini", "antigravity", "hermes", "kilo", "kimi"]);
+    assert.deepEqual(seen.map((item) => item.provider), ["claude", "codex", "gemini", "antigravity", "kimi"]);
     assert.ok(seen.every(({ prompt }) => prompt.includes('"ticketId":"T-193"') && prompt.includes("Run the bounded verification") && prompt.includes("handoff-read")));
+    for (const client of ["hermes", "kilo"]) {
+      await assert.rejects(() => runAgent({ profileName: "universal", client, ticketId: "T-193", handoffId: handoff.handoffId, prompt: "Continue the task", cwd: root }, async () => ({ exitCode: 0, events: [], stderr: "" })), /cannot enforce read-only/);
+    }
     const stored = await getHandoff(handoff.handoffId, 2_000);
     assert.ok(Buffer.byteLength(stored.compactContext) <= 2_000);
     const store = new SessionStore(path.join(root, "system", "sessions", "sessions.sqlite"));

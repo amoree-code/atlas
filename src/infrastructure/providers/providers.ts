@@ -3,7 +3,7 @@ import { runHeadless, type HeadlessResult, type RuntimeEvent } from "../process/
 import { resolveOriginalExecutable } from "./provider-registry.js";
 
 export type HeadlessProvider = "claude" | "codex" | "gemini" | "antigravity" | "hermes" | "kilo" | "kimi";
-export type ProviderAdapter = { provider: HeadlessProvider; capabilities: readonly string[]; build: (request: ProviderRequest) => string[] };
+export type ProviderAdapter = { provider: HeadlessProvider; capabilities: readonly string[]; readOnlyArgs?: readonly string[]; build: (request: ProviderRequest) => string[] };
 
 export type ProviderRequest = {
   provider: HeadlessProvider;
@@ -14,23 +14,30 @@ export type ProviderRequest = {
   timeoutMs?: number;
   maxOutputBytes?: number;
   onEvent?: (event: RuntimeEvent) => void;
+  readOnly?: boolean;
 };
 
 export const providerAdapterRegistry: Readonly<Record<HeadlessProvider, ProviderAdapter>> = {
-  claude: { provider: "claude", capabilities: ["headless", "resume"], build: (request) => [...(request.resumeId ? ["--resume", request.resumeId] : []), "-p", request.prompt, "--verbose", "--output-format", "stream-json"] },
-  codex: { provider: "codex", capabilities: ["headless"], build: (request) => ["exec", "--json", "--skip-git-repo-check", request.prompt] },
-  gemini: { provider: "gemini", capabilities: ["headless"], build: (request) => ["--prompt", request.prompt, "--output-format", "stream-json"] },
-  antigravity: { provider: "antigravity", capabilities: ["headless"], build: (request) => ["--print", request.prompt, "--output-format", "stream-json"] },
+  claude: { provider: "claude", capabilities: ["headless", "resume", "read-only"], readOnlyArgs: ["--permission-mode", "plan", "--restricted"], build: (request) => [...(request.resumeId ? ["--resume", request.resumeId] : []), ...(request.readOnly ? ["--permission-mode", "plan", "--restricted"] : []), "-p", request.prompt, "--verbose", "--output-format", "stream-json"] },
+  codex: { provider: "codex", capabilities: ["headless", "read-only"], readOnlyArgs: ["--sandbox", "read-only"], build: (request) => ["exec", ...(request.readOnly ? ["--sandbox", "read-only"] : []), "--json", "--skip-git-repo-check", request.prompt] },
+  gemini: { provider: "gemini", capabilities: ["headless", "read-only"], readOnlyArgs: ["--approval-mode=plan"], build: (request) => [...(request.readOnly ? ["--approval-mode=plan"] : []), "--prompt", request.prompt, "--output-format", "stream-json"] },
+  antigravity: { provider: "antigravity", capabilities: ["headless", "read-only"], readOnlyArgs: ["--mode", "plan", "--sandbox"], build: (request) => [...(request.readOnly ? ["--mode", "plan", "--sandbox"] : []), "--print", request.prompt, "--output-format", "stream-json"] },
   hermes: { provider: "hermes", capabilities: ["headless"], build: (request) => ["-z", request.prompt] },
   kilo: { provider: "kilo", capabilities: ["headless"], build: (request) => ["run", "--auto", request.prompt] },
-  kimi: { provider: "kimi", capabilities: ["headless"], build: (request) => ["--prompt", request.prompt, "--print", "--output-format", "stream-json"] },
+  kimi: { provider: "kimi", capabilities: ["headless", "read-only"], readOnlyArgs: ["--plan"], build: (request) => [...(request.readOnly ? ["--plan"] : []), "--prompt", request.prompt, "--print", "--output-format", "stream-json"] },
 };
 
 export function buildProviderInvocation(request: ProviderRequest): { command: string; args: string[] } {
   const command = request.provider === "antigravity" ? "agy" : request.provider;
-  const args = providerAdapterRegistry[request.provider].build(request);
+  const adapter = providerAdapterRegistry[request.provider];
+  if (request.readOnly) assertProviderSupportsReadOnly(request.provider);
+  const args = adapter.build(request);
 
   return { command, args };
+}
+
+export function assertProviderSupportsReadOnly(provider: HeadlessProvider): void {
+  if (!providerAdapterRegistry[provider].capabilities.includes("read-only")) throw new Error(`Provider cannot enforce read-only execution: ${provider}`);
 }
 
 export function runProvider(request: ProviderRequest): Promise<HeadlessResult> {

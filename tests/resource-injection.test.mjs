@@ -69,6 +69,20 @@ test("bindProject creates a binding and resolveProject then finds it from that e
   });
 });
 
+test("resolveProject uses the deepest containing binding from a non-Git subdirectory", async () => {
+  await withTempAtlasRoot(async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-nested-"));
+    await bindProject("demo", projectDir);
+    const nested = path.join(projectDir, "src", "components");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(nested, { recursive: true });
+    const resolution = await resolveProject(nested);
+    assert.equal(resolution.status, "bound");
+    assert.equal(resolution.projectId, "demo");
+    assert.equal(resolution.matchedOn, "path");
+  });
+});
+
 test("bindProject reports a conflict instead of silently overwriting an existing binding", async () => {
   await withTempAtlasRoot(async () => {
     const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-"));

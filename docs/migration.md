@@ -1,24 +1,21 @@
 # Migration
 
-There is no data-migration tooling in the current runtime: no schema-versioned migrations,
-no CLI command, and no automatic transformation of existing workspace data. This document
-describes what changes between versions and what to check by hand.
+Atlas provides an explicit, local migration command. Preview the operation with
+`atlas migrate`, then apply the idempotent session database migrations with
+`atlas migrate --apply`. The command reports SQLite integrity after applying changes.
 
 ## SQLite schema
 
-`SessionStore` (`src/infrastructure/persistence/session-store.ts`) creates its tables with
-`CREATE TABLE IF NOT EXISTS`. Upgrading the engine does not alter an existing
-`sessions.sqlite` schema — a new column or table added in a future version would require a
-manual migration step, not currently provided. Back up
-`<workspace>/system/sessions/sessions.sqlite` before upgrading if you want a rollback point
-(see [sessions.md](sessions.md)).
+`SessionStore` (`src/infrastructure/persistence/session-store.ts`) creates missing tables
+and applies additive column migrations. `atlas migrate --apply` is the explicit upgrade
+boundary. Back up `<workspace>/system/sessions/sessions.sqlite` before upgrading if you
+want a rollback point (see [sessions.md](sessions.md)).
 
 ## Profiles
 
-Profile files are plain JSON validated against `profileSchema`
-(see [profiles.md](profiles.md)). If a future engine version adds a required field, an
-existing profile written for an older version will fail validation until it is updated by
-hand — there is no automatic profile upgrade.
+Profile files are plain JSON validated against `profileSchema` (see [profiles.md](profiles.md)).
+New optional fields receive schema defaults. A future breaking profile change must ship an
+explicit profile migration before the required field is enforced.
 
 ## Moving a workspace
 

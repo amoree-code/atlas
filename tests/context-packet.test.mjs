@@ -64,11 +64,13 @@ test("ambiguous intent ('continue the login work') stays fail-closed with medium
 
 // --- missing identifier ---
 
-test("missing identifier on a search-type intent (decision-lookup) never selects a reference", async () => {
+test("decision lookup selects bounded authoritative decision references", async () => {
   const classification = classifyIntent("what did we decide about auth");
   assert.equal(classification.identifier, null);
   const packet = await buildContextPacket(classification, GOOD_BUDGET);
-  assert.deepEqual(packet.selectedReferences, []);
+  assert.ok(packet.selectedReferences.length > 0 && packet.selectedReferences.length <= GOOD_BUDGET.maxFiles);
+  assert.ok(packet.selectedReferences.every((reference) => reference.recordType === "decision"));
+  assert.ok(packet.sourcePaths.every((sourcePath) => sourcePath.startsWith("personal/knowledge/decisions/")));
 });
 
 // --- invalid identifier ---

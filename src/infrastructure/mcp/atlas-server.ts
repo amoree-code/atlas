@@ -6,7 +6,7 @@ import { atlasPath, atlasRoot } from "../../paths.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
 import { actionFingerprint, mcpApprovalSchema } from "../../domain/mcp/mcp-contract.js";
 import { getHandoff, getTicket, listHandoffs } from "../../application/handoff/handoff-service.js";
-import { openSessionStore } from "../persistence/session-store.js";
+import { openSessionStoreReadOnly } from "../persistence/session-store.js";
 
 type Request = { jsonrpc?: string; id?: number; method?: string; params?: Record<string, unknown> };
 type Response = { jsonrpc: "2.0"; id?: number; result?: unknown; error?: { code: number; message: string } };
@@ -58,12 +58,12 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
   if (name === "atlas_handoffs_list") return { handoffs: await listHandoffs(typeof args.ticketId === "string" ? args.ticketId : undefined) };
   if (name === "atlas_handoff_get") return await getHandoff(requiredArgument(args, "handoffId"), typeof args.maxBytes === "number" ? Math.min(16_000, Math.max(512, args.maxBytes)) : 8_000);
   if (name === "atlas_session_get") {
-    const store = await openSessionStore();
+    const store = await openSessionStoreReadOnly();
     try { const session = store.get(requiredArgument(args, "sessionId")); if (!session) throw new Error("Session not found"); return session; }
     finally { store.close(); }
   }
   if (name === "atlas_session_summary") {
-    const store = await openSessionStore();
+    const store = await openSessionStoreReadOnly();
     try {
       const session = store.get(requiredArgument(args, "sessionId"));
       if (!session) throw new Error("Session not found");
@@ -76,7 +76,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
     } finally { store.close(); }
   }
   if (name === "atlas_session_events") {
-    const store = await openSessionStore();
+    const store = await openSessionStoreReadOnly();
     try { const events = store.listEvents(requiredArgument(args, "sessionId")); const max = typeof args.maxEvents === "number" ? Math.min(100, Math.max(1, args.maxEvents)) : 20; return { events: events.slice(-max) }; }
     finally { store.close(); }
   }

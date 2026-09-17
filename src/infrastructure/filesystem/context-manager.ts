@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { open, realpath } from "node:fs/promises";
+import { StringDecoder } from "node:string_decoder";
 import path from "node:path";
 import type { Profile } from "../../domain/profiles/profile.js";
 import type { ContextManifest } from "../../domain/context/context.js";
@@ -19,13 +20,23 @@ export async function buildContext(profile: Profile, root: string, maxBytes = 32
   for (const relativePath of profile.contextSources) {
     if (bytes >= sourceBudget) break;
     const absolutePath = path.resolve(root, relativePath);
-    const allowed = profile.allowedPaths.some((allowedPath) => {
-      const boundary = path.resolve(root, allowedPath);
-      return absolutePath === boundary || absolutePath.startsWith(`${boundary}${path.sep}`);
-    });
+    let canonicalPath: string;
+    try { canonicalPath = await realpath(absolutePath); }
+    catch { omitted.push(relativePath); continue; }
+    const canonicalBoundaries = await Promise.all(profile.allowedPaths.map(async (allowedPath) => {
+      try { return await realpath(path.resolve(root, allowedPath)); } catch { return null; }
+    }));
+    const allowed = canonicalBoundaries.some((boundary) => boundary && (canonicalPath === boundary || canonicalPath.startsWith(`${boundary}${path.sep}`)));
     if (!allowed) { omitted.push(relativePath); continue; }
 
-    const content = (await readFile(absolutePath, "utf8")).slice(0, sourceBudget - bytes);
+    const remaining = Math.max(0, sourceBudget - bytes);
+    const handle = await open(canonicalPath, "r");
+    let content: string;
+    try {
+      const buffer = Buffer.alloc(remaining);
+      const { bytesRead } = await handle.read(buffer, 0, remaining, 0);
+      content = new StringDecoder("utf8").write(buffer.subarray(0, bytesRead));
+    } finally { await handle.close(); }
     chunks.push(`## ${relativePath}\n${content}`);
     files.push(relativePath);
     bytes += Buffer.byteLength(content);

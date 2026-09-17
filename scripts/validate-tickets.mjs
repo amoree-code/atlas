@@ -38,7 +38,7 @@ async function readTicket(file, archived) {
     const required = ["id", "title", "state", "project", "goal"];
     for (const field of required) if (!fields[field]) errors.push(`${file}: missing ${field}`);
     if (id && id !== directory) errors.push(`${file}: id does not match directory`);
-    if (fields.state && !["planned", "active", "done", "blocked"].includes(fields.state)) errors.push(`${file}: invalid state`);
+    if (fields.state && !["todo", "active", "paused", "blocked", "done", "cancelled"].includes(fields.state)) errors.push(`${file}: invalid state`);
     const checklist = source.match(/- \"\[[ x]\] .*\"/g) ?? [];
     if (!checklist.length) errors.push(`${file}: missing checklist`);
     if (fields.state === "done" && checklist.some((line) => line.includes("[ ]"))) errors.push(`${file}: done ticket has unchecked work`);

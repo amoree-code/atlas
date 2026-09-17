@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atlasPath } from "../../paths.js";
 import { runAgent, type ProviderExecutor } from "../runs/run-agent.js";
@@ -14,16 +14,14 @@ export async function listSchedules(): Promise<Schedule[]> {
 
 export async function saveSchedule(schedule: Schedule): Promise<void> {
   if (!Number.isFinite(schedule.intervalMs) || schedule.intervalMs < 1_000) throw new Error("Schedule interval must be at least 1000ms");
-  const schedules = (await listSchedules()).filter((item) => item.id !== schedule.id);
-  schedules.push(schedule);
-  await mkdir(path.dirname(file()), { recursive: true });
-  await writeFile(file(), `${JSON.stringify(schedules, null, 2)}\n`, { mode: 0o600 });
+  await mutateSchedules((schedules) => [...schedules.filter((item) => item.id !== schedule.id), schedule]);
 }
 
 export async function setScheduleEnabled(id: string, enabled: boolean): Promise<Schedule> {
-  const schedules = await listSchedules(); const schedule = schedules.find((item) => item.id === id);
-  if (!schedule) throw new Error(`Schedule not found: ${id}`);
-  schedule.enabled = enabled; await writeFile(file(), `${JSON.stringify(schedules, null, 2)}\n`, { mode: 0o600 }); return schedule;
+  let updated: Schedule | undefined;
+  await mutateSchedules((schedules) => schedules.map((schedule) => schedule.id === id ? (updated = { ...schedule, enabled }) : schedule));
+  if (!updated) throw new Error(`Schedule not found: ${id}`);
+  return updated;
 }
 
 export async function runSchedule(id: string, cwd: string, execute?: ProviderExecutor): Promise<void> {
@@ -42,7 +40,8 @@ export async function runDueSchedules(cwd: string, execute?: ProviderExecutor): 
     if (!lease) continue;
     running.add(schedule.id);
     try {
-      await runAgent({ profileName: schedule.profile, prompt: schedule.prompt, cwd }, execute);
+      const session = await runAgent({ profileName: schedule.profile, prompt: schedule.prompt, cwd }, execute);
+      if (session.status !== "completed") throw new Error(`Scheduled run failed: ${session.sessionId}`);
       schedule.nextRunAt = new Date(now + schedule.intervalMs).toISOString();
       ran.push(schedule.id);
     } finally {
@@ -51,7 +50,10 @@ export async function runDueSchedules(cwd: string, execute?: ProviderExecutor): 
       await unlink(leaseFile(schedule.id)).catch(() => undefined);
     }
   }
-  if (ran.length) await writeFile(file(), `${JSON.stringify(schedules, null, 2)}\n`, { mode: 0o600 });
+  for (const id of ran) {
+    const completed = schedules.find((schedule) => schedule.id === id);
+    if (completed) await mutateSchedules((current) => current.map((item) => item.id === id ? { ...item, nextRunAt: completed.nextRunAt } : item));
+  }
   return ran;
 }
 
@@ -60,13 +62,12 @@ export async function runSchedulerWorkerOnce(cwd: string, execute?: ProviderExec
   for (const schedule of schedules) {
     if (!schedule.enabled || Date.parse(schedule.nextRunAt) > Date.now()) continue;
     const lease = leaseFile(schedule.id);
-    await mkdir(path.dirname(lease), { recursive: true });
-    let handle;
-    try { handle = await open(lease, "wx"); await handle.writeFile(`${process.pid}\n`); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === "EEXIST") continue; throw error; }
+    const handle = await acquireLease(schedule.id);
+    if (!handle) continue;
     try {
       try {
-        await runAgent({ profileName: schedule.profile, prompt: schedule.prompt, cwd }, execute);
+        const session = await runAgent({ profileName: schedule.profile, prompt: schedule.prompt, cwd }, execute);
+        if (session.status !== "completed") throw new Error(`Scheduled run failed: ${session.sessionId}`);
         schedule.nextRunAt = new Date(Date.now() + schedule.intervalMs).toISOString(); schedule.attempts = 0; delete schedule.retryAt; ran.push(schedule.id);
       } catch {
         schedule.attempts = (schedule.attempts ?? 0) + 1;
@@ -75,7 +76,16 @@ export async function runSchedulerWorkerOnce(cwd: string, execute?: ProviderExec
       }
     } finally { await handle.close(); await unlink(lease).catch(() => undefined); }
   }
-  await writeFile(file(), `${JSON.stringify(schedules, null, 2)}\n`, { mode: 0o600 });
+  for (const changed of schedules) {
+    if (!ran.includes(changed.id) && changed.attempts === undefined && changed.retryAt === undefined) continue;
+    await mutateSchedules((current) => current.map((item) => {
+      if (item.id !== changed.id) return item;
+      const updated = { ...item, nextRunAt: changed.nextRunAt, attempts: changed.attempts };
+      if (changed.retryAt) updated.retryAt = changed.retryAt;
+      else delete updated.retryAt;
+      return updated;
+    }));
+  }
   return ran;
 }
 
@@ -100,7 +110,45 @@ async function acquireLease(id: string): Promise<Awaited<ReturnType<typeof open>
     await handle.writeFile(`${process.pid}\n`);
     return handle;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") return null;
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      const leaseContents = (await readFile(lease, "utf8").catch(() => "")).trim();
+      if (!leaseContents) return null;
+      const owner = Number.parseInt(leaseContents, 10);
+      if (Number.isInteger(owner) && owner > 0 && processIsAlive(owner)) return null;
+      await unlink(lease).catch(() => undefined);
+      try {
+        const handle = await open(lease, "wx");
+        await handle.writeFile(`${process.pid}\n`);
+        return handle;
+      } catch (retryError) {
+        if ((retryError as NodeJS.ErrnoException).code === "EEXIST") return null;
+        throw retryError;
+      }
+    }
     throw error;
+  }
+}
+
+function processIsAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return (error as NodeJS.ErrnoException).code === "EPERM"; }
+}
+
+async function mutateSchedules(update: (schedules: Schedule[]) => Schedule[]): Promise<void> {
+  let lease: Awaited<ReturnType<typeof open>> | null = null;
+  for (let attempt = 0; attempt < 100 && !lease; attempt += 1) {
+    lease = await acquireLease("__registry__");
+    if (!lease) await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  if (!lease) throw new Error("Schedule registry remained busy for 1 second");
+  try {
+    const schedules = update(await listSchedules());
+    await mkdir(path.dirname(file()), { recursive: true });
+    const temporary = `${file()}.tmp-${process.pid}-${Date.now()}`;
+    await writeFile(temporary, `${JSON.stringify(schedules, null, 2)}\n`, { mode: 0o600 });
+    await rename(temporary, file());
+  } finally {
+    await lease.close();
+    await unlink(leaseFile("__registry__")).catch(() => undefined);
   }
 }

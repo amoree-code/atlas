@@ -6,7 +6,7 @@ import test from "node:test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { listSchedules, runDueSchedules, runSchedulerWorker, runSchedulerWorkerOnce, saveSchedule } from "../dist/application/scheduler/local-scheduler.js";
-import { handleGatewayRequest } from "../dist/application/gateway/webhook-gateway.js";
+import { createWebhookGateway, handleGatewayRequest } from "../dist/application/gateway/webhook-gateway.js";
 import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
 import { telegramAdapter } from "../dist/application/gateway/webhook-gateway.js";
 import { setTimeout as delay } from "node:timers/promises";
@@ -59,6 +59,24 @@ test("run-due uses a cross-process lease for concurrent callers", async () => {
   delete process.env.ATLAS_ROOT;
 });
 
+test("scheduler completion merges with concurrent schedule edits", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-schedule-merge-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  try {
+    await saveSchedule({ id: "running", profile: "default", prompt: "run", intervalMs: 1000, nextRunAt: new Date(0).toISOString(), enabled: true });
+    let release;
+    const blocked = new Promise((resolve) => { release = resolve; });
+    const run = runDueSchedules(root, async () => { await blocked; return { exitCode: 0, events: [], stderr: "" }; });
+    await delay(20);
+    await saveSchedule({ id: "added", profile: "default", prompt: "later", intervalMs: 1000, nextRunAt: new Date(Date.now() + 60_000).toISOString(), enabled: true });
+    release();
+    await run;
+    assert.deepEqual((await listSchedules()).map((item) => item.id).sort(), ["added", "running"]);
+  } finally { delete process.env.ATLAS_ROOT; }
+});
+
 test("gateway authenticates and triggers a bounded run request", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-"));
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
@@ -99,6 +117,30 @@ test("gateway rejects traversal profiles and hides profile loading errors", asyn
   delete process.env.ATLAS_ROOT;
 });
 
+test("HTTP gateway rate limiting persists across requests", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-rate-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  const gateway = createWebhookGateway(root, "secret", async () => ({ exitCode: 0, events: [], stderr: "" }));
+  await new Promise((resolve) => gateway.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = gateway.address();
+    assert.ok(address && typeof address === "object");
+    const input = { profile: "default", prompt: "ping", approval: { approved: true, fingerprint: actionFingerprint("gateway.run", { profile: "default", prompt: "ping" }) } };
+    const statuses = [];
+    for (let index = 0; index < 11; index += 1) {
+      const response = await fetch(`http://127.0.0.1:${address.port}`, { method: "POST", headers: { authorization: "Bearer secret", "content-type": "application/json" }, body: JSON.stringify(input) });
+      statuses.push(response.status);
+    }
+    assert.deepEqual(statuses.slice(0, 10), Array(10).fill(200));
+    assert.equal(statuses[10], 429);
+  } finally {
+    await new Promise((resolve) => gateway.close(resolve));
+    delete process.env.ATLAS_ROOT;
+  }
+});
+
 test("scheduler worker records retry state and releases its lease", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-worker-"));
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
@@ -108,6 +150,31 @@ test("scheduler worker records retry state and releases its lease", async () => 
   await runSchedulerWorkerOnce(root, async () => { throw new Error("provider failed"); });
   assert.equal((await listSchedules())[0].attempts, 1);
   delete process.env.ATLAS_ROOT;
+});
+
+test("scheduler worker retries a provider non-zero exit", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-worker-exit-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  try {
+    await saveSchedule({ id: "failed-exit", profile: "default", prompt: "retry", intervalMs: 1000, nextRunAt: new Date(0).toISOString(), enabled: true });
+    assert.deepEqual(await runSchedulerWorkerOnce(root, async () => ({ exitCode: 1, events: [], stderr: "failed" })), []);
+    assert.equal((await listSchedules())[0].attempts, 1);
+  } finally { delete process.env.ATLAS_ROOT; }
+});
+
+test("scheduler worker reclaims a lease owned by a dead process", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-worker-stale-lease-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, "system", "schedules"), { recursive: true });
+  await writeFile(path.join(root, "system", "profiles", "default.json"), JSON.stringify({ name: "default", provider: "claude", role: "assistant" }));
+  process.env.ATLAS_ROOT = root;
+  try {
+    await saveSchedule({ id: "stale", profile: "default", prompt: "run", intervalMs: 1000, nextRunAt: new Date(0).toISOString(), enabled: true });
+    await writeFile(path.join(root, "system", "schedules", "stale.lease"), "99999999\n");
+    assert.deepEqual(await runSchedulerWorkerOnce(root, async () => ({ exitCode: 0, events: [], stderr: "" })), ["stale"]);
+  } finally { delete process.env.ATLAS_ROOT; }
 });
 
 test("scheduler worker stops through AbortSignal", async () => {

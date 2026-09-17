@@ -6,7 +6,7 @@ import { loadProfile } from "../../infrastructure/filesystem/profile-loader.js";
 import { profileIdentity, selectProfileClient } from "../../domain/profiles/profile.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import type { Session } from "../../domain/sessions/session.js";
-import { runProvider, type HeadlessProvider, type ProviderRequest } from "../../infrastructure/providers/providers.js";
+import { assertProviderSupportsReadOnly, runProvider, type HeadlessProvider, type ProviderRequest } from "../../infrastructure/providers/providers.js";
 import type { HeadlessResult, RuntimeEvent } from "../../infrastructure/process/cli-process.js";
 import { appendRuntimeLog, redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { finalizeSession } from "../memory/session-closeout.js";
@@ -41,8 +41,12 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   const effectiveTicketId = request.ticketId ?? (typeof handoff?.ticketId === "string" ? handoff.ticketId : null);
   const clientHome = resolveClientHome(profile);
   executionPolicy(profile, request.cwd);
+  assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
   if (profile.writePolicy !== "none") {
     throw new Error("Writable profile runs require an enforcing sandbox; direct execution cannot enforce writePolicy");
+  }
+  if (profile.governance?.approvalRequired && !request.runContract) {
+    throw new Error("Profile requires an approved run contract");
   }
   const sessionStore = await openSessionStore();
   const sessionId = request.sessionId ?? randomUUID();
@@ -112,6 +116,7 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
       clientHome,
       timeoutMs: request.runContract?.budget.timeoutMs,
       maxOutputBytes: request.runContract?.budget.maxOutputBytes,
+      readOnly: true,
       onEvent: (event) => {
         captureProviderSessionId(sessionStore, sessionId, event);
         sessionStore.appendEvent(sessionId, event.type, boundedEventData(event));
@@ -138,15 +143,24 @@ export async function runAgent(request: AgentRunRequest, execute: ProviderExecut
   }
 }
 
-export async function resumeAgent(sessionId: string, prompt: string, execute: ProviderExecutor = runProvider): Promise<Session> {
+export async function resumeAgent(sessionId: string, prompt: string, execute: ProviderExecutor = runProvider, runContract?: RunContract): Promise<Session> {
   const sessionStore = await openSessionStore();
-  const existing = sessionStore.get(sessionId);
-  if (!existing) throw new Error(`Session not found: ${sessionId}`);
-  if (existing.provider !== "claude" || !existing.providerSessionId) {
-    throw new Error(`Provider does not support resume yet: ${existing.provider}`);
-  }
-
   try {
+    const existing = sessionStore.get(sessionId);
+    if (!existing) throw new Error(`Session not found: ${sessionId}`);
+    if (existing.provider !== "claude" || !existing.providerSessionId) {
+      throw new Error(`Provider does not support resume yet: ${existing.provider}`);
+    }
+    const profile = selectProfileClient(await loadProfile(existing.profile), existing.provider);
+    executionPolicy(profile, existing.workingDirectory);
+    assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
+    if (profile.writePolicy !== "none") throw new Error("Writable profile resumes require an enforcing sandbox");
+    if (profileIdentity(profile) !== existing.profileIdentity) throw new Error("Profile changed since the session was created; start a new reviewed run");
+    if (profile.governance?.approvalRequired && !runContract) throw new Error("Profile requires an approved run contract to resume");
+    if (runContract) {
+      if (runContract.sessionId !== sessionId) throw new Error("Run contract session does not match the session being resumed");
+      authorizeRun(sessionStore, runContract);
+    }
     sessionStore.updateStatus(sessionId, "running");
     sessionStore.appendEvent(sessionId, "resume_requested", redactRuntimeText(prompt));
     sessionStore.appendEvent(sessionId, "user_input", redactRuntimeText(prompt));
@@ -155,6 +169,10 @@ export async function resumeAgent(sessionId: string, prompt: string, execute: Pr
       prompt,
       cwd: existing.workingDirectory,
       resumeId: existing.providerSessionId,
+      clientHome: resolveClientHome(profile),
+      timeoutMs: runContract?.budget.timeoutMs,
+      maxOutputBytes: runContract?.budget.maxOutputBytes,
+      readOnly: true,
       onEvent: (event) => {
         captureProviderSessionId(sessionStore, sessionId, event);
         sessionStore.appendEvent(sessionId, event.type, boundedEventData(event));

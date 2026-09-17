@@ -7,7 +7,7 @@ export async function runContextCommand(json = false): Promise<void> {
   const version = (await readFile(enginePath("VERSION"), "utf8")).trim();
   const resolution = await resolveProject(process.cwd());
   const project = resolution.status === "bound" ? resolution.projectId : null;
-  const tickets = project === "atlas" ? (await listTickets()).filter((ticket) => ticket.state === "active" || ticket.state === "blocked") : [];
+  const tickets = project ? (await listTickets(undefined, project)).filter((ticket) => ticket.state === "active" || ticket.state === "blocked") : [];
   const context = { project, projectResolution: resolution, version, roots: ["personal", "projects", "system"], tickets };
   if (json) {
     console.log(JSON.stringify(context, null, 2));

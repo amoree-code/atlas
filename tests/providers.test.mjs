@@ -32,6 +32,16 @@ test("builds the Codex JSON contract", () => {
   });
 });
 
+test("read-only provider invocations use enforced provider modes and fail closed when unsupported", () => {
+  assert.deepEqual(buildProviderInvocation({ provider: "codex", prompt: "inspect", cwd: "/tmp", readOnly: true }).args.slice(0, 4), ["exec", "--sandbox", "read-only", "--json"]);
+  assert.ok(buildProviderInvocation({ provider: "claude", prompt: "inspect", cwd: "/tmp", readOnly: true }).args.includes("plan"));
+  assert.ok(buildProviderInvocation({ provider: "gemini", prompt: "inspect", cwd: "/tmp", readOnly: true }).args.includes("--approval-mode=plan"));
+  assert.ok(buildProviderInvocation({ provider: "antigravity", prompt: "inspect", cwd: "/tmp", readOnly: true }).args.includes("--sandbox"));
+  assert.ok(buildProviderInvocation({ provider: "kimi", prompt: "inspect", cwd: "/tmp", readOnly: true }).args.includes("--plan"));
+  assert.throws(() => buildProviderInvocation({ provider: "hermes", prompt: "inspect", cwd: "/tmp", readOnly: true }), /cannot enforce read-only/);
+  assert.throws(() => buildProviderInvocation({ provider: "kilo", prompt: "inspect", cwd: "/tmp", readOnly: true }), /cannot enforce read-only/);
+});
+
 test("builds the Gemini stream contract", () => {
   assert.deepEqual(buildProviderInvocation({
     provider: "gemini", prompt: "hello", cwd: "/tmp",

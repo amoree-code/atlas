@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { mkdir } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import { atlasPath } from "../../paths.js";
 import { assertValidStatusTransition, type Session, type SessionEvent, type SessionStatus } from "../../domain/sessions/session.js";
 import { validateSession } from "./session-validator.js";
@@ -31,8 +31,12 @@ type SessionRow = Omit<Session, "sessionId" | "providerSessionId" | "parentSessi
 export class SessionStore {
   private readonly database: DatabaseSync;
 
-  constructor(databaseFile = atlasPath("system", "sessions", "sessions.sqlite")) {
-    this.database = new DatabaseSync(databaseFile);
+  constructor(databaseFile = atlasPath("system", "sessions", "sessions.sqlite"), options: { readOnly?: boolean } = {}) {
+    this.database = new DatabaseSync(databaseFile, options.readOnly ? { readOnly: true } : {});
+    if (options.readOnly) {
+      this.database.exec("PRAGMA query_only = ON; PRAGMA busy_timeout = 5000;");
+      return;
+    }
     this.database.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA busy_timeout = 5000;
@@ -402,4 +406,10 @@ export class SessionStore {
 export async function openSessionStore(): Promise<SessionStore> {
   await mkdir(atlasPath("system", "sessions"), { recursive: true });
   return new SessionStore();
+}
+
+export async function openSessionStoreReadOnly(): Promise<SessionStore> {
+  const databaseFile = atlasPath("system", "sessions", "sessions.sqlite");
+  await access(databaseFile);
+  return new SessionStore(databaseFile, { readOnly: true });
 }

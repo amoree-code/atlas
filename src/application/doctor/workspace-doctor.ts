@@ -103,9 +103,9 @@ async function checkWrappers(): Promise<Finding[]> {
 
 async function checkDependencies(): Promise<Finding[]> {
   if (process.env.ATLAS_SKIP_DEPENDENCY_AUDIT === "1") {
-    return [{ code: "DEPENDENCY_AUDIT_SKIPPED", severity: "OK", message: "dependency audit skipped by caller", fixable: false }];
+    return [{ code: "DEPENDENCY_AUDIT_SKIPPED", severity: "WARN", message: "dependency audit was not run because the caller skipped it", fixable: false }];
   }
-  if (!(await exists(enginePath("pnpm-lock.yaml")))) return [{ code: "DEPENDENCY_AUDIT_SKIPPED", severity: "OK", message: "dependency audit metadata is not included in the installed package", fixable: false }];
+  if (!(await exists(enginePath("pnpm-lock.yaml")))) return [{ code: "DEPENDENCY_AUDIT_SKIPPED", severity: "WARN", message: "dependency audit was not run because metadata is not included in the installed package", fixable: false }];
   try {
     await execFile("pnpm", ["audit", "--audit-level", "high", "--json"], { cwd: enginePath(), timeout: 20_000 });
     return [{ code: "DEPENDENCIES_CLEAN", severity: "OK", message: "no high-severity dependency advisories reported", fixable: false }];
@@ -190,8 +190,22 @@ async function checkVersion(): Promise<Finding[]> {
     : [{ code: "VERSION_DRIFT", severity: "WARN", message: `VERSION=${version} but package.json=${pkg.version ?? "missing"}`, fixable: false }];
 }
 
+async function checkGovernance(): Promise<Finding[]> {
+  const root = atlasPath("system", "control-plane", "governance");
+  const core = path.join(root, "rules", "core.md");
+  const policies = path.join(root, "policies");
+  if (!(await exists(core)) || !(await exists(policies))) return [{ code: "GOVERNANCE_MISSING", severity: "WARN", message: "canonical governance rules or policies are missing", fixable: false }];
+  const source = await readFile(core, "utf8");
+  const available = new Set((await readdir(policies)).filter((name) => name.endsWith(".md")).map((name) => name.slice(0, -3)));
+  const referenced = [...source.matchAll(/atlas policy ([a-z-]+)/g)].map((match) => match[1]).filter((name) => name !== "list");
+  const missing = [...new Set(referenced.filter((name) => !available.has(name)))];
+  return missing.length
+    ? [{ code: "GOVERNANCE_DRIFT", severity: "WARN", message: `governance references missing policies: ${missing.join(", ")}`, fixable: false }]
+    : [{ code: "GOVERNANCE_ALIGNED", severity: "OK", message: "governance policy references resolve", fixable: false }];
+}
+
 export async function scanWorkspace(): Promise<Finding[]> {
-  return [...await checkStructure(), ...await checkLinks(), ...await checkMemory(), ...await checkVersion(), ...await checkWrappers(), ...await checkDependencies(), ...await checkWorkspaceContracts(), ...await checkPermissions(), ...await checkDuplicates(), ...await checkProfileAuthority()];
+  return [...await checkStructure(), ...await checkLinks(), ...await checkMemory(), ...await checkVersion(), ...await checkGovernance(), ...await checkWrappers(), ...await checkDependencies(), ...await checkWorkspaceContracts(), ...await checkPermissions(), ...await checkDuplicates(), ...await checkProfileAuthority()];
 }
 
 export function hasFailures(findings: Finding[]): boolean {
