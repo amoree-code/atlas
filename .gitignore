@@ -58,3 +58,10 @@ __pycache__/
 # Nested .git directories are NOT ignored. Ignoring one would hide it; we want a nested
 # repository to be found and reported, not silently excluded. atlas-doctor fails loudly
 # on any unexpected nested repository.
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# graft shims bake an absolute npx cache path (leaks local username) — regenerate per machine
+/.claude/helpers/graft-hooks.cjs
+/.claude/helpers/graft-statusline.cjs
