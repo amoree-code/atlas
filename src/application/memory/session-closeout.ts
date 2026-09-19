@@ -7,7 +7,7 @@ import {
 } from "../../infrastructure/persistence/session-store.js";
 import { createHandoffWithStore } from "../handoff/handoff-service.js";
 import { observeSessionWithStore } from "../skills/task-observer.js";
-import { appendDailyNarrative } from "./daily-narrative.js";
+import { appendDailyNarrative, appendObservations } from "./daily-narrative.js";
 import { generateModelNarrative } from "./model-narrative.js";
 import {
   type SessionSummaryResult,
@@ -162,7 +162,8 @@ export async function finalizeSession(
     );
   }
   try {
-    await observeSessionWithStore(store, sessionId);
+    const observations = await observeSessionWithStore(store, sessionId);
+    await appendObservations(session, observations);
   } catch (error) {
     store.appendEvent(
       sessionId,

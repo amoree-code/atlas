@@ -3,10 +3,11 @@ import path from "node:path";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { atlasPath } from "../../paths.js";
+import type { TaskObservation } from "../skills/task-observer.js";
 import type { ModelNarrative } from "./model-narrative.js";
 
 const dailyTemplate = (date: string): string =>
-  `# Daily — ${date}\n\n## Focus\n\n## Work log\n\n## Decisions\n\n## Problems\n\n## Next\n`;
+  `# Daily — ${date}\n\n## Focus\n\n## Work log\n\n## Decisions\n\n## Problems\n\n## Next\n\n## Observations\n`;
 
 function safeText(value: string, max = 240): string {
   return redactRuntimeText(value).replace(/\s+/g, " ").trim().slice(0, max);
@@ -108,6 +109,42 @@ export async function appendDailyNarrative(input: {
       content,
       "## Next",
       `- [${project}] ${safeText(nextAction, 240)}`,
+    );
+  }
+
+  await writeFile(file, content, "utf8");
+}
+
+/**
+ * Appends newly detected observations (corrections, repeated procedures,
+ * explicit decisions, proven verifications — see task-observer.ts) to
+ * today's personal/daily/YYYY-MM-DD.md, so they surface next to the
+ * session narrative instead of sitting only in system/skills/observations.json.
+ */
+export async function appendObservations(
+  session: Session,
+  observations: TaskObservation[],
+): Promise<void> {
+  if (!observations.length) return;
+  const date = new Date().toISOString().slice(0, 10);
+  const directory = atlasPath("personal", "daily");
+  const file = path.join(directory, `${date}.md`);
+  await mkdir(directory, { recursive: true });
+
+  let content: string;
+  try {
+    content = await readFile(file, "utf8");
+  } catch {
+    content = dailyTemplate(date);
+  }
+
+  const project =
+    path.basename(session.workingDirectory) || session.workingDirectory;
+  for (const observation of observations) {
+    content = insertUnderHeading(
+      content,
+      "## Observations",
+      `- [${observation.signalType}] ${safeText(observation.summary, 300)} _(${project}, confidence ${observation.confidence})_`,
     );
   }
 
