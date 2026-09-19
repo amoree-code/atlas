@@ -20,8 +20,7 @@ export type TaskObservation = {
   signalType:
     | "repeated-correction"
     | "repeated-procedure"
-    | "explicit-decision"
-    | "proven-verification";
+    | "explicit-decision";
   summary: string;
   evidenceRefs: string[];
   confidence: number;
@@ -82,6 +81,14 @@ export async function observeSessionWithStore(
     }))
     .filter((event) => event.text.length > 12)
     .slice(0, 80);
+  const userInputs = events
+    .filter((event) => event.type === "user_input")
+    .map((event) => ({
+      id: event.eventId,
+      text: redactRuntimeText(event.data).replace(/\s+/g, " ").trim(),
+    }))
+    .filter((event) => event.text.length > 12)
+    .slice(0, 80);
   const candidates: Array<{
     signalType: TaskObservation["signalType"];
     summary: string;
@@ -114,8 +121,10 @@ export async function observeSessionWithStore(
       refs: repeated[1].refs.slice(0, 4),
       confidence: 0.8,
     });
-  const corrections = outputs.filter((event) =>
-    /\b(correct|fix|instead|should use)\b/i.test(event.text),
+  const corrections = userInputs.filter((event) =>
+    /\b(no,|not that|instead of|should use|that'?s wrong|actually,)\b/i.test(
+      event.text,
+    ),
   );
   if (corrections.length)
     candidates.push({
@@ -123,19 +132,6 @@ export async function observeSessionWithStore(
       summary: corrections[0].text.slice(0, 500),
       refs: corrections.slice(0, 4).map((event) => `event:${event.id}`),
       confidence: 0.7,
-    });
-  if (
-    proven.length &&
-    outputs.some((event) =>
-      /verification|tests?\b|check(ed)?|passed/i.test(event.text),
-    )
-  )
-    candidates.push({
-      signalType: "proven-verification",
-      summary:
-        "The session contains independently recorded proven verification.",
-      refs: proven.slice(0, 4).map((event) => `event:${event.eventId}`),
-      confidence: 0.85,
     });
   const items = await load();
   const created: TaskObservation[] = [];

@@ -162,3 +162,49 @@ test("observer records proven repeated work without creating or promoting a skil
     delete process.env.ATLAS_ROOT;
   }
 });
+
+test("observer only treats real user corrections as repeated-correction, not provider output mentioning those words", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-observer-"));
+  process.env.ATLAS_ROOT = root;
+  const store = await openSessionStore();
+  const sessionId = "observer-correction-session";
+  store.create({
+    sessionId,
+    provider: "codex",
+    providerSessionId: null,
+    parentSessionId: null,
+    profile: "developer",
+    profileIdentity: "profile-hash",
+    workingDirectory: root,
+    resumeData: null,
+    ticketId: null,
+  });
+  store.updateStatus(sessionId, "running");
+  store.appendEvent(
+    sessionId,
+    "provider_output",
+    "--acp (Deprecated, use `kimi acp` instead) Run as ACP server.",
+  );
+  store.appendEvent(
+    sessionId,
+    "user_input",
+    "no, use pnpm instead of npm for this repo",
+  );
+  store.appendEvent(
+    sessionId,
+    "evidence",
+    JSON.stringify({ result: "proven", criterion: "tests pass" }),
+  );
+  store.updateStatus(sessionId, "completed");
+  store.close();
+  try {
+    const observations = await observeSession(sessionId);
+    const corrections = observations.filter(
+      (item) => item.signalType === "repeated-correction",
+    );
+    assert.equal(corrections.length, 1);
+    assert.match(corrections[0].summary, /use pnpm instead of npm/);
+  } finally {
+    delete process.env.ATLAS_ROOT;
+  }
+});
