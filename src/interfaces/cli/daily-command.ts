@@ -15,19 +15,24 @@ import { listTickets } from "./tickets-command.js";
  * status (see task-observer.ts). Only runs on a real TTY, so headless and
  * scheduled invocations of `atlas daily start` never block on input.
  */
+const observationGateLimit = 5;
+
 async function runObservationGate(): Promise<void> {
   if (!(process.stdin.isTTY && process.stdout.isTTY)) return;
-  const pending = (await listObservations()).filter(
+  const allPending = (await listObservations()).filter(
     (observation) => observation.status === "observed",
   );
-  if (!pending.length) return;
+  if (!allPending.length) return;
+  const pending = allPending.slice(-observationGateLimit);
   const prompt = createInterface({
     input: process.stdin,
     output: process.stdout,
   });
   try {
     console.log(
-      `\n🤖 Atlas: ${pending.length} observation(s) awaiting review.`,
+      allPending.length > pending.length
+        ? `\n🤖 Atlas: ${pending.length} most recent of ${allPending.length} observation(s) awaiting review.`
+        : `\n🤖 Atlas: ${pending.length} observation(s) awaiting review.`,
     );
     for (const observation of pending) {
       console.log(`\n[${observation.signalType}] ${observation.summary}`);
