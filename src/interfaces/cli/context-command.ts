@@ -1,10 +1,9 @@
-import { readFile } from "node:fs/promises";
 import { resolveProject } from "../../application/context/project-resolution.js";
-import { enginePath } from "../../paths.js";
+import { atlasVersion } from "../../version.js";
 import { listTickets } from "./tickets-command.js";
 
 export async function runContextCommand(json = false): Promise<void> {
-  const version = (await readFile(enginePath("VERSION"), "utf8")).trim();
+  const version = await atlasVersion();
   const resolution = await resolveProject(process.cwd());
   const project = resolution.status === "bound" ? resolution.projectId : null;
   const tickets = project

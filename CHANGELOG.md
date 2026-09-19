@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Make `package.json` the single version authority and remove the duplicate `VERSION` file.
+- Replace the stale partial CLI help text with a grouped catalog of every top-level command.
+- Ignore generated Graphify analysis output and document the current CLI module boundary.
 - Upgrade to pnpm 12, TypeScript 7, and Zod 4.
 - Add Biome and Knip quality gates plus a unified `pnpm check` command.
 - Align ticket creation and validation with the current task contract while retaining legacy-ticket compatibility.

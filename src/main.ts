@@ -87,6 +87,7 @@ import {
   runPolicyCommand,
 } from "./interfaces/cli/governance-command.js";
 import { runHandoffCommand } from "./interfaces/cli/handoff-command.js";
+import { renderHelp } from "./interfaces/cli/help-command.js";
 import { runIdeaCommand } from "./interfaces/cli/idea-command.js";
 import { intercept } from "./interfaces/cli/intercept-command.js";
 import { runMemoryCommand } from "./interfaces/cli/memory-command.js";
@@ -96,17 +97,14 @@ import { runOperateCommand } from "./interfaces/cli/operate-command.js";
 import { runFirstRunWizard, setup } from "./interfaces/cli/setup-command.js";
 import { runTicketsCommand } from "./interfaces/cli/tickets-command.js";
 import { atlasRoot } from "./paths.js";
+import { atlasVersion } from "./version.js";
 
 const command = process.argv[2] === "--yes" ? undefined : process.argv[2];
 
 if (command === "--version" || command === "-v") {
-  console.log(
-    (await readFile(new URL("../VERSION", import.meta.url), "utf8")).trim(),
-  );
+  console.log(await atlasVersion());
 } else if (command === "--help" || command === "-h") {
-  console.log(
-    "Usage: atlas <command> [options]\n\nCore commands: setup, context, project, tickets, policy, lifecycle, doctor, repair, run, session, service",
-  );
+  console.log(renderHelp());
 } else if (!command) {
   await runFirstRunWizard(process.argv.includes("--yes"));
 } else if (command === "setup") {

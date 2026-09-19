@@ -61,6 +61,7 @@ __pycache__/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+/graphify-out/
 
 # graft shims bake an absolute npx cache path (leaks local username) — regenerate per machine
 /.claude/helpers/graft-hooks.cjs

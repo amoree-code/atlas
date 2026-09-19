@@ -380,7 +380,6 @@ async function checkProfileAuthority(): Promise<Finding[]> {
 }
 
 async function checkVersion(): Promise<Finding[]> {
-  const versionFile = enginePath("VERSION");
   const packageFile = enginePath("package.json");
   if (!(await exists(packageFile)))
     return [
@@ -394,33 +393,14 @@ async function checkVersion(): Promise<Finding[]> {
   const pkg = JSON.parse(await readFile(packageFile, "utf8")) as {
     version?: string;
   };
-  if (!(await exists(versionFile)))
-    return [
-      {
-        code: "PACKAGE_VERSION",
-        severity: "OK",
-        message: `installed package version ${pkg.version ?? "unknown"}`,
-        fixable: false,
-      },
-    ];
-  const version = (await readFile(versionFile, "utf8")).trim();
-  return version === pkg.version
-    ? [
-        {
-          code: "VERSION_ALIGNED",
-          severity: "OK",
-          message: `engine version ${version} is aligned`,
-          fixable: false,
-        },
-      ]
-    : [
-        {
-          code: "VERSION_DRIFT",
-          severity: "WARN",
-          message: `VERSION=${version} but package.json=${pkg.version ?? "missing"}`,
-          fixable: false,
-        },
-      ];
+  return [
+    {
+      code: "PACKAGE_VERSION",
+      severity: "OK",
+      message: `installed package version ${pkg.version ?? "unknown"}`,
+      fixable: false,
+    },
+  ];
 }
 
 async function checkGovernance(): Promise<Finding[]> {

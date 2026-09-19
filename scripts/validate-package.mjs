@@ -6,15 +6,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(
   await readFile(path.join(root, "package.json"), "utf8"),
 );
-const version = (await readFile(path.join(root, "VERSION"), "utf8")).trim();
+const version = packageJson.version;
 const changelog = await readFile(path.join(root, "CHANGELOG.md"), "utf8");
 const readme = await readFile(path.join(root, "README.md"), "utf8");
 const findings = [];
 
-if (packageJson.version !== version)
-  findings.push(
-    `version mismatch: package.json=${packageJson.version}, VERSION=${version}`,
-  );
+if (typeof version !== "string" || !version.trim())
+  findings.push("package.json is missing a valid version");
 if (!changelog.includes(`## ${version}`))
   findings.push(`CHANGELOG.md is missing ## ${version}`);
 if (!readme.includes("CHANGELOG.md"))
