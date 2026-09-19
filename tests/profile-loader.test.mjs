@@ -3,16 +3,22 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { loadProfileDistribution } from "../dist/application/profiles/profile-distribution.js";
 import { loadProfile } from "../dist/infrastructure/filesystem/profile-loader.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
-import { loadProfileDistribution } from "../dist/application/profiles/profile-distribution.js";
 
 test("loadProfile reads profiles from private ATLAS_ROOT/system/profiles, not the engine tree", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-"));
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
-  await writeFile(path.join(root, "system", "profiles", "reviewer.json"), JSON.stringify({
-    name: "reviewer", provider: "claude", model: "sonnet", role: "review only",
-  }));
+  await writeFile(
+    path.join(root, "system", "profiles", "reviewer.json"),
+    JSON.stringify({
+      name: "reviewer",
+      provider: "claude",
+      model: "sonnet",
+      role: "review only",
+    }),
+  );
 
   process.env.ATLAS_ROOT = root;
   try {
@@ -25,7 +31,9 @@ test("loadProfile reads profiles from private ATLAS_ROOT/system/profiles, not th
 });
 
 test("loadProfile rejects a name whose file does not exist under ATLAS_ROOT", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-missing-"));
+  const root = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-profile-loader-missing-"),
+  );
   process.env.ATLAS_ROOT = root;
   try {
     await assert.rejects(loadProfile("missing"));
@@ -35,9 +43,19 @@ test("loadProfile rejects a name whose file does not exist under ATLAS_ROOT", as
 });
 
 test("loadProfile rejects traversal names before reading outside the profiles root", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-traversal-"));
+  const root = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-profile-loader-traversal-"),
+  );
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
-  await writeFile(path.join(root, "outside.json"), JSON.stringify({ name: "outside", provider: "claude", model: "sonnet", role: "outside" }));
+  await writeFile(
+    path.join(root, "outside.json"),
+    JSON.stringify({
+      name: "outside",
+      provider: "claude",
+      model: "sonnet",
+      role: "outside",
+    }),
+  );
   process.env.ATLAS_ROOT = root;
   try {
     await assert.rejects(loadProfile("../outside"), /Invalid profile name/);
@@ -47,16 +65,24 @@ test("loadProfile rejects traversal names before reading outside the profiles ro
 });
 
 test("loadProfile keeps legacy profile directories compatible during migration", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-directory-"));
+  const root = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-profile-directory-"),
+  );
   const directory = path.join(root, "system", "profiles", "developer");
   await mkdir(directory, { recursive: true });
-  await writeFile(path.join(directory, "profile.json"), JSON.stringify({
-    name: "developer",
-    role: "developer",
-    clients: { hermes: { enabled: true, profile: "developer" } },
-    governance: { writePolicy: "workspace", allowedPaths: ["."] },
-  }));
-  await writeFile(path.join(directory, "instructions.md"), "Inspect before editing.");
+  await writeFile(
+    path.join(directory, "profile.json"),
+    JSON.stringify({
+      name: "developer",
+      role: "developer",
+      clients: { hermes: { enabled: true, profile: "developer" } },
+      governance: { writePolicy: "workspace", allowedPaths: ["."] },
+    }),
+  );
+  await writeFile(
+    path.join(directory, "instructions.md"),
+    "Inspect before editing.",
+  );
 
   process.env.ATLAS_ROOT = root;
   try {
@@ -71,19 +97,45 @@ test("loadProfile keeps legacy profile directories compatible during migration",
 });
 
 test("all practical role profiles use the universal client contract", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-universal-"));
+  const root = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-profile-loader-universal-"),
+  );
   const profilesDirectory = path.join(root, "system", "profiles");
   await mkdir(profilesDirectory, { recursive: true });
-  const template = JSON.parse(await readFile(new URL("../templates/profiles/default.json", import.meta.url), "utf8"));
-  const names = ["default", "developer", "reviewer", "strategist", "tester", "security-auditor", "devops", "researcher"];
-  for (const name of names) await writeFile(path.join(profilesDirectory, `${name}.json`), JSON.stringify({ ...template, name }));
+  const template = JSON.parse(
+    await readFile(
+      new URL("../templates/profiles/default.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const names = [
+    "default",
+    "developer",
+    "reviewer",
+    "strategist",
+    "tester",
+    "security-auditor",
+    "devops",
+    "researcher",
+  ];
+  for (const name of names)
+    await writeFile(
+      path.join(profilesDirectory, `${name}.json`),
+      JSON.stringify({ ...template, name }),
+    );
 
   process.env.ATLAS_ROOT = root;
   try {
     for (const name of names) {
       const profile = await loadProfile(name);
       assert.equal(profile.name, name);
-  assert.deepEqual(Object.keys(profile.clients).sort(), ["antigravity", "claude", "codex", "gemini", "hermes"]);
+      assert.deepEqual(Object.keys(profile.clients).sort(), [
+        "antigravity",
+        "claude",
+        "codex",
+        "gemini",
+        "hermes",
+      ]);
       assert.equal(profile.defaultClient, "claude");
       assert.equal(profile.clients.claude.enabled, true);
       assert.ok(profile.instructions.length > 0);
@@ -94,19 +146,44 @@ test("all practical role profiles use the universal client contract", async () =
 });
 
 test("validates a profile distribution and rejects private state", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-distribution-"));
-  await writeFile(path.join(root, "distribution.yaml"), JSON.stringify({ name: "developer", version: "1.0.0", files: ["profile.json", "instructions.md"] }));
+  const root = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-profile-distribution-"),
+  );
+  await writeFile(
+    path.join(root, "distribution.yaml"),
+    JSON.stringify({
+      name: "developer",
+      version: "1.0.0",
+      files: ["profile.json", "instructions.md"],
+    }),
+  );
   await writeFile(path.join(root, "profile.json"), "{}");
   await writeFile(path.join(root, "instructions.md"), "instructions");
   assert.equal((await loadProfileDistribution(root)).name, "developer");
 
-  const unsafe = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-distribution-unsafe-"));
-  await writeFile(path.join(unsafe, "distribution.yaml"), JSON.stringify({ name: "unsafe", version: "1.0.0", files: [".env"] }));
-  await assert.rejects(loadProfileDistribution(unsafe), /forbidden private state/);
+  const unsafe = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-profile-distribution-unsafe-"),
+  );
+  await writeFile(
+    path.join(unsafe, "distribution.yaml"),
+    JSON.stringify({ name: "unsafe", version: "1.0.0", files: [".env"] }),
+  );
+  await assert.rejects(
+    loadProfileDistribution(unsafe),
+    /forbidden private state/,
+  );
 
-  const traversal = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-distribution-traversal-"));
-  await writeFile(path.join(traversal, "distribution.yaml"), JSON.stringify({ name: "unsafe", version: "1.0.0", files: ["../outside"] }));
-  await assert.rejects(loadProfileDistribution(traversal), /escapes package root/);
+  const traversal = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-profile-distribution-traversal-"),
+  );
+  await writeFile(
+    path.join(traversal, "distribution.yaml"),
+    JSON.stringify({ name: "unsafe", version: "1.0.0", files: ["../outside"] }),
+  );
+  await assert.rejects(
+    loadProfileDistribution(traversal),
+    /escapes package root/,
+  );
 });
 
 test("openSessionStore persists sessions under ATLAS_ROOT/system/sessions/sessions.sqlite", async () => {
@@ -115,8 +192,13 @@ test("openSessionStore persists sessions under ATLAS_ROOT/system/sessions/sessio
   try {
     const store = await openSessionStore();
     store.create({
-      sessionId: "persisted-1", provider: "claude", providerSessionId: null, parentSessionId: null,
-      profile: "default", workingDirectory: root, resumeData: null,
+      sessionId: "persisted-1",
+      provider: "claude",
+      providerSessionId: null,
+      parentSessionId: null,
+      profile: "default",
+      workingDirectory: root,
+      resumeData: null,
     });
     store.close();
 

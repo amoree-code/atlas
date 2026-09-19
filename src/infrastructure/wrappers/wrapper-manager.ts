@@ -1,10 +1,23 @@
-import { access, chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFile as execFileCallback } from "node:child_process";
-import { promisify } from "node:util";
+import {
+  access,
+  chmod,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { enginePath, atlasPath } from "../../paths.js";
-import { builtInProviderRecords, loadProviderRegistry, resolveOriginalExecutable, saveProviderRegistry, type ProviderRecord } from "../providers/provider-registry.js";
+import { promisify } from "node:util";
+import { atlasPath, enginePath } from "../../paths.js";
+import {
+  builtInProviderRecords,
+  loadProviderRegistry,
+  type ProviderRecord,
+  resolveOriginalExecutable,
+  saveProviderRegistry,
+} from "../providers/provider-registry.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -17,7 +30,9 @@ function shellQuote(value: string): string {
 }
 
 function wrapperPath(command: string): string {
-  return process.platform === "win32" ? path.join(shimDirectory(), `${command}.cmd`) : path.join(shimDirectory(), command);
+  return process.platform === "win32"
+    ? path.join(shimDirectory(), `${command}.cmd`)
+    : path.join(shimDirectory(), command);
 }
 
 export function providerWrapperPath(command: string): string {
@@ -59,7 +74,10 @@ exec ${shellQuote(process.execPath)} ${shellQuote(enginePath("dist", "main.js"))
 `;
 }
 
-export async function syncProviderWrappers(): Promise<{ providers: ProviderRecord[]; directory: string }> {
+export async function syncProviderWrappers(): Promise<{
+  providers: ProviderRecord[];
+  directory: string;
+}> {
   const providers = loadProviderRegistry();
   await mkdir(shimDirectory(), { recursive: true });
   const atlasWrapper = wrapperPath("atlas");
@@ -77,12 +95,24 @@ export async function syncProviderWrappers(): Promise<{ providers: ProviderRecor
   return { providers, directory: shimDirectory() };
 }
 
-export async function registerProvider(id: string, command = id): Promise<ProviderRecord> {
+export async function registerProvider(
+  id: string,
+  command = id,
+): Promise<ProviderRecord> {
   if (!/^[a-zA-Z0-9._-]+$/.test(id) || !/^[a-zA-Z0-9._-]+$/.test(command)) {
-    throw new Error("Provider id and command may contain only letters, numbers, dot, underscore, and hyphen");
+    throw new Error(
+      "Provider id and command may contain only letters, numbers, dot, underscore, and hyphen",
+    );
   }
-  const providers = loadProviderRegistry().filter((provider) => provider.id !== id);
-  const provider: ProviderRecord = { id, command, interactive: true, headless: true };
+  const providers = loadProviderRegistry().filter(
+    (provider) => provider.id !== id,
+  );
+  const provider: ProviderRecord = {
+    id,
+    command,
+    interactive: true,
+    headless: true,
+  };
   await saveProviderRegistry([...providers, provider]);
   await syncProviderWrappers();
   return provider;
@@ -90,29 +120,47 @@ export async function registerProvider(id: string, command = id): Promise<Provid
 
 export async function removeProvider(id: string): Promise<ProviderRecord> {
   const providers = loadProviderRegistry();
-  const provider = providers.find((candidate) => candidate.id === id || candidate.command === id);
+  const provider = providers.find(
+    (candidate) => candidate.id === id || candidate.command === id,
+  );
   if (!provider) throw new Error(`Provider is not registered: ${id}`);
-  if (builtInProviderRecords().some((candidate) => candidate.id === provider.id)) {
-    throw new Error(`Built-in provider remains registered; use its package manager to remove: ${provider.id}`);
+  if (
+    builtInProviderRecords().some((candidate) => candidate.id === provider.id)
+  ) {
+    throw new Error(
+      `Built-in provider remains registered; use its package manager to remove: ${provider.id}`,
+    );
   }
   await rm(wrapperPath(provider.command), { force: true });
-  await saveProviderRegistry(providers.filter((candidate) => candidate.id !== provider.id));
+  await saveProviderRegistry(
+    providers.filter((candidate) => candidate.id !== provider.id),
+  );
   return provider;
 }
 
-export function shellKind(parentCommand: string, loginShell: string): "fish" | "posix" {
+export function shellKind(
+  parentCommand: string,
+  loginShell: string,
+): "fish" | "posix" {
   const parent = path.basename(parentCommand.trim().split(/\s+/, 1)[0] ?? "");
   if (parent === "fish") return "fish";
-  if (["ash", "bash", "dash", "ksh", "sh", "zsh"].includes(parent)) return "posix";
+  if (["ash", "bash", "dash", "ksh", "sh", "zsh"].includes(parent))
+    return "posix";
   return path.basename(loginShell) === "fish" ? "fish" : "posix";
 }
 
 async function currentShellName(): Promise<string> {
   if (process.platform === "win32") return "powershell";
   try {
-    const { stdout } = await execFile("ps", ["-p", String(process.ppid), "-o", "comm="]);
+    const { stdout } = await execFile("ps", [
+      "-p",
+      String(process.ppid),
+      "-o",
+      "comm=",
+    ]);
     const parent = path.basename(stdout.trim().split(/\s+/, 1)[0] ?? "");
-    if (["ash", "bash", "dash", "fish", "ksh", "sh", "zsh"].includes(parent)) return parent;
+    if (["ash", "bash", "dash", "fish", "ksh", "sh", "zsh"].includes(parent))
+      return parent;
   } catch {
     // Fall through to the configured login shell.
   }
@@ -128,7 +176,7 @@ export async function installShellPath(): Promise<string> {
   if (process.platform === "win32") {
     return `$env:Path = "${directory};$env:Path"`;
   }
-  if (await currentShellKind() === "fish") {
+  if ((await currentShellKind()) === "fish") {
     return `fish_add_path --global --prepend --move ${shellQuote(directory)}`;
   }
   return `export PATH=${shellQuote(directory)}:$PATH`;
@@ -136,10 +184,20 @@ export async function installShellPath(): Promise<string> {
 
 async function shellProfilePath(): Promise<string> {
   const home = os.homedir();
-  if (process.platform === "win32") return process.env.ATLAS_SHELL_PROFILE ?? path.join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+  if (process.platform === "win32")
+    return (
+      process.env.ATLAS_SHELL_PROFILE ??
+      path.join(
+        home,
+        "Documents",
+        "PowerShell",
+        "Microsoft.PowerShell_profile.ps1",
+      )
+    );
   if (process.env.ATLAS_SHELL_PROFILE) return process.env.ATLAS_SHELL_PROFILE;
   const shell = await currentShellName();
-  if (shell === "fish") return path.join(home, ".config", "fish", "config.fish");
+  if (shell === "fish")
+    return path.join(home, ".config", "fish", "config.fish");
   if (shell === "zsh") return path.join(home, ".zshrc");
   if (shell === "bash") return path.join(home, ".bashrc");
   return path.join(home, ".profile");
@@ -147,9 +205,14 @@ async function shellProfilePath(): Promise<string> {
 
 export async function installShellIntegration(): Promise<string> {
   const file = await shellProfilePath();
-  const marker = /\n?# >>> atlas interception >>>[\s\S]*?# <<< atlas interception <<<\n?/;
+  const marker =
+    /\n?# >>> atlas interception >>>[\s\S]*?# <<< atlas interception <<<\n?/;
   let existing = "";
-  try { existing = await readFile(file, "utf8"); } catch { /* new profile */ }
+  try {
+    existing = await readFile(file, "utf8");
+  } catch {
+    /* new profile */
+  }
   const line = await installShellPath();
   const block = `\n# >>> atlas interception >>>\n${line}\n# <<< atlas interception <<<\n`;
   await mkdir(path.dirname(file), { recursive: true });
@@ -162,29 +225,47 @@ export async function wrapperDoctor(commandPath?: string): Promise<string[]> {
   const providers = loadProviderRegistry();
   try {
     const contents = await readFile(wrapperPath("atlas"), "utf8");
-    if (!contents.includes("dist/main.js")) findings.push("atlas: CLI wrapper is stale or does not route through Atlas");
+    if (!contents.includes("dist/main.js"))
+      findings.push(
+        "atlas: CLI wrapper is stale or does not route through Atlas",
+      );
   } catch {
     findings.push(`atlas: CLI wrapper is missing at ${wrapperPath("atlas")}`);
   }
   for (const provider of providers) {
     try {
       const contents = await readFile(wrapperPath(provider.command), "utf8");
-      if (!contents.includes(`intercept --client '${provider.id}'`) && !contents.includes(`intercept --client "${provider.id}"`)) {
-        findings.push(`${provider.id}: wrapper is stale or does not route through Atlas`);
+      if (
+        !contents.includes(`intercept --client '${provider.id}'`) &&
+        !contents.includes(`intercept --client "${provider.id}"`)
+      ) {
+        findings.push(
+          `${provider.id}: wrapper is stale or does not route through Atlas`,
+        );
       }
     } catch {
-      findings.push(`${provider.id}: wrapper is missing at ${wrapperPath(provider.command)}`);
+      findings.push(
+        `${provider.id}: wrapper is missing at ${wrapperPath(provider.command)}`,
+      );
     }
     try {
       resolveOriginalExecutable(provider.command);
     } catch (error) {
-      findings.push(`${provider.id}: ${error instanceof Error ? error.message : String(error)}`);
+      findings.push(
+        `${provider.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
-  const currentPath = (process.env.PATH ?? "").split(path.delimiter).map((entry) => path.resolve(entry));
+  const currentPath = (process.env.PATH ?? "")
+    .split(path.delimiter)
+    .map((entry) => path.resolve(entry));
   const index = currentPath.indexOf(path.resolve(shimDirectory()));
-  if (index < 0) findings.push(`Atlas shim directory is not on PATH: ${shimDirectory()}`);
-  else if (index > 0) findings.push(`Atlas shim directory is after ${index} PATH entries; provider commands can bypass Atlas`);
+  if (index < 0)
+    findings.push(`Atlas shim directory is not on PATH: ${shimDirectory()}`);
+  else if (index > 0)
+    findings.push(
+      `Atlas shim directory is after ${index} PATH entries; provider commands can bypass Atlas`,
+    );
   const bypass = commandPath ? absolutePathBypassFinding(commandPath) : null;
   if (bypass) findings.push(bypass);
   return findings;
@@ -193,20 +274,51 @@ export async function wrapperDoctor(commandPath?: string): Promise<string[]> {
 export function absolutePathBypassFinding(commandPath: string): string | null {
   if (!path.isAbsolute(commandPath)) return null;
   const resolved = path.resolve(commandPath);
-  if (resolved.startsWith(`${path.resolve(shimDirectory())}${path.sep}`)) return null;
+  if (resolved.startsWith(`${path.resolve(shimDirectory())}${path.sep}`))
+    return null;
   const command = path.basename(resolved).replace(/\.(cmd|exe|bat)$/i, "");
-  const provider = loadProviderRegistry().find((candidate) => candidate.command === command);
-  if (!provider) return `BYPASS_DETECTED: absolute path is outside Atlas and is not a registered provider: ${resolved}`;
+  const provider = loadProviderRegistry().find(
+    (candidate) => candidate.command === command,
+  );
+  if (!provider)
+    return `BYPASS_DETECTED: absolute path is outside Atlas and is not a registered provider: ${resolved}`;
   return `BYPASS_DETECTED: ${provider.id} was invoked by absolute path outside Atlas shims: ${resolved}`;
 }
 
-export async function wrapperStatus(): Promise<Array<ProviderRecord & { wrapper: string; installed: boolean; realExecutable: string | null; entryPoint: "terminal-shim"; controlLevel: "observed" }>> {
+export async function wrapperStatus(): Promise<
+  Array<
+    ProviderRecord & {
+      wrapper: string;
+      installed: boolean;
+      realExecutable: string | null;
+      entryPoint: "terminal-shim";
+      controlLevel: "observed";
+    }
+  >
+> {
   const providers = loadProviderRegistry();
-  return Promise.all(providers.map(async (provider) => {
-    let realExecutable: string | null = null;
-    try { realExecutable = resolveOriginalExecutable(provider.command); } catch { /* reported by doctor */ }
-    let installed = true;
-    try { await access(wrapperPath(provider.command)); } catch { installed = false; }
-    return { ...provider, wrapper: wrapperPath(provider.command), installed, realExecutable, entryPoint: "terminal-shim", controlLevel: "observed" };
-  }));
+  return Promise.all(
+    providers.map(async (provider) => {
+      let realExecutable: string | null = null;
+      try {
+        realExecutable = resolveOriginalExecutable(provider.command);
+      } catch {
+        /* reported by doctor */
+      }
+      let installed = true;
+      try {
+        await access(wrapperPath(provider.command));
+      } catch {
+        installed = false;
+      }
+      return {
+        ...provider,
+        wrapper: wrapperPath(provider.command),
+        installed,
+        realExecutable,
+        entryPoint: "terminal-shim",
+        controlLevel: "observed",
+      };
+    }),
+  );
 }

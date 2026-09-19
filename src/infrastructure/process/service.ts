@@ -7,13 +7,21 @@ export async function runService(shutdownAfterMs?: number): Promise<void> {
   let watcher: Promise<void> | undefined;
   try {
     const connection = await loadObsidianConnection();
-    watcher = watchObsidianVault(connection, undefined, controller.signal).catch((error) => {
-      console.error(`Obsidian watcher stopped: ${error instanceof Error ? error.message : String(error)}`);
+    watcher = watchObsidianVault(
+      connection,
+      undefined,
+      controller.signal,
+    ).catch((error) => {
+      console.error(
+        `Obsidian watcher stopped: ${error instanceof Error ? error.message : String(error)}`,
+      );
     });
     console.log(`Obsidian watcher enabled: ${connection.vaultPath}`);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.error(`Obsidian watcher unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `Obsidian watcher unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
   const heartbeat = setInterval(() => undefined, 60_000);
@@ -35,7 +43,8 @@ export async function runService(shutdownAfterMs?: number): Promise<void> {
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
     process.on("message", onMessage);
-    if (shutdownAfterMs !== undefined) testShutdown = setTimeout(() => shutdown("timer"), shutdownAfterMs);
+    if (shutdownAfterMs !== undefined)
+      testShutdown = setTimeout(() => shutdown("timer"), shutdownAfterMs);
   });
   await watcher;
   console.log("Atlas runtime stopped.");

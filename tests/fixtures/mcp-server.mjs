@@ -10,11 +10,35 @@ process.stdin.on("data", (chunk) => {
     if (!line) continue;
     const request = JSON.parse(line);
     if (request.method?.startsWith("notifications/")) continue;
-    const result = request.method === "initialize"
-      ? { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "atlas-fixture", version: "0.0.0" } }
-      : request.method === "tools/list"
-        ? { tools: [{ name: "read", description: "Read data", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: true } }, { name: "write", description: "Write data", inputSchema: { type: "object", properties: {} }, annotations: { readOnlyHint: false } }] }
-        : request.method === "tools/call" ? { content: [{ type: "text", text: "ok" }] } : {};
-    process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: request.id, result })}\n`);
+    const result =
+      request.method === "initialize"
+        ? {
+            protocolVersion: "2025-06-18",
+            capabilities: { tools: {} },
+            serverInfo: { name: "atlas-fixture", version: "0.0.0" },
+          }
+        : request.method === "tools/list"
+          ? {
+              tools: [
+                {
+                  name: "read",
+                  description: "Read data",
+                  inputSchema: { type: "object", properties: {} },
+                  annotations: { readOnlyHint: true },
+                },
+                {
+                  name: "write",
+                  description: "Write data",
+                  inputSchema: { type: "object", properties: {} },
+                  annotations: { readOnlyHint: false },
+                },
+              ],
+            }
+          : request.method === "tools/call"
+            ? { content: [{ type: "text", text: "ok" }] }
+            : {};
+    process.stdout.write(
+      `${JSON.stringify({ jsonrpc: "2.0", id: request.id, result })}\n`,
+    );
   }
 });

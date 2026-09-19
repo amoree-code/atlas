@@ -8,7 +8,9 @@ export function resolveClientHome(profile: Profile): string | undefined {
   const root = path.resolve(atlasPath("system", "clients"));
   const resolved = path.resolve(atlasPath(configured));
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
-    throw new Error(`Client home must stay under Atlas system/clients: ${configured}`);
+    throw new Error(
+      `Client home must stay under Atlas system/clients: ${configured}`,
+    );
   }
   return resolved;
 }

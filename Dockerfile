@@ -6,7 +6,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN mkdir -p scripts
 COPY scripts/prepare-node-pty.mjs scripts/prepare-hooks.mjs ./scripts/
 RUN corepack enable && pnpm install --frozen-lockfile

@@ -2,7 +2,7 @@
   "name": "atlas",
   "version": "0.3.6",
   "private": false,
-  "packageManager": "pnpm@10.26.1",
+  "packageManager": "pnpm@12.4.2",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -26,21 +26,25 @@
     "check:package": "node scripts/validate-package.mjs",
     "check:system": "sh scripts/health-check.sh",
     "check:providers": "node scripts/provider-smoke.mjs",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "check:style": "biome check .",
+    "check:unused": "knip --include files,dependencies,devDependencies,unlisted,binaries,unresolved",
+    "check": "pnpm typecheck && pnpm check:style && pnpm check:unused && pnpm check:privacy && pnpm check:skills && pnpm check:tickets && pnpm check:package && pnpm check:system",
     "test": "pnpm build && node --test --test-concurrency=1 --test-timeout=30000 tests/*.test.mjs",
     "prepare": "node scripts/prepare-hooks.mjs"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": ["node-pty"]
-  },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
     "@types/node": "^22.0.0",
+    "knip": "^6.37.0",
     "lefthook": "^2.1.14",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "node-pty": "^1.1.0",
     "playwright-core": "^1.48.0",
-    "zod": "^3.25.0"
+    "zod": "^4.6.5"
   }
 }

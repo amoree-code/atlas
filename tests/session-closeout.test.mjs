@@ -10,7 +10,9 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
   process.env.ATLAS_ROOT = root;
   await mkdir(path.join(root, "system", "sessions"), { recursive: true });
-  const store = new SessionStore(path.join(root, "system", "sessions", "sessions.sqlite"));
+  const store = new SessionStore(
+    path.join(root, "system", "sessions", "sessions.sqlite"),
+  );
   const sessionId = "closeout-session-1";
   store.create({
     sessionId,
@@ -26,11 +28,26 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
     resumeData: null,
   });
   store.updateStatus(sessionId, "running");
-  store.appendEvent(sessionId, "user_input", "Review the session closeout behavior");
+  store.appendEvent(
+    sessionId,
+    "user_input",
+    "Review the session closeout behavior",
+  );
   const providerSecret = ["sk", "-ant-closeout-secret"].join("");
-  store.appendEvent(sessionId, "provider_output", `Inspected the session flow and found one bounded result. ${providerSecret}`);
+  store.appendEvent(
+    sessionId,
+    "provider_output",
+    `Inspected the session flow and found one bounded result. ${providerSecret}`,
+  );
   store.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: 0 }));
-  store.appendEvent(sessionId, "evidence", JSON.stringify({ result: "proven", criterion: "provider process exits successfully" }));
+  store.appendEvent(
+    sessionId,
+    "evidence",
+    JSON.stringify({
+      result: "proven",
+      criterion: "provider process exits successfully",
+    }),
+  );
   store.updateStatus(sessionId, "completed");
 
   const result = await finalizeSession(store, sessionId, { exitCode: 0 });
@@ -38,7 +55,10 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   const saved = store.get(sessionId);
 
   const today = new Date().toISOString().slice(0, 10);
-  const daily = await readFile(path.join(root, "personal", "daily", `${today}.md`), "utf8");
+  const daily = await readFile(
+    path.join(root, "personal", "daily", `${today}.md`),
+    "utf8",
+  );
   assert.match(daily, /^# Daily/);
   assert.match(daily, /## Work log/);
   assert.match(daily, /Review the session closeout behavior/);
@@ -55,10 +75,19 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   assert.equal(saved.closeoutStatus, "completed");
   assert.ok(saved.handoffId);
   assert.equal(store.getHandoff(saved.handoffId).sourceSessionId, sessionId);
-  assert.ok(store.listEvents(sessionId).some((event) => event.type === "session_summary"));
+  assert.ok(
+    store
+      .listEvents(sessionId)
+      .some((event) => event.type === "session_summary"),
+  );
   const second = await finalizeSession(store, sessionId, { exitCode: 0 });
   assert.equal(second.summaryPath, result.summaryPath);
-  assert.equal(store.listEvents(sessionId).filter((event) => event.type === "session_summary").length, 1);
+  assert.equal(
+    store
+      .listEvents(sessionId)
+      .filter((event) => event.type === "session_summary").length,
+    1,
+  );
   assert.equal(store.listHandoffs().length, 1);
   store.close();
   delete process.env.ATLAS_ROOT;

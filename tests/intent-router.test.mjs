@@ -8,7 +8,14 @@ import { classifyIntent } from "../dist/application/context/intent-router.js";
 
 test("ticket lookup: bare 'show T-123' resolves get with high confidence", () => {
   const result = classifyIntent("show T-123");
-  assert.deepEqual(result, { intent: "ticket-lookup", entityType: "ticket", identifier: "T-123", action: "get", confidence: "high", ambiguityReason: null });
+  assert.deepEqual(result, {
+    intent: "ticket-lookup",
+    entityType: "ticket",
+    identifier: "T-123",
+    action: "get",
+    confidence: "high",
+    ambiguityReason: null,
+  });
 });
 
 test("ticket lookup: 'explain T-7' also resolves as get (no dedicated explain verb, defaults to get)", () => {
@@ -94,7 +101,14 @@ test("knowledge lookup: 'what knowledge do we have about deployments'", () => {
 
 test("work-style lookup: 'what is my work style'", () => {
   const result = classifyIntent("what is my work style");
-  assert.deepEqual(result, { intent: "work-style-lookup", entityType: "work-style", identifier: null, action: "lookup", confidence: "high", ambiguityReason: null });
+  assert.deepEqual(result, {
+    intent: "work-style-lookup",
+    entityType: "work-style",
+    identifier: null,
+    action: "lookup",
+    confidence: "high",
+    ambiguityReason: null,
+  });
 });
 
 // --- project detection ---
@@ -109,7 +123,14 @@ test("project detection: 'what project am I in'", () => {
 
 test("project creation: 'start a new project called X' captures the name and returns high confidence", () => {
   const result = classifyIntent("start a new project called X");
-  assert.deepEqual(result, { intent: "project-create", entityType: "project", identifier: "X", action: "create", confidence: "high", ambiguityReason: null });
+  assert.deepEqual(result, {
+    intent: "project-create",
+    entityType: "project",
+    identifier: "X",
+    action: "create",
+    confidence: "high",
+    ambiguityReason: null,
+  });
 });
 
 test("project creation without a captured name is medium confidence, not a guessed name", () => {
@@ -124,7 +145,14 @@ test("project creation without a captured name is medium confidence, not a guess
 
 test("remember: 'save this as a decision' is high-confidence remember with entityType decision", () => {
   const result = classifyIntent("save this as a decision");
-  assert.deepEqual(result, { intent: "remember", entityType: "decision", identifier: null, action: "remember", confidence: "high", ambiguityReason: null });
+  assert.deepEqual(result, {
+    intent: "remember",
+    entityType: "decision",
+    identifier: null,
+    action: "remember",
+    confidence: "high",
+    ambiguityReason: null,
+  });
 });
 
 test("remember: 'remember this' (imperative with explicit target) is high-confidence remember", () => {
@@ -169,7 +197,15 @@ test("missing identifier on an otherwise clear ticket-shaped request without T- 
 
 test("unknown/ambiguous: 'show me that thing' returns a safe low-confidence result with no retrieval implied", () => {
   const result = classifyIntent("show me that thing");
-  assert.deepEqual(result, { intent: "unknown", entityType: "unknown", identifier: null, action: "unknown", confidence: "low", ambiguityReason: "no recognizable entity, verb, or identifier matched in the request" });
+  assert.deepEqual(result, {
+    intent: "unknown",
+    entityType: "unknown",
+    identifier: null,
+    action: "unknown",
+    confidence: "low",
+    ambiguityReason:
+      "no recognizable entity, verb, or identifier matched in the request",
+  });
 });
 
 test("empty request returns a safe result, not a crash", () => {
@@ -224,20 +260,41 @@ test("output is small and bounded regardless of oversized input", () => {
 
 test("classification result exposes exactly the contracted fields, nothing extra", () => {
   const result = classifyIntent("show T-1");
-  assert.deepEqual(Object.keys(result).sort(), ["action", "ambiguityReason", "confidence", "entityType", "identifier", "intent"]);
+  assert.deepEqual(Object.keys(result).sort(), [
+    "action",
+    "ambiguityReason",
+    "confidence",
+    "entityType",
+    "identifier",
+    "intent",
+  ]);
 });
 
 test("intent-router.ts imports nothing — structurally no fs, no network, no MCP, no model call is possible", async () => {
   const { readFile } = await import("node:fs/promises");
-  const source = await readFile(path.resolve("src/application/context/intent-router.ts"), "utf8");
+  const source = await readFile(
+    path.resolve("src/application/context/intent-router.ts"),
+    "utf8",
+  );
   assert.doesNotMatch(source, /^import /m);
 });
 
 test("'atlas intent classify' CLI is reusable client-neutrally: same output as the direct call, no fs writes", () => {
-  const before = spawnSync("git", ["status", "--porcelain"], { encoding: "utf8" }).stdout;
-  const result = spawnSync(process.execPath, [path.resolve("dist/main.js"), "intent", "classify", "show", "T-123"], { encoding: "utf8" });
-  const after = spawnSync("git", ["status", "--porcelain"], { encoding: "utf8" }).stdout;
+  const before = spawnSync("git", ["status", "--porcelain"], {
+    encoding: "utf8",
+  }).stdout;
+  const result = spawnSync(
+    process.execPath,
+    [path.resolve("dist/main.js"), "intent", "classify", "show", "T-123"],
+    { encoding: "utf8" },
+  );
+  const after = spawnSync("git", ["status", "--porcelain"], {
+    encoding: "utf8",
+  }).stdout;
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout.trim()), classifyIntent("show T-123"));
+  assert.deepEqual(
+    JSON.parse(result.stdout.trim()),
+    classifyIntent("show T-123"),
+  );
   assert.equal(before, after);
 });

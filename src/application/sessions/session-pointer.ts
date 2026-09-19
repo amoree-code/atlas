@@ -1,6 +1,6 @@
 import path from "node:path";
-import type { SessionStore } from "../../infrastructure/persistence/session-store.js";
 import type { Session, SessionStatus } from "../../domain/sessions/session.js";
+import type { SessionStore } from "../../infrastructure/persistence/session-store.js";
 import { validateBudget } from "../context/context-ladder.js";
 import { resolveProject } from "../context/project-resolution.js";
 
@@ -35,23 +35,41 @@ export type ResumePlan = {
 
 // Sessions are created with randomUUID(), so a pointer that is not a UUID did not come from
 // Atlas and is refused before any lookup.
-const SESSION_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SESSION_ID_SHAPE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STALE_RESUME_MS = 24 * 60 * 60 * 1000;
 const MAX_NEXT_ACTION_CHARS = 200;
 
-export function validateSessionIdentifier(sessionId: unknown): { valid: true; value: string } | { valid: false; reason: string } {
-  if (typeof sessionId !== "string" || sessionId.length === 0) return { valid: false, reason: "session pointer is missing" };
-  if (sessionId.includes("\0")) return { valid: false, reason: "session pointer contains a null byte" };
-  if (!SESSION_ID_SHAPE.test(sessionId)) return { valid: false, reason: `session pointer '${sessionId}' is not a valid Atlas session identifier` };
+export function validateSessionIdentifier(
+  sessionId: unknown,
+): { valid: true; value: string } | { valid: false; reason: string } {
+  if (typeof sessionId !== "string" || sessionId.length === 0)
+    return { valid: false, reason: "session pointer is missing" };
+  if (sessionId.includes("\0"))
+    return { valid: false, reason: "session pointer contains a null byte" };
+  if (!SESSION_ID_SHAPE.test(sessionId))
+    return {
+      valid: false,
+      reason: `session pointer '${sessionId}' is not a valid Atlas session identifier`,
+    };
   return { valid: true, value: sessionId };
 }
 
 function refused(reason: string, violations: string[] = []): ResumePlan {
-  return { ok: false, mode: "refused", reason, pointer: null, parentSessionId: null, violations };
+  return {
+    ok: false,
+    mode: "refused",
+    reason,
+    pointer: null,
+    parentSessionId: null,
+    violations,
+  };
 }
 
 function clip(value: string): string {
-  return value.length > MAX_NEXT_ACTION_CHARS ? `${value.slice(0, MAX_NEXT_ACTION_CHARS)}…` : value;
+  return value.length > MAX_NEXT_ACTION_CHARS
+    ? `${value.slice(0, MAX_NEXT_ACTION_CHARS)}…`
+    : value;
 }
 
 async function projectIdFor(directory: string): Promise<string | null> {
@@ -61,7 +79,9 @@ async function projectIdFor(directory: string): Promise<string | null> {
 
 // Builds the compact pointer for a session that is already known to exist. Carries only
 // references: summaryPath is a path, not the summary; nextAction is clipped.
-export async function buildSessionPointer(session: Session): Promise<SessionPointer> {
+export async function buildSessionPointer(
+  session: Session,
+): Promise<SessionPointer> {
   return {
     sessionId: session.sessionId,
     parentSessionId: session.parentSessionId,
@@ -75,52 +95,88 @@ export async function buildSessionPointer(session: Session): Promise<SessionPoin
   };
 }
 
-export type ResumeOptions = { cwd?: string; now?: number; requestedProject?: string };
+export type ResumeOptions = {
+  cwd?: string;
+  now?: number;
+  requestedProject?: string;
+};
 
 // Deterministic, read-only resume planning. Budget is validated before the store is read.
-export async function planSessionResume(store: SessionStore, sessionId: unknown, budget: unknown, options: ResumeOptions = {}): Promise<ResumePlan> {
+export async function planSessionResume(
+  store: SessionStore,
+  sessionId: unknown,
+  budget: unknown,
+  options: ResumeOptions = {},
+): Promise<ResumePlan> {
   const budgetCheck = validateBudget(budget);
-  if (!budgetCheck.valid) return refused(`invalid-budget: ${budgetCheck.reason}`, ["invalid-budget"]);
+  if (!budgetCheck.valid)
+    return refused(`invalid-budget: ${budgetCheck.reason}`, ["invalid-budget"]);
 
   const identifier = validateSessionIdentifier(sessionId);
   if (!identifier.valid) return refused(identifier.reason);
 
   const session = store.get(identifier.value);
-  if (!session) return refused(`session ${identifier.value} does not exist in Atlas`);
+  if (!session)
+    return refused(`session ${identifier.value} does not exist in Atlas`);
 
   const pointer = await buildSessionPointer(session);
 
   const cwd = options.cwd;
   if (cwd) {
     const currentProject = await projectIdFor(path.resolve(cwd));
-    if (pointer.projectId && currentProject && pointer.projectId !== currentProject) {
-      return refused(`cross-project resume refused: session belongs to '${pointer.projectId}', current directory resolves to '${currentProject}'`);
+    if (
+      pointer.projectId &&
+      currentProject &&
+      pointer.projectId !== currentProject
+    ) {
+      return refused(
+        `cross-project resume refused: session belongs to '${pointer.projectId}', current directory resolves to '${currentProject}'`,
+      );
     }
   }
-  if (options.requestedProject && pointer.projectId && options.requestedProject !== pointer.projectId) {
-    return refused(`cross-project resume refused: session belongs to '${pointer.projectId}', request targeted '${options.requestedProject}'`);
+  if (
+    options.requestedProject &&
+    pointer.projectId &&
+    options.requestedProject !== pointer.projectId
+  ) {
+    return refused(
+      `cross-project resume refused: session belongs to '${pointer.projectId}', request targeted '${options.requestedProject}'`,
+    );
   }
 
   const now = options.now ?? Date.now();
   const age = now - Date.parse(session.updatedAt);
 
   if (session.status === "created") {
-    return refused(`session ${identifier.value} never started (status: created) — nothing to resume`);
+    return refused(
+      `session ${identifier.value} never started (status: created) — nothing to resume`,
+    );
   }
   if (session.status === "failed" || session.status === "cancelled") {
-    return refused(`session ${identifier.value} ended in terminal status '${session.status}' — a new session must be started explicitly, Atlas will not reassign it automatically`);
+    return refused(
+      `session ${identifier.value} ended in terminal status '${session.status}' — a new session must be started explicitly, Atlas will not reassign it automatically`,
+    );
   }
-  if (session.status === "running" && Number.isFinite(age) && age > STALE_RESUME_MS) {
-    return refused(`session ${identifier.value} is stale: last updated ${Math.floor(age / 3_600_000)}h ago while still marked running — run 'atlas session doctor' before resuming`, ["stale-session"]);
+  if (
+    session.status === "running" &&
+    Number.isFinite(age) &&
+    age > STALE_RESUME_MS
+  ) {
+    return refused(
+      `session ${identifier.value} is stale: last updated ${Math.floor(age / 3_600_000)}h ago while still marked running — run 'atlas session doctor' before resuming`,
+      ["stale-session"],
+    );
   }
 
-  const mode: ResumeMode = session.status === "running" ? "attach-child" : "pointer-only";
+  const mode: ResumeMode =
+    session.status === "running" ? "attach-child" : "pointer-only";
   const plan: ResumePlan = {
     ok: true,
     mode,
-    reason: mode === "attach-child"
-      ? `session ${identifier.value} is live; a child session may attach to it`
-      : `session ${identifier.value} is closed cleanly; a new child session may point at its checkpoint without replaying it`,
+    reason:
+      mode === "attach-child"
+        ? `session ${identifier.value} is live; a child session may attach to it`
+        : `session ${identifier.value} is closed cleanly; a new child session may point at its checkpoint without replaying it`,
     pointer,
     parentSessionId: identifier.value,
     violations: [],
@@ -129,14 +185,23 @@ export async function planSessionResume(store: SessionStore, sessionId: unknown,
   const bounded = budget as { maxChars: number };
   const serialized = JSON.stringify(plan).length;
   if (serialized > bounded.maxChars) {
-    return refused(`resume plan is ${serialized} chars, budget.maxChars allows ${bounded.maxChars}`, ["max-chars-exceeded"]);
+    return refused(
+      `resume plan is ${serialized} chars, budget.maxChars allows ${bounded.maxChars}`,
+      ["max-chars-exceeded"],
+    );
   }
   return plan;
 }
 
 // Validates an explicitly supplied parent before a caller passes it to store.create().
 // A missing parent is reported as "none", never inferred from the most recent session.
-export function validateParentSession(store: SessionStore, parentSessionId: unknown, childSessionId?: string): { ok: true; parentSessionId: string | null } | { ok: false; reason: string } {
+export function validateParentSession(
+  store: SessionStore,
+  parentSessionId: unknown,
+  childSessionId?: string,
+):
+  | { ok: true; parentSessionId: string | null }
+  | { ok: false; reason: string } {
   if (parentSessionId === null || parentSessionId === undefined) {
     return { ok: true, parentSessionId: null };
   }
@@ -146,6 +211,10 @@ export function validateParentSession(store: SessionStore, parentSessionId: unkn
     return { ok: false, reason: "a session cannot be its own parent" };
   }
   const parent = store.get(identifier.value);
-  if (!parent) return { ok: false, reason: `parent session ${identifier.value} does not exist in Atlas` };
+  if (!parent)
+    return {
+      ok: false,
+      reason: `parent session ${identifier.value} does not exist in Atlas`,
+    };
   return { ok: true, parentSessionId: identifier.value };
 }

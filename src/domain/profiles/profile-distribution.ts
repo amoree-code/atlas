@@ -12,6 +12,8 @@ export const profileDistributionSchema = z.object({
 
 export type ProfileDistribution = z.infer<typeof profileDistributionSchema>;
 
-export function validateProfileDistribution(input: unknown): ProfileDistribution {
+export function validateProfileDistribution(
+  input: unknown,
+): ProfileDistribution {
   return profileDistributionSchema.parse(input);
 }

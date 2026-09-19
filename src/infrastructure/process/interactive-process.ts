@@ -1,5 +1,5 @@
-import { spawn as spawnPty, type IPty } from "node-pty";
 import { spawn } from "node:child_process";
+import { type IPty, spawn as spawnPty } from "node-pty";
 
 export type InteractiveProcessRequest = {
   command: string;
@@ -19,7 +19,9 @@ export type InteractiveProcessResult = {
   cancelled?: boolean;
 };
 
-export function runInteractive(request: InteractiveProcessRequest): Promise<InteractiveProcessResult> {
+export function runInteractive(
+  request: InteractiveProcessRequest,
+): Promise<InteractiveProcessResult> {
   return new Promise((resolve, reject) => {
     let terminal: IPty;
     try {
@@ -42,7 +44,8 @@ export function runInteractive(request: InteractiveProcessRequest): Promise<Inte
     let forceKillTimer: NodeJS.Timeout | undefined;
     const maxCapture = 64_000;
     const onData = (data: string): void => {
-      if (output.length < maxCapture) output += data.slice(0, maxCapture - output.length);
+      if (output.length < maxCapture)
+        output += data.slice(0, maxCapture - output.length);
       process.stdout.write(data);
       request.onData?.(data.slice(0, 64_000));
     };
@@ -59,7 +62,8 @@ export function runInteractive(request: InteractiveProcessRequest): Promise<Inte
       process.stdin.resume();
       process.stdin.on("data", onStdin);
     }
-    const onResize = (): void => terminal.resize(process.stdout.columns || 120, process.stdout.rows || 40);
+    const onResize = (): void =>
+      terminal.resize(process.stdout.columns || 120, process.stdout.rows || 40);
     process.stdout.on("resize", onResize);
 
     const stop = (reason: "timeout" | "cancel"): void => {
@@ -69,7 +73,8 @@ export function runInteractive(request: InteractiveProcessRequest): Promise<Inte
       forceKillTimer = setTimeout(() => terminal.kill("SIGKILL"), 100);
     };
     const onAbort = (): void => stop("cancel");
-    if (request.timeoutMs !== undefined) timer = setTimeout(() => stop("timeout"), request.timeoutMs);
+    if (request.timeoutMs !== undefined)
+      timer = setTimeout(() => stop("timeout"), request.timeoutMs);
     request.signal?.addEventListener("abort", onAbort, { once: true });
     if (request.signal?.aborted) onAbort();
 
@@ -88,15 +93,22 @@ export function runInteractive(request: InteractiveProcessRequest): Promise<Inte
   });
 }
 
-export function runPassthrough(request: InteractiveProcessRequest): Promise<InteractiveProcessResult> {
+export function runPassthrough(
+  request: InteractiveProcessRequest,
+): Promise<InteractiveProcessResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(request.command, request.args, {
       cwd: request.cwd,
       env: { ...process.env, ...request.env },
       stdio: "inherit",
     });
-    const timer = request.timeoutMs === undefined ? undefined : setTimeout(() => child.kill("SIGTERM"), request.timeoutMs);
-    const onAbort = (): void => { child.kill("SIGTERM"); };
+    const timer =
+      request.timeoutMs === undefined
+        ? undefined
+        : setTimeout(() => child.kill("SIGTERM"), request.timeoutMs);
+    const onAbort = (): void => {
+      child.kill("SIGTERM");
+    };
     request.signal?.addEventListener("abort", onAbort, { once: true });
     child.once("error", (error) => {
       if (timer) clearTimeout(timer);
@@ -106,7 +118,11 @@ export function runPassthrough(request: InteractiveProcessRequest): Promise<Inte
     child.once("close", (exitCode) => {
       if (timer) clearTimeout(timer);
       request.signal?.removeEventListener("abort", onAbort);
-      resolve({ exitCode: exitCode ?? 1, output: "", cancelled: request.signal?.aborted });
+      resolve({
+        exitCode: exitCode ?? 1,
+        output: "",
+        cancelled: request.signal?.aborted,
+      });
     });
   });
 }

@@ -3,21 +3,44 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { browserContracts } from "../dist/domain/capabilities/browser-contract.js";
-import { FakeBrowserProvider } from "../dist/infrastructure/providers/fake-browser-provider.js";
-import { resolveDownloadPath, safeDownloadFilename } from "../dist/infrastructure/providers/playwright-browser-provider.js";
-import { BrowserApprovalRequiredError, BrowserService } from "../dist/application/browser/browser-service.js";
+import {
+  BrowserApprovalRequiredError,
+  BrowserService,
+} from "../dist/application/browser/browser-service.js";
 import { BrowserSessionManager } from "../dist/application/browser/browser-session.js";
+import { browserContracts } from "../dist/domain/capabilities/browser-contract.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { FakeBrowserProvider } from "../dist/infrastructure/providers/fake-browser-provider.js";
+import {
+  resolveDownloadPath,
+  safeDownloadFilename,
+} from "../dist/infrastructure/providers/playwright-browser-provider.js";
 
 test("every browser operation has an explicit authority, idempotency, and approval policy", () => {
-  const operations = ["open", "close", "navigate", "read", "observe", "extract", "click", "type", "select", "scroll", "wait", "upload", "download", "submit"];
+  const operations = [
+    "open",
+    "close",
+    "navigate",
+    "read",
+    "observe",
+    "extract",
+    "click",
+    "type",
+    "select",
+    "scroll",
+    "wait",
+    "upload",
+    "download",
+    "submit",
+  ];
   for (const operation of operations) {
     const contract = browserContracts[operation];
     assert.equal(contract.capability, "browser");
     assert.equal(contract.operation, operation);
     assert.ok(["profile", "session", "owner"].includes(contract.authority));
-    assert.ok(["safe", "repeatable", "non-repeatable"].includes(contract.idempotency));
+    assert.ok(
+      ["safe", "repeatable", "non-repeatable"].includes(contract.idempotency),
+    );
     assert.ok(["none", "required", "conditional"].includes(contract.approval));
     assert.ok(contract.verification.length > 0);
   }
@@ -29,11 +52,22 @@ test("upload, download, and submit require owner approval before executing", asy
   const launch = await service.launch("/tmp/atlas-browser-test-profile");
   const handle = await service.connect(launch);
 
-  await assert.rejects(() => service.upload(handle, "#file", ["/tmp/a.txt"]), BrowserApprovalRequiredError);
-  await assert.rejects(() => service.download(handle, "#dl", "/tmp"), BrowserApprovalRequiredError);
-  await assert.rejects(() => service.submit(handle, "#form"), BrowserApprovalRequiredError);
+  await assert.rejects(
+    () => service.upload(handle, "#file", ["/tmp/a.txt"]),
+    BrowserApprovalRequiredError,
+  );
+  await assert.rejects(
+    () => service.download(handle, "#dl", "/tmp"),
+    BrowserApprovalRequiredError,
+  );
+  await assert.rejects(
+    () => service.submit(handle, "#form"),
+    BrowserApprovalRequiredError,
+  );
 
-  const uploaded = await service.upload(handle, "#file", ["/tmp/a.txt"], { approved: true });
+  const uploaded = await service.upload(handle, "#file", ["/tmp/a.txt"], {
+    approved: true,
+  });
   assert.equal(uploaded.approved, true);
   assert.equal(uploaded.verified, true);
 });
@@ -48,12 +82,19 @@ test("navigate requires approval only when crossing origins, never on the first 
   assert.equal(first.approved, true);
   assert.equal(first.verified, true);
 
-  await assert.rejects(() => service.navigate(handle, "https://other-origin.example/b"), BrowserApprovalRequiredError);
+  await assert.rejects(
+    () => service.navigate(handle, "https://other-origin.example/b"),
+    BrowserApprovalRequiredError,
+  );
 
   const sameOrigin = await service.navigate(handle, "https://example.com/b");
   assert.equal(sameOrigin.approved, true);
 
-  const crossOrigin = await service.navigate(handle, "https://other-origin.example/b", { approved: true });
+  const crossOrigin = await service.navigate(
+    handle,
+    "https://other-origin.example/b",
+    { approved: true },
+  );
   assert.equal(crossOrigin.approved, true);
   assert.equal(crossOrigin.verified, true);
 });
@@ -93,21 +134,43 @@ test("click verification reflects the live post-click state, navigation and non-
 
   // A button click with no navigation, verified by the live count of a target selector
   // (e.g. a toggled panel appearing) rather than by URL.
-  handle.setElements([{ tag: "div", type: null, name: null, id: "panel", text: "open", visible: true }]);
-  const toggled = await service.click(handle, "#toggle", { kind: "selector-count", selector: "panel", expected: 1 });
+  handle.setElements([
+    {
+      tag: "div",
+      type: null,
+      name: null,
+      id: "panel",
+      text: "open",
+      visible: true,
+    },
+  ]);
+  const toggled = await service.click(handle, "#toggle", {
+    kind: "selector-count",
+    selector: "panel",
+    expected: 1,
+  });
   assert.equal(toggled.result.url, toggled.result.urlBefore);
   assert.equal(toggled.verified, true);
 
   // Same non-navigating click, but the expected element count is wrong.
-  const wrongCount = await service.click(handle, "#toggle", { kind: "selector-count", selector: "panel", expected: 0 });
+  const wrongCount = await service.click(handle, "#toggle", {
+    kind: "selector-count",
+    selector: "panel",
+    expected: 0,
+  });
   assert.equal(wrongCount.verified, false);
 });
 
 test("download path is sanitized against a hostile suggested filename", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "atlas-browser-download-"));
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-browser-download-"),
+  );
 
   assert.equal(safeDownloadFilename("../../etc/passwd"), "passwd");
-  assert.equal(safeDownloadFilename("..\\..\\windows\\system32\\evil.exe"), "evil.exe");
+  assert.equal(
+    safeDownloadFilename("..\\..\\windows\\system32\\evil.exe"),
+    "evil.exe",
+  );
   assert.equal(safeDownloadFilename("/etc/passwd"), "passwd");
   assert.equal(safeDownloadFilename(".."), "download");
   assert.equal(safeDownloadFilename("."), "download");
@@ -124,7 +187,10 @@ test("browser sessions persist launch metadata and reconnect through the session
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-browser-session-"));
   const store = new SessionStore(path.join(root, "sessions.sqlite"));
   const provider = new FakeBrowserProvider();
-  const manager = new BrowserSessionManager(store, new BrowserService(provider));
+  const manager = new BrowserSessionManager(
+    store,
+    new BrowserService(provider),
+  );
 
   const opened = await manager.open("test-profile");
   assert.equal(opened.provider, "browser");
@@ -135,11 +201,21 @@ test("browser sessions persist launch metadata and reconnect through the session
   const observed = await manager.observe(opened.sessionId);
   assert.equal(observed.url, "about:blank");
   assert.equal(manager.show(opened.sessionId).status, "running");
-  assert.equal(manager.events(opened.sessionId).some((event) => event.type === "browser_operation"), true);
+  assert.equal(
+    manager
+      .events(opened.sessionId)
+      .some((event) => event.type === "browser_operation"),
+    true,
+  );
 
   const closed = await manager.close(opened.sessionId);
   assert.equal(closed.status, "completed");
-  assert.equal(manager.events(opened.sessionId).some((event) => event.type === "browser_closed"), true);
+  assert.equal(
+    manager
+      .events(opened.sessionId)
+      .some((event) => event.type === "browser_closed"),
+    true,
+  );
   store.close();
   await rm(root, { recursive: true, force: true });
 });

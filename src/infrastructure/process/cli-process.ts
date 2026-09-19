@@ -69,7 +69,9 @@ export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
     };
 
     child.stdout.on("data", emitLines);
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
     child.once("error", (error) => {
       clearTimeout(timer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
@@ -79,7 +81,15 @@ export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
       clearTimeout(timer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
       if (stdoutBuffer) emitLines(Buffer.from("\n"));
-      resolve({ exitCode: timedOut ? 124 : outputLimitExceeded ? 125 : (exitCode ?? 1), events, stderr: timedOut ? `${stderr}Process timed out.\n` : outputLimitExceeded ? `${stderr}Output budget exceeded.\n` : stderr });
+      resolve({
+        exitCode: timedOut ? 124 : outputLimitExceeded ? 125 : (exitCode ?? 1),
+        events,
+        stderr: timedOut
+          ? `${stderr}Process timed out.\n`
+          : outputLimitExceeded
+            ? `${stderr}Output budget exceeded.\n`
+            : stderr,
+      });
     });
   });
 }

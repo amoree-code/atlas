@@ -4,11 +4,21 @@ import { mkdir, mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
-import { buildSessionPointer, planSessionResume, validateParentSession, validateSessionIdentifier } from "../dist/application/sessions/session-pointer.js";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
+import {
+  buildSessionPointer,
+  planSessionResume,
+  validateParentSession,
+  validateSessionIdentifier,
+} from "../dist/application/sessions/session-pointer.js";
+import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
-const BUDGET = { maxFiles: 10, maxBytes: 50_000, maxChars: 5_000, maxOperationCost: 5 };
+const BUDGET = {
+  maxFiles: 10,
+  maxBytes: 50_000,
+  maxChars: 5_000,
+  maxOperationCost: 5,
+};
 
 async function withStore(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-slice8-"));
@@ -20,7 +30,8 @@ async function withStore(fn) {
     return await fn(store, root);
   } finally {
     store.close();
-    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
   }
 }
 
@@ -41,7 +52,8 @@ function createSession(store, overrides = {}) {
   });
   if (overrides.status && overrides.status !== "created") {
     store.updateStatus(sessionId, "running");
-    if (overrides.status !== "running") store.updateStatus(sessionId, overrides.status);
+    if (overrides.status !== "running")
+      store.updateStatus(sessionId, overrides.status);
   }
   return sessionId;
 }
@@ -50,8 +62,14 @@ function createSession(store, overrides = {}) {
 
 test("valid pointer: a real session identifier resolves to a compact pointer", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "running", workingDirectory: root, ticketId: "T-198" });
-    const plan = await planSessionResume(store, sessionId, BUDGET, { cwd: root });
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+      ticketId: "T-198",
+    });
+    const plan = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+    });
     assert.equal(plan.ok, true, plan.reason);
     assert.equal(plan.mode, "attach-child");
     assert.equal(plan.pointer.sessionId, sessionId);
@@ -69,7 +87,13 @@ test("missing pointer is refused without touching the store", () =>
   }));
 
 test("malformed pointer shapes are refused before any lookup", () => {
-  for (const bad of ["not-a-uuid", "../../etc/passwd", "abc\0def", "12345", "'; DROP TABLE sessions;--"]) {
+  for (const bad of [
+    "not-a-uuid",
+    "../../etc/passwd",
+    "abc\0def",
+    "12345",
+    "'; DROP TABLE sessions;--",
+  ]) {
     assert.equal(validateSessionIdentifier(bad).valid, false, bad);
   }
   assert.equal(validateSessionIdentifier(randomUUID()).valid, true);
@@ -86,50 +110,90 @@ test("unknown session is reported as non-existent, never guessed", () =>
 
 test("closed (completed) session yields a pointer-only plan and is never reopened", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "completed", workingDirectory: root });
+    const sessionId = createSession(store, {
+      status: "completed",
+      workingDirectory: root,
+    });
     const before = store.get(sessionId).status;
-    const plan = await planSessionResume(store, sessionId, BUDGET, { cwd: root });
+    const plan = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+    });
     assert.equal(plan.ok, true, plan.reason);
     assert.equal(plan.mode, "pointer-only");
-    assert.equal(store.get(sessionId).status, before, "resume planning must not mutate session status");
+    assert.equal(
+      store.get(sessionId).status,
+      before,
+      "resume planning must not mutate session status",
+    );
   }));
 
 test("terminal statuses (failed, cancelled) refuse resume — no resurrection, no reassignment", () =>
   withStore(async (store, root) => {
     for (const status of ["failed", "cancelled"]) {
-      const sessionId = createSession(store, { status, workingDirectory: root });
-      const plan = await planSessionResume(store, sessionId, BUDGET, { cwd: root });
+      const sessionId = createSession(store, {
+        status,
+        workingDirectory: root,
+      });
+      const plan = await planSessionResume(store, sessionId, BUDGET, {
+        cwd: root,
+      });
       assert.equal(plan.ok, false, status);
       assert.match(plan.reason, /terminal status/);
-      assert.equal(store.get(sessionId).status, status, "status must be unchanged");
+      assert.equal(
+        store.get(sessionId).status,
+        status,
+        "status must be unchanged",
+      );
     }
   }));
 
 test("a session that never started is refused", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "created", workingDirectory: root });
-    const plan = await planSessionResume(store, sessionId, BUDGET, { cwd: root });
+    const sessionId = createSession(store, {
+      status: "created",
+      workingDirectory: root,
+    });
+    const plan = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+    });
     assert.equal(plan.ok, false);
     assert.match(plan.reason, /never started/);
   }));
 
 test("stale running session is refused with an explicit stale reason", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "running", workingDirectory: root });
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
     const future = Date.now() + 48 * 60 * 60 * 1000;
-    const plan = await planSessionResume(store, sessionId, BUDGET, { cwd: root, now: future });
+    const plan = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+      now: future,
+    });
     assert.equal(plan.ok, false);
     assert.match(plan.reason, /stale/);
     assert.deepEqual(plan.violations, ["stale-session"]);
-    assert.equal(store.get(sessionId).status, "running", "a stale session must not be mutated");
+    assert.equal(
+      store.get(sessionId).status,
+      "running",
+      "a stale session must not be mutated",
+    );
   }));
 
 // ---------------------------------------------------------------- parent / child
 
 test("parent/child relation is recorded through the existing session store", () =>
   withStore(async (store, root) => {
-    const parentId = createSession(store, { status: "running", workingDirectory: root });
-    const childId = createSession(store, { status: "running", workingDirectory: root, parentSessionId: parentId });
+    const parentId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
+    const childId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+      parentSessionId: parentId,
+    });
     assert.equal(store.get(childId).parentSessionId, parentId);
     const pointer = await buildSessionPointer(store.get(childId));
     assert.equal(pointer.parentSessionId, parentId);
@@ -137,30 +201,59 @@ test("parent/child relation is recorded through the existing session store", () 
 
 test("an invalid or unknown parent is refused, and a missing parent is never guessed", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "running", workingDirectory: root });
-    assert.deepEqual(validateParentSession(store, null), { ok: true, parentSessionId: null });
-    assert.deepEqual(validateParentSession(store, undefined), { ok: true, parentSessionId: null });
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
+    assert.deepEqual(validateParentSession(store, null), {
+      ok: true,
+      parentSessionId: null,
+    });
+    assert.deepEqual(validateParentSession(store, undefined), {
+      ok: true,
+      parentSessionId: null,
+    });
     assert.equal(validateParentSession(store, "not-a-uuid").ok, false);
     assert.equal(validateParentSession(store, randomUUID()).ok, false);
-    assert.equal(validateParentSession(store, sessionId, sessionId).ok, false, "self-parent must be refused");
-    assert.deepEqual(validateParentSession(store, sessionId), { ok: true, parentSessionId: sessionId });
+    assert.equal(
+      validateParentSession(store, sessionId, sessionId).ok,
+      false,
+      "self-parent must be refused",
+    );
+    assert.deepEqual(validateParentSession(store, sessionId), {
+      ok: true,
+      parentSessionId: sessionId,
+    });
   }));
 
 // ---------------------------------------------------------------- project scope
 
 test("cross-project resume is refused when the session belongs to another project", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "running", workingDirectory: root });
-    const plan = await planSessionResume(store, sessionId, BUDGET, { cwd: root, requestedProject: "some-other-project" });
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
+    const plan = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+      requestedProject: "some-other-project",
+    });
     assert.equal(plan.ok, false);
     assert.match(plan.reason, /cross-project resume refused/);
   }));
 
 test("a session outside any project binding resolves projectId null rather than guessing", () =>
   withStore(async (store, root) => {
-    const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-slice8-outside-"));
-    const sessionId = createSession(store, { status: "running", workingDirectory: outside });
-    const plan = await planSessionResume(store, sessionId, BUDGET, { cwd: root });
+    const outside = await mkdtemp(
+      path.join(os.tmpdir(), "atlas-slice8-outside-"),
+    );
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: outside,
+    });
+    const plan = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+    });
     assert.equal(plan.pointer.projectId, null);
   }));
 
@@ -168,20 +261,52 @@ test("a session outside any project binding resolves projectId null rather than 
 
 test("resume metadata is bounded: no transcript, no event content, clipped next action", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "running", workingDirectory: root });
-    store.appendEvent(sessionId, "provider_output", "SECRET-TRANSCRIPT-MARKER repeated ".repeat(200));
-    const plan = await planSessionResume(store, sessionId, BUDGET, { cwd: root });
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
+    store.appendEvent(
+      sessionId,
+      "provider_output",
+      "SECRET-TRANSCRIPT-MARKER repeated ".repeat(200),
+    );
+    const plan = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+    });
     const serialized = JSON.stringify(plan);
     assert.doesNotMatch(serialized, /SECRET-TRANSCRIPT-MARKER/);
-    assert.ok(serialized.length < 1_000, `pointer should stay compact, was ${serialized.length}`);
-    assert.deepEqual(Object.keys(plan.pointer).sort(), ["checkpointRef", "nextAction", "parentSessionId", "projectId", "provider", "sessionId", "status", "ticketId", "updatedAt"]);
+    assert.ok(
+      serialized.length < 1_000,
+      `pointer should stay compact, was ${serialized.length}`,
+    );
+    assert.deepEqual(Object.keys(plan.pointer).sort(), [
+      "checkpointRef",
+      "nextAction",
+      "parentSessionId",
+      "projectId",
+      "provider",
+      "sessionId",
+      "status",
+      "ticketId",
+      "updatedAt",
+    ]);
   }));
 
 test("invalid budget blocks resume planning before the store is read", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "running", workingDirectory: root });
-    for (const budget of [undefined, null, { ...BUDGET, maxChars: 0 }, { ...BUDGET, maxBytes: -5 }]) {
-      const plan = await planSessionResume(store, sessionId, budget, { cwd: root });
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
+    for (const budget of [
+      undefined,
+      null,
+      { ...BUDGET, maxChars: 0 },
+      { ...BUDGET, maxBytes: -5 },
+    ]) {
+      const plan = await planSessionResume(store, sessionId, budget, {
+        cwd: root,
+      });
       assert.equal(plan.ok, false);
       assert.match(plan.reason, /invalid-budget/);
     }
@@ -189,8 +314,16 @@ test("invalid budget blocks resume planning before the store is read", () =>
 
 test("a resume plan larger than budget.maxChars is refused rather than trimmed silently", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "running", workingDirectory: root });
-    const plan = await planSessionResume(store, sessionId, { ...BUDGET, maxChars: 1 }, { cwd: root });
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
+    const plan = await planSessionResume(
+      store,
+      sessionId,
+      { ...BUDGET, maxChars: 1 },
+      { cwd: root },
+    );
     assert.equal(plan.ok, false);
     assert.deepEqual(plan.violations, ["max-chars-exceeded"]);
   }));
@@ -199,31 +332,59 @@ test("a resume plan larger than budget.maxChars is refused rather than trimmed s
 
 test("deterministic resume: repeated identical requests return identical plans", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "completed", workingDirectory: root });
+    const sessionId = createSession(store, {
+      status: "completed",
+      workingDirectory: root,
+    });
     const now = Date.now();
-    const first = await planSessionResume(store, sessionId, BUDGET, { cwd: root, now });
-    const second = await planSessionResume(store, sessionId, BUDGET, { cwd: root, now });
+    const first = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+      now,
+    });
+    const second = await planSessionResume(store, sessionId, BUDGET, {
+      cwd: root,
+      now,
+    });
     assert.deepEqual(first, second);
   }));
 
 test("a duplicate resume request creates nothing and changes no session state", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "completed", workingDirectory: root });
+    const sessionId = createSession(store, {
+      status: "completed",
+      workingDirectory: root,
+    });
     const before = store.list().length;
     const beforeRow = store.get(sessionId);
     await planSessionResume(store, sessionId, BUDGET, { cwd: root });
     await planSessionResume(store, sessionId, BUDGET, { cwd: root });
-    assert.equal(store.list().length, before, "resume planning must not create sessions");
+    assert.equal(
+      store.list().length,
+      before,
+      "resume planning must not create sessions",
+    );
     assert.deepEqual(store.get(sessionId), beforeRow);
   }));
 
 test("sequential plans for different sessions do not leak state between calls", () =>
   withStore(async (store, root) => {
-    const running = createSession(store, { status: "running", workingDirectory: root });
-    const failed = createSession(store, { status: "failed", workingDirectory: root });
-    const first = await planSessionResume(store, running, BUDGET, { cwd: root });
-    const second = await planSessionResume(store, failed, BUDGET, { cwd: root });
-    const third = await planSessionResume(store, running, BUDGET, { cwd: root });
+    const running = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
+    const failed = createSession(store, {
+      status: "failed",
+      workingDirectory: root,
+    });
+    const first = await planSessionResume(store, running, BUDGET, {
+      cwd: root,
+    });
+    const second = await planSessionResume(store, failed, BUDGET, {
+      cwd: root,
+    });
+    const third = await planSessionResume(store, running, BUDGET, {
+      cwd: root,
+    });
     assert.equal(first.ok, true);
     assert.equal(second.ok, false);
     assert.equal(third.ok, true);
@@ -233,8 +394,13 @@ test("sequential plans for different sessions do not leak state between calls", 
 // ---------------------------------------------------------------- isolation guarantees
 
 test("session-pointer.ts imports no provider, network, or MCP module and invokes no provider", async () => {
-  const source = await readFile(path.resolve("src/application/sessions/session-pointer.ts"), "utf8");
-  const imports = [...source.matchAll(/^import .*?from "([^"]+)";?$/gm)].map((match) => match[1]);
+  const source = await readFile(
+    path.resolve("src/application/sessions/session-pointer.ts"),
+    "utf8",
+  );
+  const imports = [...source.matchAll(/^import .*?from "([^"]+)";?$/gm)].map(
+    (match) => match[1],
+  );
   const allowed = new Set([
     "node:path",
     "../../infrastructure/persistence/session-store.js",
@@ -242,17 +408,30 @@ test("session-pointer.ts imports no provider, network, or MCP module and invokes
     "../context/context-ladder.js",
     "../context/project-resolution.js",
   ]);
-  for (const specifier of imports) assert.ok(allowed.has(specifier), `unexpected import: ${specifier}`);
-  const codeOnly = source.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.doesNotMatch(codeOnly, /node:https?|node:net\b|child_process|mcp-client|mcp-server|fetch\(|spawn|exec\(/i);
+  for (const specifier of imports)
+    assert.ok(allowed.has(specifier), `unexpected import: ${specifier}`);
+  const codeOnly = source
+    .replace(/\/\/.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.doesNotMatch(
+    codeOnly,
+    /node:https?|node:net\b|child_process|mcp-client|mcp-server|fetch\(|spawn|exec\(/i,
+  );
 });
 
 test("no accidental content persistence: planning writes nothing to the session database", () =>
   withStore(async (store, root) => {
-    const sessionId = createSession(store, { status: "running", workingDirectory: root });
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
     const beforeEvents = store.listEvents(sessionId).length;
     await planSessionResume(store, sessionId, BUDGET, { cwd: root });
-    assert.equal(store.listEvents(sessionId).length, beforeEvents, "resume planning must not append events");
+    assert.equal(
+      store.listEvents(sessionId).length,
+      beforeEvents,
+      "resume planning must not append events",
+    );
   }));
 
 // ---------------------------------------------------------------- language parity
@@ -263,10 +442,18 @@ test("Arabic and English continue-wording both fail closed: neither language eve
     const arabic = classifyIntent("كمل شغل اللوكين");
     assert.equal(english.confidence, "medium");
     assert.equal(arabic.action, english.action);
-    assert.ok(arabic.ambiguityReason && english.ambiguityReason, "both languages must stay ambiguous without an explicit id");
+    assert.ok(
+      arabic.ambiguityReason && english.ambiguityReason,
+      "both languages must stay ambiguous without an explicit id",
+    );
     // Neither classification carries a session identifier, so neither can drive a resume.
     for (const classification of [english, arabic]) {
-      const plan = await planSessionResume(store, classification.identifier, BUDGET, { cwd: root });
+      const plan = await planSessionResume(
+        store,
+        classification.identifier,
+        BUDGET,
+        { cwd: root },
+      );
       assert.equal(plan.ok, false);
     }
   }));

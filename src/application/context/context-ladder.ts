@@ -9,7 +9,11 @@ import type { IntentClassification } from "./intent-router.js";
 // classification (fail-closed). No rung here reads file content — it only validates a
 // budget and, for "exact-record", stats a single bounded, path-checked candidate file to
 // prove size before any later slice is allowed to read it. See T-198 slice 5.
-export type LadderRung = "identity" | "project-metadata" | "ranked-references" | "exact-record";
+export type LadderRung =
+  | "identity"
+  | "project-metadata"
+  | "ranked-references"
+  | "exact-record";
 
 export type ContextBudget = {
   maxFiles: number;
@@ -64,10 +68,16 @@ export function validateBudget(
   if (!budget || typeof budget !== "object")
     return { valid: false, reason: "budget is missing or not an object" };
   const candidate = budget as Partial<ContextBudget>;
-  const fields: (keyof ContextBudget)[] = ["maxFiles", "maxBytes", "maxChars", "maxOperationCost"];
+  const fields: (keyof ContextBudget)[] = [
+    "maxFiles",
+    "maxBytes",
+    "maxChars",
+    "maxOperationCost",
+  ];
   for (const field of fields) {
     const value = candidate[field];
-    if (value === undefined) return { valid: false, reason: `budget.${field} is missing` };
+    if (value === undefined)
+      return { valid: false, reason: `budget.${field} is missing` };
     if (!isBoundedPositiveInteger(value, BUDGET_CEILING[field])) {
       return {
         valid: false,
@@ -111,7 +121,8 @@ export function resolveLadderRung(classification: IntentClassification): {
   if (classification.intent === "ticket-lookup" && classification.identifier) {
     return {
       rung: "exact-record",
-      reason: "ticket-lookup with an explicit, validated identifier resolves to an exact record",
+      reason:
+        "ticket-lookup with an explicit, validated identifier resolves to an exact record",
     };
   }
   if (
@@ -135,11 +146,21 @@ function budgetRejection(
   reason: string,
   violation: BudgetViolation = "invalid-budget",
 ): BoundedReadResult {
-  return { rung, allowed: false, reason, violation, files: [], bytes: 0, truncated: false };
+  return {
+    rung,
+    allowed: false,
+    reason,
+    violation,
+    files: [],
+    bytes: 0,
+    truncated: false,
+  };
 }
 
 function withinCharBudget(
-  result: Omit<BoundedReadResult, "violation" | "allowed" | "reason"> & { reason: string },
+  result: Omit<BoundedReadResult, "violation" | "allowed" | "reason"> & {
+    reason: string;
+  },
   budget: ContextBudget,
   rung: LadderRung,
 ): BoundedReadResult {
@@ -257,7 +278,11 @@ function planProjectMetadata(budget: ContextBudget): BoundedReadResult {
   );
 }
 
-async function planRankedReferences(intent: string, budget: ContextBudget, root: string): Promise<BoundedReadResult> {
+async function planRankedReferences(
+  intent: string,
+  budget: ContextBudget,
+  root: string,
+): Promise<BoundedReadResult> {
   const rung: LadderRung = "ranked-references";
   const cost = READ_RUNG_COST[rung];
   if (cost > budget.maxOperationCost) {
@@ -268,15 +293,23 @@ async function planRankedReferences(intent: string, budget: ContextBudget, root:
     );
   }
   const candidates: string[] = [];
-  if (intent === "memory-lookup" || intent === "work-style-lookup") candidates.push("personal/memory/MEMORY.md");
-  if (intent === "knowledge-lookup") candidates.push("personal/knowledge/KNOWLEDGE.md");
+  if (intent === "memory-lookup" || intent === "work-style-lookup")
+    candidates.push("personal/memory/MEMORY.md");
+  if (intent === "knowledge-lookup")
+    candidates.push("personal/knowledge/KNOWLEDGE.md");
   if (intent === "decision-lookup") {
     const directory = path.join(root, "personal", "knowledge", "decisions");
     try {
-      for (const entry of (await readdir(directory, { withFileTypes: true })).filter((item) => item.isFile() && item.name.endsWith(".md")).sort((a, b) => a.name.localeCompare(b.name))) {
-        candidates.push(path.posix.join("personal/knowledge/decisions", entry.name));
+      for (const entry of (await readdir(directory, { withFileTypes: true }))
+        .filter((item) => item.isFile() && item.name.endsWith(".md"))
+        .sort((a, b) => a.name.localeCompare(b.name))) {
+        candidates.push(
+          path.posix.join("personal/knowledge/decisions", entry.name),
+        );
       }
-    } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
   }
   const files: string[] = [];
   let bytes = 0;
@@ -285,8 +318,11 @@ async function planRankedReferences(intent: string, budget: ContextBudget, root:
     try {
       const size = (await stat(resolveWithin(root, relative))).size;
       if (bytes + size > budget.maxBytes) break;
-      files.push(relative); bytes += size;
-    } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+      files.push(relative);
+      bytes += size;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
   }
   return withinCharBudget(
     {
@@ -294,7 +330,9 @@ async function planRankedReferences(intent: string, budget: ContextBudget, root:
       files,
       bytes,
       truncated: false,
-      reason: files.length ? `selected ${files.length} authoritative '${intent}' reference(s) within budget` : `no authoritative '${intent}' references were available within budget`,
+      reason: files.length
+        ? `selected ${files.length} authoritative '${intent}' reference(s) within budget`
+        : `no authoritative '${intent}' references were available within budget`,
     },
     budget,
     rung,
@@ -312,13 +350,27 @@ export async function planContextRead(
 ): Promise<BoundedReadResult> {
   const { rung, reason } = resolveLadderRung(classification);
   const validation = validateBudget(budget);
-  if (!validation.valid) return budgetRejection(rung, validation.reason, "invalid-budget");
+  if (!validation.valid)
+    return budgetRejection(rung, validation.reason, "invalid-budget");
   const bounded = budget as ContextBudget;
 
   if (rung === "identity")
-    return { rung, allowed: true, reason, violation: null, files: [], bytes: 0, truncated: false };
+    return {
+      rung,
+      allowed: true,
+      reason,
+      violation: null,
+      files: [],
+      bytes: 0,
+      truncated: false,
+    };
   if (rung === "exact-record")
-    return planExactTicketRecord(classification.identifier ?? "", bounded, root, projectId);
+    return planExactTicketRecord(
+      classification.identifier ?? "",
+      bounded,
+      root,
+      projectId,
+    );
   if (rung === "project-metadata") return planProjectMetadata(bounded);
   return planRankedReferences(classification.intent, bounded, root);
 }

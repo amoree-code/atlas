@@ -16,9 +16,28 @@ export type IntentCategory =
   | "execute"
   | "unknown";
 
-export type EntityType = "ticket" | "memory" | "knowledge" | "work-style" | "project" | "decision" | "execution" | "unknown";
+export type EntityType =
+  | "ticket"
+  | "memory"
+  | "knowledge"
+  | "work-style"
+  | "project"
+  | "decision"
+  | "execution"
+  | "unknown";
 
-export type IntentAction = "get" | "list" | "search" | "lookup" | "create" | "update" | "complete" | "continue" | "remember" | "execute" | "unknown";
+export type IntentAction =
+  | "get"
+  | "list"
+  | "search"
+  | "lookup"
+  | "create"
+  | "update"
+  | "complete"
+  | "continue"
+  | "remember"
+  | "execute"
+  | "unknown";
 
 export type IntentConfidence = "high" | "medium" | "low";
 
@@ -35,7 +54,8 @@ const TICKET_ID_PATTERN = /\bT-(\d+)\b/gi;
 
 function extractTicketIds(text: string): string[] {
   const ids = new Set<string>();
-  for (const match of text.matchAll(TICKET_ID_PATTERN)) ids.add(`T-${match[1]}`);
+  for (const match of text.matchAll(TICKET_ID_PATTERN))
+    ids.add(`T-${match[1]}`);
   return [...ids];
 }
 
@@ -43,11 +63,19 @@ function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-const TICKET_COMPLETE = [/\b(complete|close|finish|done|archive)\b/i, /خلص|انهي|سكر|أرشف/];
+const TICKET_COMPLETE = [
+  /\b(complete|close|finish|done|archive)\b/i,
+  /خلص|انهي|سكر|أرشف/,
+];
 const TICKET_UPDATE = [/\b(update|edit|change)\b/i, /عدل|حدث|غير/];
 const TICKET_CONTINUE = [/\b(continue|resume)\b/i, /كمل|استمر/];
-const TICKET_CREATE = [/\b(create|new|open)\b[^.\n]*\bticket\b/i, /\bticket\b[^.\n]*\b(create|new|open)\b/i, /تكت جديدة|انشئ تكت|سوي تكت|افتح تكت/];
-const TICKET_CREATE_NAME = /\b(?:called|named|title(?:d)?)(?:\s+is)?\s+["']?(.+?)["']?(?:[.!?]|$)/i;
+const TICKET_CREATE = [
+  /\b(create|new|open)\b[^.\n]*\bticket\b/i,
+  /\bticket\b[^.\n]*\b(create|new|open)\b/i,
+  /تكت جديدة|انشئ تكت|سوي تكت|افتح تكت/,
+];
+const TICKET_CREATE_NAME =
+  /\b(?:called|named|title(?:d)?)(?:\s+is)?\s+["']?(.+?)["']?(?:[.!?]|$)/i;
 
 const SAVE_VERB = [/\bsave\b/i, /احفظ|خزن|سجل/];
 const REMEMBER_VERB = [/\b(remember|note|capture)\b/i, /تذكر/];
@@ -75,7 +103,8 @@ const PROJECT_CREATE = [
   /\bnew project\b/i,
   /مشروع جديد|سوي مشروع|انشئ مشروع/,
 ];
-const PROJECT_CREATE_NAME = /\b(?:called|named)\s+["']?([\w .-]+?)["']?(?:[.!?]|$)/i;
+const PROJECT_CREATE_NAME =
+  /\b(?:called|named)\s+["']?([\w .-]+?)["']?(?:[.!?]|$)/i;
 
 const PROJECT_DETECT = [
   /\b(what|which) project\b/i,
@@ -108,7 +137,14 @@ const EXECUTE = [
 ];
 
 function safeResult(ambiguityReason: string): IntentClassification {
-  return { intent: "unknown", entityType: "unknown", identifier: null, action: "unknown", confidence: "low", ambiguityReason };
+  return {
+    intent: "unknown",
+    entityType: "unknown",
+    identifier: null,
+    action: "unknown",
+    confidence: "low",
+    ambiguityReason,
+  };
 }
 
 export function classifyIntent(rawText: string): IntentClassification {
@@ -117,14 +153,26 @@ export function classifyIntent(rawText: string): IntentClassification {
 
   const ticketIds = extractTicketIds(text);
   if (ticketIds.length > 1) {
-    return safeResult(`multiple ticket identifiers found (${ticketIds.join(", ")}); specify exactly one`);
+    return safeResult(
+      `multiple ticket identifiers found (${ticketIds.join(", ")}); specify exactly one`,
+    );
   }
   if (ticketIds.length === 1) {
-    const action: IntentAction = matchesAny(text, TICKET_COMPLETE) ? "complete"
-      : matchesAny(text, TICKET_UPDATE) ? "update"
-      : matchesAny(text, TICKET_CONTINUE) ? "continue"
-      : "get";
-    return { intent: "ticket-lookup", entityType: "ticket", identifier: ticketIds[0], action, confidence: "high", ambiguityReason: null };
+    const action: IntentAction = matchesAny(text, TICKET_COMPLETE)
+      ? "complete"
+      : matchesAny(text, TICKET_UPDATE)
+        ? "update"
+        : matchesAny(text, TICKET_CONTINUE)
+          ? "continue"
+          : "get";
+    return {
+      intent: "ticket-lookup",
+      entityType: "ticket",
+      identifier: ticketIds[0],
+      action,
+      confidence: "high",
+      ambiguityReason: null,
+    };
   }
 
   if (matchesAny(text, TICKET_CREATE)) {
@@ -136,45 +184,107 @@ export function classifyIntent(rawText: string): IntentClassification {
       identifier,
       action: "create",
       confidence: identifier ? "high" : "medium",
-      ambiguityReason: identifier ? null : "no ticket title captured ('called <title>' / 'named <title>')",
+      ambiguityReason: identifier
+        ? null
+        : "no ticket title captured ('called <title>' / 'named <title>')",
     };
   }
 
   const hasSaveVerb = matchesAny(text, SAVE_VERB);
   const hasRememberVerb = matchesAny(text, REMEMBER_VERB);
-  const hasTarget = matchesAny(text, REMEMBER_TARGET) || matchesAny(text, AS_DECISION) || matchesAny(text, AS_KNOWLEDGE);
+  const hasTarget =
+    matchesAny(text, REMEMBER_TARGET) ||
+    matchesAny(text, AS_DECISION) ||
+    matchesAny(text, AS_KNOWLEDGE);
   // "remember"/"note" only count as a save command when they have an explicit target
   // ("this", "that", "as a decision", ...); bare "remember" (e.g. "what do you remember
   // about X") is a recall question, handled below by MEMORY_LOOKUP instead.
   if (hasSaveVerb || (hasRememberVerb && hasTarget)) {
-    const entityType: EntityType = matchesAny(text, AS_DECISION) ? "decision" : matchesAny(text, AS_KNOWLEDGE) ? "knowledge" : "memory";
-    return { intent: "remember", entityType, identifier: null, action: "remember", confidence: hasTarget ? "high" : "medium", ambiguityReason: hasTarget ? null : "no explicit content target ('this'/'that') named for the save" };
+    const entityType: EntityType = matchesAny(text, AS_DECISION)
+      ? "decision"
+      : matchesAny(text, AS_KNOWLEDGE)
+        ? "knowledge"
+        : "memory";
+    return {
+      intent: "remember",
+      entityType,
+      identifier: null,
+      action: "remember",
+      confidence: hasTarget ? "high" : "medium",
+      ambiguityReason: hasTarget
+        ? null
+        : "no explicit content target ('this'/'that') named for the save",
+    };
   }
 
   if (matchesAny(text, DECISION_LOOKUP)) {
-    return { intent: "decision-lookup", entityType: "decision", identifier: null, action: "lookup", confidence: "high", ambiguityReason: null };
+    return {
+      intent: "decision-lookup",
+      entityType: "decision",
+      identifier: null,
+      action: "lookup",
+      confidence: "high",
+      ambiguityReason: null,
+    };
   }
 
   if (matchesAny(text, WORK_STYLE)) {
-    return { intent: "work-style-lookup", entityType: "work-style", identifier: null, action: "lookup", confidence: "high", ambiguityReason: null };
+    return {
+      intent: "work-style-lookup",
+      entityType: "work-style",
+      identifier: null,
+      action: "lookup",
+      confidence: "high",
+      ambiguityReason: null,
+    };
   }
 
   if (matchesAny(text, PROJECT_CREATE)) {
     const nameMatch = PROJECT_CREATE_NAME.exec(text);
     const identifier = nameMatch ? nameMatch[1].trim() : null;
-    return { intent: "project-create", entityType: "project", identifier, action: "create", confidence: identifier ? "high" : "medium", ambiguityReason: identifier ? null : "no project name captured ('called <name>' / 'named <name>')" };
+    return {
+      intent: "project-create",
+      entityType: "project",
+      identifier,
+      action: "create",
+      confidence: identifier ? "high" : "medium",
+      ambiguityReason: identifier
+        ? null
+        : "no project name captured ('called <name>' / 'named <name>')",
+    };
   }
 
   if (matchesAny(text, PROJECT_DETECT)) {
-    return { intent: "project-detect", entityType: "project", identifier: null, action: "lookup", confidence: "high", ambiguityReason: null };
+    return {
+      intent: "project-detect",
+      entityType: "project",
+      identifier: null,
+      action: "lookup",
+      confidence: "high",
+      ambiguityReason: null,
+    };
   }
 
   if (matchesAny(text, KNOWLEDGE_LOOKUP)) {
-    return { intent: "knowledge-lookup", entityType: "knowledge", identifier: null, action: "search", confidence: "high", ambiguityReason: null };
+    return {
+      intent: "knowledge-lookup",
+      entityType: "knowledge",
+      identifier: null,
+      action: "search",
+      confidence: "high",
+      ambiguityReason: null,
+    };
   }
 
   if (matchesAny(text, MEMORY_LOOKUP)) {
-    return { intent: "memory-lookup", entityType: "memory", identifier: null, action: "search", confidence: "high", ambiguityReason: null };
+    return {
+      intent: "memory-lookup",
+      entityType: "memory",
+      identifier: null,
+      action: "search",
+      confidence: "high",
+      ambiguityReason: null,
+    };
   }
 
   // "continue"/"resume" is checked before the execute verbs on purpose: in Arabic "شغل" is
@@ -188,13 +298,23 @@ export function classifyIntent(rawText: string): IntentClassification {
       identifier: null,
       action: "continue",
       confidence: "medium",
-      ambiguityReason: "'continue'/'resume' matched without an explicit ticket id or resolved project; could be a ticket or a project — confirm before retrieval",
+      ambiguityReason:
+        "'continue'/'resume' matched without an explicit ticket id or resolved project; could be a ticket or a project — confirm before retrieval",
     };
   }
 
   if (matchesAny(text, EXECUTE)) {
-    return { intent: "execute", entityType: "execution", identifier: null, action: "execute", confidence: "high", ambiguityReason: null };
+    return {
+      intent: "execute",
+      entityType: "execution",
+      identifier: null,
+      action: "execute",
+      confidence: "high",
+      ambiguityReason: null,
+    };
   }
 
-  return safeResult("no recognizable entity, verb, or identifier matched in the request");
+  return safeResult(
+    "no recognizable entity, verb, or identifier matched in the request",
+  );
 }

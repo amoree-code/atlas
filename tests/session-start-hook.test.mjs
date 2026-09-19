@@ -15,9 +15,13 @@ test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutp
   const result = await claudeSessionStartHook({ cwd: outside });
   assert.equal(result.hookSpecificOutput.hookEventName, "SessionStart");
   assert.ok(
-    Buffer.byteLength(result.hookSpecificOutput.additionalContext) <= ATLAS_BOOTSTRAP_MAX_BYTES,
+    Buffer.byteLength(result.hookSpecificOutput.additionalContext) <=
+      ATLAS_BOOTSTRAP_MAX_BYTES,
   );
-  assert.match(result.hookSpecificOutput.additionalContext, /^atlas=1 project=/);
+  assert.match(
+    result.hookSpecificOutput.additionalContext,
+    /^atlas=1 project=/,
+  );
 });
 
 test("claudeSessionStartHook reports unbound for a cwd with no Atlas binding, not a guess", async () => {
@@ -27,9 +31,13 @@ test("claudeSessionStartHook reports unbound for a cwd with no Atlas binding, no
   process.env.ATLAS_ROOT = atlasRoot;
   try {
     const result = await claudeSessionStartHook({ cwd: outside });
-    assert.match(result.hookSpecificOutput.additionalContext, /project=unbound/);
+    assert.match(
+      result.hookSpecificOutput.additionalContext,
+      /project=unbound/,
+    );
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
   }
 });
 
@@ -48,7 +56,9 @@ test("atlas hook session-start CLI: bounded stdout JSON, run from a cwd outside 
   assert.equal(result.status, 0, result.stderr);
   const parsed = JSON.parse(result.stdout.trim());
   assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart");
-  assert.ok(Buffer.byteLength(parsed.hookSpecificOutput.additionalContext) <= 256);
+  assert.ok(
+    Buffer.byteLength(parsed.hookSpecificOutput.additionalContext) <= 256,
+  );
   assert.doesNotMatch(
     parsed.hookSpecificOutput.additionalContext,
     /MEMORY|KNOWLEDGE|## Atlas resource/,
@@ -67,7 +77,9 @@ test("atlas hook session-start CLI works with no stdin payload at all (falls bac
 });
 
 test("readBoundedStdin rejects a payload larger than its bound instead of buffering it unbounded", async () => {
-  const { readBoundedStdin } = await import("../dist/application/hooks/session-start-hook.js");
+  const { readBoundedStdin } = await import(
+    "../dist/application/hooks/session-start-hook.js"
+  );
   const { Readable } = await import("node:stream");
   const oversized = Readable.from([Buffer.alloc(200, "x")]);
   oversized.isTTY = false;
@@ -83,9 +95,19 @@ test("claudeNativeHookStatus reports not-installed/not-registered honestly when 
 
 test("claudeNativeHookStatus reports installed-but-not-registered when the script exists but settings.json does not reference it", async () => {
   const fakeHome = await mkdtemp(path.join(os.tmpdir(), "atlas-fake-home-"));
-  await mkdir(path.join(fakeHome, "atlas", "system", "integrations", "claude-code", "hooks"), {
-    recursive: true,
-  });
+  await mkdir(
+    path.join(
+      fakeHome,
+      "atlas",
+      "system",
+      "integrations",
+      "claude-code",
+      "hooks",
+    ),
+    {
+      recursive: true,
+    },
+  );
   await writeFile(
     path.join(
       fakeHome,
@@ -110,9 +132,19 @@ test("claudeNativeHookStatus reports installed-but-not-registered when the scrip
 
 test("claudeNativeHookStatus reports registered only when settings.json actually references the script", async () => {
   const fakeHome = await mkdtemp(path.join(os.tmpdir(), "atlas-fake-home-"));
-  await mkdir(path.join(fakeHome, "atlas", "system", "integrations", "claude-code", "hooks"), {
-    recursive: true,
-  });
+  await mkdir(
+    path.join(
+      fakeHome,
+      "atlas",
+      "system",
+      "integrations",
+      "claude-code",
+      "hooks",
+    ),
+    {
+      recursive: true,
+    },
+  );
   const scriptPath = path.join(
     fakeHome,
     "atlas",
@@ -127,7 +159,9 @@ test("claudeNativeHookStatus reports registered only when settings.json actually
   await writeFile(
     path.join(fakeHome, ".claude", "settings.json"),
     JSON.stringify({
-      hooks: { SessionStart: [{ hooks: [{ type: "command", command: scriptPath }] }] },
+      hooks: {
+        SessionStart: [{ hooks: [{ type: "command", command: scriptPath }] }],
+      },
     }),
   );
   const status = await claudeNativeHookStatus(fakeHome);

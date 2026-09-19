@@ -6,7 +6,10 @@ import { runHeadless } from "../dist/infrastructure/process/cli-process.js";
 test("streams structured and plain headless output", async () => {
   const result = await runHeadless({
     command: process.execPath,
-    args: ["-e", "console.log(JSON.stringify({type:'delta',text:'ok'})); console.log('done')"],
+    args: [
+      "-e",
+      "console.log(JSON.stringify({type:'delta',text:'ok'})); console.log('done')",
+    ],
     cwd: process.cwd(),
   });
 

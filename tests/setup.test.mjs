@@ -8,16 +8,33 @@ import { enginePath } from "../dist/paths.js";
 
 function platformStartupFile(home) {
   if (process.platform === "darwin") {
-    return path.join(home, "Library", "LaunchAgents", "com.atlas.runtime.plist");
+    return path.join(
+      home,
+      "Library",
+      "LaunchAgents",
+      "com.atlas.runtime.plist",
+    );
   }
   if (process.platform === "linux") {
     return path.join(home, ".config", "systemd", "user", "atlas.service");
   }
-  return path.join(home, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "atlas.cmd");
+  return path.join(
+    home,
+    "AppData",
+    "Roaming",
+    "Microsoft",
+    "Windows",
+    "Start Menu",
+    "Programs",
+    "Startup",
+    "atlas.cmd",
+  );
 }
 
 test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, never the engine tree", async () => {
-  const privateRoot = await mkdtemp(path.join(os.tmpdir(), "atlas-setup-root-"));
+  const privateRoot = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-setup-root-"),
+  );
   const fakeHome = await mkdtemp(path.join(os.tmpdir(), "atlas-setup-home-"));
 
   const originalAtlasRoot = process.env.ATLAS_ROOT;
@@ -25,31 +42,58 @@ test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, nev
   const originalAppData = process.env.APPDATA;
   process.env.ATLAS_ROOT = privateRoot;
   process.env.HOME = fakeHome;
-  if (process.platform === "win32") process.env.APPDATA = path.join(fakeHome, "AppData", "Roaming");
+  if (process.platform === "win32")
+    process.env.APPDATA = path.join(fakeHome, "AppData", "Roaming");
 
   try {
     await setup();
 
     for (const directory of ["personal/memory"]) {
       const info = await stat(path.join(privateRoot, directory));
-      assert.ok(info.isDirectory(), `expected ${directory} under the private root`);
+      assert.ok(
+        info.isDirectory(),
+        `expected ${directory} under the private root`,
+      );
     }
     await stat(path.join(privateRoot, "personal", "memory", "MEMORY.md"));
     await stat(path.join(privateRoot, "personal", "knowledge", "KNOWLEDGE.md"));
-    for (const directory of ["system/profiles", "system/sessions", "system/config/startup", "system/control-plane", "system/integrations", "system/archive"]) {
+    for (const directory of [
+      "system/profiles",
+      "system/sessions",
+      "system/config/startup",
+      "system/control-plane",
+      "system/integrations",
+      "system/archive",
+    ]) {
       const info = await stat(path.join(privateRoot, directory));
-      assert.ok(info.isDirectory(), `expected ${directory} under the private root`);
+      assert.ok(
+        info.isDirectory(),
+        `expected ${directory} under the private root`,
+      );
     }
     await stat(path.join(privateRoot, "system", "profiles", "default.json"));
-    await assert.rejects(stat(path.join(privateRoot, "system", "profiles", "default", "profile.json")));
+    await assert.rejects(
+      stat(
+        path.join(privateRoot, "system", "profiles", "default", "profile.json"),
+      ),
+    );
 
     const startupFile = platformStartupFile(fakeHome);
     const contents = await readFile(startupFile, "utf8");
-    assert.ok(contents.includes(enginePath("dist", "main.js")), "startup entry should point at the engine executable");
-    assert.ok(contents.includes(privateRoot), "startup entry should use the private root as its working directory");
+    assert.ok(
+      contents.includes(enginePath("dist", "main.js")),
+      "startup entry should point at the engine executable",
+    );
+    assert.ok(
+      contents.includes(privateRoot),
+      "startup entry should use the private root as its working directory",
+    );
   } finally {
-    if (originalAtlasRoot === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = originalAtlasRoot;
-    if (originalHome === undefined) delete process.env.HOME; else process.env.HOME = originalHome;
-    if (originalAppData === undefined) delete process.env.APPDATA; else process.env.APPDATA = originalAppData;
+    if (originalAtlasRoot === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = originalAtlasRoot;
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    if (originalAppData === undefined) delete process.env.APPDATA;
+    else process.env.APPDATA = originalAppData;
   }
 });

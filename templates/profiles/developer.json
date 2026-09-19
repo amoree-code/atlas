@@ -4,7 +4,13 @@
   "version": "1.0.0",
   "provider": "claude",
   "model": "sonnet",
-  "clients": { "claude": { "enabled": true, "model": "sonnet" }, "codex": { "enabled": true }, "gemini": { "enabled": true }, "antigravity": { "enabled": true }, "hermes": { "enabled": true } },
+  "clients": {
+    "claude": { "enabled": true, "model": "sonnet" },
+    "codex": { "enabled": true },
+    "gemini": { "enabled": true },
+    "antigravity": { "enabled": true },
+    "hermes": { "enabled": true }
+  },
   "defaultClient": "claude",
   "role": "developer",
   "skills": [],

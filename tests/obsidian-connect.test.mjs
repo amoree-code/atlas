@@ -6,9 +6,19 @@ import test from "node:test";
 import { connectObsidianVault } from "../dist/application/obsidian/vault-discovery.js";
 
 test("connects an Obsidian vault with read-only default", async () => {
-  const vaultPath = await mkdtemp(path.join(os.tmpdir(), "atlas-obsidian-connect-"));
-  const atlasRoot = await mkdtemp(path.join(os.tmpdir(), "atlas-obsidian-connect-state-"));
-  const configFile = path.join(atlasRoot, "system", "integrations", "obsidian", "connection.json");
+  const vaultPath = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-obsidian-connect-"),
+  );
+  const atlasRoot = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-obsidian-connect-state-"),
+  );
+  const configFile = path.join(
+    atlasRoot,
+    "system",
+    "integrations",
+    "obsidian",
+    "connection.json",
+  );
   await mkdir(path.join(vaultPath, ".obsidian"));
 
   const result = await connectObsidianVault(vaultPath, "read-only", configFile);

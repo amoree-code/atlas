@@ -22,8 +22,9 @@ boundary and returns a content hash.
 
 ## Layers
 
-- **Interfaces** — `src/main.ts` (command dispatch: `setup`, `service`, `run`, `session`, `capture`)
-  and `src/interfaces/cli/setup-command.ts` (workspace bootstrap).
+- **Interfaces** — `src/main.ts` performs top-level dispatch, while focused handlers and the
+  canonical help catalog live under `src/interfaces/cli/`. Run `atlas --help` for the complete
+  current command surface.
 - **Application** — `src/application/runs/run-agent.ts` (`runAgent` / `resumeAgent`, the orchestration
   entry points) and `src/infrastructure/process/service.ts` (long-running process for startup integration).
 - **Domain** — `src/domain/profiles/`, `src/domain/sessions/`, `src/domain/context/`:
@@ -36,7 +37,7 @@ boundary and returns a content hash.
 flowchart TB
     subgraph Interfaces
         Main["src/main.ts (CLI dispatch)"]
-        Setup["interfaces/cli/setup-command.ts"]
+        Commands["interfaces/cli/*-command.ts"]
     end
 
     subgraph Application
@@ -57,7 +58,7 @@ flowchart TB
     end
 
     Main --> AgentRun
-    Main --> Setup
+    Main --> Commands
     Main --> Service
     AgentRun --> Profiles
     AgentRun --> Sessions
@@ -71,7 +72,7 @@ flowchart TB
         AtlasState["private roots (config, profiles, sessions,\ncontrol-plane, integrations, archive)"]
     end
 
-    Setup -.creates.-> PrivateBoundary
+    Commands -.creates.-> PrivateBoundary
     Store -.reads/writes.-> AtlasState
     Profiles -.reads.-> AtlasState
 ```

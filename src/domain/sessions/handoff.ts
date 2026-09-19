@@ -17,8 +17,8 @@ export const handoffSchema = z.object({
   verification: z.array(z.string()).default([]),
   notProven: z.array(z.string()).default([]),
   blocked: z.array(z.string()).default([]),
-  permissions: z.record(z.unknown()).default({}),
-  contextManifest: z.record(z.unknown()).default({}),
+  permissions: z.record(z.string(), z.unknown()).default({}),
+  contextManifest: z.record(z.string(), z.unknown()).default({}),
   nextAction: z.string().default(""),
   sourceSummaryPath: z.string().nullable().default(null),
   content: z.string().max(16_000).default(""),
@@ -35,23 +35,45 @@ export function validateHandoff(input: unknown): Handoff {
 
 export function compactHandoff(handoff: Handoff, maxBytes = 8_000): string {
   const value = {
-    handoffId: handoff.handoffId, ticketId: handoff.ticketId, title: handoff.title, objective: handoff.objective,
-    state: handoff.state, profileId: handoff.profileId, provider: handoff.provider, commit: handoff.commit,
-    decisions: handoff.decisions, changedFiles: handoff.changedFiles, verification: handoff.verification,
-    notProven: handoff.notProven, blocked: handoff.blocked, permissions: handoff.permissions,
-    contextManifest: handoff.contextManifest, nextAction: handoff.nextAction, sourceSummaryPath: handoff.sourceSummaryPath,
+    handoffId: handoff.handoffId,
+    ticketId: handoff.ticketId,
+    title: handoff.title,
+    objective: handoff.objective,
+    state: handoff.state,
+    profileId: handoff.profileId,
+    provider: handoff.provider,
+    commit: handoff.commit,
+    decisions: handoff.decisions,
+    changedFiles: handoff.changedFiles,
+    verification: handoff.verification,
+    notProven: handoff.notProven,
+    blocked: handoff.blocked,
+    permissions: handoff.permissions,
+    contextManifest: handoff.contextManifest,
+    nextAction: handoff.nextAction,
+    sourceSummaryPath: handoff.sourceSummaryPath,
   };
   const serialize = (candidate: typeof value) => JSON.stringify(candidate);
   let serialized = serialize(value);
   if (Buffer.byteLength(serialized) <= maxBytes) return serialized;
   const compact = {
     ...value,
-    decisions: value.decisions.slice(0, 8), changedFiles: value.changedFiles.slice(0, 24),
-    verification: value.verification.slice(0, 8), notProven: value.notProven.slice(0, 8),
-    blocked: value.blocked.slice(0, 8), permissions: {}, contextManifest: {},
+    decisions: value.decisions.slice(0, 8),
+    changedFiles: value.changedFiles.slice(0, 24),
+    verification: value.verification.slice(0, 8),
+    notProven: value.notProven.slice(0, 8),
+    blocked: value.blocked.slice(0, 8),
+    permissions: {},
+    contextManifest: {},
   };
   serialized = serialize(compact);
   if (Buffer.byteLength(serialized) <= maxBytes) return serialized;
-  return JSON.stringify({ handoffId: handoff.handoffId, ticketId: handoff.ticketId, title: handoff.title,
-    state: handoff.state, nextAction: handoff.nextAction, truncated: true } as Record<string, unknown>);
+  return JSON.stringify({
+    handoffId: handoff.handoffId,
+    ticketId: handoff.ticketId,
+    title: handoff.title,
+    state: handoff.state,
+    nextAction: handoff.nextAction,
+    truncated: true,
+  } as Record<string, unknown>);
 }

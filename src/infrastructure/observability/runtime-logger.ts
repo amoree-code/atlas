@@ -12,7 +12,7 @@ const secretPatterns = [
   /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |OPENSSH |EC )?PRIVATE KEY-----/g,
 ];
 const homePath = os.homedir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const privatePathPattern = new RegExp(`${homePath}(?:[/\\\\][^\\s/'\"]+)*`, "g");
+const privatePathPattern = new RegExp(`${homePath}(?:[/\\\\][^\\s/'"]+)*`, "g");
 
 export type RuntimeLog = {
   timestamp: string;
@@ -26,12 +26,23 @@ export type RuntimeLog = {
 
 export function redactRuntimeText(value: string): string {
   let safe = value;
-  for (const pattern of secretPatterns) safe = safe.replace(pattern, "[REDACTED]");
-  return safe.replace(privatePathPattern, "[PRIVATE_PATH]").slice(0, MAX_PAYLOAD);
+  for (const pattern of secretPatterns)
+    safe = safe.replace(pattern, "[REDACTED]");
+  return safe
+    .replace(privatePathPattern, "[PRIVATE_PATH]")
+    .slice(0, MAX_PAYLOAD);
 }
 
 export async function appendRuntimeLog(log: RuntimeLog): Promise<void> {
-  const safe = { ...log, payload: log.payload === undefined ? undefined : redactRuntimeText(log.payload) };
+  const safe = {
+    ...log,
+    payload:
+      log.payload === undefined ? undefined : redactRuntimeText(log.payload),
+  };
   await mkdir(atlasPath("system", "runtime", "logs"), { recursive: true });
-  await appendFile(path.join(atlasPath("system", "runtime", "logs"), "runtime.jsonl"), `${JSON.stringify(safe)}\n`, "utf8");
+  await appendFile(
+    path.join(atlasPath("system", "runtime", "logs"), "runtime.jsonl"),
+    `${JSON.stringify(safe)}\n`,
+    "utf8",
+  );
 }

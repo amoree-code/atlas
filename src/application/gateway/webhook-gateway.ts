@@ -1,12 +1,12 @@
+import { timingSafeEqual } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
-} from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
-import { runAgent, type ProviderExecutor } from '../runs/run-agent.js';
-import { actionFingerprint } from '../../domain/mcp/mcp-contract.js';
-import { loadProfile } from '../../infrastructure/filesystem/profile-loader.js';
+} from "node:http";
+import { actionFingerprint } from "../../domain/mcp/mcp-contract.js";
+import { loadProfile } from "../../infrastructure/filesystem/profile-loader.js";
+import { type ProviderExecutor, runAgent } from "../runs/run-agent.js";
 
 export type GatewayRequest = {
   profile: string;
@@ -29,14 +29,17 @@ function sameSecret(expected: string, actual: string | undefined): boolean {
   if (actual === undefined) return false;
   const expectedBytes = Buffer.from(expected);
   const actualBytes = Buffer.from(actual);
-  return expectedBytes.length === actualBytes.length && timingSafeEqual(expectedBytes, actualBytes);
+  return (
+    expectedBytes.length === actualBytes.length &&
+    timingSafeEqual(expectedBytes, actualBytes)
+  );
 }
 
 export const telegramAdapter: GatewayAdapter = {
-  id: 'telegram',
+  id: "telegram",
   normalize(input: unknown): GatewayMessage {
-    if (!input || typeof input !== 'object')
-      throw new Error('Invalid Telegram payload');
+    if (!input || typeof input !== "object")
+      throw new Error("Invalid Telegram payload");
     const message = (
       input as {
         message?: {
@@ -49,19 +52,19 @@ export const telegramAdapter: GatewayAdapter = {
     if (
       !message?.message_id ||
       !message.chat?.id ||
-      typeof message.text !== 'string' ||
+      typeof message.text !== "string" ||
       !message.text.trim()
     )
-      throw new Error('Invalid Telegram message');
-    const [profile = 'default', ...prompt] = message.text
+      throw new Error("Invalid Telegram message");
+    const [profile = "default", ...prompt] = message.text
       .trim()
-      .replace(/^\/run\s+/i, '')
+      .replace(/^\/run\s+/i, "")
       .split(/\s+/);
     return {
-      platform: 'telegram',
+      platform: "telegram",
       externalId: `${message.chat.id}:${message.message_id}`,
       profile,
-      prompt: prompt.join(' ') || profile,
+      prompt: prompt.join(" ") || profile,
       approved: false,
     };
   },
@@ -77,36 +80,63 @@ export function createGatewayHandler(
     input: unknown,
     token: string | undefined,
   ): Promise<{ status: number; body: string }> => {
-    const credentials = expectedToken.split(',').map((entry) => {
-      const separator = entry.indexOf('=');
-      if (separator < 1) return { id: 'default', token: entry, profiles: undefined };
+    const credentials = expectedToken.split(",").map((entry) => {
+      const separator = entry.indexOf("=");
+      if (separator < 1)
+        return { id: "default", token: entry, profiles: undefined };
       const label = entry.slice(0, separator);
-      const scopeIndex = label.indexOf('@');
-      return { id: scopeIndex < 1 ? label : label.slice(0, scopeIndex), token: entry.slice(separator + 1), profiles: scopeIndex < 1 ? undefined : new Set(label.slice(scopeIndex + 1).split('|').filter(Boolean)) };
+      const scopeIndex = label.indexOf("@");
+      return {
+        id: scopeIndex < 1 ? label : label.slice(0, scopeIndex),
+        token: entry.slice(separator + 1),
+        profiles:
+          scopeIndex < 1
+            ? undefined
+            : new Set(
+                label
+                  .slice(scopeIndex + 1)
+                  .split("|")
+                  .filter(Boolean),
+              ),
+      };
     });
-    const identity = credentials.find((credential) => sameSecret(credential.token, token) && (!credential.profiles || (typeof input === 'object' && input !== null && credential.profiles.has((input as GatewayRequest).profile))))?.id;
+    const identity = credentials.find(
+      (credential) =>
+        sameSecret(credential.token, token) &&
+        (!credential.profiles ||
+          (typeof input === "object" &&
+            input !== null &&
+            credential.profiles.has((input as GatewayRequest).profile))),
+    )?.id;
     if (!expectedToken || !identity)
-      return { status: 401, body: 'Unauthorized' };
+      return { status: 401, body: "Unauthorized" };
     const now = Date.now();
     while (requestTimes[0] !== undefined && requestTimes[0] < now - 60_000)
       requestTimes.shift();
     if (requestTimes.length >= 10)
-      return { status: 429, body: 'Rate limit exceeded' };
+      return { status: 429, body: "Rate limit exceeded" };
     requestTimes.push(now);
     if (
       !input ||
-      typeof input !== 'object' ||
-      typeof (input as GatewayRequest).profile !== 'string' ||
-      typeof (input as GatewayRequest).prompt !== 'string' ||
+      typeof input !== "object" ||
+      typeof (input as GatewayRequest).profile !== "string" ||
+      typeof (input as GatewayRequest).prompt !== "string" ||
       (input as GatewayRequest).approval?.approved !== true ||
-      typeof (input as GatewayRequest).approval?.fingerprint !== 'string' ||
-      (input as GatewayRequest).approval.fingerprint !== actionFingerprint('gateway.run', { profile: (input as GatewayRequest).profile, prompt: (input as GatewayRequest).prompt })
+      typeof (input as GatewayRequest).approval?.fingerprint !== "string" ||
+      (input as GatewayRequest).approval.fingerprint !==
+        actionFingerprint("gateway.run", {
+          profile: (input as GatewayRequest).profile,
+          prompt: (input as GatewayRequest).prompt,
+        })
     )
-      return { status: 400, body: 'Invalid or unapproved request' };
+      return { status: 400, body: "Invalid or unapproved request" };
     if ((input as GatewayRequest).prompt.length > 8_000)
-      return { status: 413, body: 'Prompt too large' };
-    try { await loadProfile((input as GatewayRequest).profile); }
-    catch { return { status: 400, body: 'Invalid profile' }; }
+      return { status: 413, body: "Prompt too large" };
+    try {
+      await loadProfile((input as GatewayRequest).profile);
+    } catch {
+      return { status: 400, body: "Invalid profile" };
+    }
     const session = await runAgent(
       {
         profileName: (input as GatewayRequest).profile,
@@ -144,29 +174,29 @@ export function createWebhookGateway(
   const handleRequest = createGatewayHandler(expectedToken, cwd, execute);
   return createServer(
     async (request: IncomingMessage, response: ServerResponse) => {
-      if (request.method !== 'POST') {
+      if (request.method !== "POST") {
         response.writeHead(405);
-        response.end('Method not allowed');
+        response.end("Method not allowed");
         return;
       }
-      let body = '';
-      request.on('data', (chunk) => {
+      let body = "";
+      request.on("data", (chunk) => {
         body += chunk.toString();
         if (body.length > 16_000) request.destroy();
       });
-      request.on('end', async () => {
+      request.on("end", async () => {
         try {
           const result = await handleRequest(
             JSON.parse(body),
-            request.headers.authorization?.replace(/^Bearer\s+/i, ''),
+            request.headers.authorization?.replace(/^Bearer\s+/i, ""),
           );
           response.writeHead(result.status, {
-            'content-type': 'application/json',
+            "content-type": "application/json",
           });
           response.end(result.body);
-        } catch (error) {
+        } catch (_error) {
           response.writeHead(500);
-          response.end('Gateway request failed');
+          response.end("Gateway request failed");
         }
       });
     },

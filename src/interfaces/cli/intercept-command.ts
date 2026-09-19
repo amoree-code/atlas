@@ -1,17 +1,35 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { finalizeSession } from "../../application/memory/session-closeout.js";
-import { profileIdentity, type Profile } from "../../domain/profiles/profile.js";
-import { validateRunContract } from "../../domain/runs/run-contract.js";
-import { authorizeRun } from "../../application/runs/run-authorization.js";
-import { runInteractive, runPassthrough } from "../../infrastructure/process/interactive-process.js";
-import { findProvider, resolveOriginalExecutable, validateExplicitExecutable } from "../../infrastructure/providers/provider-registry.js";
-import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
-import { bootstrapEnvironment, buildAtlasBootstrap } from "../../application/context/resource-injection.js";
+import {
+  authAdapter,
+  authLogin,
+  authStatus,
+} from "../../application/auth/auth-orchestrator.js";
 import { resolveProject } from "../../application/context/project-resolution.js";
-import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
-import { authAdapter, authLogin, authStatus } from "../../application/auth/auth-orchestrator.js";
+import {
+  bootstrapEnvironment,
+  buildAtlasBootstrap,
+} from "../../application/context/resource-injection.js";
+import { finalizeSession } from "../../application/memory/session-closeout.js";
+import { authorizeRun } from "../../application/runs/run-authorization.js";
+import {
+  type Profile,
+  profileIdentity,
+} from "../../domain/profiles/profile.js";
+import { validateRunContract } from "../../domain/runs/run-contract.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
+import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
+import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
+import {
+  type InteractiveProcessResult,
+  runInteractive,
+  runPassthrough,
+} from "../../infrastructure/process/interactive-process.js";
+import {
+  findProvider,
+  resolveOriginalExecutable,
+  validateExplicitExecutable,
+} from "../../infrastructure/providers/provider-registry.js";
 
 export type InterceptOptions = {
   entryPoint?: "terminal-shim" | "interactive-managed" | "desktop-wrapper";
@@ -22,10 +40,18 @@ export type InterceptOptions = {
   handoffId?: string;
 };
 
-export async function intercept(command: string, args: string[], options: InterceptOptions = {}): Promise<number> {
+export async function intercept(
+  command: string,
+  args: string[],
+  options: InterceptOptions = {},
+): Promise<number> {
   const provider = findProvider(command);
-  const entryPoint = options.entryPoint ?? (options.originalExecutable ? "desktop-wrapper" : "terminal-shim");
-  const controlLevel = options.controlLevel ?? (options.originalExecutable ? "managed-partial" : "observed");
+  const entryPoint =
+    options.entryPoint ??
+    (options.originalExecutable ? "desktop-wrapper" : "terminal-shim");
+  const controlLevel =
+    options.controlLevel ??
+    (options.originalExecutable ? "managed-partial" : "observed");
   const inputCapture = options.originalExecutable ? "none" : "bounded-terminal";
   const sessionId = randomUUID();
   const profile = interceptedProfile(provider.id);
@@ -43,7 +69,11 @@ export async function intercept(command: string, args: string[], options: Interc
     deniedTools: [],
     stopConditions: ["provider-process-exits"],
     approval: { required: false, approved: true },
-    budget: { timeoutMs: 24 * 60 * 60 * 1000, maxAttempts: 1, maxOutputBytes: 64_000 },
+    budget: {
+      timeoutMs: 24 * 60 * 60 * 1000,
+      maxAttempts: 1,
+      maxOutputBytes: 64_000,
+    },
   });
 
   store.create({
@@ -59,47 +89,104 @@ export async function intercept(command: string, args: string[], options: Interc
     workingDirectory,
     resumeData: null,
   });
-  store.appendEvent(sessionId, "session_entry_contract", JSON.stringify(validateSessionEntryContract({
-    entryPoint,
-    controlLevel,
-    inputCapture,
-    contextTransport: options.originalExecutable ? "desktop-passthrough" : bootstrap.manifest.transport,
-    policyEnforcement: "shim-lifecycle-and-provider-owned-policy",
-    promotion: "explicit-review",
-    resume: provider.id === "claude" ? "provider-owned-if-exposed" : "unsupported",
-  })));
-  store.appendEvent(sessionId, "intercept_requested", JSON.stringify({ runId, command: provider.command, args: args.map(redactRuntimeText) }));
-  if (options.handoffId) store.appendEvent(sessionId, "handoff_bound", JSON.stringify({ handoffId: options.handoffId, ticketId: options.ticketId ?? null }));
-  store.appendEvent(sessionId, "project_resolved", JSON.stringify({ workingDirectory, ...projectResolution }));
-  store.appendEvent(sessionId, "atlas_bootstrap", JSON.stringify({
-    provider: provider.id,
-    ...bootstrap.manifest,
-  }));
+  store.appendEvent(
+    sessionId,
+    "session_entry_contract",
+    JSON.stringify(
+      validateSessionEntryContract({
+        entryPoint,
+        controlLevel,
+        inputCapture,
+        contextTransport: options.originalExecutable
+          ? "desktop-passthrough"
+          : bootstrap.manifest.transport,
+        policyEnforcement: "shim-lifecycle-and-provider-owned-policy",
+        promotion: "explicit-review",
+        resume:
+          provider.id === "claude"
+            ? "provider-owned-if-exposed"
+            : "unsupported",
+      }),
+    ),
+  );
+  store.appendEvent(
+    sessionId,
+    "intercept_requested",
+    JSON.stringify({
+      runId,
+      command: provider.command,
+      args: args.map(redactRuntimeText),
+    }),
+  );
+  if (options.handoffId)
+    store.appendEvent(
+      sessionId,
+      "handoff_bound",
+      JSON.stringify({
+        handoffId: options.handoffId,
+        ticketId: options.ticketId ?? null,
+      }),
+    );
+  store.appendEvent(
+    sessionId,
+    "project_resolved",
+    JSON.stringify({ workingDirectory, ...projectResolution }),
+  );
+  store.appendEvent(
+    sessionId,
+    "atlas_bootstrap",
+    JSON.stringify({
+      provider: provider.id,
+      ...bootstrap.manifest,
+    }),
+  );
 
   try {
     store.updateStatus(sessionId, "running");
     authorizeRun(store, contract);
-    const executable = options.originalExecutable ? validateExplicitExecutable(options.originalExecutable) : resolveOriginalExecutable(provider.command);
+    const executable = options.originalExecutable
+      ? validateExplicitExecutable(options.originalExecutable)
+      : resolveOriginalExecutable(provider.command);
     const authState = await authStatus(provider.id);
-    store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: authState }));
+    store.appendEvent(
+      sessionId,
+      "auth_state",
+      JSON.stringify({ provider: provider.id, state: authState }),
+    );
     if (authState === "login_required") {
-      store.appendEvent(sessionId, "auth_login_started", JSON.stringify({ provider: provider.id }));
+      store.appendEvent(
+        sessionId,
+        "auth_login_started",
+        JSON.stringify({ provider: provider.id }),
+      );
       const verifiedState = await authLogin(provider.id);
-      store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: verifiedState }));
+      store.appendEvent(
+        sessionId,
+        "auth_state",
+        JSON.stringify({ provider: provider.id, state: verifiedState }),
+      );
       if (verifiedState !== "authenticated") {
         store.updateStatus(sessionId, "failed");
-        store.appendEvent(sessionId, "evidence", JSON.stringify({
+        store.appendEvent(
           sessionId,
-          type: "auth",
-          source: "atlas-interceptor",
-          result: "blocked_by_client_authentication",
-          criterion: "provider login did not verify successfully",
-        }));
+          "evidence",
+          JSON.stringify({
+            sessionId,
+            type: "auth",
+            source: "atlas-interceptor",
+            result: "blocked_by_client_authentication",
+            criterion: "provider login did not verify successfully",
+          }),
+        );
         await finalizeSession(store, sessionId, { exitCode: 1 });
         return 1;
       }
     }
-    store.appendEvent(sessionId, "provider_resolved", JSON.stringify({ executable, runtime: "direct" }));
+    store.appendEvent(
+      sessionId,
+      "provider_resolved",
+      JSON.stringify({ executable, runtime: "direct" }),
+    );
     const processRequest = {
       command: provider.command,
       args,
@@ -109,15 +196,26 @@ export async function intercept(command: string, args: string[], options: Interc
         ...bootstrapEnvironment(bootstrap),
       },
     };
-    const runProvider = async (signal: AbortSignal) => await (options.originalExecutable ? runPassthrough : runInteractive)({
-      command: executable,
-      args,
-      cwd: workingDirectory,
-      env: processRequest.environment,
-      signal,
-      onData: (data) => store.appendEvent(sessionId, "provider_output", redactRuntimeText(data)),
-      onInput: (data) => store.appendEvent(sessionId, "terminal_input", redactRuntimeText(data)),
-    });
+    const runProvider = async (signal: AbortSignal) =>
+      await (options.originalExecutable ? runPassthrough : runInteractive)({
+        command: executable,
+        args,
+        cwd: workingDirectory,
+        env: processRequest.environment,
+        signal,
+        onData: (data) =>
+          store.appendEvent(
+            sessionId,
+            "provider_output",
+            redactRuntimeText(data),
+          ),
+        onInput: (data) =>
+          store.appendEvent(
+            sessionId,
+            "terminal_input",
+            redactRuntimeText(data),
+          ),
+      });
     const abortController = new AbortController();
     let terminationSignal: NodeJS.Signals | undefined;
     const onTermination = (signal: NodeJS.Signals): void => {
@@ -126,46 +224,101 @@ export async function intercept(command: string, args: string[], options: Interc
     };
     process.once("SIGINT", onTermination);
     process.once("SIGTERM", onTermination);
-    let result;
+    let result: InteractiveProcessResult;
     try {
       result = await runProvider(abortController.signal);
     } finally {
       process.off("SIGINT", onTermination);
       process.off("SIGTERM", onTermination);
     }
-    const exitCode = terminationSignal ? (terminationSignal === "SIGINT" ? 130 : 143) : result.exitCode;
+    const exitCode = terminationSignal
+      ? terminationSignal === "SIGINT"
+        ? 130
+        : 143
+      : result.exitCode;
     let evidence = classifyProviderResult(exitCode, result.output);
-    if (evidence.result === "blocked_by_client_authentication" && authAdapter(provider.id)) {
-      store.appendEvent(sessionId, "auth_recovery_started", JSON.stringify({ provider: provider.id, reason: evidence.criterion }));
+    if (
+      evidence.result === "blocked_by_client_authentication" &&
+      authAdapter(provider.id)
+    ) {
+      store.appendEvent(
+        sessionId,
+        "auth_recovery_started",
+        JSON.stringify({ provider: provider.id, reason: evidence.criterion }),
+      );
       const recoveredState = await authLogin(provider.id);
-      store.appendEvent(sessionId, "auth_state", JSON.stringify({ provider: provider.id, state: recoveredState, phase: "recovery" }));
+      store.appendEvent(
+        sessionId,
+        "auth_state",
+        JSON.stringify({
+          provider: provider.id,
+          state: recoveredState,
+          phase: "recovery",
+        }),
+      );
       if (recoveredState === "authenticated") {
-        store.appendEvent(sessionId, "run_resumed", JSON.stringify({ provider: provider.id, reason: "authentication verified" }));
+        store.appendEvent(
+          sessionId,
+          "run_resumed",
+          JSON.stringify({
+            provider: provider.id,
+            reason: "authentication verified",
+          }),
+        );
         result = await runProvider(new AbortController().signal);
-        if (result.output) store.appendEvent(sessionId, "provider_output", redactRuntimeText(result.output));
+        if (result.output)
+          store.appendEvent(
+            sessionId,
+            "provider_output",
+            redactRuntimeText(result.output),
+          );
         evidence = classifyProviderResult(result.exitCode, result.output);
       }
     }
     const finalExitCode = terminationSignal ? exitCode : result.exitCode;
     const status = finalExitCode === 0 ? "completed" : "failed";
     store.updateStatus(sessionId, status);
-    store.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: finalExitCode, signal: terminationSignal ?? null }));
-    if (evidence.result === "blocked_by_client_authentication") {
-      store.appendEvent(sessionId, "provider_blocked", JSON.stringify({ reason: evidence.criterion }));
-    }
-    store.appendEvent(sessionId, "evidence", JSON.stringify({
+    store.appendEvent(
       sessionId,
-      type: "provider_exit",
-      source: "atlas-interceptor",
-      result: evidence.result,
-      criterion: evidence.criterion,
-    }));
+      "process_exit",
+      JSON.stringify({
+        exitCode: finalExitCode,
+        signal: terminationSignal ?? null,
+      }),
+    );
+    if (evidence.result === "blocked_by_client_authentication") {
+      store.appendEvent(
+        sessionId,
+        "provider_blocked",
+        JSON.stringify({ reason: evidence.criterion }),
+      );
+    }
+    store.appendEvent(
+      sessionId,
+      "evidence",
+      JSON.stringify({
+        sessionId,
+        type: "provider_exit",
+        source: "atlas-interceptor",
+        result: evidence.result,
+        criterion: evidence.criterion,
+      }),
+    );
     store.scanCaptureItems(sessionId);
-    await finalizeSession(store, sessionId, { exitCode: finalExitCode, nextAction: terminationSignal ? `Session ended by ${terminationSignal}.` : undefined });
+    await finalizeSession(store, sessionId, {
+      exitCode: finalExitCode,
+      nextAction: terminationSignal
+        ? `Session ended by ${terminationSignal}.`
+        : undefined,
+    });
     return finalExitCode;
   } catch (error) {
     store.updateStatus(sessionId, "failed");
-    store.appendEvent(sessionId, "error", redactRuntimeText(error instanceof Error ? error.message : String(error)));
+    store.appendEvent(
+      sessionId,
+      "error",
+      redactRuntimeText(error instanceof Error ? error.message : String(error)),
+    );
     await finalizeSession(store, sessionId, { exitCode: 1 });
     throw error;
   } finally {
@@ -173,12 +326,29 @@ export async function intercept(command: string, args: string[], options: Interc
   }
 }
 
-function classifyProviderResult(exitCode: number, output: string): { result: string; criterion: string } {
-  if (exitCode === 0) return { result: "proven", criterion: "intercepted provider process exits successfully" };
-  if (/401\s+Unauthorized|missing bearer|not logged in|sign in to use/i.test(output)) {
-    return { result: "blocked_by_client_authentication", criterion: "provider authentication is required" };
+function classifyProviderResult(
+  exitCode: number,
+  output: string,
+): { result: string; criterion: string } {
+  if (exitCode === 0)
+    return {
+      result: "proven",
+      criterion: "intercepted provider process exits successfully",
+    };
+  if (
+    /401\s+Unauthorized|missing bearer|not logged in|sign in to use/i.test(
+      output,
+    )
+  ) {
+    return {
+      result: "blocked_by_client_authentication",
+      criterion: "provider authentication is required",
+    };
   }
-  return { result: "not_proven", criterion: "intercepted provider process exits successfully" };
+  return {
+    result: "not_proven",
+    criterion: "intercepted provider process exits successfully",
+  };
 }
 
 function interceptedProfile(provider: string): Profile {
@@ -194,7 +364,9 @@ function interceptedProfile(provider: string): Profile {
     allowedCommands: [],
     writePolicy: "none",
     contextSources: [],
-    clients: { [provider]: { enabled: true, capabilities: [], limitations: [] } },
+    clients: {
+      [provider]: { enabled: true, capabilities: [], limitations: [] },
+    },
     defaultClient: provider as Profile["provider"],
     memory: { enabled: true, scope: "profile" },
     verification: { commands: [] },

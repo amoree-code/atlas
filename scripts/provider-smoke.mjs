@@ -14,11 +14,23 @@ const failures = [];
 for (const [command, args] of providers) {
   const result = await new Promise((resolve) => {
     const child = spawn(command, args, { stdio: "ignore" });
-    const timer = setTimeout(() => { child.kill("SIGTERM"); resolve({ code: null, timedOut: true }); }, 10_000);
-    child.once("error", () => { clearTimeout(timer); resolve({ code: null, timedOut: false }); });
-    child.once("close", (code) => { clearTimeout(timer); resolve({ code, timedOut: false }); });
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      resolve({ code: null, timedOut: true });
+    }, 10_000);
+    child.once("error", () => {
+      clearTimeout(timer);
+      resolve({ code: null, timedOut: false });
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      resolve({ code, timedOut: false });
+    });
   });
-  if (result.code !== 0) failures.push(`${command}: ${result.timedOut ? "timed out" : `exit ${result.code ?? "unavailable"}`}`);
+  if (result.code !== 0)
+    failures.push(
+      `${command}: ${result.timedOut ? "timed out" : `exit ${result.code ?? "unavailable"}`}`,
+    );
   else console.log(`${command}: executable smoke passed`);
 }
 
