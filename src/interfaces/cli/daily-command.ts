@@ -41,8 +41,15 @@ async function runObservationGate(): Promise<void> {
       );
       const status =
         answer.trim().toLowerCase() === "y" ? "approved" : "rejected";
-      await reviewObservation(observation.observationId, status);
-      console.log(`→ ${status}`);
+      const reviewed = await reviewObservation(
+        observation.observationId,
+        status,
+      );
+      console.log(
+        reviewed.skillCandidateId
+          ? `→ ${status} (skill candidate: ${reviewed.skillCandidateId})`
+          : `→ ${status}`,
+      );
     }
   } finally {
     prompt.close();
