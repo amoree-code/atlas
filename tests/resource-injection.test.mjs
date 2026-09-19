@@ -3,8 +3,15 @@ import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ATLAS_BOOTSTRAP_MAX_BYTES, bootstrapEnvironment, buildAtlasBootstrap } from "../dist/application/context/resource-injection.js";
-import { bindProject, resolveProject } from "../dist/application/context/project-resolution.js";
+import {
+  bindProject,
+  resolveProject,
+} from "../dist/application/context/project-resolution.js";
+import {
+  ATLAS_BOOTSTRAP_MAX_BYTES,
+  bootstrapEnvironment,
+  buildAtlasBootstrap,
+} from "../dist/application/context/resource-injection.js";
 
 async function withTempAtlasRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-bootstrap-"));
@@ -13,34 +20,57 @@ async function withTempAtlasRoot(fn) {
   try {
     return await fn(root);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
   }
 }
 
 test("bound project bootstrap stays within the 256-byte budget and carries no Atlas file content", () => {
-  const bootstrap = buildAtlasBootstrap({ status: "bound", projectId: "atlas", name: "Atlas", path: "/x", matchedOn: "atlas-root", confidence: "high" });
-  assert.ok(bootstrap.manifest.bytes <= ATLAS_BOOTSTRAP_MAX_BYTES, `${bootstrap.manifest.bytes} exceeds ${ATLAS_BOOTSTRAP_MAX_BYTES}`);
+  const bootstrap = buildAtlasBootstrap({
+    status: "bound",
+    projectId: "atlas",
+    name: "Atlas",
+    path: "/x",
+    matchedOn: "atlas-root",
+    confidence: "high",
+  });
+  assert.ok(
+    bootstrap.manifest.bytes <= ATLAS_BOOTSTRAP_MAX_BYTES,
+    `${bootstrap.manifest.bytes} exceeds ${ATLAS_BOOTSTRAP_MAX_BYTES}`,
+  );
   assert.equal(bootstrap.manifest.transport, "bootstrap-env");
   assert.match(bootstrap.content, /project=atlas/);
   assert.doesNotMatch(bootstrap.content, /##\s*Atlas resource/);
 });
 
 test("unbound project bootstrap reports unbound rather than guessing a project", () => {
-  const bootstrap = buildAtlasBootstrap({ status: "unbound", cwd: "/tmp/somewhere", gitRoot: null, confidence: "none" });
+  const bootstrap = buildAtlasBootstrap({
+    status: "unbound",
+    cwd: "/tmp/somewhere",
+    gitRoot: null,
+    confidence: "none",
+  });
   assert.match(bootstrap.content, /project=unbound/);
   assert.match(bootstrap.content, /confidence=none/);
 });
 
 test("bootstrap is delivered only as environment variables, never as file content or provider args", () => {
-  const bootstrap = buildAtlasBootstrap({ status: "unbound", cwd: "/tmp", gitRoot: null, confidence: "none" });
+  const bootstrap = buildAtlasBootstrap({
+    status: "unbound",
+    cwd: "/tmp",
+    gitRoot: null,
+    confidence: "none",
+  });
   const env = bootstrapEnvironment(bootstrap);
   assert.equal(env.ATLAS_BOOTSTRAP, bootstrap.content);
   assert.equal(Object.keys(env).length, 2);
-  assert.ok(Buffer.byteLength(env.ATLAS_BOOTSTRAP) <= ATLAS_BOOTSTRAP_MAX_BYTES);
+  assert.ok(
+    Buffer.byteLength(env.ATLAS_BOOTSTRAP) <= ATLAS_BOOTSTRAP_MAX_BYTES,
+  );
 });
 
 test("resolveProject reports unbound for an arbitrary cwd with no binding and no git root", async () => {
-  await withTempAtlasRoot(async (root) => {
+  await withTempAtlasRoot(async (_root) => {
     const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-outside-"));
     const resolution = await resolveProject(outside);
     assert.equal(resolution.status, "unbound");
@@ -71,7 +101,9 @@ test("bindProject creates a binding and resolveProject then finds it from that e
 
 test("resolveProject uses the deepest containing binding from a non-Git subdirectory", async () => {
   await withTempAtlasRoot(async () => {
-    const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-nested-"));
+    const projectDir = await mkdtemp(
+      path.join(os.tmpdir(), "atlas-project-nested-"),
+    );
     await bindProject("demo", projectDir);
     const nested = path.join(projectDir, "src", "components");
     const { mkdir } = await import("node:fs/promises");

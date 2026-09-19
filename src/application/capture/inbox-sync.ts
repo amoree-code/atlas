@@ -1,18 +1,23 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { atlasPath } from "../../paths.js";
 import type { SessionStore } from "../../infrastructure/persistence/session-store.js";
+import { atlasPath } from "../../paths.js";
 
 const marker = "## Capture candidates (generated)";
 
 export async function syncCaptureInbox(store: SessionStore): Promise<void> {
   const file = atlasPath("personal", "inbox", "INBOX.md");
   let current: string;
-  try { current = await readFile(file, "utf8"); } catch { return; }
+  try {
+    current = await readFile(file, "utf8");
+  } catch {
+    return;
+  }
   const base = current.split(marker)[0].trimEnd();
   const items = store.listCaptureItems("new");
-  const generated = items.length === 0
-    ? `${marker}\n\n_No new capture candidates._`
-    : `${marker}\n\n${items.map((item) => `- [${item.captureId}] ${item.content.replace(/\s+/g, " ").trim()} _(session ${item.sessionId})_`).join("\n")}`;
+  const generated =
+    items.length === 0
+      ? `${marker}\n\n_No new capture candidates._`
+      : `${marker}\n\n${items.map((item) => `- [${item.captureId}] ${item.content.replace(/\s+/g, " ").trim()} _(session ${item.sessionId})_`).join("\n")}`;
   const next = `${base}\n\n${generated}\n`;
   if (next !== current) await writeFile(file, next, "utf8");
 }

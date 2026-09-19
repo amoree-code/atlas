@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
@@ -6,6 +7,16 @@ const root = path.resolve(process.argv[2] ?? ".");
 const findings = [];
 const ignoredDirectories = new Set([".git", "node_modules", "dist"]);
 const ignoredFiles = new Set(["LICENSE", "pnpm-lock.yaml"]);
+const gitRepository = (() => {
+  try {
+    execFileSync("git", ["-C", root, "rev-parse", "--is-inside-work-tree"], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+})();
 const secretPatterns = [
   /(?:^|[^A-Za-z0-9_-])(?:sk-(?:ant-)?|AIza|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]{8,}/i,
   /\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/i,
@@ -13,15 +24,27 @@ const secretPatterns = [
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
   /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----/,
 ];
-const privatePathPattern = /(?:^|[\s'"`])(?:\/Users\/[^\s'"`]+|\/home\/[^\s'"`]+|[A-Za-z]:\\Users\\[^\s'"`]+)/;
+const privatePathPattern =
+  /(?:^|[\s'"`])(?:\/Users\/[^\s'"`]+|\/home\/[^\s'"`]+|[A-Za-z]:\\Users\\[^\s'"`]+)/;
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 
 async function walk(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
     const target = path.join(directory, entry.name);
+    if (gitRepository && isGitIgnored(target)) continue;
     if (entry.isDirectory()) await walk(target);
     else if (!ignoredFiles.has(entry.name)) await scan(target);
+  }
+}
+function isGitIgnored(target) {
+  try {
+    execFileSync("git", ["-C", root, "check-ignore", "-q", "--", target], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 async function scan(file) {
@@ -30,9 +53,12 @@ async function scan(file) {
   const content = await readFile(file, "utf8").catch(() => null);
   if (content === null || content.includes("\u0000")) return;
   const relative = path.relative(root, file);
-  if (secretPatterns.some((pattern) => pattern.test(content))) findings.push({ type: "credential", path: relative });
-  if (privatePathPattern.test(content)) findings.push({ type: "private-path", path: relative });
-  if (emailPattern.test(content) && !relative.endsWith(".md")) findings.push({ type: "personal-data", path: relative });
+  if (secretPatterns.some((pattern) => pattern.test(content)))
+    findings.push({ type: "credential", path: relative });
+  if (privatePathPattern.test(content))
+    findings.push({ type: "private-path", path: relative });
+  if (emailPattern.test(content) && !relative.endsWith(".md"))
+    findings.push({ type: "personal-data", path: relative });
 }
 await walk(root);
 if (findings.length) {

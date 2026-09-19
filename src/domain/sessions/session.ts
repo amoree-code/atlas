@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-export const sessionStatusSchema = z.enum(["created", "running", "completed", "failed", "cancelled"]);
+export const sessionStatusSchema = z.enum([
+  "created",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
 export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 
 export const sessionSchema = z.object({
@@ -21,7 +27,9 @@ export const sessionSchema = z.object({
   contextHash: z.string().nullable().default(null),
   contextBytes: z.number().int().nonnegative().default(0),
   nextAction: z.string().default(""),
-  verificationStatus: z.enum(["unknown", "proven", "not_proven", "blocked"]).default("unknown"),
+  verificationStatus: z
+    .enum(["unknown", "proven", "not_proven", "blocked"])
+    .default("unknown"),
   summaryPath: z.string().nullable().default(null),
   summaryHash: z.string().nullable().default(null),
   summaryBytes: z.number().int().nonnegative().default(0),
@@ -54,7 +62,10 @@ const allowedTransitions: Record<SessionStatus, readonly SessionStatus[]> = {
   cancelled: [],
 };
 
-export function assertValidStatusTransition(from: SessionStatus, to: SessionStatus): void {
+export function assertValidStatusTransition(
+  from: SessionStatus,
+  to: SessionStatus,
+): void {
   if (from === to) return;
   if (!allowedTransitions[from].includes(to)) {
     throw new Error(`Invalid session status transition: ${from} -> ${to}`);

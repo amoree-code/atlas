@@ -1,6 +1,13 @@
-import { createHandoff, getHandoff, listHandoffs } from "../../application/handoff/handoff-service.js";
+import {
+  createHandoff,
+  getHandoff,
+  listHandoffs,
+} from "../../application/handoff/handoff-service.js";
 
-export async function runHandoffCommand(action: string, args: string[]): Promise<void> {
+export async function runHandoffCommand(
+  action: string,
+  args: string[],
+): Promise<void> {
   if (action === "create") {
     const ticketIndex = args.indexOf("--ticket");
     const sessionIndex = args.indexOf("--session");
@@ -9,7 +16,8 @@ export async function runHandoffCommand(action: string, args: string[]): Promise
     const handoff = await createHandoff({
       ticketId: ticketIndex >= 0 ? args[ticketIndex + 1] : undefined,
       sessionId: sessionIndex >= 0 ? args[sessionIndex + 1] : undefined,
-      nextAction: nextIndex >= 0 ? args.slice(nextIndex + 1).join(" ") : undefined,
+      nextAction:
+        nextIndex >= 0 ? args.slice(nextIndex + 1).join(" ") : undefined,
       provider: providerIndex >= 0 ? args[providerIndex + 1] : undefined,
     });
     console.log(JSON.stringify(handoff, null, 2));
@@ -24,9 +32,19 @@ export async function runHandoffCommand(action: string, args: string[]): Promise
   }
   if (action === "list") {
     const ticketIndex = args.indexOf("--ticket");
-    console.log(JSON.stringify(await listHandoffs(ticketIndex >= 0 ? args[ticketIndex + 1] : undefined), null, 2));
+    console.log(
+      JSON.stringify(
+        await listHandoffs(
+          ticketIndex >= 0 ? args[ticketIndex + 1] : undefined,
+        ),
+        null,
+        2,
+      ),
+    );
     return;
   }
-  console.error("Usage: atlas handoff create [--ticket <id>] [--session <id>] [--next <action>]|show <id>|context <id>|list [--ticket <id>]");
+  console.error(
+    "Usage: atlas handoff create [--ticket <id>] [--session <id>] [--next <action>]|show <id>|context <id>|list [--ticket <id>]",
+  );
   process.exitCode = 1;
 }

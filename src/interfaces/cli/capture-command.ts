@@ -1,40 +1,60 @@
-import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
-import { mkdir, writeFile, appendFile } from "node:fs/promises";
-import path from "node:path";
-import { atlasPath } from "../../paths.js";
-import { syncMemoryIndexes } from "../../application/memory/index-sync.js";
-import { syncCaptureInbox } from "../../application/capture/inbox-sync.js";
 import { randomUUID } from "node:crypto";
-import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
-import { atlasRoot } from "../../paths.js";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { syncCaptureInbox } from "../../application/capture/inbox-sync.js";
+import { syncMemoryIndexes } from "../../application/memory/index-sync.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
+import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
+import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
+import { atlasPath, atlasRoot } from "../../paths.js";
 
-export async function runCaptureCommand(action: string, args: string[]): Promise<void> {
+export async function runCaptureCommand(
+  action: string,
+  args: string[],
+): Promise<void> {
   const store = await openSessionStore();
   try {
     if (action === "add") {
       const content = redactRuntimeText(args.join(" ").trim());
       if (!content) throw new Error("Usage: atlas capture add <idea>");
       const sessionId = randomUUID();
-      store.create({ sessionId, provider: "manual", providerSessionId: null, parentSessionId: null,
-        profile: "manual-capture", profileIdentity: "", workingDirectory: atlasRoot(), resumeData: null });
-      store.appendEvent(sessionId, "session_entry_contract", JSON.stringify(validateSessionEntryContract({
-        entryPoint: "atlas-run",
-        controlLevel: "full-head",
-        inputCapture: "semantic",
-        contextTransport: "manual-capture",
-        policyEnforcement: "explicit-capture-operation",
-        promotion: "explicit-review",
-        resume: "unsupported",
-      })));
+      store.create({
+        sessionId,
+        provider: "manual",
+        providerSessionId: null,
+        parentSessionId: null,
+        profile: "manual-capture",
+        profileIdentity: "",
+        workingDirectory: atlasRoot(),
+        resumeData: null,
+      });
+      store.appendEvent(
+        sessionId,
+        "session_entry_contract",
+        JSON.stringify(
+          validateSessionEntryContract({
+            entryPoint: "atlas-run",
+            controlLevel: "full-head",
+            inputCapture: "semantic",
+            contextTransport: "manual-capture",
+            policyEnforcement: "explicit-capture-operation",
+            promotion: "explicit-review",
+            resume: "unsupported",
+          }),
+        ),
+      );
       store.updateStatus(sessionId, "running");
       store.appendEvent(sessionId, "user_input", content);
       store.updateStatus(sessionId, "completed");
       store.scanCaptureItems(sessionId);
       await syncCaptureInbox(store);
-      const [item] = store.listCaptureItems("new").filter((candidate) => candidate.sessionId === sessionId);
+      const [item] = store
+        .listCaptureItems("new")
+        .filter((candidate) => candidate.sessionId === sessionId);
       if (!item) throw new Error("Capture item was not created");
-      console.log(JSON.stringify({ captureId: item.captureId, sessionId, status: "new" }));
+      console.log(
+        JSON.stringify({ captureId: item.captureId, sessionId, status: "new" }),
+      );
       return;
     }
     if (action === "scan") {
@@ -45,54 +65,98 @@ export async function runCaptureCommand(action: string, args: string[]): Promise
       return;
     }
     if (action === "list") {
-      console.log(JSON.stringify(store.listCaptureItems(args[0] ?? "new"), null, 2));
+      console.log(
+        JSON.stringify(store.listCaptureItems(args[0] ?? "new"), null, 2),
+      );
       return;
     }
     if (action === "promote" || action === "discard") {
       const captureId = Number(args[0]);
-      if (!Number.isInteger(captureId)) throw new Error(`Usage: atlas capture ${action} <capture-id> [target]`);
+      if (!Number.isInteger(captureId))
+        throw new Error(`Usage: atlas capture ${action} <capture-id> [target]`);
       if (action === "promote") {
         const item = store.getCaptureItem(captureId);
         if (!item) throw new Error(`Capture item not found: ${captureId}`);
         await promote(item, args[1]);
       }
-      store.updateCaptureStatus(captureId, action === "promote" ? "promoted" : "discarded", args[1]);
+      store.updateCaptureStatus(
+        captureId,
+        action === "promote" ? "promoted" : "discarded",
+        args[1],
+      );
       await syncCaptureInbox(store);
-      console.log(JSON.stringify({ captureId, status: action === "promote" ? "promoted" : "discarded", target: args[1] ?? null }));
+      console.log(
+        JSON.stringify({
+          captureId,
+          status: action === "promote" ? "promoted" : "discarded",
+          target: args[1] ?? null,
+        }),
+      );
       return;
     }
-    console.error("Usage: atlas capture add <idea>|scan [session-id]|list [status]|promote <id> <target>|discard <id>");
+    console.error(
+      "Usage: atlas capture add <idea>|scan [session-id]|list [status]|promote <id> <target>|discard <id>",
+    );
     process.exitCode = 1;
   } finally {
     store.close();
   }
 }
 
-async function promote(item: { captureId: number; content: string }, target = "knowledge/results"): Promise<void> {
+async function promote(
+  item: { captureId: number; content: string },
+  target = "knowledge/results",
+): Promise<void> {
   if (target.startsWith("memory/")) {
     const relative = target.slice("memory/".length);
-    if (!relative.endsWith(".md") || relative.includes("..")) throw new Error("Memory target must be an existing canonical .md file.");
+    if (!relative.endsWith(".md") || relative.includes(".."))
+      throw new Error("Memory target must be an existing canonical .md file.");
     const file = path.resolve(atlasPath("personal", "memory"), relative);
     const memoryRoot = path.resolve(atlasPath("personal", "memory")) + path.sep;
-    if (!file.startsWith(memoryRoot)) throw new Error("Memory target must stay inside personal/memory.");
+    if (!file.startsWith(memoryRoot))
+      throw new Error("Memory target must stay inside personal/memory.");
     const header = `\n\n## Captured note — ${new Date().toISOString().slice(0, 10)}\n\n${item.content.trim()}\n\n_Source: session-capture-${item.captureId}; review status: unverified._\n`;
     await appendFile(file, header);
     await syncMemoryIndexes(true);
     return;
   }
   if (target === "memory") {
-    throw new Error("Use an explicit canonical file, for example memory/goals.md.");
+    throw new Error(
+      "Use an explicit canonical file, for example memory/goals.md.",
+    );
   }
   if (target === "backlog") {
-    await appendFile(atlasPath("projects", "backlog.md"), `\n- [TODO] (P2) atlas — ${item.content.replace(/\s+/g, " ").trim()}  {${new Date().toISOString().slice(0, 10)}}\n`);
+    await appendFile(
+      atlasPath("projects", "backlog.md"),
+      `\n- [TODO] (P2) atlas — ${item.content.replace(/\s+/g, " ").trim()}  {${new Date().toISOString().slice(0, 10)}}\n`,
+    );
     return;
   }
-  const match = target.match(/^knowledge\/(architecture|decisions|discoveries|failures|research|results|solutions|references)$/);
-  if (!match) throw new Error("Target must be knowledge/<kind>, memory/<file>.md, or backlog.");
-  const safe = item.content.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+  const match = target.match(
+    /^knowledge\/(architecture|decisions|discoveries|failures|research|results|solutions|references)$/,
+  );
+  if (!match)
+    throw new Error(
+      "Target must be knowledge/<kind>, memory/<file>.md, or backlog.",
+    );
+  const safe = item.content
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
   const slug = safe || `capture-${item.captureId}`;
-  const file = path.join(atlasPath("personal", "knowledge", match[1], `${slug}-${item.captureId}.md`));
+  const file = path.join(
+    atlasPath(
+      "personal",
+      "knowledge",
+      match[1],
+      `${slug}-${item.captureId}.md`,
+    ),
+  );
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `---\nname: ${slug}-${item.captureId}\ndescription: Candidate promoted from a reviewed session input\nmetadata:\n  type: ${match[1] === "results" ? "task-result" : match[1].slice(0, -1)}\n  domain: ${match[1]}\n  status: current\n  verification: unverified\n  source: session-capture-${item.captureId}\n---\n\n${item.content.trim()}\n`);
+  await writeFile(
+    file,
+    `---\nname: ${slug}-${item.captureId}\ndescription: Candidate promoted from a reviewed session input\nmetadata:\n  type: ${match[1] === "results" ? "task-result" : match[1].slice(0, -1)}\n  domain: ${match[1]}\n  status: current\n  verification: unverified\n  source: session-capture-${item.captureId}\n---\n\n${item.content.trim()}\n`,
+  );
   await syncMemoryIndexes(true);
 }

@@ -64,9 +64,7 @@
       }
     ]
   },
-  "footerLinksRegexes": [
-    "graft/[\\w./-]+\\.md"
-  ],
+  "footerLinksRegexes": ["graft/[\\w./-]+\\.md"],
   "permissions": {
     "allow": [
       "Bash(graft:*)",

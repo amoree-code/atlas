@@ -1,3 +1,8 @@
 [
-  {"name":"malformed","description":"Fixture","version":"1.0.0","category":"core"}
+  {
+    "name": "malformed",
+    "description": "Fixture",
+    "version": "1.0.0",
+    "category": "core"
+  }
 ]

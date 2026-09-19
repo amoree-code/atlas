@@ -1,23 +1,28 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
+import { claudeNativeHookStatus } from "../dist/application/hooks/session-start-hook.js";
 import { createGrant } from "../dist/application/operations/write-guard.js";
 import {
   invokeProviderHeadless,
+  PROVIDER_HEADLESS,
   parseProviderStream,
   providerHeadlessSupport,
-  PROVIDER_HEADLESS,
 } from "../dist/infrastructure/providers/provider-invocation.js";
 import { resolveOriginalExecutable } from "../dist/infrastructure/providers/provider-registry.js";
-import { claudeNativeHookStatus } from "../dist/application/hooks/session-start-hook.js";
 
-const BUDGET = { maxFiles: 10, maxBytes: 50_000, maxChars: 5_000, maxOperationCost: 5 };
+const BUDGET = {
+  maxFiles: 10,
+  maxBytes: 50_000,
+  maxChars: 5_000,
+  maxOperationCost: 5,
+};
 const SESSION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 
 // Live provider tests cost real API quota, so they run only when explicitly requested.
@@ -79,7 +84,14 @@ test("the same headless contract shape exists for every supported provider", () 
 });
 
 test("unsupported providers stay explicitly gated, never silently attempted", async () => {
-  for (const provider of ["hermes", "kilo", "kimi", "copilot", "openhands", "antigravity"]) {
+  for (const provider of [
+    "hermes",
+    "kilo",
+    "kimi",
+    "copilot",
+    "openhands",
+    "antigravity",
+  ]) {
     const support = providerHeadlessSupport(provider);
     assert.equal(support.supported, false, provider);
     assert.match(support.reason, /unsupported/);
@@ -113,7 +125,9 @@ test("no auto-approve or permission-bypass flag is ever passed to a provider", (
 // ---------------------------------------------------------------- guard before invocation
 
 test("guard rejection happens before any process is spawned", async () => {
-  const { file } = await fakeProvider("#!/bin/sh\necho SHOULD-NOT-RUN\nexit 0\n");
+  const { file } = await fakeProvider(
+    "#!/bin/sh\necho SHOULD-NOT-RUN\nexit 0\n",
+  );
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
@@ -128,14 +142,19 @@ test("guard rejection happens before any process is spawned", async () => {
 });
 
 test("consent rejection (revoked/expired/wrong-session) blocks provider invocation", async () => {
-  const { file } = await fakeProvider("#!/bin/sh\necho SHOULD-NOT-RUN\nexit 0\n");
+  const { file } = await fakeProvider(
+    "#!/bin/sh\necho SHOULD-NOT-RUN\nexit 0\n",
+  );
   const scope = {
     action: "provider.invoke",
     target: "claude",
     identifier: null,
     projectId: "atlas",
   };
-  const foreignGrant = createGrant("99999999-9999-9999-9999-999999999999", scope);
+  const foreignGrant = createGrant(
+    "99999999-9999-9999-9999-999999999999",
+    scope,
+  );
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
@@ -161,7 +180,9 @@ test("ambiguous intent cannot invoke a provider even with a grant", async () => 
     prompt: "x",
     atlasSessionId: SESSION,
     cwd: os.tmpdir(),
-    guard: guardFor("claude", { classification: classifyIntent("continue the login work") }),
+    guard: guardFor("claude", {
+      classification: classifyIntent("continue the login work"),
+    }),
   });
   assert.equal(result.status, "denied");
   assert.equal(result.guard.code, "ambiguous-intent");
@@ -206,35 +227,48 @@ test("invalid provider command produces a structured unavailable/failed result, 
   assert.match(result.reason, /could not be executed|not available/);
 });
 
-unixOnly("timeout produces a structured timeout result and kills the process", async () => {
-  const { file } = await fakeProvider("#!/usr/bin/env node\nsetTimeout(() => {}, 30_000);\n");
-  const started = Date.now();
-  const result = await invokeProviderHeadless({
-    provider: "claude",
-    prompt: "x",
-    atlasSessionId: SESSION,
-    cwd: os.tmpdir(),
-    executable: file,
-    timeoutMs: 1_000,
-    guard: guardFor("claude"),
-  });
-  assert.equal(result.status, "timeout");
-  assert.ok(Date.now() - started < 15_000, "must not wait for the full sleep");
-});
+unixOnly(
+  "timeout produces a structured timeout result and kills the process",
+  async () => {
+    const { file } = await fakeProvider(
+      "#!/usr/bin/env node\nsetTimeout(() => {}, 30_000);\n",
+    );
+    const started = Date.now();
+    const result = await invokeProviderHeadless({
+      provider: "claude",
+      prompt: "x",
+      atlasSessionId: SESSION,
+      cwd: os.tmpdir(),
+      executable: file,
+      timeoutMs: 1_000,
+      guard: guardFor("claude"),
+    });
+    assert.equal(result.status, "timeout");
+    assert.ok(
+      Date.now() - started < 15_000,
+      "must not wait for the full sleep",
+    );
+  },
+);
 
-unixOnly("non-zero exit produces a structured failed result with the exit code", async () => {
-  const { file } = await fakeProvider("#!/usr/bin/env node\nconsole.error('boom');\nprocess.exitCode = 3;\n");
-  const result = await invokeProviderHeadless({
-    provider: "claude",
-    prompt: "x",
-    atlasSessionId: SESSION,
-    cwd: os.tmpdir(),
-    executable: file,
-    guard: guardFor("claude"),
-  });
-  assert.equal(result.status, "failed");
-  assert.equal(result.exitCode, 3);
-});
+unixOnly(
+  "non-zero exit produces a structured failed result with the exit code",
+  async () => {
+    const { file } = await fakeProvider(
+      "#!/usr/bin/env node\nconsole.error('boom');\nprocess.exitCode = 3;\n",
+    );
+    const result = await invokeProviderHeadless({
+      provider: "claude",
+      prompt: "x",
+      atlasSessionId: SESSION,
+      cwd: os.tmpdir(),
+      executable: file,
+      guard: guardFor("claude"),
+    });
+    assert.equal(result.status, "failed");
+    assert.equal(result.exitCode, 3);
+  },
+);
 
 test("malformed stream lines are counted, never thrown", () => {
   const parsed = parseProviderStream('{"a":1}\nNOT JSON\n{"b":2}\n');
@@ -252,9 +286,18 @@ test("partial stream (unterminated final line) is reported as partial, not malfo
 
 test("missing session id is reported as null rather than invented", () => {
   assert.equal(parseProviderStream('{"result":"ok"}').providerSessionId, null);
-  assert.equal(parseProviderStream("plain provider prose", "text").providerSessionId, null);
-  assert.equal(parseProviderStream('{"session_id":"abc-123"}').providerSessionId, "abc-123");
-  assert.equal(parseProviderStream('{"session":{"id":"nested-1"}}').providerSessionId, "nested-1");
+  assert.equal(
+    parseProviderStream("plain provider prose", "text").providerSessionId,
+    null,
+  );
+  assert.equal(
+    parseProviderStream('{"session_id":"abc-123"}').providerSessionId,
+    "abc-123",
+  );
+  assert.equal(
+    parseProviderStream('{"session":{"id":"nested-1"}}').providerSessionId,
+    "nested-1",
+  );
 });
 
 test("a failing provider still propagates the Atlas session pointer and parent relation", async () => {
@@ -288,8 +331,14 @@ test("provider output is redacted and clipped — no credential leakage into res
     executable: file,
     guard: guardFor("claude"),
   });
-  assert.ok(!result.output.includes(fakeApiKey), "api key must not survive redaction");
-  assert.ok(!result.output.includes(fakeToken), "token must not survive redaction");
+  assert.ok(
+    !result.output.includes(fakeApiKey),
+    "api key must not survive redaction",
+  );
+  assert.ok(
+    !result.output.includes(fakeToken),
+    "token must not survive redaction",
+  );
   assert.ok(result.output.length <= 4_000);
 });
 
@@ -327,14 +376,20 @@ test("Arabic and English intents are guarded identically before provider invocat
     prompt: "x",
     atlasSessionId: SESSION,
     cwd: os.tmpdir(),
-    guard: guardFor("claude", { classification: classifyIntent("شغل السيرفر"), approved: false }),
+    guard: guardFor("claude", {
+      classification: classifyIntent("شغل السيرفر"),
+      approved: false,
+    }),
   });
   const english = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
     atlasSessionId: SESSION,
     cwd: os.tmpdir(),
-    guard: guardFor("claude", { classification: classifyIntent("run the build"), approved: false }),
+    guard: guardFor("claude", {
+      classification: classifyIntent("run the build"),
+      approved: false,
+    }),
   });
   assert.equal(arabic.status, "denied");
   assert.equal(english.status, "denied");
@@ -343,13 +398,29 @@ test("Arabic and English intents are guarded identically before provider invocat
 
 // ---------------------------------------------------------------- hook & shim verification
 
-installed("live shim verification: the Atlas shim executes and routes through the engine", () => {
-  const shim = path.join(os.homedir(), "atlas", "system", "runtime", "shims", "atlas");
-  const result = spawnSync(shim, ["context", "--json"], { encoding: "utf8", timeout: 60_000 });
-  assert.equal(result.status, 0, result.stderr);
-  const packet = JSON.parse(result.stdout);
-  assert.ok("projectResolution" in packet, "shim must reach the current engine build");
-});
+installed(
+  "live shim verification: the Atlas shim executes and routes through the engine",
+  () => {
+    const shim = path.join(
+      os.homedir(),
+      "atlas",
+      "system",
+      "runtime",
+      "shims",
+      "atlas",
+    );
+    const result = spawnSync(shim, ["context", "--json"], {
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const packet = JSON.parse(result.stdout);
+    assert.ok(
+      "projectResolution" in packet,
+      "shim must reach the current engine build",
+    );
+  },
+);
 
 installed(
   "live hook verification: the Atlas SessionStart hook script executes and emits bounded context",
@@ -368,11 +439,17 @@ installed(
       session_id: "slice10",
       hook_event_name: "SessionStart",
     });
-    const result = spawnSync(hook, [], { input: payload, encoding: "utf8", timeout: 60_000 });
+    const result = spawnSync(hook, [], {
+      input: payload,
+      encoding: "utf8",
+      timeout: 60_000,
+    });
     assert.equal(result.status, 0, result.stderr);
     const parsed = JSON.parse(result.stdout.trim());
     assert.equal(parsed.hookSpecificOutput.hookEventName, "SessionStart");
-    assert.ok(Buffer.byteLength(parsed.hookSpecificOutput.additionalContext) <= 256);
+    assert.ok(
+      Buffer.byteLength(parsed.hookSpecificOutput.additionalContext) <= 256,
+    );
   },
 );
 
@@ -390,8 +467,18 @@ installed(
 installed(
   "CLI/direct-import parity: the shim and a direct engine call produce the same context packet",
   () => {
-    const shim = path.join(os.homedir(), "atlas", "system", "runtime", "shims", "atlas");
-    const viaShim = spawnSync(shim, ["context", "--json"], { encoding: "utf8", timeout: 60_000 });
+    const shim = path.join(
+      os.homedir(),
+      "atlas",
+      "system",
+      "runtime",
+      "shims",
+      "atlas",
+    );
+    const viaShim = spawnSync(shim, ["context", "--json"], {
+      encoding: "utf8",
+      timeout: 60_000,
+    });
     const direct = spawnSync(
       process.execPath,
       [path.resolve("dist/main.js"), "context", "--json"],
@@ -408,23 +495,33 @@ installed(
 
 // ---------------------------------------------------------------- live provider smoke tests
 
-live("live smoke: claude headless completes and returns a provider session id", async () => {
-  const executable = resolvesOrNull("claude");
-  assert.ok(executable, "claude must resolve for this live test");
-  const dir = await mkdtemp(path.join(os.tmpdir(), "atlas-live-claude-"));
-  const result = await invokeProviderHeadless({
-    provider: "claude",
-    prompt: "Reply with exactly: OK",
-    atlasSessionId: SESSION,
-    cwd: dir,
-    timeoutMs: 180_000,
-    guard: guardFor("claude"),
-  });
-  assert.equal(result.status, "completed", `${result.status}: ${result.reason} ${result.output}`);
-  assert.equal(result.exitCode, 0);
-  assert.ok(result.providerSessionId, "claude headless json must carry a session id");
-  assert.equal(result.malformedLines, 0);
-});
+live(
+  "live smoke: claude headless completes and returns a provider session id",
+  async () => {
+    const executable = resolvesOrNull("claude");
+    assert.ok(executable, "claude must resolve for this live test");
+    const dir = await mkdtemp(path.join(os.tmpdir(), "atlas-live-claude-"));
+    const result = await invokeProviderHeadless({
+      provider: "claude",
+      prompt: "Reply with exactly: OK",
+      atlasSessionId: SESSION,
+      cwd: dir,
+      timeoutMs: 180_000,
+      guard: guardFor("claude"),
+    });
+    assert.equal(
+      result.status,
+      "completed",
+      `${result.status}: ${result.reason} ${result.output}`,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.ok(
+      result.providerSessionId,
+      "claude headless json must carry a session id",
+    );
+    assert.equal(result.malformedLines, 0);
+  },
+);
 
 live("live smoke: codex headless completes", async () => {
   const executable = resolvesOrNull("codex");
@@ -439,7 +536,11 @@ live("live smoke: codex headless completes", async () => {
     timeoutMs: 300_000,
     guard: guardFor("codex"),
   });
-  assert.equal(result.status, "completed", `${result.status}: ${result.reason} ${result.output}`);
+  assert.equal(
+    result.status,
+    "completed",
+    `${result.status}: ${result.reason} ${result.output}`,
+  );
   assert.equal(result.exitCode, 0);
 });
 
@@ -455,7 +556,11 @@ live("live smoke: gemini headless completes", async () => {
     timeoutMs: 300_000,
     guard: guardFor("gemini"),
   });
-  assert.equal(result.status, "completed", `${result.status}: ${result.reason} ${result.output}`);
+  assert.equal(
+    result.status,
+    "completed",
+    `${result.status}: ${result.reason} ${result.output}`,
+  );
   assert.equal(result.exitCode, 0);
 });
 

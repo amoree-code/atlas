@@ -19,7 +19,10 @@ test("ATLAS_ROOT explicitly overrides the default private root", () => {
   process.env.ATLAS_ROOT = override;
   try {
     assert.equal(atlasRoot(), path.resolve(override));
-    assert.equal(atlasPath("personal"), path.join(path.resolve(override), "personal"));
+    assert.equal(
+      atlasPath("personal"),
+      path.join(path.resolve(override), "personal"),
+    );
     assert.equal(
       atlasPath("sessions", "sessions.sqlite"),
       path.join(path.resolve(override), "sessions", "sessions.sqlite"),
@@ -32,7 +35,10 @@ test("ATLAS_ROOT explicitly overrides the default private root", () => {
 test("enginePath always resolves relative to engine root, ignoring ATLAS_ROOT", () => {
   process.env.ATLAS_ROOT = path.join(os.tmpdir(), "atlas-root-unrelated");
   try {
-    assert.equal(enginePath("dist", "main.js"), path.join(engineRoot(), "dist", "main.js"));
+    assert.equal(
+      enginePath("dist", "main.js"),
+      path.join(engineRoot(), "dist", "main.js"),
+    );
   } finally {
     delete process.env.ATLAS_ROOT;
   }

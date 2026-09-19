@@ -18,7 +18,8 @@ const builtInProviders: ProviderRecord[] = [
   { id: "hermes", command: "hermes", interactive: true, headless: true },
 ];
 
-export const providerRegistryPath = (): string => atlasPath("system", "control-plane", "registry", "providers.json");
+export const providerRegistryPath = (): string =>
+  atlasPath("system", "control-plane", "registry", "providers.json");
 
 export function builtInProviderRecords(): ProviderRecord[] {
   return builtInProviders.map((provider) => ({ ...provider }));
@@ -27,31 +28,53 @@ export function builtInProviderRecords(): ProviderRecord[] {
 export function loadProviderRegistry(): ProviderRecord[] {
   const file = providerRegistryPath();
   if (!existsSync(file)) return builtInProviderRecords();
-  const parsed = JSON.parse(readFileSync(file, "utf8")) as { providers?: ProviderRecord[] };
+  const parsed = JSON.parse(readFileSync(file, "utf8")) as {
+    providers?: ProviderRecord[];
+  };
   const custom = Array.isArray(parsed.providers) ? parsed.providers : [];
   const merged = new Map<string, ProviderRecord>();
-  for (const provider of [...builtInProviders, ...custom]) merged.set(provider.id, provider);
+  for (const provider of [...builtInProviders, ...custom])
+    merged.set(provider.id, provider);
   return [...merged.values()];
 }
 
-export async function saveProviderRegistry(providers: ProviderRecord[]): Promise<void> {
+export async function saveProviderRegistry(
+  providers: ProviderRecord[],
+): Promise<void> {
   await mkdir(path.dirname(providerRegistryPath()), { recursive: true });
-  await writeFile(providerRegistryPath(), `${JSON.stringify({ version: 1, providers }, null, 2)}\n`);
+  await writeFile(
+    providerRegistryPath(),
+    `${JSON.stringify({ version: 1, providers }, null, 2)}\n`,
+  );
 }
 
-export function findProvider(value: string, providers = loadProviderRegistry()): ProviderRecord {
-  const provider = providers.find((candidate) => candidate.id === value || candidate.command === value);
+export function findProvider(
+  value: string,
+  providers = loadProviderRegistry(),
+): ProviderRecord {
+  const provider = providers.find(
+    (candidate) => candidate.id === value || candidate.command === value,
+  );
   if (!provider) throw new Error(`Provider is not registered: ${value}`);
   return provider;
 }
 
-export function resolveOriginalExecutable(command: string, env = process.env): string {
-  const shimRoot = path.resolve(env.ATLAS_SHIM_DIR ?? atlasPath("system", "runtime", "shims"));
+export function resolveOriginalExecutable(
+  command: string,
+  env = process.env,
+): string {
+  const shimRoot = path.resolve(
+    env.ATLAS_SHIM_DIR ?? atlasPath("system", "runtime", "shims"),
+  );
   const pathEntries = (env.PATH ?? "").split(path.delimiter).filter(Boolean);
-  const names = process.platform === "win32" ? [command, `${command}.exe`, `${command}.cmd`, `${command}.bat`] : [command];
+  const names =
+    process.platform === "win32"
+      ? [command, `${command}.exe`, `${command}.cmd`, `${command}.bat`]
+      : [command];
 
   for (const directory of pathEntries) {
-    if (path.resolve(directory) === shimRoot || isAtlasShimDirectory(directory)) continue;
+    if (path.resolve(directory) === shimRoot || isAtlasShimDirectory(directory))
+      continue;
     for (const name of names) {
       const candidate = path.join(directory, name);
       try {
@@ -62,21 +85,31 @@ export function resolveOriginalExecutable(command: string, env = process.env): s
       }
     }
   }
-  throw new Error(`Provider executable not found outside Atlas shims: ${command}`);
+  throw new Error(
+    `Provider executable not found outside Atlas shims: ${command}`,
+  );
 }
 
 export function validateExplicitExecutable(commandPath: string): string {
-  if (!path.isAbsolute(commandPath)) throw new Error(`Provider executable must be an absolute path: ${commandPath}`);
+  if (!path.isAbsolute(commandPath))
+    throw new Error(
+      `Provider executable must be an absolute path: ${commandPath}`,
+    );
   const resolved = path.resolve(commandPath);
   try {
     accessSync(resolved, constants.X_OK);
   } catch {
-    throw new Error(`Provider executable is missing or not executable: ${resolved}`);
+    throw new Error(
+      `Provider executable is missing or not executable: ${resolved}`,
+    );
   }
   return resolved;
 }
 
 function isAtlasShimDirectory(directory: string): boolean {
   const resolved = path.resolve(directory);
-  return path.basename(resolved) === "shims" && path.basename(path.dirname(resolved)) === "runtime";
+  return (
+    path.basename(resolved) === "shims" &&
+    path.basename(path.dirname(resolved)) === "runtime"
+  );
 }

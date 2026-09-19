@@ -2,9 +2,12 @@ import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
-import { atlasPath, atlasRoot, enginePath } from "../../paths.js";
-import { installShellIntegration, syncProviderWrappers } from "../../infrastructure/wrappers/wrapper-manager.js";
 import { connectObsidianVault } from "../../application/obsidian/vault-discovery.js";
+import {
+  installShellIntegration,
+  syncProviderWrappers,
+} from "../../infrastructure/wrappers/wrapper-manager.js";
+import { atlasPath, atlasRoot, enginePath } from "../../paths.js";
 
 const personalDirectories = [
   "personal/memory",
@@ -37,7 +40,8 @@ async function ensureFile(file: string, contents: string): Promise<void> {
 async function restrictDirectories(directory: string): Promise<void> {
   await chmod(directory, 0o700);
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.isDirectory()) await restrictDirectories(path.join(directory, entry.name));
+    if (entry.isDirectory())
+      await restrictDirectories(path.join(directory, entry.name));
   }
 }
 
@@ -95,37 +99,83 @@ async function installWindowsStartup(): Promise<void> {
   await writeFile(launcher, contents);
 }
 
-export type SetupOptions = { obsidianPath?: string; obsidianMode?: "read-only" | "read-write" };
+export type SetupOptions = {
+  obsidianPath?: string;
+  obsidianMode?: "read-only" | "read-write";
+};
 
 async function setupComplete(): Promise<boolean> {
-  try { await readFile(atlasPath("system", "profiles", "default.json")); return true; }
-  catch { return false; }
+  try {
+    await readFile(atlasPath("system", "profiles", "default.json"));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function runFirstRunWizard(skipPrompt = false): Promise<void> {
   if (await setupComplete()) {
-    console.log("Atlas is ready. Run `atlas doctor` for health or `atlas mcp config` for client setup.");
+    console.log(
+      "Atlas is ready. Run `atlas doctor` for health or `atlas mcp config` for client setup.",
+    );
     return;
   }
   if (!skipPrompt && process.stdin.isTTY && process.stdout.isTTY) {
-    const prompt = createInterface({ input: process.stdin, output: process.stdout });
+    const prompt = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
     try {
-      console.log("Welcome to Atlas. This will create your private workspace and prepare MCP.");
-      const answer = await prompt.question("Continue with the recommended setup? [Y/n] ");
-      if (answer.trim().toLowerCase() === "n") { console.log("Setup cancelled."); return; }
-    } finally { prompt.close(); }
+      console.log(
+        "Welcome to Atlas. This will create your private workspace and prepare MCP.",
+      );
+      const answer = await prompt.question(
+        "Continue with the recommended setup? [Y/n] ",
+      );
+      if (answer.trim().toLowerCase() === "n") {
+        console.log("Setup cancelled.");
+        return;
+      }
+    } finally {
+      prompt.close();
+    }
   }
   await setup();
-  console.log("Atlas is ready. Run `atlas run --profile default --prompt \"your task\"` to start.");
+  console.log(
+    'Atlas is ready. Run `atlas run --profile default --prompt "your task"` to start.',
+  );
 }
 
 export async function setup(options: SetupOptions = {}): Promise<void> {
-  await Promise.all(personalDirectories.map((directory) => mkdir(atlasPath(directory), { recursive: true })));
-  await Promise.all(stateDirectories.map((directory) => mkdir(atlasPath(directory), { recursive: true })));
-  await ensureFile(atlasPath("personal", "memory", "MEMORY.md"), "# Memory\n\n## Records (generated)\n");
-  await ensureFile(atlasPath("personal", "knowledge", "KNOWLEDGE.md"), "# Knowledge\n\n## Records (generated)\n");
-  await ensureFile(atlasPath("system", "profiles", "default.json"), await readFile(new URL("../../../templates/profiles/default.json", import.meta.url), "utf8"));
-  await ensureFile(atlasPath("system", "config", "startup", "STARTUP.md"), "# Atlas startup\n\nManaged by `atlas setup`.\n");
+  await Promise.all(
+    personalDirectories.map((directory) =>
+      mkdir(atlasPath(directory), { recursive: true }),
+    ),
+  );
+  await Promise.all(
+    stateDirectories.map((directory) =>
+      mkdir(atlasPath(directory), { recursive: true }),
+    ),
+  );
+  await ensureFile(
+    atlasPath("personal", "memory", "MEMORY.md"),
+    "# Memory\n\n## Records (generated)\n",
+  );
+  await ensureFile(
+    atlasPath("personal", "knowledge", "KNOWLEDGE.md"),
+    "# Knowledge\n\n## Records (generated)\n",
+  );
+  await ensureFile(
+    atlasPath("system", "profiles", "default.json"),
+    await readFile(
+      new URL("../../../templates/profiles/default.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  await ensureFile(
+    atlasPath("system", "config", "startup", "STARTUP.md"),
+    "# Atlas startup\n\nManaged by `atlas setup`.\n",
+  );
   await syncProviderWrappers();
   const shellProfile = await installShellIntegration();
 
@@ -134,8 +184,15 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   if (process.platform === "win32") await installWindowsStartup();
   await restrictDirectories(atlasPath("system"));
   if (options.obsidianPath) {
-    const result = await connectObsidianVault(options.obsidianPath, options.obsidianMode ?? "read-only");
-    console.log(`Obsidian connected: ${result.vaultPath} (${result.noteCount} Markdown notes)`);
+    const result = await connectObsidianVault(
+      options.obsidianPath,
+      options.obsidianMode ?? "read-only",
+    );
+    console.log(
+      `Obsidian connected: ${result.vaultPath} (${result.noteCount} Markdown notes)`,
+    );
   }
-  console.log(`Atlas setup complete: ${atlasRoot()} (AI CLI interception enabled in ${shellProfile})`);
+  console.log(
+    `Atlas setup complete: ${atlasRoot()} (AI CLI interception enabled in ${shellProfile})`,
+  );
 }

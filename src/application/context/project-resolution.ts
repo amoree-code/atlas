@@ -23,10 +23,22 @@ export type ProjectResolution =
       matchedOn: "git-root" | "cwd" | "path" | "atlas-root";
       confidence: "high";
     }
-  | { status: "unbound"; cwd: string; gitRoot: string | null; confidence: "none" }
-  | { status: "ambiguous"; cwd: string; candidates: ProjectBinding[]; confidence: "low" };
+  | {
+      status: "unbound";
+      cwd: string;
+      gitRoot: string | null;
+      confidence: "none";
+    }
+  | {
+      status: "ambiguous";
+      cwd: string;
+      candidates: ProjectBinding[];
+      confidence: "low";
+    };
 
-export function projectConfirmationQuestion(resolution: ProjectResolution): string | null {
+export function projectConfirmationQuestion(
+  resolution: ProjectResolution,
+): string | null {
   if (resolution.status === "bound") return null;
   if (resolution.status === "ambiguous")
     return "Which Atlas project should this request use? Specify the project name or binding path.";
@@ -34,7 +46,12 @@ export function projectConfirmationQuestion(resolution: ProjectResolution): stri
 }
 
 function bindingsFile(): string {
-  return atlasPath("system", "control-plane", "registry", "project-bindings.json");
+  return atlasPath(
+    "system",
+    "control-plane",
+    "registry",
+    "project-bindings.json",
+  );
 }
 
 export function findGitRoot(startDir: string): string | null {
@@ -50,7 +67,10 @@ export function findGitRoot(startDir: string): string | null {
 export async function listProjectBindings(): Promise<ProjectBinding[]> {
   try {
     const raw = await readFile(bindingsFile(), "utf8");
-    const parsed = JSON.parse(raw) as { version: number; bindings: ProjectBinding[] };
+    const parsed = JSON.parse(raw) as {
+      version: number;
+      bindings: ProjectBinding[];
+    };
     return parsed.bindings ?? [];
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
@@ -62,7 +82,11 @@ async function saveProjectBindings(bindings: ProjectBinding[]): Promise<void> {
   const file = bindingsFile();
   await mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.atlas-tmp-${process.pid}`;
-  await writeFile(tmp, `${JSON.stringify({ version: 1, bindings }, null, 2)}\n`, "utf8");
+  await writeFile(
+    tmp,
+    `${JSON.stringify({ version: 1, bindings }, null, 2)}\n`,
+    "utf8",
+  );
   await rename(tmp, file);
 }
 
@@ -77,17 +101,34 @@ export async function resolveProject(cwd: string): Promise<ProjectResolution> {
   const containing = bindings
     .filter((binding) => {
       const bound = path.resolve(binding.path);
-      return resolvedCwd === bound || resolvedCwd.startsWith(`${bound}${path.sep}`);
+      return (
+        resolvedCwd === bound || resolvedCwd.startsWith(`${bound}${path.sep}`)
+      );
     })
     .sort((a, b) => path.resolve(b.path).length - path.resolve(a.path).length);
-  if (containing.length && (!containing[1] || path.resolve(containing[0].path).length > path.resolve(containing[1].path).length)) {
+  if (
+    containing.length &&
+    (!containing[1] ||
+      path.resolve(containing[0].path).length >
+        path.resolve(containing[1].path).length)
+  ) {
     const binding = containing[0];
     return {
-      status: "bound", projectId: binding.id, name: binding.name, path: binding.path,
-      matchedOn: path.resolve(binding.path) === resolvedCwd ? "cwd" : "path", confidence: "high",
+      status: "bound",
+      projectId: binding.id,
+      name: binding.name,
+      path: binding.path,
+      matchedOn: path.resolve(binding.path) === resolvedCwd ? "cwd" : "path",
+      confidence: "high",
     };
   }
-  if (containing.length > 1) return { status: "ambiguous", cwd: resolvedCwd, candidates: containing, confidence: "low" };
+  if (containing.length > 1)
+    return {
+      status: "ambiguous",
+      cwd: resolvedCwd,
+      candidates: containing,
+      confidence: "low",
+    };
 
   const gitRootMatch = gitRoot
     ? bindings.filter((binding) => path.resolve(binding.path) === gitRoot)
@@ -103,12 +144,21 @@ export async function resolveProject(cwd: string): Promise<ProjectResolution> {
     };
   }
   if (gitRootMatch.length > 1) {
-    return { status: "ambiguous", cwd: resolvedCwd, candidates: gitRootMatch, confidence: "low" };
+    return {
+      status: "ambiguous",
+      cwd: resolvedCwd,
+      candidates: gitRootMatch,
+      confidence: "low",
+    };
   }
 
   const root = atlasRoot();
   const isFilesystemRoot = root === path.parse(root).root;
-  if (resolvedCwd === root || isFilesystemRoot || resolvedCwd.startsWith(`${root}${path.sep}`)) {
+  if (
+    resolvedCwd === root ||
+    isFilesystemRoot ||
+    resolvedCwd.startsWith(`${root}${path.sep}`)
+  ) {
     return {
       status: "bound",
       projectId: "atlas",
@@ -130,18 +180,33 @@ export type BindProjectResult = {
 
 // Explicit registration/binding: never guesses on a name or path collision, always returns
 // the conflict instead of silently overwriting an existing binding.
-export async function bindProject(name: string, targetPath: string): Promise<BindProjectResult> {
+export async function bindProject(
+  name: string,
+  targetPath: string,
+): Promise<BindProjectResult> {
   const resolvedPath = path.resolve(targetPath);
   const bindings = await listProjectBindings();
 
-  const existingAtPath = bindings.find((binding) => path.resolve(binding.path) === resolvedPath);
+  const existingAtPath = bindings.find(
+    (binding) => path.resolve(binding.path) === resolvedPath,
+  );
   if (existingAtPath) {
-    if (existingAtPath.name === name) return { binding: existingAtPath, created: false };
-    return { binding: existingAtPath, created: false, conflict: existingAtPath };
+    if (existingAtPath.name === name)
+      return { binding: existingAtPath, created: false };
+    return {
+      binding: existingAtPath,
+      created: false,
+      conflict: existingAtPath,
+    };
   }
 
   const existingByName = bindings.find((binding) => binding.name === name);
-  if (existingByName) return { binding: existingByName, created: false, conflict: existingByName };
+  if (existingByName)
+    return {
+      binding: existingByName,
+      created: false,
+      conflict: existingByName,
+    };
 
   const binding: ProjectBinding = {
     id: name,

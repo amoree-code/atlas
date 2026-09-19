@@ -29,10 +29,11 @@ or invent credentials; authentication remains owned by each provider CLI.
 
 ## Data validation
 
-Before publication, run `pnpm check:privacy`. This read-only release-gate scan checks
-non-generated source, documentation, and templates for credential patterns, real private
-paths, and personal data. It reports finding types and file paths without secret values and
-fails closed; license text and generated dependencies/build output are intentionally ignored.
+Before publication, run `pnpm check:privacy`. This read-only release-gate scan checks tracked
+and publishable untracked source, documentation, and templates for credential patterns, real
+private paths, and personal data. It reports finding types and file paths without secret values
+and fails closed; Git-ignored machine-local files, license text, dependencies, and build output
+are intentionally ignored.
 
 Profiles, sessions, and context manifests are all validated against Zod schemas on read and
 write (`profile-validator.ts`, `session-validator.ts`, `context-validator.ts`), so malformed

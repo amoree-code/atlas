@@ -1,19 +1,48 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { validateProfileDistribution, type ProfileDistribution } from "../../domain/profiles/profile-distribution.js";
+import {
+  type ProfileDistribution,
+  validateProfileDistribution,
+} from "../../domain/profiles/profile-distribution.js";
 
-const forbidden = new Set([".env", ".env.example", "auth.json", "memories", "sessions", "logs", "workspace", "home", "state.db", "state.db-shm", "state.db-wal"]);
+const forbidden = new Set([
+  ".env",
+  ".env.example",
+  "auth.json",
+  "memories",
+  "sessions",
+  "logs",
+  "workspace",
+  "home",
+  "state.db",
+  "state.db-shm",
+  "state.db-wal",
+]);
 
-export async function loadProfileDistribution(root: string): Promise<ProfileDistribution> {
-  const manifest = JSON.parse(await readFile(path.join(root, "distribution.yaml"), "utf8"));
+export async function loadProfileDistribution(
+  root: string,
+): Promise<ProfileDistribution> {
+  const manifest = JSON.parse(
+    await readFile(path.join(root, "distribution.yaml"), "utf8"),
+  );
   const distribution = validateProfileDistribution(manifest);
-  const files = distribution.files.length ? distribution.files : await listFiles(root);
+  const files = distribution.files.length
+    ? distribution.files
+    : await listFiles(root);
   for (const file of files) {
-    if (isForbidden(file)) throw new Error(`Profile distribution contains forbidden private state: ${file}`);
+    if (isForbidden(file))
+      throw new Error(
+        `Profile distribution contains forbidden private state: ${file}`,
+      );
     const resolved = path.resolve(root, file);
     const rootPath = path.resolve(root);
-    if (resolved !== rootPath && !resolved.startsWith(`${rootPath}${path.sep}`)) {
-      throw new Error(`Profile distribution file escapes package root: ${file}`);
+    if (
+      resolved !== rootPath &&
+      !resolved.startsWith(`${rootPath}${path.sep}`)
+    ) {
+      throw new Error(
+        `Profile distribution file escapes package root: ${file}`,
+      );
     }
     await stat(resolved);
   }
@@ -21,7 +50,9 @@ export async function loadProfileDistribution(root: string): Promise<ProfileDist
 }
 
 function isForbidden(file: string): boolean {
-  return file.split(/[\\/]/).some((part) => forbidden.has(part) || part.startsWith(".env"));
+  return file
+    .split(/[\\/]/)
+    .some((part) => forbidden.has(part) || part.startsWith(".env"));
 }
 
 async function listFiles(root: string, relative = ""): Promise<string[]> {
@@ -29,7 +60,7 @@ async function listFiles(root: string, relative = ""): Promise<string[]> {
   const result: string[] = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const child = path.join(relative, entry.name);
-    if (entry.isDirectory()) result.push(...await listFiles(root, child));
+    if (entry.isDirectory()) result.push(...(await listFiles(root, child)));
     else result.push(child);
   }
   return result;

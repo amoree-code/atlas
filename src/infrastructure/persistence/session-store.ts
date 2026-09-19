@@ -1,10 +1,25 @@
-import { DatabaseSync } from "node:sqlite";
 import { access, mkdir } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
+import {
+  assertValidStatusTransition,
+  type Session,
+  type SessionEvent,
+  type SessionStatus,
+} from "../../domain/sessions/session.js";
 import { atlasPath } from "../../paths.js";
-import { assertValidStatusTransition, type Session, type SessionEvent, type SessionStatus } from "../../domain/sessions/session.js";
 import { validateSession } from "./session-validator.js";
 
-type SessionRow = Omit<Session, "sessionId" | "providerSessionId" | "parentSessionId" | "profileIdentity" | "workingDirectory" | "resumeData" | "createdAt" | "updatedAt"> & {
+type SessionRow = Omit<
+  Session,
+  | "sessionId"
+  | "providerSessionId"
+  | "parentSessionId"
+  | "profileIdentity"
+  | "workingDirectory"
+  | "resumeData"
+  | "createdAt"
+  | "updatedAt"
+> & {
   session_id: string;
   title: string;
   ticket_id: string | null;
@@ -31,8 +46,14 @@ type SessionRow = Omit<Session, "sessionId" | "providerSessionId" | "parentSessi
 export class SessionStore {
   private readonly database: DatabaseSync;
 
-  constructor(databaseFile = atlasPath("system", "sessions", "sessions.sqlite"), options: { readOnly?: boolean } = {}) {
-    this.database = new DatabaseSync(databaseFile, options.readOnly ? { readOnly: true } : {});
+  constructor(
+    databaseFile = atlasPath("system", "sessions", "sessions.sqlite"),
+    options: { readOnly?: boolean } = {},
+  ) {
+    this.database = new DatabaseSync(
+      databaseFile,
+      options.readOnly ? { readOnly: true } : {},
+    );
     if (options.readOnly) {
       this.database.exec("PRAGMA query_only = ON; PRAGMA busy_timeout = 5000;");
       return;
@@ -137,92 +158,214 @@ export class SessionStore {
   // CREATE TABLE IF NOT EXISTS does not add columns to a table that already exists, so a
   // database created before profile identity existed needs this column added explicitly.
   private migrateProfileIdentityColumn(): void {
-    const columns = this.database.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>;
+    const columns = this.database
+      .prepare("PRAGMA table_info(sessions)")
+      .all() as Array<{ name: string }>;
     if (!columns.some((column) => column.name === "profile_identity")) {
-      this.database.exec("ALTER TABLE sessions ADD COLUMN profile_identity TEXT NOT NULL DEFAULT ''");
+      this.database.exec(
+        "ALTER TABLE sessions ADD COLUMN profile_identity TEXT NOT NULL DEFAULT ''",
+      );
     }
     const additions: Array<[string, string]> = [
-      ["title", "TEXT NOT NULL DEFAULT ''"], ["ticket_id", "TEXT"], ["handoff_id", "TEXT"],
-      ["context_hash", "TEXT"], ["context_bytes", "INTEGER NOT NULL DEFAULT 0"],
-      ["next_action", "TEXT NOT NULL DEFAULT ''"], ["verification_status", "TEXT NOT NULL DEFAULT 'unknown'"],
-      ["summary_path", "TEXT"], ["summary_hash", "TEXT"], ["summary_bytes", "INTEGER NOT NULL DEFAULT 0"],
-      ["closeout_status", "TEXT NOT NULL DEFAULT 'pending'"], ["closeout_version", "TEXT NOT NULL DEFAULT '1'"],
+      ["title", "TEXT NOT NULL DEFAULT ''"],
+      ["ticket_id", "TEXT"],
+      ["handoff_id", "TEXT"],
+      ["context_hash", "TEXT"],
+      ["context_bytes", "INTEGER NOT NULL DEFAULT 0"],
+      ["next_action", "TEXT NOT NULL DEFAULT ''"],
+      ["verification_status", "TEXT NOT NULL DEFAULT 'unknown'"],
+      ["summary_path", "TEXT"],
+      ["summary_hash", "TEXT"],
+      ["summary_bytes", "INTEGER NOT NULL DEFAULT 0"],
+      ["closeout_status", "TEXT NOT NULL DEFAULT 'pending'"],
+      ["closeout_version", "TEXT NOT NULL DEFAULT '1'"],
       ["closed_at", "TEXT"],
     ];
     for (const [name, definition] of additions) {
-      if (!columns.some((column) => column.name === name)) this.database.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${definition}`);
+      if (!columns.some((column) => column.name === name))
+        this.database.exec(
+          `ALTER TABLE sessions ADD COLUMN ${name} ${definition}`,
+        );
     }
   }
 
   private migrateHandoffSummaryColumn(): void {
-    const columns = this.database.prepare("PRAGMA table_info(handoffs)").all() as Array<{ name: string }>;
+    const columns = this.database
+      .prepare("PRAGMA table_info(handoffs)")
+      .all() as Array<{ name: string }>;
     if (!columns.some((column) => column.name === "source_summary_path")) {
-      this.database.exec("ALTER TABLE handoffs ADD COLUMN source_summary_path TEXT");
+      this.database.exec(
+        "ALTER TABLE handoffs ADD COLUMN source_summary_path TEXT",
+      );
     }
   }
 
-  create(input: Omit<Session, "createdAt" | "updatedAt" | "status" | "title" | "ticketId" | "handoffId" | "contextHash" | "contextBytes" | "nextAction" | "verificationStatus" | "summaryPath" | "summaryHash" | "summaryBytes" | "closeoutStatus" | "closeoutVersion" | "closedAt"> & {
-    status?: SessionStatus; title?: string; ticketId?: string | null; handoffId?: string | null; contextHash?: string | null;
-    contextBytes?: number; nextAction?: string; verificationStatus?: "unknown" | "proven" | "not_proven" | "blocked";
-  }): Session {
+  create(
+    input: Omit<
+      Session,
+      | "createdAt"
+      | "updatedAt"
+      | "status"
+      | "title"
+      | "ticketId"
+      | "handoffId"
+      | "contextHash"
+      | "contextBytes"
+      | "nextAction"
+      | "verificationStatus"
+      | "summaryPath"
+      | "summaryHash"
+      | "summaryBytes"
+      | "closeoutStatus"
+      | "closeoutVersion"
+      | "closedAt"
+    > & {
+      status?: SessionStatus;
+      title?: string;
+      ticketId?: string | null;
+      handoffId?: string | null;
+      contextHash?: string | null;
+      contextBytes?: number;
+      nextAction?: string;
+      verificationStatus?: "unknown" | "proven" | "not_proven" | "blocked";
+    },
+  ): Session {
     const now = new Date().toISOString();
-    const session = validateSession({ ...input, status: input.status ?? "created", createdAt: now, updatedAt: now });
-    this.database.prepare(`
+    const session = validateSession({
+      ...input,
+      status: input.status ?? "created",
+      createdAt: now,
+      updatedAt: now,
+    });
+    this.database
+      .prepare(`
       INSERT INTO sessions (session_id, title, ticket_id, handoff_id, provider, provider_session_id, parent_session_id, profile,
         profile_identity, working_directory, status, created_at, updated_at, resume_data, context_hash, context_bytes, next_action, verification_status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(session.sessionId, session.title, session.ticketId, session.handoffId, session.provider, session.providerSessionId,
-      session.parentSessionId, session.profile, session.profileIdentity, session.workingDirectory, session.status, now, now,
-      session.resumeData, session.contextHash, session.contextBytes, session.nextAction, session.verificationStatus);
+    `)
+      .run(
+        session.sessionId,
+        session.title,
+        session.ticketId,
+        session.handoffId,
+        session.provider,
+        session.providerSessionId,
+        session.parentSessionId,
+        session.profile,
+        session.profileIdentity,
+        session.workingDirectory,
+        session.status,
+        now,
+        now,
+        session.resumeData,
+        session.contextHash,
+        session.contextBytes,
+        session.nextAction,
+        session.verificationStatus,
+      );
 
     if (session.parentSessionId) {
-      this.database.prepare("INSERT INTO session_links (parent_session_id, child_session_id) VALUES (?, ?)")
+      this.database
+        .prepare(
+          "INSERT INTO session_links (parent_session_id, child_session_id) VALUES (?, ?)",
+        )
         .run(session.parentSessionId, session.sessionId);
     }
     return session;
   }
 
   get(sessionId: string): Session | null {
-    const row = this.database.prepare("SELECT * FROM sessions WHERE session_id = ?").get(sessionId) as SessionRow | undefined;
+    const row = this.database
+      .prepare("SELECT * FROM sessions WHERE session_id = ?")
+      .get(sessionId) as SessionRow | undefined;
     return row ? this.toSession(row) : null;
   }
 
-  updateStatus(sessionId: string, status: SessionStatus, resumeData?: string | null): void {
+  updateStatus(
+    sessionId: string,
+    status: SessionStatus,
+    resumeData?: string | null,
+  ): void {
     const current = this.get(sessionId);
     if (!current) throw new Error(`Session not found: ${sessionId}`);
     assertValidStatusTransition(current.status, status);
-    this.database.prepare("UPDATE sessions SET status = ?, resume_data = COALESCE(?, resume_data), updated_at = ? WHERE session_id = ?")
+    this.database
+      .prepare(
+        "UPDATE sessions SET status = ?, resume_data = COALESCE(?, resume_data), updated_at = ? WHERE session_id = ?",
+      )
       .run(status, resumeData ?? null, new Date().toISOString(), sessionId);
   }
 
   updateProviderSessionId(sessionId: string, providerSessionId: string): void {
-    this.database.prepare("UPDATE sessions SET provider_session_id = ?, updated_at = ? WHERE session_id = ?")
+    this.database
+      .prepare(
+        "UPDATE sessions SET provider_session_id = ?, updated_at = ? WHERE session_id = ?",
+      )
       .run(providerSessionId, new Date().toISOString(), sessionId);
   }
 
-  updateContext(sessionId: string, contextHash: string, contextBytes: number): void {
-    this.database.prepare("UPDATE sessions SET context_hash = ?, context_bytes = ?, updated_at = ? WHERE session_id = ?")
+  updateContext(
+    sessionId: string,
+    contextHash: string,
+    contextBytes: number,
+  ): void {
+    this.database
+      .prepare(
+        "UPDATE sessions SET context_hash = ?, context_bytes = ?, updated_at = ? WHERE session_id = ?",
+      )
       .run(contextHash, contextBytes, new Date().toISOString(), sessionId);
   }
 
   updateHandoff(sessionId: string, handoffId: string, nextAction = ""): void {
-    this.database.prepare("UPDATE sessions SET handoff_id = ?, next_action = ?, updated_at = ? WHERE session_id = ?")
+    this.database
+      .prepare(
+        "UPDATE sessions SET handoff_id = ?, next_action = ?, updated_at = ? WHERE session_id = ?",
+      )
       .run(handoffId, nextAction, new Date().toISOString(), sessionId);
   }
 
-  updateCloseout(sessionId: string, input: { summaryPath: string; summaryHash: string; summaryBytes: number; closeoutStatus: "completed" | "failed"; closedAt: string }): void {
-    this.database.prepare(`UPDATE sessions SET summary_path = ?, summary_hash = ?, summary_bytes = ?, closeout_status = ?, closeout_version = '1', closed_at = ?, updated_at = ? WHERE session_id = ?`)
-      .run(input.summaryPath, input.summaryHash, input.summaryBytes, input.closeoutStatus, input.closedAt, input.closedAt, sessionId);
+  updateCloseout(
+    sessionId: string,
+    input: {
+      summaryPath: string;
+      summaryHash: string;
+      summaryBytes: number;
+      closeoutStatus: "completed" | "failed";
+      closedAt: string;
+    },
+  ): void {
+    this.database
+      .prepare(
+        `UPDATE sessions SET summary_path = ?, summary_hash = ?, summary_bytes = ?, closeout_status = ?, closeout_version = '1', closed_at = ?, updated_at = ? WHERE session_id = ?`,
+      )
+      .run(
+        input.summaryPath,
+        input.summaryHash,
+        input.summaryBytes,
+        input.closeoutStatus,
+        input.closedAt,
+        input.closedAt,
+        sessionId,
+      );
   }
 
   saveHandoff(input: Record<string, unknown>): void {
     const now = new Date().toISOString();
-    const value = (key: string, fallback: string | number | null): string | number | null => {
+    const value = (
+      key: string,
+      fallback: string | number | null,
+    ): string | number | null => {
       const candidate = input[key] ?? fallback;
-      return typeof candidate === "string" || typeof candidate === "number" || candidate === null ? candidate : String(candidate);
+      return typeof candidate === "string" ||
+        typeof candidate === "number" ||
+        candidate === null
+        ? candidate
+        : String(candidate);
     };
-    const jsonValue = (key: string, fallback: unknown): string => JSON.stringify(input[key] ?? fallback);
-    this.database.prepare(`
+    const jsonValue = (key: string, fallback: unknown): string =>
+      JSON.stringify(input[key] ?? fallback);
+    this.database
+      .prepare(`
       INSERT INTO handoffs (handoff_id, ticket_id, title, objective, state, profile_id, profile_identity,
         source_session_id, provider, parent_session_id, decisions_json, changed_files_json, commit_ref,
         verification_json, not_proven_json, blocked_json, permissions_json, context_manifest_json,
@@ -239,101 +382,237 @@ export class SessionStore {
         next_action=excluded.next_action, source_summary_path=excluded.source_summary_path,
         content=excluded.content, content_bytes=excluded.content_bytes,
         updated_at=excluded.updated_at
-    `).run(value("handoffId", ""), value("ticketId", null), value("title", ""), value("objective", ""),
-      value("state", "paused"), value("profileId", ""), value("profileIdentity", ""), value("sourceSessionId", null),
-      value("provider", ""), value("parentSessionId", null), jsonValue("decisions", []),
-      jsonValue("changedFiles", []), value("commit", null), jsonValue("verification", []),
-      jsonValue("notProven", []), jsonValue("blocked", []), jsonValue("permissions", {}),
-      jsonValue("contextManifest", {}), value("nextAction", ""), value("sourceSummaryPath", null), value("content", ""),
-      value("contentBytes", 0), value("createdAt", now), now);
+    `)
+      .run(
+        value("handoffId", ""),
+        value("ticketId", null),
+        value("title", ""),
+        value("objective", ""),
+        value("state", "paused"),
+        value("profileId", ""),
+        value("profileIdentity", ""),
+        value("sourceSessionId", null),
+        value("provider", ""),
+        value("parentSessionId", null),
+        jsonValue("decisions", []),
+        jsonValue("changedFiles", []),
+        value("commit", null),
+        jsonValue("verification", []),
+        jsonValue("notProven", []),
+        jsonValue("blocked", []),
+        jsonValue("permissions", {}),
+        jsonValue("contextManifest", {}),
+        value("nextAction", ""),
+        value("sourceSummaryPath", null),
+        value("content", ""),
+        value("contentBytes", 0),
+        value("createdAt", now),
+        now,
+      );
   }
 
   getHandoff(handoffId: string): Record<string, unknown> | null {
-    const row = this.database.prepare("SELECT * FROM handoffs WHERE handoff_id = ?").get(handoffId) as Record<string, unknown> | undefined;
+    const row = this.database
+      .prepare("SELECT * FROM handoffs WHERE handoff_id = ?")
+      .get(handoffId) as Record<string, unknown> | undefined;
     return row ? this.deserializeHandoff(row) : null;
   }
 
   listHandoffs(ticketId?: string): Array<Record<string, unknown>> {
-    const rows = (ticketId
-      ? this.database.prepare("SELECT * FROM handoffs WHERE ticket_id = ? ORDER BY updated_at DESC").all(ticketId)
-      : this.database.prepare("SELECT * FROM handoffs ORDER BY updated_at DESC").all()) as Array<Record<string, unknown>>;
+    const rows = (
+      ticketId
+        ? this.database
+            .prepare(
+              "SELECT * FROM handoffs WHERE ticket_id = ? ORDER BY updated_at DESC",
+            )
+            .all(ticketId)
+        : this.database
+            .prepare("SELECT * FROM handoffs ORDER BY updated_at DESC")
+            .all()
+    ) as Array<Record<string, unknown>>;
     return rows.map((row) => this.deserializeHandoff(row));
   }
 
-  saveIdea(input: { ideaId: string; title: string; content: string; sourceSessionId?: string | null }): void {
+  saveIdea(input: {
+    ideaId: string;
+    title: string;
+    content: string;
+    sourceSessionId?: string | null;
+  }): void {
     const now = new Date().toISOString();
-    this.database.prepare(`INSERT INTO ideas (idea_id, title, content, source_session_id, status, created_at, updated_at)
+    this.database
+      .prepare(`INSERT INTO ideas (idea_id, title, content, source_session_id, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'raw', ?, ?)`)
-      .run(input.ideaId, input.title, input.content, input.sourceSessionId ?? null, now, now);
+      .run(
+        input.ideaId,
+        input.title,
+        input.content,
+        input.sourceSessionId ?? null,
+        now,
+        now,
+      );
   }
 
   listIdeas(status?: string): Array<Record<string, unknown>> {
-    const rows = (status
-      ? this.database.prepare("SELECT * FROM ideas WHERE status = ? ORDER BY created_at DESC").all(status)
-      : this.database.prepare("SELECT * FROM ideas ORDER BY created_at DESC").all()) as Array<Record<string, unknown>>;
-    return rows.map((row) => ({ ideaId: row.idea_id, title: row.title, content: row.content, sourceSessionId: row.source_session_id, status: row.status, target: row.target, createdAt: row.created_at, updatedAt: row.updated_at }));
+    const rows = (
+      status
+        ? this.database
+            .prepare(
+              "SELECT * FROM ideas WHERE status = ? ORDER BY created_at DESC",
+            )
+            .all(status)
+        : this.database
+            .prepare("SELECT * FROM ideas ORDER BY created_at DESC")
+            .all()
+    ) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({
+      ideaId: row.idea_id,
+      title: row.title,
+      content: row.content,
+      sourceSessionId: row.source_session_id,
+      status: row.status,
+      target: row.target,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
   }
 
-  updateIdea(ideaId: string, status: "classified" | "discarded", target?: string): void {
-    const result = this.database.prepare("UPDATE ideas SET status = ?, target = ?, updated_at = ? WHERE idea_id = ?")
+  updateIdea(
+    ideaId: string,
+    status: "classified" | "discarded",
+    target?: string,
+  ): void {
+    const result = this.database
+      .prepare(
+        "UPDATE ideas SET status = ?, target = ?, updated_at = ? WHERE idea_id = ?",
+      )
       .run(status, target ?? null, new Date().toISOString(), ideaId);
     if (!result.changes) throw new Error(`Idea not found: ${ideaId}`);
   }
 
-  private deserializeHandoff(row: Record<string, unknown>): Record<string, unknown> {
+  private deserializeHandoff(
+    row: Record<string, unknown>,
+  ): Record<string, unknown> {
     const json = (key: string, fallback: unknown): unknown => {
-      try { return JSON.parse(String(row[key] ?? "")); } catch { return fallback; }
+      try {
+        return JSON.parse(String(row[key] ?? ""));
+      } catch {
+        return fallback;
+      }
     };
     return {
-      handoffId: row.handoff_id, ticketId: row.ticket_id, title: row.title, objective: row.objective, state: row.state,
-      profileId: row.profile_id, profileIdentity: row.profile_identity, sourceSessionId: row.source_session_id,
-      provider: row.provider, parentSessionId: row.parent_session_id, decisions: json("decisions_json", []),
-      changedFiles: json("changed_files_json", []), commit: row.commit_ref, verification: json("verification_json", []),
-      notProven: json("not_proven_json", []), blocked: json("blocked_json", []), permissions: json("permissions_json", {}),
-      contextManifest: json("context_manifest_json", {}), nextAction: row.next_action, sourceSummaryPath: row.source_summary_path ?? null, content: row.content,
-      contentBytes: row.content_bytes, createdAt: row.created_at, updatedAt: row.updated_at,
+      handoffId: row.handoff_id,
+      ticketId: row.ticket_id,
+      title: row.title,
+      objective: row.objective,
+      state: row.state,
+      profileId: row.profile_id,
+      profileIdentity: row.profile_identity,
+      sourceSessionId: row.source_session_id,
+      provider: row.provider,
+      parentSessionId: row.parent_session_id,
+      decisions: json("decisions_json", []),
+      changedFiles: json("changed_files_json", []),
+      commit: row.commit_ref,
+      verification: json("verification_json", []),
+      notProven: json("not_proven_json", []),
+      blocked: json("blocked_json", []),
+      permissions: json("permissions_json", {}),
+      contextManifest: json("context_manifest_json", {}),
+      nextAction: row.next_action,
+      sourceSummaryPath: row.source_summary_path ?? null,
+      content: row.content,
+      contentBytes: row.content_bytes,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     };
   }
 
   list(): Session[] {
-    return (this.database.prepare("SELECT * FROM sessions ORDER BY created_at DESC").all() as SessionRow[])
-      .map((row) => this.toSession(row));
+    return (
+      this.database
+        .prepare("SELECT * FROM sessions ORDER BY created_at DESC")
+        .all() as SessionRow[]
+    ).map((row) => this.toSession(row));
   }
 
   listStaleRunning(olderThanMs: number, now = Date.now()): Session[] {
-    if (!Number.isFinite(olderThanMs) || olderThanMs <= 0) throw new Error("Stale-session threshold must be positive");
+    if (!Number.isFinite(olderThanMs) || olderThanMs <= 0)
+      throw new Error("Stale-session threshold must be positive");
     const cutoff = new Date(now - olderThanMs).toISOString();
-    return (this.database.prepare("SELECT * FROM sessions WHERE status = 'running' AND updated_at < ? ORDER BY updated_at").all(cutoff) as SessionRow[])
-      .map((row) => this.toSession(row));
+    return (
+      this.database
+        .prepare(
+          "SELECT * FROM sessions WHERE status = 'running' AND updated_at < ? ORDER BY updated_at",
+        )
+        .all(cutoff) as SessionRow[]
+    ).map((row) => this.toSession(row));
   }
 
   reconcileStaleRunning(olderThanMs: number, now = Date.now()): Session[] {
     const stale = this.listStaleRunning(olderThanMs, now);
     for (const session of stale) {
       this.updateStatus(session.sessionId, "cancelled");
-      this.appendEvent(session.sessionId, "session_reconciled", JSON.stringify({ reason: "stale-running", thresholdMs: olderThanMs, reconciledAt: new Date(now).toISOString() }));
+      this.appendEvent(
+        session.sessionId,
+        "session_reconciled",
+        JSON.stringify({
+          reason: "stale-running",
+          thresholdMs: olderThanMs,
+          reconciledAt: new Date(now).toISOString(),
+        }),
+      );
     }
     return stale;
   }
 
   integrityCheck(): { integrity: string; foreignKeys: unknown[] } {
-    const integrity = (this.database.prepare("PRAGMA integrity_check").get() as { integrity_check: string }).integrity_check;
+    const integrity = (
+      this.database.prepare("PRAGMA integrity_check").get() as {
+        integrity_check: string;
+      }
+    ).integrity_check;
     const foreignKeys = this.database.prepare("PRAGMA foreign_key_check").all();
     return { integrity, foreignKeys };
   }
 
   appendEvent(sessionId: string, type: string, data: string): SessionEvent {
     const createdAt = new Date().toISOString();
-    const result = this.database.prepare("INSERT INTO session_events (session_id, type, data, created_at) VALUES (?, ?, ?, ?)")
+    const result = this.database
+      .prepare(
+        "INSERT INTO session_events (session_id, type, data, created_at) VALUES (?, ?, ?, ?)",
+      )
       .run(sessionId, type, data, createdAt);
-    return { eventId: Number(result.lastInsertRowid), sessionId, type, data, createdAt };
+    return {
+      eventId: Number(result.lastInsertRowid),
+      sessionId,
+      type,
+      data,
+      createdAt,
+    };
   }
 
   listEvents(sessionId: string): SessionEvent[] {
-    return this.database.prepare("SELECT event_id, session_id, type, data, created_at FROM session_events WHERE session_id = ? ORDER BY event_id")
-      .all(sessionId).map((row) => {
-        const event = row as { event_id: number; session_id: string; type: string; data: string; created_at: string };
-        return { eventId: event.event_id, sessionId: event.session_id, type: event.type, data: event.data, createdAt: event.created_at };
+    return this.database
+      .prepare(
+        "SELECT event_id, session_id, type, data, created_at FROM session_events WHERE session_id = ? ORDER BY event_id",
+      )
+      .all(sessionId)
+      .map((row) => {
+        const event = row as {
+          event_id: number;
+          session_id: string;
+          type: string;
+          data: string;
+          created_at: string;
+        };
+        return {
+          eventId: event.event_id,
+          sessionId: event.session_id,
+          type: event.type,
+          data: event.data,
+          createdAt: event.created_at,
+        };
       });
   }
 
@@ -343,30 +622,79 @@ export class SessionStore {
          AND event_id NOT IN (SELECT source_event_id FROM capture_items) ORDER BY event_id`
       : `SELECT event_id FROM session_events WHERE type = 'user_input'
          AND event_id NOT IN (SELECT source_event_id FROM capture_items) ORDER BY event_id`;
-    const rows = (sessionId ? this.database.prepare(query).all(sessionId) : this.database.prepare(query).all()) as Array<{ event_id: number }>;
-    const insert = this.database.prepare("INSERT INTO capture_items (source_event_id, created_at) VALUES (?, ?)");
+    const rows = (
+      sessionId
+        ? this.database.prepare(query).all(sessionId)
+        : this.database.prepare(query).all()
+    ) as Array<{ event_id: number }>;
+    const insert = this.database.prepare(
+      "INSERT INTO capture_items (source_event_id, created_at) VALUES (?, ?)",
+    );
     const now = new Date().toISOString();
     for (const row of rows) insert.run(row.event_id, now);
     return rows.length;
   }
 
-  listCaptureItems(status = "new"): Array<{ captureId: number; sourceEventId: number; sessionId: string; content: string; type: string; status: string; target: string | null; createdAt: string }> {
-    const rows = this.database.prepare(`
+  listCaptureItems(status = "new"): Array<{
+    captureId: number;
+    sourceEventId: number;
+    sessionId: string;
+    content: string;
+    type: string;
+    status: string;
+    target: string | null;
+    createdAt: string;
+  }> {
+    const rows = this.database
+      .prepare(`
       SELECT c.capture_id, c.source_event_id, e.session_id, e.data, c.type, c.status, c.target, c.created_at
       FROM capture_items c JOIN session_events e ON e.event_id = c.source_event_id
       WHERE c.status = ? ORDER BY c.capture_id
-    `).all(status) as Array<{ capture_id: number; source_event_id: number; session_id: string; data: string; type: string; status: string; target: string | null; created_at: string }>;
-    return rows.map((row) => ({ captureId: row.capture_id, sourceEventId: row.source_event_id, sessionId: row.session_id, content: row.data, type: row.type, status: row.status, target: row.target, createdAt: row.created_at }));
+    `)
+      .all(status) as Array<{
+      capture_id: number;
+      source_event_id: number;
+      session_id: string;
+      data: string;
+      type: string;
+      status: string;
+      target: string | null;
+      created_at: string;
+    }>;
+    return rows.map((row) => ({
+      captureId: row.capture_id,
+      sourceEventId: row.source_event_id,
+      sessionId: row.session_id,
+      content: row.data,
+      type: row.type,
+      status: row.status,
+      target: row.target,
+      createdAt: row.created_at,
+    }));
   }
 
-  getCaptureItem(captureId: number): ReturnType<SessionStore["listCaptureItems"]>[number] | null {
-    return this.listCaptureItems("new").find((item) => item.captureId === captureId) ?? null;
+  getCaptureItem(
+    captureId: number,
+  ): ReturnType<SessionStore["listCaptureItems"]>[number] | null {
+    return (
+      this.listCaptureItems("new").find(
+        (item) => item.captureId === captureId,
+      ) ?? null
+    );
   }
 
-  updateCaptureStatus(captureId: number, status: "promoted" | "discarded", target?: string): void {
-    const result = this.database.prepare("UPDATE capture_items SET status = ?, target = ?, reviewed_at = ? WHERE capture_id = ?")
+  updateCaptureStatus(
+    captureId: number,
+    status: "promoted" | "discarded",
+    target?: string,
+  ): void {
+    const result = this.database
+      .prepare(
+        "UPDATE capture_items SET status = ?, target = ?, reviewed_at = ? WHERE capture_id = ?",
+      )
       .run(status, target ?? null, new Date().toISOString(), captureId);
-    if (!result.changes) throw new Error(`Capture item not found: ${captureId}`);
+    if (!result.changes)
+      throw new Error(`Capture item not found: ${captureId}`);
   }
 
   close(): void {

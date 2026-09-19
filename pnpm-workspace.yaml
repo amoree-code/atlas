@@ -1,2 +1,4 @@
-onlyBuiltDependencies:
-  - node-pty
+allowBuilds:
+  esbuild: true
+  lefthook: true
+  node-pty: true

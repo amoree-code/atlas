@@ -21,18 +21,27 @@ function projectTag(project: ProjectResolution): string {
 
 // Bounded, client-neutral: identifies Atlas as canonical and the resolved project (or its
 // absence), and names the on-demand operations a client can call. Never Atlas file content.
-export function buildAtlasBootstrap(project: ProjectResolution): AtlasBootstrap {
+export function buildAtlasBootstrap(
+  project: ProjectResolution,
+): AtlasBootstrap {
   const content = `atlas=1 project=${projectTag(project)} confidence=${project.confidence} ops=${SUPPORTED_OPERATIONS}`;
   const bytes = Buffer.byteLength(content, "utf8");
   if (bytes > ATLAS_BOOTSTRAP_MAX_BYTES) {
-    throw new Error(`Atlas bootstrap exceeds the ${ATLAS_BOOTSTRAP_MAX_BYTES}-byte budget (${bytes} bytes): ${content}`);
+    throw new Error(
+      `Atlas bootstrap exceeds the ${ATLAS_BOOTSTRAP_MAX_BYTES}-byte budget (${bytes} bytes): ${content}`,
+    );
   }
-  return { content, manifest: { bytes, source: "atlas", transport: "bootstrap-env" } };
+  return {
+    content,
+    manifest: { bytes, source: "atlas", transport: "bootstrap-env" },
+  };
 }
 
 // Delivered as environment variables only — never written into provider argv or a
 // provider-owned context file, and never a second source of truth for provider memory.
-export function bootstrapEnvironment(bootstrap: AtlasBootstrap): Record<string, string> {
+export function bootstrapEnvironment(
+  bootstrap: AtlasBootstrap,
+): Record<string, string> {
   return {
     ATLAS_BOOTSTRAP: bootstrap.content,
     ATLAS_BOOTSTRAP_BYTES: String(bootstrap.manifest.bytes),

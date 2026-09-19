@@ -2,7 +2,15 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { defaultSkillNames } from "../skills/default-skills.js";
 
-const providerSchema = z.enum(["claude", "codex", "gemini", "antigravity", "hermes", "kilo", "kimi"]);
+const providerSchema = z.enum([
+  "claude",
+  "codex",
+  "gemini",
+  "antigravity",
+  "hermes",
+  "kilo",
+  "kimi",
+]);
 const clientBindingSchema = z.object({
   enabled: z.boolean().default(true),
   model: z.string().min(1).optional(),
@@ -32,48 +40,87 @@ const rawProfileSchema = z.object({
   allowedCommands: z.array(z.string()).default([]),
   writePolicy: z.enum(["none", "workspace", "allowed-paths"]).default("none"),
   contextSources: z.array(z.string()).default([]),
-  clients: z.record(clientBindingSchema).default({}),
+  clients: z.record(z.string(), clientBindingSchema).default({}),
   defaultClient: providerSchema.optional(),
   governance: governanceSchema.optional(),
-  memory: z.object({ enabled: z.boolean().default(true), scope: z.string().min(1).default("profile") }).default({}),
-  verification: z.object({ commands: z.array(z.string()).default([]) }).default({}),
+  memory: z
+    .object({
+      enabled: z.boolean().default(true),
+      scope: z.string().min(1).default("profile"),
+    })
+    .default({ enabled: true, scope: "profile" }),
+  verification: z
+    .object({ commands: z.array(z.string()).default([]) })
+    .default({ commands: [] }),
   contextCompression: z.enum(["none", "atlas-bounded"]).default("none"),
   instructions: z.string().default(""),
 });
 
-export const profileSchema = rawProfileSchema.superRefine((input, context) => {
-  for (const client of Object.keys(input.clients)) {
-    if (!providerSchema.safeParse(client).success) context.addIssue({ code: z.ZodIssueCode.custom, path: ["clients", client], message: `Unsupported client: ${client}` });
-  }
-  if (!input.provider && !input.defaultClient && !Object.entries(input.clients).some(([, binding]) => binding.enabled)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ["clients"], message: "Profile must select a provider or an enabled client" });
-  }
-}).transform((input) => {
-  const provider = input.provider ?? input.defaultClient ?? (Object.entries(input.clients).find(([, binding]) => binding.enabled)?.[0] as z.infer<typeof providerSchema>);
-  const model = input.model ?? input.clients[provider]?.model ?? "provider-managed";
-  const governance = input.governance ?? {};
-  return {
-    ...input,
-    skills: input.skills.length ? input.skills : defaultSkillNames(input.role),
-    provider,
-    model,
-    defaultClient: input.defaultClient ?? provider,
-    allowedPaths: governance.allowedPaths ?? input.allowedPaths,
-    allowedCommands: governance.allowedCommands ?? input.allowedCommands,
-    writePolicy: governance.writePolicy ?? input.writePolicy,
-  };
-});
+export const profileSchema = rawProfileSchema
+  .superRefine((input, context) => {
+    for (const client of Object.keys(input.clients)) {
+      if (!providerSchema.safeParse(client).success)
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["clients", client],
+          message: `Unsupported client: ${client}`,
+        });
+    }
+    if (
+      !input.provider &&
+      !input.defaultClient &&
+      !Object.entries(input.clients).some(([, binding]) => binding.enabled)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["clients"],
+        message: "Profile must select a provider or an enabled client",
+      });
+    }
+  })
+  .transform((input) => {
+    const provider =
+      input.provider ??
+      input.defaultClient ??
+      (Object.entries(input.clients).find(
+        ([, binding]) => binding.enabled,
+      )?.[0] as z.infer<typeof providerSchema>);
+    const model =
+      input.model ?? input.clients[provider]?.model ?? "provider-managed";
+    const governance = input.governance ?? {};
+    return {
+      ...input,
+      skills: input.skills.length
+        ? input.skills
+        : defaultSkillNames(input.role),
+      provider,
+      model,
+      defaultClient: input.defaultClient ?? provider,
+      allowedPaths: governance.allowedPaths ?? input.allowedPaths,
+      allowedCommands: governance.allowedCommands ?? input.allowedCommands,
+      writePolicy: governance.writePolicy ?? input.writePolicy,
+    };
+  });
 
 export type Profile = z.infer<typeof profileSchema>;
 
-export function selectProfileClient(profile: Profile, requested?: string): Profile {
+export function selectProfileClient(
+  profile: Profile,
+  requested?: string,
+): Profile {
   const value = requested ?? profile.defaultClient ?? profile.provider;
   const parsed = providerSchema.safeParse(value);
   if (!parsed.success) throw new Error(`Unsupported client: ${value}`);
   const client = parsed.data;
   const binding = profile.clients[client];
-  if (Object.keys(profile.clients).length && (!binding || !binding.enabled)) throw new Error(`Client is not enabled for profile: ${client}`);
-  return { ...profile, provider: client, defaultClient: client, model: binding?.model ?? profile.model };
+  if (Object.keys(profile.clients).length && !binding?.enabled)
+    throw new Error(`Client is not enabled for profile: ${client}`);
+  return {
+    ...profile,
+    provider: client,
+    defaultClient: client,
+    model: binding?.model ?? profile.model,
+  };
 }
 
 // A deterministic identity for the exact configuration a profile had at the moment a

@@ -1,17 +1,29 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { addSkillCandidate, learnSkillFromSession, listSkillCandidates, loadPromotedSkills, reviewSkillCandidate } from "../dist/application/skills/skill-curation.js";
-import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
-import { listSkills, loadSkill, loadSkills } from "../dist/infrastructure/filesystem/skill-loader.js";
-import { mkdir, writeFile } from "node:fs/promises";
-import { mkdtemp } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import test from "node:test";
+import {
+  addSkillCandidate,
+  learnSkillFromSession,
+  listSkillCandidates,
+  loadPromotedSkills,
+  reviewSkillCandidate,
+} from "../dist/application/skills/skill-curation.js";
+import {
+  listSkills,
+  loadSkill,
+  loadSkills,
+} from "../dist/infrastructure/filesystem/skill-loader.js";
+import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
 test("lists the public core skill catalog without loading full instructions", async () => {
   const skills = await listSkills();
-  assert.deepEqual(skills.map((skill) => skill.name), ["core-thinking", "verification", "catch-up", "session-handoff"]);
+  assert.deepEqual(
+    skills.map((skill) => skill.name),
+    ["core-thinking", "verification", "catch-up", "session-handoff"],
+  );
   assert.equal(Object.hasOwn(skills[0], "instructions"), false);
 });
 
@@ -26,8 +38,14 @@ test("rejects unknown skills", async () => {
 });
 
 test("loads profile skills in order, ignores duplicates, and enforces a byte budget", async () => {
-  const skills = await loadSkills(["verification", "verification", "core-thinking"], 80);
-  assert.deepEqual(skills.map((skill) => skill.name), ["verification"]);
+  const skills = await loadSkills(
+    ["verification", "verification", "core-thinking"],
+    80,
+  );
+  assert.deepEqual(
+    skills.map((skill) => skill.name),
+    ["verification"],
+  );
   assert.ok(Buffer.byteLength(skills[0].instructions) <= 80);
 });
 
@@ -36,38 +54,82 @@ test("auto-activates only owner-reviewed promoted skills matching the prompt", a
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = root;
   try {
-    await addSkillCandidate({ id: "typescript-review", name: "TypeScript Review", instructions: "Check strict typing." });
-    await addSkillCandidate({ id: "untrusted-review", name: "Untrusted Review", instructions: "Do not load me." });
+    await addSkillCandidate({
+      id: "typescript-review",
+      name: "TypeScript Review",
+      instructions: "Check strict typing.",
+    });
+    await addSkillCandidate({
+      id: "untrusted-review",
+      name: "Untrusted Review",
+      instructions: "Do not load me.",
+    });
     await reviewSkillCandidate("typescript-review", "promoted");
-    const loaded = await loadPromotedSkills("Please apply TypeScript Review to this change");
-    assert.deepEqual(loaded.map((skill) => skill.id), ["typescript-review"]);
-    assert.deepEqual(await loadPromotedSkills("Please apply Untrusted Review"), []);
+    const loaded = await loadPromotedSkills(
+      "Please apply TypeScript Review to this change",
+    );
+    assert.deepEqual(
+      loaded.map((skill) => skill.id),
+      ["typescript-review"],
+    );
+    assert.deepEqual(
+      await loadPromotedSkills("Please apply Untrusted Review"),
+      [],
+    );
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
   }
 });
 
 test("resolves private and project skills without reading them from engine", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-private-skills-"));
   const projectSkills = path.join(root, "projects", "demo", "skills");
-  await mkdir(path.join(projectSkills, "project", "project-only"), { recursive: true });
-  await writeFile(path.join(projectSkills, "index.json"), JSON.stringify([{
-    name: "project-only", description: "Project skill", version: "1.0.0", category: "project",
-  }]));
-  await writeFile(path.join(projectSkills, "project", "project-only", "SKILL.md"), "Project instructions");
+  await mkdir(path.join(projectSkills, "project", "project-only"), {
+    recursive: true,
+  });
+  await writeFile(
+    path.join(projectSkills, "index.json"),
+    JSON.stringify([
+      {
+        name: "project-only",
+        description: "Project skill",
+        version: "1.0.0",
+        category: "project",
+      },
+    ]),
+  );
+  await writeFile(
+    path.join(projectSkills, "project", "project-only", "SKILL.md"),
+    "Project instructions",
+  );
   process.env.ATLAS_ROOT = root;
-  const skills = await loadSkills(["project-only"], 1000, path.join(root, "projects", "demo"));
+  const skills = await loadSkills(
+    ["project-only"],
+    1000,
+    path.join(root, "projects", "demo"),
+  );
   assert.equal(skills[0].instructions, "Project instructions");
   delete process.env.ATLAS_ROOT;
 });
 
 test("the pinned local validator rejects malformed Agent Skills", async () => {
   const script = path.join(process.cwd(), "scripts", "validate-skills.mjs");
-  const fixture = path.join(process.cwd(), "tests", "fixtures", "skills", "malformed");
-  const child = spawn(process.execPath, [script, fixture], { stdio: ["ignore", "pipe", "pipe"] });
+  const fixture = path.join(
+    process.cwd(),
+    "tests",
+    "fixtures",
+    "skills",
+    "malformed",
+  );
+  const child = spawn(process.execPath, [script, fixture], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   const output = await new Promise((resolve) => {
     let value = "";
-    child.stderr.on("data", (chunk) => { value += chunk; });
+    child.stderr.on("data", (chunk) => {
+      value += chunk;
+    });
     child.on("close", (code) => resolve({ code, value }));
   });
   assert.notEqual(output.code, 0);
@@ -77,9 +139,16 @@ test("the pinned local validator rejects malformed Agent Skills", async () => {
 test("stores and requires review for skill candidates", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-skill-candidates-"));
   process.env.ATLAS_ROOT = root;
-  await addSkillCandidate({ id: "review", name: "Review", instructions: "Check the diff." });
+  await addSkillCandidate({
+    id: "review",
+    name: "Review",
+    instructions: "Check the diff.",
+  });
   assert.equal((await listSkillCandidates())[0].status, "candidate");
-  assert.equal((await reviewSkillCandidate("review", "promoted")).status, "promoted");
+  assert.equal(
+    (await reviewSkillCandidate("review", "promoted")).status,
+    "promoted",
+  );
   delete process.env.ATLAS_ROOT;
 });
 
@@ -88,10 +157,27 @@ test("learns a bounded skill candidate from a completed session without auto-pro
   process.env.ATLAS_ROOT = root;
   const sessionId = "learn-session";
   const store = await openSessionStore();
-  store.create({ sessionId, provider: "codex", providerSessionId: null, parentSessionId: null, profile: "default", profileIdentity: "", workingDirectory: root, resumeData: null });
+  store.create({
+    sessionId,
+    provider: "codex",
+    providerSessionId: null,
+    parentSessionId: null,
+    profile: "default",
+    profileIdentity: "",
+    workingDirectory: root,
+    resumeData: null,
+  });
   store.updateStatus(sessionId, "running");
-  store.appendEvent(sessionId, "provider_output", "Use a bounded review checklist.");
-  store.appendEvent(sessionId, "evidence", JSON.stringify({ result: "proven" }));
+  store.appendEvent(
+    sessionId,
+    "provider_output",
+    "Use a bounded review checklist.",
+  );
+  store.appendEvent(
+    sessionId,
+    "evidence",
+    JSON.stringify({ result: "proven" }),
+  );
   store.updateStatus(sessionId, "completed");
   store.close();
   const candidate = await learnSkillFromSession(sessionId);

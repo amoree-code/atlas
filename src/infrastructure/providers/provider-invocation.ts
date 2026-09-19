@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
+import {
+  evaluateGuard,
+  type GuardDecision,
+  type GuardRequest,
+} from "../../application/operations/write-guard.js";
 import { redactRuntimeText } from "../observability/runtime-logger.js";
 import { resolveOriginalExecutable } from "./provider-registry.js";
-import { evaluateGuard, type GuardDecision, type GuardRequest } from "../../application/operations/write-guard.js";
 
 // Provider-neutral headless invocation boundary (T-198 slice 10). One contract for every
 // supported provider: guard first, then a non-interactive spawn with stdin closed and a hard
@@ -21,8 +25,14 @@ export type ProviderHeadlessSpec = {
 };
 
 export const PROVIDER_HEADLESS: Record<string, ProviderHeadlessSpec> = {
-  claude: { args: (prompt) => ["-p", prompt, "--output-format", "json"], parse: "json" },
-  codex: { args: (prompt) => ["exec", prompt, "--skip-git-repo-check"], parse: "text" },
+  claude: {
+    args: (prompt) => ["-p", prompt, "--output-format", "json"],
+    parse: "json",
+  },
+  codex: {
+    args: (prompt) => ["exec", prompt, "--skip-git-repo-check"],
+    parse: "text",
+  },
   gemini: { args: (prompt) => ["-p", prompt, "--skip-trust"], parse: "text" },
 };
 
@@ -32,11 +42,21 @@ export type ProviderSupport =
 
 export function providerHeadlessSupport(provider: string): ProviderSupport {
   const spec = PROVIDER_HEADLESS[provider];
-  if (!spec) return { supported: false, reason: `provider '${provider}' has no verified headless contract in Atlas — it stays gated as unsupported` };
+  if (!spec)
+    return {
+      supported: false,
+      reason: `provider '${provider}' has no verified headless contract in Atlas — it stays gated as unsupported`,
+    };
   return { supported: true, spec };
 }
 
-export type ProviderStatus = "completed" | "failed" | "timeout" | "unsupported" | "unavailable" | "denied";
+export type ProviderStatus =
+  | "completed"
+  | "failed"
+  | "timeout"
+  | "unsupported"
+  | "unavailable"
+  | "denied";
 
 export type ProviderResult = {
   provider: string;
@@ -77,14 +97,34 @@ function sessionIdOf(event: Record<string, unknown>): string | null {
 
 // Tolerant, deterministic stream parsing: a malformed line is counted, never thrown, and an
 // unterminated trailing line is reported as partial rather than silently dropped.
-export function parseProviderStream(text: string, mode: ProviderParseMode = "json"): ParsedStream {
-  if (mode === "text") return { events: [], malformedLines: 0, partial: false, providerSessionId: null };
+export function parseProviderStream(
+  text: string,
+  mode: ProviderParseMode = "json",
+): ParsedStream {
+  if (mode === "text")
+    return {
+      events: [],
+      malformedLines: 0,
+      partial: false,
+      providerSessionId: null,
+    };
   const trimmed = text.trim();
-  if (trimmed.length === 0) return { events: [], malformedLines: 0, partial: false, providerSessionId: null };
+  if (trimmed.length === 0)
+    return {
+      events: [],
+      malformedLines: 0,
+      partial: false,
+      providerSessionId: null,
+    };
 
   try {
     const single = JSON.parse(trimmed) as Record<string, unknown>;
-    return { events: [single], malformedLines: 0, partial: false, providerSessionId: sessionIdOf(single) };
+    return {
+      events: [single],
+      malformedLines: 0,
+      partial: false,
+      providerSessionId: sessionIdOf(single),
+    };
   } catch {
     // Fall through to line-by-line parsing.
   }
@@ -123,7 +163,12 @@ export type ProviderInvocationRequest = {
   executable?: string;
 };
 
-function result(request: ProviderInvocationRequest, status: ProviderStatus, reason: string, overrides: Partial<ProviderResult> = {}): ProviderResult {
+function result(
+  request: ProviderInvocationRequest,
+  status: ProviderStatus,
+  reason: string,
+  overrides: Partial<ProviderResult> = {},
+): ProviderResult {
   return {
     provider: request.provider,
     status,
@@ -143,20 +188,33 @@ function result(request: ProviderInvocationRequest, status: ProviderStatus, reas
 
 // Every external provider action goes through here, and the guard runs before the process is
 // ever spawned. A denial returns a structured result; it never reaches spawn().
-export async function invokeProviderHeadless(request: ProviderInvocationRequest): Promise<ProviderResult> {
+export async function invokeProviderHeadless(
+  request: ProviderInvocationRequest,
+): Promise<ProviderResult> {
   const support = providerHeadlessSupport(request.provider);
   if (!support.supported) return result(request, "unsupported", support.reason);
 
   const decision = evaluateGuard(request.guard);
   if (!decision.allowed) {
-    return result(request, "denied", `provider invocation denied by the Atlas write guard: ${decision.reason}`, { guard: decision });
+    return result(
+      request,
+      "denied",
+      `provider invocation denied by the Atlas write guard: ${decision.reason}`,
+      { guard: decision },
+    );
   }
 
   let executable: string;
   try {
-    executable = request.executable ?? resolveOriginalExecutable(request.provider);
+    executable =
+      request.executable ?? resolveOriginalExecutable(request.provider);
   } catch (error) {
-    return result(request, "unavailable", `provider '${request.provider}' is not available on this machine: ${error instanceof Error ? error.message : String(error)}`, { guard: decision });
+    return result(
+      request,
+      "unavailable",
+      `provider '${request.provider}' is not available on this machine: ${error instanceof Error ? error.message : String(error)}`,
+      { guard: decision },
+    );
   }
 
   const started = Date.now();
@@ -176,15 +234,26 @@ export async function invokeProviderHeadless(request: ProviderInvocationRequest)
       if (settled) return;
       settled = true;
       child.kill("SIGKILL");
-      resolve(result(request, "timeout", `provider '${request.provider}' exceeded the ${timeoutMs}ms budget and was terminated`, {
-        durationMs: Date.now() - started,
-        guard: decision,
-        output: redactRuntimeText(stdout).slice(0, MAX_OUTPUT_CHARS),
-      }));
+      resolve(
+        result(
+          request,
+          "timeout",
+          `provider '${request.provider}' exceeded the ${timeoutMs}ms budget and was terminated`,
+          {
+            durationMs: Date.now() - started,
+            guard: decision,
+            output: redactRuntimeText(stdout).slice(0, MAX_OUTPUT_CHARS),
+          },
+        ),
+      );
     }, timeoutMs);
 
-    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
-    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
 
     const finish = (exitCode: number | null, failureReason?: string) => {
       if (settled) return;
@@ -192,21 +261,37 @@ export async function invokeProviderHeadless(request: ProviderInvocationRequest)
       clearTimeout(timer);
       const parsed = parseProviderStream(stdout, support.spec.parse);
       const ok = exitCode === 0 && !failureReason;
-      resolve(result(request, ok ? "completed" : "failed", failureReason ?? (ok
-        ? `provider '${request.provider}' completed`
-        : `provider '${request.provider}' exited with code ${exitCode}`), {
-        exitCode,
-        durationMs: Date.now() - started,
-        providerSessionId: parsed.providerSessionId,
-        malformedLines: parsed.malformedLines,
-        partial: parsed.partial,
-        // Output is redacted and clipped: provider stdout/stderr never lands in a result raw.
-        output: redactRuntimeText(stdout || stderr).slice(0, MAX_OUTPUT_CHARS),
-        guard: decision,
-      }));
+      resolve(
+        result(
+          request,
+          ok ? "completed" : "failed",
+          failureReason ??
+            (ok
+              ? `provider '${request.provider}' completed`
+              : `provider '${request.provider}' exited with code ${exitCode}`),
+          {
+            exitCode,
+            durationMs: Date.now() - started,
+            providerSessionId: parsed.providerSessionId,
+            malformedLines: parsed.malformedLines,
+            partial: parsed.partial,
+            // Output is redacted and clipped: provider stdout/stderr never lands in a result raw.
+            output: redactRuntimeText(stdout || stderr).slice(
+              0,
+              MAX_OUTPUT_CHARS,
+            ),
+            guard: decision,
+          },
+        ),
+      );
     };
 
-    child.on("error", (error) => finish(null, `provider '${request.provider}' could not be executed: ${error.message}`));
+    child.on("error", (error) =>
+      finish(
+        null,
+        `provider '${request.provider}' could not be executed: ${error.message}`,
+      ),
+    );
     child.on("close", (code) => finish(code));
   });
 }

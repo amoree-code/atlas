@@ -1,9 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
+import { atlasRoot, engineRoot } from "../../paths.js";
 import { validateBudget } from "../context/context-ladder.js";
 import type { IntentClassification } from "../context/intent-router.js";
-import { atlasRoot, engineRoot } from "../../paths.js";
-import { OPERATION_KIND, type OperationName, type WriteApproval } from "./operation-contract.js";
+import {
+  OPERATION_KIND,
+  type OperationName,
+  type WriteApproval,
+} from "./operation-contract.js";
 
 // Central write guard (T-198 slice 9). Every durable write, command execution, and provider
 // invocation must pass through evaluateGuard() first. Approval is never inferred from what
@@ -86,7 +90,11 @@ export function computeScopeHash(scope: GuardScope): string {
   return createHash("sha256").update(canonical).digest("hex").slice(0, 32);
 }
 
-export function createGrant(sessionId: string, scope: GuardScope, options: { now?: number; ttlMs?: number } = {}): ApprovalGrant {
+export function createGrant(
+  sessionId: string,
+  scope: GuardScope,
+  options: { now?: number; ttlMs?: number } = {},
+): ApprovalGrant {
   const now = options.now ?? Date.now();
   return {
     grantId: randomUUID(),
@@ -95,17 +103,25 @@ export function createGrant(sessionId: string, scope: GuardScope, options: { now
     target: path.resolve(scope.target),
     scopeHash: computeScopeHash(scope),
     grantedAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + (options.ttlMs ?? DEFAULT_GRANT_TTL_MS)).toISOString(),
+    expiresAt: new Date(
+      now + (options.ttlMs ?? DEFAULT_GRANT_TTL_MS),
+    ).toISOString(),
     revokedAt: null,
     consumed: false,
   };
 }
 
-export function revokeGrant(grant: ApprovalGrant, now = Date.now()): ApprovalGrant {
+export function revokeGrant(
+  grant: ApprovalGrant,
+  now = Date.now(),
+): ApprovalGrant {
   return { ...grant, revokedAt: new Date(now).toISOString() };
 }
 
-export function consentStateOf(grant: ApprovalGrant | null | undefined, now = Date.now()): ConsentState {
+export function consentStateOf(
+  grant: ApprovalGrant | null | undefined,
+  now = Date.now(),
+): ConsentState {
   if (!grant) return "none";
   if (grant.revokedAt) return "revoked";
   if (Date.parse(grant.expiresAt) <= now) return "expired";
@@ -121,7 +137,14 @@ export type GuardRequest = {
   now?: number;
 };
 
-function decision(request: GuardRequest, code: GuardDenialCode, reason: string, consent: ConsentState, scopeHash: string, approval: WriteApproval | null = null): GuardDecision {
+function decision(
+  request: GuardRequest,
+  code: GuardDenialCode,
+  reason: string,
+  consent: ConsentState,
+  scopeHash: string,
+  approval: WriteApproval | null = null,
+): GuardDecision {
   return {
     allowed: code === "allowed",
     code,
@@ -149,26 +172,66 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
   const consent = consentStateOf(request.grant, now);
 
   const budgetCheck = validateBudget(request.budget);
-  if (!budgetCheck.valid) return decision(request, "invalid-budget", `denied: ${budgetCheck.reason}`, consent, scopeHash);
+  if (!budgetCheck.valid)
+    return decision(
+      request,
+      "invalid-budget",
+      `denied: ${budgetCheck.reason}`,
+      consent,
+      scopeHash,
+    );
 
   const isRecordOperation = request.scope.action in OPERATION_KIND;
-  const needsApproval = !isRecordOperation || OPERATION_KIND[request.scope.action as OperationName] === "write";
+  const needsApproval =
+    !isRecordOperation ||
+    OPERATION_KIND[request.scope.action as OperationName] === "write";
   if (!needsApproval) {
-    return decision(request, "allowed", "read operation: no approval required", consent, scopeHash, null);
+    return decision(
+      request,
+      "allowed",
+      "read operation: no approval required",
+      consent,
+      scopeHash,
+      null,
+    );
   }
 
   if (request.classification.intent === "unknown") {
-    return decision(request, "unknown-intent", "denied: unknown intent may never write, execute, or invoke a provider", consent, scopeHash);
+    return decision(
+      request,
+      "unknown-intent",
+      "denied: unknown intent may never write, execute, or invoke a provider",
+      consent,
+      scopeHash,
+    );
   }
   if (request.classification.ambiguityReason) {
-    return decision(request, "ambiguous-intent", `denied: ambiguous intent may never write, execute, or invoke a provider (${request.classification.ambiguityReason})`, consent, scopeHash);
+    return decision(
+      request,
+      "ambiguous-intent",
+      `denied: ambiguous intent may never write, execute, or invoke a provider (${request.classification.ambiguityReason})`,
+      consent,
+      scopeHash,
+    );
   }
   if (request.classification.confidence !== "high") {
-    return decision(request, "low-confidence", `denied: confidence '${request.classification.confidence}' is below the required 'high'`, consent, scopeHash);
+    return decision(
+      request,
+      "low-confidence",
+      `denied: confidence '${request.classification.confidence}' is below the required 'high'`,
+      consent,
+      scopeHash,
+    );
   }
 
   if (request.scope.target.includes("\0")) {
-    return decision(request, "invalid-target", "denied: target contains a null byte", consent, scopeHash);
+    return decision(
+      request,
+      "invalid-target",
+      "denied: target contains a null byte",
+      consent,
+      scopeHash,
+    );
   }
   // A record write must resolve inside the private Atlas root and never inside the public
   // engine package, whatever path the caller passed.
@@ -177,36 +240,111 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
     const root = path.resolve(atlasRoot());
     const engine = path.resolve(engineRoot());
     if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
-      return decision(request, "invalid-target", "denied: target escapes the Atlas root", consent, scopeHash);
+      return decision(
+        request,
+        "invalid-target",
+        "denied: target escapes the Atlas root",
+        consent,
+        scopeHash,
+      );
     }
     if (resolved === engine || resolved.startsWith(`${engine}${path.sep}`)) {
-      return decision(request, "invalid-target", "denied: refusing to write private Atlas content inside the public engine package", consent, scopeHash);
+      return decision(
+        request,
+        "invalid-target",
+        "denied: refusing to write private Atlas content inside the public engine package",
+        consent,
+        scopeHash,
+      );
     }
   }
 
-  if (consent === "none") return decision(request, "no-consent", "denied: no explicit approval grant was supplied — approval is never inferred from wording", consent, scopeHash);
-  if (consent === "revoked") return decision(request, "consent-revoked", "denied: the approval grant was revoked", consent, scopeHash);
-  if (consent === "expired") return decision(request, "consent-expired", "denied: the approval grant has expired", consent, scopeHash);
+  if (consent === "none")
+    return decision(
+      request,
+      "no-consent",
+      "denied: no explicit approval grant was supplied — approval is never inferred from wording",
+      consent,
+      scopeHash,
+    );
+  if (consent === "revoked")
+    return decision(
+      request,
+      "consent-revoked",
+      "denied: the approval grant was revoked",
+      consent,
+      scopeHash,
+    );
+  if (consent === "expired")
+    return decision(
+      request,
+      "consent-expired",
+      "denied: the approval grant has expired",
+      consent,
+      scopeHash,
+    );
 
   const grant = request.grant as ApprovalGrant;
-  if (grant.consumed) return decision(request, "consent-consumed", "denied: the approval grant was already used and is not reusable", consent, scopeHash);
+  if (grant.consumed)
+    return decision(
+      request,
+      "consent-consumed",
+      "denied: the approval grant was already used and is not reusable",
+      consent,
+      scopeHash,
+    );
   if (grant.sessionId !== request.sessionId) {
-    return decision(request, "wrong-session", `denied: the approval grant belongs to session ${grant.sessionId}, not ${request.sessionId} — approval is never inherited`, consent, scopeHash);
+    return decision(
+      request,
+      "wrong-session",
+      `denied: the approval grant belongs to session ${grant.sessionId}, not ${request.sessionId} — approval is never inherited`,
+      consent,
+      scopeHash,
+    );
   }
   if (grant.action !== request.scope.action) {
-    return decision(request, "wrong-action", `denied: the approval grant covers '${grant.action}', not '${request.scope.action}'`, consent, scopeHash);
+    return decision(
+      request,
+      "wrong-action",
+      `denied: the approval grant covers '${grant.action}', not '${request.scope.action}'`,
+      consent,
+      scopeHash,
+    );
   }
   if (path.resolve(grant.target) !== path.resolve(request.scope.target)) {
-    return decision(request, "wrong-target", `denied: the approval grant covers a different target`, consent, scopeHash);
+    return decision(
+      request,
+      "wrong-target",
+      `denied: the approval grant covers a different target`,
+      consent,
+      scopeHash,
+    );
   }
   if (grant.scopeHash !== scopeHash) {
-    return decision(request, "scope-changed", "denied: the request scope changed after the approval was granted", consent, scopeHash);
+    return decision(
+      request,
+      "scope-changed",
+      "denied: the request scope changed after the approval was granted",
+      consent,
+      scopeHash,
+    );
   }
 
   const approval: WriteApproval | null = isRecordOperation
-    ? { approved: true, operation: request.scope.action as OperationName, target: path.resolve(request.scope.target) }
+    ? {
+        approved: true,
+        operation: request.scope.action as OperationName,
+        target: path.resolve(request.scope.target),
+      }
     : null;
-  return decision(request, "allowed", `approved: grant ${grant.grantId} covers this exact action, target, and scope`, consent, scopeHash, approval);
+  return decision(
+    request,
+    "allowed",
+    `approved: grant ${grant.grantId} covers this exact action, target, and scope`,
+    consent,
+    scopeHash,
+    approval,
+  );
 }
 
 // Marks a grant used. A grant is single-use, so an approved write cannot be replayed.

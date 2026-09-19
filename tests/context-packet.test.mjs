@@ -3,10 +3,18 @@ import { mkdir, mkdtemp, readFile, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import {
+  buildContextPacket,
+  buildSelectedReferences,
+} from "../dist/application/context/context-packet.js";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
-import { buildContextPacket, buildSelectedReferences } from "../dist/application/context/context-packet.js";
 
-const GOOD_BUDGET = { maxFiles: 5, maxBytes: 50_000, maxChars: 5_000, maxOperationCost: 5 };
+const GOOD_BUDGET = {
+  maxFiles: 5,
+  maxBytes: 50_000,
+  maxChars: 5_000,
+  maxOperationCost: 5,
+};
 
 async function withTempTicket(bytes, fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-"));
@@ -19,7 +27,8 @@ async function withTempTicket(bytes, fn) {
   try {
     return await fn(root, file);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
   }
 }
 
@@ -34,7 +43,8 @@ async function withTempDecision(bytes, fn) {
   try {
     return await fn(root, file);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
   }
 }
 
@@ -84,15 +94,33 @@ test("decision lookup selects bounded authoritative decision references", () =>
     const classification = classifyIntent("what did we decide about auth");
     assert.equal(classification.identifier, null);
     const packet = await buildContextPacket(classification, GOOD_BUDGET, root);
-    assert.ok(packet.selectedReferences.length > 0 && packet.selectedReferences.length <= GOOD_BUDGET.maxFiles);
-    assert.ok(packet.selectedReferences.every((reference) => reference.recordType === "decision"));
-    assert.ok(packet.sourcePaths.every((sourcePath) => sourcePath.startsWith("personal/knowledge/decisions/")));
+    assert.ok(
+      packet.selectedReferences.length > 0 &&
+        packet.selectedReferences.length <= GOOD_BUDGET.maxFiles,
+    );
+    assert.ok(
+      packet.selectedReferences.every(
+        (reference) => reference.recordType === "decision",
+      ),
+    );
+    assert.ok(
+      packet.sourcePaths.every((sourcePath) =>
+        sourcePath.startsWith("personal/knowledge/decisions/"),
+      ),
+    );
   }));
 
 // --- invalid identifier ---
 
 test("invalid identifier shape (hand-crafted, bypassing the router) is rejected with a violation, never a guessed path", async () => {
-  const classification = { intent: "ticket-lookup", entityType: "ticket", identifier: "T-1/../../etc/passwd", action: "get", confidence: "high", ambiguityReason: null };
+  const classification = {
+    intent: "ticket-lookup",
+    entityType: "ticket",
+    identifier: "T-1/../../etc/passwd",
+    action: "get",
+    confidence: "high",
+    ambiguityReason: null,
+  };
   const packet = await buildContextPacket(classification, GOOD_BUDGET);
   assert.deepEqual(packet.selectedReferences, []);
   assert.ok(packet.violations.length > 0);
@@ -101,8 +129,18 @@ test("invalid identifier shape (hand-crafted, bypassing the router) is rejected 
 // --- duplicate references ---
 
 test("buildSelectedReferences drops an exact duplicate (same identifier + sourcePath) and reports it", () => {
-  const candidate = { identifier: "T-1", recordType: "ticket", sourcePath: "projects/atlas/tickets/T-1/task.md", freshness: "current", confidence: "high", selectionReason: "test" };
-  const { references, violations } = buildSelectedReferences([candidate, { ...candidate }]);
+  const candidate = {
+    identifier: "T-1",
+    recordType: "ticket",
+    sourcePath: "projects/atlas/tickets/T-1/task.md",
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "test",
+  };
+  const { references, violations } = buildSelectedReferences([
+    candidate,
+    { ...candidate },
+  ]);
   assert.equal(references.length, 1);
   assert.match(violations.join(" "), /duplicate reference skipped/);
 });
@@ -110,8 +148,22 @@ test("buildSelectedReferences drops an exact duplicate (same identifier + source
 // --- multiple references ---
 
 test("buildSelectedReferences keeps multiple distinct references", () => {
-  const a = { identifier: "T-1", recordType: "ticket", sourcePath: "projects/atlas/tickets/T-1/task.md", freshness: "current", confidence: "high", selectionReason: "a" };
-  const b = { identifier: "T-2", recordType: "ticket", sourcePath: "projects/atlas/tickets/T-2/task.md", freshness: "current", confidence: "high", selectionReason: "b" };
+  const a = {
+    identifier: "T-1",
+    recordType: "ticket",
+    sourcePath: "projects/atlas/tickets/T-1/task.md",
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "a",
+  };
+  const b = {
+    identifier: "T-2",
+    recordType: "ticket",
+    sourcePath: "projects/atlas/tickets/T-2/task.md",
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "b",
+  };
   const { references, violations } = buildSelectedReferences([a, b]);
   assert.equal(references.length, 2);
   assert.equal(violations.length, 0);
@@ -120,9 +172,23 @@ test("buildSelectedReferences keeps multiple distinct references", () => {
 // --- reference ordering ---
 
 test("buildSelectedReferences preserves stable insertion order", () => {
-  const c = (id) => ({ identifier: id, recordType: "ticket", sourcePath: `projects/atlas/tickets/${id}/task.md`, freshness: "current", confidence: "high", selectionReason: "x" });
-  const { references } = buildSelectedReferences([c("T-3"), c("T-1"), c("T-2")]);
-  assert.deepEqual(references.map((r) => r.identifier), ["T-3", "T-1", "T-2"]);
+  const c = (id) => ({
+    identifier: id,
+    recordType: "ticket",
+    sourcePath: `projects/atlas/tickets/${id}/task.md`,
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "x",
+  });
+  const { references } = buildSelectedReferences([
+    c("T-3"),
+    c("T-1"),
+    c("T-2"),
+  ]);
+  assert.deepEqual(
+    references.map((r) => r.identifier),
+    ["T-3", "T-1", "T-2"],
+  );
 });
 
 // --- explicit project path ---
@@ -138,17 +204,26 @@ test("explicit project path (cwd inside the Atlas root) resolves a bound active 
 // --- missing project ---
 
 test("missing project (cwd outside any binding and outside the Atlas root) reports unbound, not a guess", async () => {
-  const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-outside-"));
-  const emptyAtlasRoot = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-empty-root-"));
+  const outside = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-packet-outside-"),
+  );
+  const emptyAtlasRoot = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-packet-empty-root-"),
+  );
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = emptyAtlasRoot;
   try {
     const classification = classifyIntent("what project am I in");
-    const packet = await buildContextPacket(classification, GOOD_BUDGET, outside);
+    const packet = await buildContextPacket(
+      classification,
+      GOOD_BUDGET,
+      outside,
+    );
     assert.equal(packet.activeProject.status, "unbound");
     assert.equal(packet.activeProject.projectId, null);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT; else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
   }
 });
 
@@ -175,12 +250,19 @@ test("no file read at all (identity rung) reports freshness unknown, never curre
 // --- confidence propagation ---
 
 test("packet.confidence is propagated directly from the intent classification's confidence for every intent", () => {
-  const inputs = ["show T-1", "what did we decide about auth", "continue the login work", "show me that thing"];
-  return Promise.all(inputs.map(async (text) => {
-    const classification = classifyIntent(text);
-    const packet = await buildContextPacket(classification, GOOD_BUDGET);
-    assert.equal(packet.confidence, classification.confidence, text);
-  }));
+  const inputs = [
+    "show T-1",
+    "what did we decide about auth",
+    "continue the login work",
+    "show me that thing",
+  ];
+  return Promise.all(
+    inputs.map(async (text) => {
+      const classification = classifyIntent(text);
+      const packet = await buildContextPacket(classification, GOOD_BUDGET);
+      assert.equal(packet.confidence, classification.confidence, text);
+    }),
+  );
 });
 
 // --- selection reason propagation ---
@@ -189,7 +271,10 @@ test("packet.selectionReason is non-empty and reflects the ladder's rung resolut
   const classification = classifyIntent("show me that thing");
   const packet = await buildContextPacket(classification, GOOD_BUDGET);
   assert.ok(packet.selectionReason.length > 0);
-  assert.match(packet.selectionReason, /fail|closed|unknown|ambiguous|confidence/i);
+  assert.match(
+    packet.selectionReason,
+    /fail|closed|unknown|ambiguous|confidence/i,
+  );
 });
 
 // --- exact budget limit ---
@@ -197,7 +282,11 @@ test("packet.selectionReason is non-empty and reflects the ladder's rung resolut
 test("exact-limit success: a ticket exactly at budget.maxBytes is selected", () =>
   withTempTicket(1000, async (root) => {
     const classification = classifyIntent("show T-1");
-    const packet = await buildContextPacket(classification, { ...GOOD_BUDGET, maxBytes: 1000 }, root);
+    const packet = await buildContextPacket(
+      classification,
+      { ...GOOD_BUDGET, maxBytes: 1000 },
+      root,
+    );
     assert.equal(packet.selectedReferences.length, 1);
     assert.equal(packet.violations.length, 0);
   }));
@@ -207,7 +296,11 @@ test("exact-limit success: a ticket exactly at budget.maxBytes is selected", () 
 test("one-over-limit failure: a ticket one byte over budget.maxBytes is rejected, not truncated into the packet", () =>
   withTempTicket(1000, async (root) => {
     const classification = classifyIntent("show T-1");
-    const packet = await buildContextPacket(classification, { ...GOOD_BUDGET, maxBytes: 999 }, root);
+    const packet = await buildContextPacket(
+      classification,
+      { ...GOOD_BUDGET, maxBytes: 999 },
+      root,
+    );
     assert.equal(packet.selectedReferences.length, 0);
     assert.match(packet.violations.join(" "), /max-bytes-exceeded/);
   }));
@@ -222,28 +315,54 @@ test("invalid budget (missing) stops before any filesystem read: project stays u
     assert.equal(packet.activeProject.confidence, "none");
     assert.deepEqual(packet.selectedReferences, []);
     assert.match(packet.violations.join(" "), /invalid-budget/);
-    assert.deepEqual(packet.budget, { maxFiles: null, maxBytes: null, maxChars: null, maxOperationCost: null });
+    assert.deepEqual(packet.budget, {
+      maxFiles: null,
+      maxBytes: null,
+      maxChars: null,
+      maxOperationCost: null,
+    });
   }));
 
 test("invalid budget (negative field) is rejected the same way as a missing budget", async () => {
   const classification = classifyIntent("show T-1");
-  const packet = await buildContextPacket(classification, { ...GOOD_BUDGET, maxBytes: -1 });
+  const packet = await buildContextPacket(classification, {
+    ...GOOD_BUDGET,
+    maxBytes: -1,
+  });
   assert.match(packet.violations.join(" "), /invalid-budget/);
 });
 
 // --- path traversal ---
 
 test("path traversal via a hand-crafted identifier never reaches the filesystem and is never listed as a source path", async () => {
-  const payloads = ["../../etc/passwd", "T-1/../../../etc/passwd", "T-../../etc"];
+  const payloads = [
+    "../../etc/passwd",
+    "T-1/../../../etc/passwd",
+    "T-../../etc",
+  ];
   for (const identifier of payloads) {
-    const classification = { intent: "ticket-lookup", entityType: "ticket", identifier, action: "get", confidence: "high", ambiguityReason: null };
+    const classification = {
+      intent: "ticket-lookup",
+      entityType: "ticket",
+      identifier,
+      action: "get",
+      confidence: "high",
+      ambiguityReason: null,
+    };
     const packet = await buildContextPacket(classification, GOOD_BUDGET);
     assert.deepEqual(packet.sourcePaths, [], identifier);
   }
 });
 
 test("buildSelectedReferences rejects a traversal sourcePath even if identifier alone looked fine", () => {
-  const candidate = { identifier: "T-1", recordType: "ticket", sourcePath: "projects/atlas/tickets/../../../etc/passwd", freshness: "current", confidence: "high", selectionReason: "x" };
+  const candidate = {
+    identifier: "T-1",
+    recordType: "ticket",
+    sourcePath: "projects/atlas/tickets/../../../etc/passwd",
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "x",
+  };
   const { references, violations } = buildSelectedReferences([candidate]);
   assert.equal(references.length, 0);
   assert.match(violations.join(" "), /path traversal/);
@@ -252,7 +371,14 @@ test("buildSelectedReferences rejects a traversal sourcePath even if identifier 
 // --- absolute path ---
 
 test("buildSelectedReferences rejects an absolute sourcePath", () => {
-  const candidate = { identifier: "T-1", recordType: "ticket", sourcePath: "/etc/passwd", freshness: "current", confidence: "high", selectionReason: "x" };
+  const candidate = {
+    identifier: "T-1",
+    recordType: "ticket",
+    sourcePath: "/etc/passwd",
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "x",
+  };
   const { references, violations } = buildSelectedReferences([candidate]);
   assert.equal(references.length, 0);
   assert.match(violations.join(" "), /absolute path/);
@@ -261,14 +387,35 @@ test("buildSelectedReferences rejects an absolute sourcePath", () => {
 // --- null byte ---
 
 test("buildSelectedReferences rejects a null byte in the sourcePath or identifier", () => {
-  const a = { identifier: "T-1", recordType: "ticket", sourcePath: "projects/atlas/tickets/T-1/task.md\0.png", freshness: "current", confidence: "high", selectionReason: "x" };
-  const b = { identifier: "T-1\0", recordType: "ticket", sourcePath: "projects/atlas/tickets/T-1/task.md", freshness: "current", confidence: "high", selectionReason: "x" };
+  const a = {
+    identifier: "T-1",
+    recordType: "ticket",
+    sourcePath: "projects/atlas/tickets/T-1/task.md\0.png",
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "x",
+  };
+  const b = {
+    identifier: "T-1\0",
+    recordType: "ticket",
+    sourcePath: "projects/atlas/tickets/T-1/task.md",
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "x",
+  };
   assert.equal(buildSelectedReferences([a]).references.length, 0);
   assert.equal(buildSelectedReferences([b]).references.length, 0);
 });
 
 test("buildSelectedReferences rejects shell metacharacters in the sourcePath", () => {
-  const candidate = { identifier: "T-1", recordType: "ticket", sourcePath: "projects/atlas/tickets/T-1/task.md; rm -rf /", freshness: "current", confidence: "high", selectionReason: "x" };
+  const candidate = {
+    identifier: "T-1",
+    recordType: "ticket",
+    sourcePath: "projects/atlas/tickets/T-1/task.md; rm -rf /",
+    freshness: "current",
+    confidence: "high",
+    selectionReason: "x",
+  };
   const { references, violations } = buildSelectedReferences([candidate]);
   assert.equal(references.length, 0);
   assert.ok(violations.length > 0);
@@ -318,13 +465,18 @@ test("buildContextPacket never writes any file", () =>
     const ticketDir = path.join(root, "projects", "atlas", "tickets", "T-1");
     const before = (await readdir(ticketDir)).sort();
     await buildContextPacket(classifyIntent("show T-1"), GOOD_BUDGET, root);
-    await buildContextPacket(classifyIntent("save this as a decision"), GOOD_BUDGET, root);
+    await buildContextPacket(
+      classifyIntent("save this as a decision"),
+      GOOD_BUDGET,
+      root,
+    );
     const after = (await readdir(ticketDir)).sort();
     assert.deepEqual(before, after);
   }));
 
 test("buildContextPacket does not embed unrequested user content — only identifiers/paths/metadata, never the raw input text", async () => {
-  const secretLookingText = "show T-1 my password is hunter2 and my api key is sk-abcdef";
+  const secretLookingText =
+    "show T-1 my password is hunter2 and my api key is sk-abcdef";
   const classification = classifyIntent(secretLookingText);
   const packet = await buildContextPacket(classification, GOOD_BUDGET);
   const serialized = JSON.stringify(packet);
@@ -334,27 +486,61 @@ test("buildContextPacket does not embed unrequested user content — only identi
 // --- no network/provider/MCP imports ---
 
 test("context-packet.ts imports only existing local modules and node:fs/promises, node:path — no network, provider, or MCP module", async () => {
-  const source = await readFile(path.resolve("src/application/context/context-packet.ts"), "utf8");
-  const imports = [...source.matchAll(/^import .*?from "([^"]+)";?$/gm)].map((match) => match[1]);
-  const allowed = new Set(["node:fs/promises", "node:path", "../../paths.js", "./intent-router.js", "./context-ladder.js", "./project-resolution.js"]);
-  for (const specifier of imports) assert.ok(allowed.has(specifier), `unexpected import: ${specifier}`);
-  const codeOnly = source.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.doesNotMatch(codeOnly, /node:https?|node:net\b|mcp-client|mcp-server|fetch\(/i);
+  const source = await readFile(
+    path.resolve("src/application/context/context-packet.ts"),
+    "utf8",
+  );
+  const imports = [...source.matchAll(/^import .*?from "([^"]+)";?$/gm)].map(
+    (match) => match[1],
+  );
+  const allowed = new Set([
+    "node:fs/promises",
+    "node:path",
+    "../../paths.js",
+    "./intent-router.js",
+    "./context-ladder.js",
+    "./project-resolution.js",
+  ]);
+  for (const specifier of imports)
+    assert.ok(allowed.has(specifier), `unexpected import: ${specifier}`);
+  const codeOnly = source
+    .replace(/\/\/.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.doesNotMatch(
+    codeOnly,
+    /node:https?|node:net\b|mcp-client|mcp-server|fetch\(/i,
+  );
 });
 
 // --- English/Arabic parity ---
 
 test("Arabic ticket-lookup ('عرض T-1') produces the same packet shape as its English equivalent", () =>
   withTempTicket(200, async (root) => {
-    const ar = await buildContextPacket(classifyIntent("عرض T-1"), GOOD_BUDGET, root);
-    const en = await buildContextPacket(classifyIntent("show T-1"), GOOD_BUDGET, root);
+    const ar = await buildContextPacket(
+      classifyIntent("عرض T-1"),
+      GOOD_BUDGET,
+      root,
+    );
+    const en = await buildContextPacket(
+      classifyIntent("show T-1"),
+      GOOD_BUDGET,
+      root,
+    );
     assert.deepEqual(ar, en);
   }));
 
 test("Arabic project-detect ('شنو المشروع الحالي') produces the same active-project result as its English equivalent", () =>
   withTempTicket(10, async (root) => {
-    const ar = await buildContextPacket(classifyIntent("شنو المشروع الحالي"), GOOD_BUDGET, root);
-    const en = await buildContextPacket(classifyIntent("what project am I in"), GOOD_BUDGET, root);
+    const ar = await buildContextPacket(
+      classifyIntent("شنو المشروع الحالي"),
+      GOOD_BUDGET,
+      root,
+    );
+    const en = await buildContextPacket(
+      classifyIntent("what project am I in"),
+      GOOD_BUDGET,
+      root,
+    );
     assert.deepEqual(ar.activeProject, en.activeProject);
     assert.equal(ar.freshness, en.freshness);
   }));

@@ -20,7 +20,9 @@ export function enginePath(...parts: string[]): string {
 }
 
 export function atlasRoot(): string {
-  return process.env.ATLAS_ROOT ? path.resolve(process.env.ATLAS_ROOT) : defaultAtlasRoot;
+  return process.env.ATLAS_ROOT
+    ? path.resolve(process.env.ATLAS_ROOT)
+    : defaultAtlasRoot;
 }
 
 export function atlasPath(...parts: string[]): string {
@@ -31,7 +33,11 @@ export function resolveWithin(root: string, ...parts: string[]): string {
   const resolvedRoot = path.resolve(root);
   const resolved = path.resolve(resolvedRoot, ...parts);
   const isFilesystemRoot = resolvedRoot === path.parse(resolvedRoot).root;
-  if (resolved !== resolvedRoot && !isFilesystemRoot && !resolved.startsWith(`${resolvedRoot}${path.sep}`)) {
+  if (
+    resolved !== resolvedRoot &&
+    !isFilesystemRoot &&
+    !resolved.startsWith(`${resolvedRoot}${path.sep}`)
+  ) {
     throw new Error("Path escapes its allowed root");
   }
   return resolved;
