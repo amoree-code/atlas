@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { compressContext } from "../dist/application/context/context-compression.js";
+import { listSkillCandidates } from "../dist/application/skills/skill-curation.js";
 import {
   listObservations,
   observeSession,
@@ -204,6 +205,56 @@ test("observer only treats real user corrections as repeated-correction, not pro
     );
     assert.equal(corrections.length, 1);
     assert.match(corrections[0].summary, /use pnpm instead of npm/);
+  } finally {
+    delete process.env.ATLAS_ROOT;
+  }
+});
+
+test("approving an observation creates a skill candidate, not just a status flag", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-observer-"));
+  process.env.ATLAS_ROOT = root;
+  const store = await openSessionStore();
+  const sessionId = "observer-approval-session";
+  store.create({
+    sessionId,
+    provider: "codex",
+    providerSessionId: null,
+    parentSessionId: null,
+    profile: "developer",
+    profileIdentity: "profile-hash",
+    workingDirectory: root,
+    resumeData: null,
+    ticketId: null,
+  });
+  store.updateStatus(sessionId, "running");
+  store.appendEvent(
+    sessionId,
+    "provider_output",
+    "Decision: use a bounded verification checklist.\nDecision: use a bounded verification checklist.",
+  );
+  store.appendEvent(
+    sessionId,
+    "evidence",
+    JSON.stringify({ result: "proven", criterion: "tests pass" }),
+  );
+  store.updateStatus(sessionId, "completed");
+  store.close();
+  try {
+    const [observation] = await observeSession(sessionId);
+    assert.equal(observation.skillCandidateId, null);
+    const reviewed = await reviewObservation(
+      observation.observationId,
+      "approved",
+    );
+    assert.ok(reviewed.skillCandidateId);
+    const candidates = await listSkillCandidates();
+    const candidate = candidates.find(
+      (item) => item.id === reviewed.skillCandidateId,
+    );
+    assert.ok(candidate);
+    assert.equal(candidate.status, "candidate");
+    assert.equal(candidate.sourceSessionId, sessionId);
+    assert.equal(candidate.instructions, observation.summary);
   } finally {
     delete process.env.ATLAS_ROOT;
   }

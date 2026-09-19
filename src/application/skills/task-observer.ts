@@ -4,6 +4,7 @@ import path from "node:path";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { atlasPath } from "../../paths.js";
+import { addSkillCandidate } from "./skill-curation.js";
 
 export type ObservationStatus =
   | "observed"
@@ -27,6 +28,7 @@ export type TaskObservation = {
   status: ObservationStatus;
   createdAt: string;
   reviewedAt: string | null;
+  skillCandidateId: string | null;
 };
 
 const observationsFile = () =>
@@ -154,6 +156,7 @@ export async function observeSessionWithStore(
       status: "observed",
       createdAt: new Date().toISOString(),
       reviewedAt: null,
+      skillCandidateId: null,
     });
   }
   if (created.length) await save([...items, ...created]);
@@ -175,6 +178,13 @@ export async function listObservations(): Promise<TaskObservation[]> {
   return load();
 }
 
+/**
+ * Approving an observation creates the skill candidate it was promising —
+ * reviewObservation used to only flip a status flag with nothing downstream.
+ * A duplicate or invalid candidate (see addSkillCandidate) leaves the
+ * approval standing but skillCandidateId null; the summary is short and
+ * redacted, so this should be rare.
+ */
 export async function reviewObservation(
   observationIdValue: string,
   status: Exclude<ObservationStatus, "observed" | "candidate">,
@@ -186,6 +196,19 @@ export async function reviewObservation(
   if (!item) throw new Error(`Observation not found: ${observationIdValue}`);
   item.status = status;
   item.reviewedAt = new Date().toISOString();
+  if (status === "approved" && !item.skillCandidateId) {
+    try {
+      const candidate = await addSkillCandidate({
+        id: `learned-${item.observationId.slice(4, 16)}`,
+        name: `Learned: ${item.signalType} (${item.observationId.slice(4, 10)})`,
+        instructions: item.summary,
+        sourceSessionId: item.sourceSessionId,
+      });
+      item.skillCandidateId = candidate.id;
+    } catch {
+      // Duplicate id/name or invalid content — approval stands, no candidate.
+    }
+  }
   await save(items);
   return item;
 }
