@@ -1,9 +1,48 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { createInterface } from "node:readline/promises";
+import {
+  listObservations,
+  reviewObservation,
+} from "../../application/skills/task-observer.js";
 import type { Session } from "../../domain/sessions/session.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { atlasPath } from "../../paths.js";
 import { listTickets } from "./tickets-command.js";
+
+/**
+ * Interactive human-in-the-loop gate for observations sitting in "observed"
+ * status (see task-observer.ts). Only runs on a real TTY, so headless and
+ * scheduled invocations of `atlas daily start` never block on input.
+ */
+async function runObservationGate(): Promise<void> {
+  if (!(process.stdin.isTTY && process.stdout.isTTY)) return;
+  const pending = (await listObservations()).filter(
+    (observation) => observation.status === "observed",
+  );
+  if (!pending.length) return;
+  const prompt = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  try {
+    console.log(
+      `\n🤖 Atlas: ${pending.length} observation(s) awaiting review.`,
+    );
+    for (const observation of pending) {
+      console.log(`\n[${observation.signalType}] ${observation.summary}`);
+      const answer = await prompt.question(
+        "Approve evolving this into a skill? (y/n): ",
+      );
+      const status =
+        answer.trim().toLowerCase() === "y" ? "approved" : "rejected";
+      await reviewObservation(observation.observationId, status);
+      console.log(`→ ${status}`);
+    }
+  } finally {
+    prompt.close();
+  }
+}
 
 export async function runDailyCommand(
   action: string,
@@ -16,6 +55,7 @@ export async function runDailyCommand(
     process.exitCode = 1;
     return;
   }
+  await runObservationGate();
   const apply = args.includes("--apply");
   const newsIndex = args.indexOf("--news");
   const news =
