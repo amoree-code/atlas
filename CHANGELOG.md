@@ -25,6 +25,14 @@
   security-audit findings.
 - Add workspace context and safe maintenance commands (`atlas doctor`, `atlas repair`),
   `.nvmrc`/lefthook for local dev tooling, and a cross-platform Docker release gate.
+- Fix a test that depended on the ambient `ATLAS_ROOT` instead of an isolated workspace,
+  causing a false failure whenever a real Obsidian vault is connected on the host.
+- Generate `skills/index.json` from each `SKILL.md`'s frontmatter instead of hand-maintaining
+  it; `pnpm check:skills` now fails if the catalog drifts from the skill files.
+- Add layer-scoped `AGENTS.md` files under `src/domain`, `src/application`,
+  `src/infrastructure`, and `src/interfaces`.
+- Add a PR template with a changelog checklist.
+- Add an Obsidian sync flow diagram to `docs/mcp.md`.
 
 ## 0.3.6
 

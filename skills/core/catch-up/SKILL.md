@@ -1,6 +1,8 @@
 ---
 name: catch-up
 description: Reconstruct the current project state, completed work, blockers, and next action.
+version: 1.0.0
+category: core
 ---
 
 # Catch up

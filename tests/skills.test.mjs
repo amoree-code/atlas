@@ -20,10 +20,12 @@ import { openSessionStore } from "../dist/infrastructure/persistence/session-sto
 
 test("lists the public core skill catalog without loading full instructions", async () => {
   const skills = await listSkills();
-  assert.deepEqual(
-    skills.map((skill) => skill.name),
-    ["core-thinking", "verification", "catch-up", "session-handoff"],
-  );
+  assert.deepEqual(skills.map((skill) => skill.name).sort(), [
+    "catch-up",
+    "core-thinking",
+    "session-handoff",
+    "verification",
+  ]);
   assert.equal(Object.hasOwn(skills[0], "instructions"), false);
 });
 
