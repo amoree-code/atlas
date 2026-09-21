@@ -116,7 +116,7 @@ export async function archiveDoneTasks(
     const source = await readFile(taskFile, "utf8");
     const id = field(source, "id") || entry.name;
     const state = field(source, "state");
-    if (state !== "done") continue;
+    if (state !== "done" && state !== "cancelled") continue;
     if (source.match(/- "\[ \] /)) {
       result.skipped.push({ id, reason: "unchecked work" });
       continue;
