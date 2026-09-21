@@ -7,7 +7,7 @@
 - Ignore generated Graphify analysis output and document the current CLI module boundary.
 - Upgrade to pnpm 12, TypeScript 7, and Zod 4.
 - Add Biome and Knip quality gates plus a unified `pnpm check` command.
-- Align ticket creation and validation with the current task contract while retaining legacy-ticket compatibility.
+- Align task creation and validation with the current task contract while retaining legacy-task compatibility.
 - Exclude Git-ignored, machine-generated files from the public privacy scan.
 
 ## 0.3.6

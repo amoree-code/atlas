@@ -20,7 +20,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:skills
       - run: pnpm check:privacy
-      - run: pnpm check:tickets
+      - run: pnpm check:tasks
       - run: pnpm build
       - run: pnpm check:package
       - name: Run full test suite

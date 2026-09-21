@@ -87,7 +87,7 @@ they answer different questions:
 - **Profile** (`system/profiles/<name>.json`) — *how* an agent runs: provider, model, role,
   skills, and read/write policy. It is configuration, reused across many runs, and owns no
   data of its own.
-- **Project** (`projects/<name>/`) — *what* the work is about: the tickets, plans, and
+- **Project** (`projects/<name>/`) — *what* the work is about: the tasks, plans, and
   private notes for one piece of work (see the workspace-root layout in
   [workspace.md](workspace.md)). A project has no execution configuration; a profile
   points at paths, it does not define what lives there.

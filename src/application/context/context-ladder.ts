@@ -118,11 +118,11 @@ export function resolveLadderRung(classification: IntentClassification): {
       reason: "project-detect intent resolves to project metadata only",
     };
   }
-  if (classification.intent === "ticket-lookup" && classification.identifier) {
+  if (classification.intent === "task-lookup" && classification.identifier) {
     return {
       rung: "exact-record",
       reason:
-        "ticket-lookup with an explicit, validated identifier resolves to an exact record",
+        "task-lookup with an explicit, validated identifier resolves to an exact record",
     };
   }
   if (
@@ -175,21 +175,21 @@ function withinCharBudget(
   return { ...result, allowed: true, violation: null };
 }
 
-const TICKET_ID_SHAPE = /^T-\d+$/i;
+const TASK_ID_SHAPE = /^T-\d+$/i;
 
-// Only ever resolves a single, already-validated ticket id to its task.md path, and only
+// Only ever resolves a single, already-validated task id to its task.md path, and only
 // ever stats it (size), never reads its content — the actual compact read is a later slice.
-async function planExactTicketRecord(
+async function planExactTaskRecord(
   identifier: string,
   budget: ContextBudget,
   root = atlasRoot(),
   projectId = "atlas",
 ): Promise<BoundedReadResult> {
   const rung: LadderRung = "exact-record";
-  if (!TICKET_ID_SHAPE.test(identifier)) {
+  if (!TASK_ID_SHAPE.test(identifier)) {
     return budgetRejection(
       rung,
-      `'${identifier}' is not a valid ticket identifier shape (expected T-<digits>) — refusing to guess a path`,
+      `'${identifier}' is not a valid task identifier shape (expected T-<digits>) — refusing to guess a path`,
       null,
     );
   }
@@ -204,7 +204,7 @@ async function planExactTicketRecord(
   if (1 > budget.maxFiles) {
     return budgetRejection(
       rung,
-      `a single ticket record requires 1 file, budget.maxFiles is ${budget.maxFiles}`,
+      `a single task record requires 1 file, budget.maxFiles is ${budget.maxFiles}`,
       "max-files-exceeded",
     );
   }
@@ -212,14 +212,14 @@ async function planExactTicketRecord(
   let resolvedPath: string;
   try {
     resolvedPath = resolveWithin(
-      resolveWithin(path.join(root, "projects"), projectId, "tickets"),
+      resolveWithin(path.join(root, "projects"), projectId, "tasks"),
       normalized,
       "task.md",
     );
   } catch {
     return budgetRejection(
       rung,
-      "resolved ticket path escapes the Atlas ticket root — refusing to read outside scope",
+      "resolved task path escapes the Atlas task root — refusing to read outside scope",
       null,
     );
   }
@@ -229,14 +229,14 @@ async function planExactTicketRecord(
   } catch {
     return budgetRejection(
       rung,
-      `ticket ${normalized} was not found under the Atlas ticket root`,
+      `task ${normalized} was not found under the Atlas task root`,
       null,
     );
   }
   if (size > budget.maxBytes) {
     return budgetRejection(
       rung,
-      `ticket ${normalized} is ${size} bytes, budget.maxBytes allows ${budget.maxBytes} — refusing to silently truncate`,
+      `task ${normalized} is ${size} bytes, budget.maxBytes allows ${budget.maxBytes} — refusing to silently truncate`,
       "max-bytes-exceeded",
     );
   }
@@ -247,7 +247,7 @@ async function planExactTicketRecord(
       files: [relative],
       bytes: size,
       truncated: false,
-      reason: `ticket ${normalized} is within budget (${size}/${budget.maxBytes} bytes)`,
+      reason: `task ${normalized} is within budget (${size}/${budget.maxBytes} bytes)`,
     },
     budget,
     rung,
@@ -365,7 +365,7 @@ export async function planContextRead(
       truncated: false,
     };
   if (rung === "exact-record")
-    return planExactTicketRecord(
+    return planExactTaskRecord(
       classification.identifier ?? "",
       bounded,
       root,

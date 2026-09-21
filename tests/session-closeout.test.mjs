@@ -17,7 +17,7 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   store.create({
     sessionId,
     title: "Closeout test",
-    ticketId: null,
+    taskId: null,
     handoffId: null,
     provider: "claude",
     providerSessionId: null,
@@ -89,6 +89,102 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
     1,
   );
   assert.equal(store.listHandoffs().length, 1);
+
+  // A second closeout for an already-closed-out session must not append a
+  // duplicate "Work log" line to the daily narrative (the bug this guards
+  // against: a caller's success path closes out, then a later step in the
+  // same caller throws and its catch block calls finalizeSession again).
+  const dailyAfterSecond = await readFile(
+    path.join(root, "personal", "daily", `${today}.md`),
+    "utf8",
+  );
+  assert.equal(
+    dailyAfterSecond.split("\n").filter((line) => line.startsWith("- ")).length,
+    1,
+  );
+
+  store.close();
+  delete process.env.ATLAS_ROOT;
+});
+
+test("skips the daily Work log line for a generic, no-project session", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
+  process.env.ATLAS_ROOT = root;
+  await mkdir(path.join(root, "system", "sessions"), { recursive: true });
+  const store = new SessionStore(
+    path.join(root, "system", "sessions", "sessions.sqlite"),
+  );
+  const sessionId = "closeout-session-generic";
+  store.create({
+    sessionId,
+    title: "claude session",
+    taskId: null,
+    handoffId: null,
+    provider: "claude",
+    providerSessionId: null,
+    parentSessionId: null,
+    profile: "reviewer",
+    profileIdentity: "profile-hash",
+    workingDirectory: root, // plain tmp dir: no .git, so no real project
+    resumeData: null,
+  });
+  store.updateStatus(sessionId, "running");
+  store.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: 0 }));
+  store.updateStatus(sessionId, "completed");
+
+  await finalizeSession(store, sessionId, { exitCode: 0 });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyPath = path.join(root, "personal", "daily", `${today}.md`);
+  let daily = "";
+  try {
+    daily = await readFile(dailyPath, "utf8");
+  } catch {
+    // No daily file at all is also an acceptable outcome of skipping.
+  }
+  assert.doesNotMatch(daily, /## Work log\n- /);
+  assert.doesNotMatch(daily, /claude session/);
+
+  store.close();
+  delete process.env.ATLAS_ROOT;
+});
+
+test("still logs a generic-title session when it has a real git project", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
+  process.env.ATLAS_ROOT = root;
+  await mkdir(path.join(root, "system", "sessions"), { recursive: true });
+  const projectDir = path.join(root, "project");
+  await mkdir(path.join(projectDir, ".git"), { recursive: true });
+  const store = new SessionStore(
+    path.join(root, "system", "sessions", "sessions.sqlite"),
+  );
+  const sessionId = "closeout-session-real-project";
+  store.create({
+    sessionId,
+    title: "claude session",
+    taskId: null,
+    handoffId: null,
+    provider: "claude",
+    providerSessionId: null,
+    parentSessionId: null,
+    profile: "reviewer",
+    profileIdentity: "profile-hash",
+    workingDirectory: projectDir,
+    resumeData: null,
+  });
+  store.updateStatus(sessionId, "running");
+  store.appendEvent(sessionId, "process_exit", JSON.stringify({ exitCode: 0 }));
+  store.updateStatus(sessionId, "completed");
+
+  await finalizeSession(store, sessionId, { exitCode: 0 });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const daily = await readFile(
+    path.join(root, "personal", "daily", `${today}.md`),
+    "utf8",
+  );
+  assert.match(daily, /## Work log\n- .*claude session — completed/);
+
   store.close();
   delete process.env.ATLAS_ROOT;
 });

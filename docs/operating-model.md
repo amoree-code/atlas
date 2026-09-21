@@ -1,6 +1,6 @@
 # Atlas operating model
 
-Atlas is the canonical local source of truth for project, ticket, memory, knowledge,
+Atlas is the canonical local source of truth for project, task, memory, knowledge,
 decision, session, and evidence state. Provider clients are entry points and execution
 hands; they are not alternate storage owners.
 
@@ -45,7 +45,7 @@ name, or binding remains unresolved until the user supplies the missing target.
 
 Every returned record carries its source path, record type, freshness, confidence, and
 selection reason. The optional declared provenance is normalized to one of:
-`fact`, `preference`, `decision`, `lesson`, `proposal`, `temporary-note`, `ticket`,
+`fact`, `preference`, `decision`, `lesson`, `proposal`, `temporary-note`, `task`,
 `project`, `execution`, or `unknown`.
 
 Corrections are additive evidence. A correction writes a new record with an explicit

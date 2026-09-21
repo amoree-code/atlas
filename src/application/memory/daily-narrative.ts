@@ -3,14 +3,24 @@ import path from "node:path";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { atlasPath } from "../../paths.js";
+import { findGitRoot } from "../context/project-resolution.js";
 import type { TaskObservation } from "../skills/task-observer.js";
 import type { ModelNarrative } from "./model-narrative.js";
 
 const dailyTemplate = (date: string): string =>
   `# Daily — ${date}\n\n## Focus\n\n## Work log\n\n## Decisions\n\n## Problems\n\n## Next\n\n## Observations\n`;
 
+// The literal fallback title stamped on a session with no explicit title
+// (see run request construction) — never meaningful content on its own.
+const GENERIC_TITLE = /^claude session$/i;
+
 function safeText(value: string, max = 240): string {
   return redactRuntimeText(value).replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function isGenericContent(text: string | null | undefined): boolean {
+  const trimmed = (text ?? "").trim();
+  return trimmed.length === 0 || GENERIC_TITLE.test(trimmed);
 }
 
 function insertUnderHeading(
@@ -70,11 +80,20 @@ export async function appendDailyNarrative(input: {
       );
       return safeText(objectiveEvent?.data ?? session.title, 160);
     })();
-  content = insertUnderHeading(
-    content,
-    "## Work log",
-    `- ${time} ${session.provider} session in ${project}: ${workLog} — ${status}`,
-  );
+
+  // Skip the doubly-useless case: no real content beyond the generic
+  // placeholder title, AND no real project (root/home session, no git repo)
+  // to give the entry any meaning. A generic title in a real project, or
+  // real content with no project, still gets logged.
+  const hasRealProject = findGitRoot(session.workingDirectory) !== null;
+  const skipWorkLog = isGenericContent(workLog) && !hasRealProject;
+  if (!skipWorkLog) {
+    content = insertUnderHeading(
+      content,
+      "## Work log",
+      `- ${time} ${session.provider} session in ${project}: ${workLog} — ${status}`,
+    );
+  }
 
   const decisionLine =
     narrative?.decision ??

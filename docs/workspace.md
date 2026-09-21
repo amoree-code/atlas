@@ -41,7 +41,7 @@ isolated workspaces from one engine checkout.
 `src/interfaces/cli/setup-command.ts` creates the workspace on first run:
 
 - Creates `personal/memory`, `personal/knowledge`, `personal/daily`, `personal/inbox`,
-  `personal/templates`, and `projects/atlas/tickets` under the workspace root.
+  `personal/templates`, and `projects/atlas/tasks` under the workspace root.
 - Creates `system/config/startup`, `system/profiles`,
   `system/sessions`, `system/control-plane`, `system/integrations`, and `system/archive` under the workspace root.
 - Writes `system/profiles/default.json` from the template in `templates/`, without overwriting existing files.
@@ -54,22 +54,22 @@ isolated workspaces from one engine checkout.
 Startup always points at `engine/dist/main.js` (the built engine), never at `src/`, and
 always runs with the private workspace directory as its current working directory.
 
-## Ticket completion and archive
+## Task completion and archive
 
-Use the governed completion command when a ticket is genuinely finished:
+Use the governed completion command when a task is genuinely finished:
 
 ```bash
-atlas tickets complete T-123
+atlas tasks complete T-123
 ```
 
 It requires every checklist item to be checked, writes `state: done`, and moves the
-whole ticket directory (including sibling artifacts) into `projects/atlas/tickets/archive/`
-in one operation. Read-only commands such as `atlas tickets list` do not mutate files.
+whole task directory (including sibling artifacts) into `projects/atlas/tasks/archive/`
+in one operation. Read-only commands such as `atlas tasks list` do not mutate files.
 
-Tickets that were marked `done` by an external editor can be reconciled explicitly:
+Tasks that were marked `done` by an external editor can be reconciled explicitly:
 
 ```bash
-atlas tickets archive --auto
+atlas tasks archive --auto
 ```
 
 There is no background filesystem watcher; this keeps completion deterministic and avoids

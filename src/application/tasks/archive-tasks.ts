@@ -33,9 +33,9 @@ function setState(source: string, state: string): string {
   return source.replace(/^state:\s*.+$/m, `state: ${state}`);
 }
 
-export async function completeTicket(
+export async function completeTask(
   id: string,
-  root = atlasPath("projects", "atlas", "tickets"),
+  root = atlasPath("projects", "atlas", "tasks"),
 ): Promise<CompletionResult> {
   const taskFile = resolveWithin(root, id, "task.md");
   const source = await readFile(taskFile, "utf8");
@@ -52,12 +52,12 @@ export async function completeTicket(
   }
   if (field(source, "state") !== "done")
     await writeFile(taskFile, setState(source, "done"));
-  const archived = await archiveDoneTickets(root, true);
+  const archived = await archiveDoneTasks(root, true);
   return { id, state: "done", ...archived };
 }
 
-export async function archiveDoneTickets(
-  root = atlasPath("projects", "atlas", "tickets"),
+export async function archiveDoneTasks(
+  root = atlasPath("projects", "atlas", "tasks"),
   apply = false,
 ): Promise<ArchiveResult> {
   const result: ArchiveResult = {

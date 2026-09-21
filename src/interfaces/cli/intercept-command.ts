@@ -36,7 +36,7 @@ export type InterceptOptions = {
   controlLevel?: "observed" | "managed-partial";
   originalExecutable?: string;
   title?: string;
-  ticketId?: string;
+  taskId?: string;
   handoffId?: string;
 };
 
@@ -79,7 +79,7 @@ export async function intercept(
   store.create({
     sessionId,
     title: options.title ?? `${provider.id} session`,
-    ticketId: options.ticketId ?? null,
+    taskId: options.taskId ?? null,
     handoffId: options.handoffId ?? null,
     provider: provider.id,
     providerSessionId: null,
@@ -124,7 +124,7 @@ export async function intercept(
       "handoff_bound",
       JSON.stringify({
         handoffId: options.handoffId,
-        ticketId: options.ticketId ?? null,
+        taskId: options.taskId ?? null,
       }),
     );
   store.appendEvent(

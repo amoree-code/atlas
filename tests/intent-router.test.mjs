@@ -4,13 +4,13 @@ import path from "node:path";
 import test from "node:test";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
 
-// --- ticket lookup: get, show, explain, continue, update, complete ---
+// --- task lookup: get, show, explain, continue, update, complete ---
 
-test("ticket lookup: bare 'show T-123' resolves get with high confidence", () => {
+test("task lookup: bare 'show T-123' resolves get with high confidence", () => {
   const result = classifyIntent("show T-123");
   assert.deepEqual(result, {
-    intent: "ticket-lookup",
-    entityType: "ticket",
+    intent: "task-lookup",
+    entityType: "task",
     identifier: "T-123",
     action: "get",
     confidence: "high",
@@ -18,65 +18,65 @@ test("ticket lookup: bare 'show T-123' resolves get with high confidence", () =>
   });
 });
 
-test("ticket lookup: 'explain T-7' also resolves as get (no dedicated explain verb, defaults to get)", () => {
+test("task lookup: 'explain T-7' also resolves as get (no dedicated explain verb, defaults to get)", () => {
   const result = classifyIntent("can you explain T-7 to me");
-  assert.equal(result.intent, "ticket-lookup");
+  assert.equal(result.intent, "task-lookup");
   assert.equal(result.identifier, "T-7");
   assert.equal(result.action, "get");
 });
 
-test("ticket lookup: 'update T-45' resolves the update action", () => {
+test("task lookup: 'update T-45' resolves the update action", () => {
   const result = classifyIntent("update T-45 with the new plan");
   assert.equal(result.action, "update");
   assert.equal(result.identifier, "T-45");
 });
 
-test("ticket lookup: 'complete T-9' resolves the complete action", () => {
+test("task lookup: 'complete T-9' resolves the complete action", () => {
   const result = classifyIntent("mark T-9 as complete");
   assert.equal(result.action, "complete");
 });
 
-test("ticket lookup: 'continue T-3' resolves the continue action, still high confidence (explicit id)", () => {
+test("task lookup: 'continue T-3' resolves the continue action, still high confidence (explicit id)", () => {
   const result = classifyIntent("continue T-3");
   assert.equal(result.action, "continue");
   assert.equal(result.confidence, "high");
   assert.equal(result.identifier, "T-3");
 });
 
-test("ticket lookup: case-insensitive and mixed casing ('sHoW t-45') still resolves and normalizes the id", () => {
+test("task lookup: case-insensitive and mixed casing ('sHoW t-45') still resolves and normalizes the id", () => {
   const result = classifyIntent("sHoW t-45");
   assert.equal(result.identifier, "T-45");
   assert.equal(result.confidence, "high");
 });
 
-test("ticket lookup: 'continue the login work' with no id is a medium-confidence ticket/project ambiguity, not a guess", () => {
+test("task lookup: 'continue the login work' with no id is a medium-confidence task/project ambiguity, not a guess", () => {
   const result = classifyIntent("continue the login work");
-  assert.equal(result.intent, "ticket-lookup");
+  assert.equal(result.intent, "task-lookup");
   assert.equal(result.identifier, null);
   assert.equal(result.action, "continue");
   assert.equal(result.confidence, "medium");
   assert.ok(result.ambiguityReason);
 });
 
-// --- ticket id validation ---
+// --- task id validation ---
 
-test("invalid ticket id shape ('TICKET-123', no hyphenated T- prefix) is not treated as an identifier", () => {
-  const result = classifyIntent("show TICKET-123");
-  assert.notEqual(result.entityType, "ticket");
+test("invalid task id shape ('TASK-123', no hyphenated T- prefix) is not treated as an identifier", () => {
+  const result = classifyIntent("show TASK-123");
+  assert.notEqual(result.entityType, "task");
   assert.equal(result.identifier, null);
 });
 
-test("invalid ticket id shape ('T123', missing hyphen) is not treated as an identifier", () => {
+test("invalid task id shape ('T123', missing hyphen) is not treated as an identifier", () => {
   const result = classifyIntent("show T123");
   assert.notEqual(result.identifier, "T123");
 });
 
-test("multiple ticket identifiers in one request are never guessed at — returns a safe ambiguous result", () => {
+test("multiple task identifiers in one request are never guessed at — returns a safe ambiguous result", () => {
   const result = classifyIntent("show T-1 and T-2");
   assert.equal(result.intent, "unknown");
   assert.equal(result.identifier, null);
   assert.equal(result.confidence, "low");
-  assert.match(result.ambiguityReason, /multiple ticket identifiers/);
+  assert.match(result.ambiguityReason, /multiple task identifiers/);
 });
 
 // --- memory lookup ---
@@ -189,10 +189,10 @@ test("execution request: 'run the build'", () => {
 
 // --- missing identifiers / ambiguous / unknown ---
 
-test("missing identifier on an otherwise clear ticket-shaped request without T- falls back to unknown, never guessed", () => {
-  const result = classifyIntent("show me ticket 123");
+test("missing identifier on an otherwise clear task-shaped request without T- falls back to unknown, never guessed", () => {
+  const result = classifyIntent("show me task 123");
   assert.equal(result.identifier, null);
-  assert.notEqual(result.intent, "ticket-lookup");
+  assert.notEqual(result.intent, "task-lookup");
 });
 
 test("unknown/ambiguous: 'show me that thing' returns a safe low-confidence result with no retrieval implied", () => {
@@ -216,9 +216,9 @@ test("empty request returns a safe result, not a crash", () => {
 
 // --- Arabic wording (Iraqi/MSA per project convention) ---
 
-test("Arabic: 'عرض T-12' (show T-12) resolves the ticket by id", () => {
+test("Arabic: 'عرض T-12' (show T-12) resolves the task by id", () => {
   const result = classifyIntent("عرض T-12");
-  assert.equal(result.intent, "ticket-lookup");
+  assert.equal(result.intent, "task-lookup");
   assert.equal(result.identifier, "T-12");
 });
 

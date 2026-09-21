@@ -1,4 +1,4 @@
-export type TicketLinkCandidate = {
+export type TaskLinkCandidate = {
   id: string;
   projectId: string;
   state: string;
@@ -7,7 +7,7 @@ export type TicketLinkCandidate = {
   relationships: string[];
 };
 
-export type TicketLinkRequest = {
+export type TaskLinkRequest = {
   projectId?: string;
   state?: string;
   keywords?: string[];
@@ -15,17 +15,17 @@ export type TicketLinkRequest = {
   limit?: number;
 };
 
-export type TicketLinkResult = TicketLinkCandidate & {
+export type TaskLinkResult = TaskLinkCandidate & {
   score: number;
   reasons: string[];
 };
 
-// Metadata-first ticket linking. No body reads, embeddings, or fuzzy guesses. A candidate
+// Metadata-first task linking. No body reads, embeddings, or fuzzy guesses. A candidate
 // only gains points from explicit metadata supplied by the caller, then stable recency.
-export function rankTicketCandidates(
-  candidates: TicketLinkCandidate[],
-  request: TicketLinkRequest,
-): TicketLinkResult[] {
+export function rankTaskCandidates(
+  candidates: TaskLinkCandidate[],
+  request: TaskLinkRequest,
+): TaskLinkResult[] {
   const wantedKeywords = new Set(
     (request.keywords ?? []).map((value) => value.toLowerCase()),
   );

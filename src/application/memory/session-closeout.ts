@@ -88,6 +88,15 @@ export async function finalizeSession(
 ): Promise<SessionCloseoutResult> {
   const session = store.get(sessionId);
   if (!session) throw new Error(`Session not found: ${sessionId}`);
+  // finalizeSession can legitimately be invoked more than once for the same session
+  // (e.g. a caller's success path completes closeout, then a later step in that same
+  // caller throws and its catch block calls finalizeSession again). The summary/handoff
+  // work below is already idempotent (guarded by existing handoffId / session_summary
+  // event checks), but the daily-narrative append is a pure side effect with no such
+  // check, so a re-run would otherwise write a duplicate "Work log" line. closedAt is
+  // only ever set by the updateCloseout call further down, so its presence here means
+  // this session has already been closed out once.
+  const alreadyClosedOut = Boolean(session.closedAt);
   const events = store.listEvents(sessionId);
   const exitEvent = lastEvent(events, "process_exit");
   const exitCode =
@@ -109,7 +118,7 @@ export async function finalizeSession(
   });
   let handoffId = session.handoffId;
   const enoughEvidence = Boolean(
-    session.ticketId ||
+    session.taskId ||
       (closeoutStatus === "completed" &&
         events.some((event) =>
           ["user_input", "provider_output", "text", "json"].includes(
@@ -121,7 +130,7 @@ export async function finalizeSession(
     try {
       const handoff = await createHandoffWithStore(store, {
         sessionId,
-        ticketId: session.ticketId ?? undefined,
+        taskId: session.taskId ?? undefined,
         nextAction: input.nextAction,
         sourceSummaryPath: summary.summaryPath,
         changedFiles: files,
@@ -140,36 +149,38 @@ export async function finalizeSession(
   }
   const closedAt = new Date().toISOString();
   store.updateCloseout(sessionId, { ...summary, closeoutStatus, closedAt });
-  try {
-    const narrative = await generateModelNarrative({
-      session,
-      events,
-      changedFiles: files,
-      nextAction: input.nextAction,
-    });
-    await appendDailyNarrative({
-      session,
-      events,
-      exitCode,
-      nextAction: input.nextAction,
-      narrative,
-    });
-  } catch (error) {
-    store.appendEvent(
-      sessionId,
-      "closeout_warning",
-      error instanceof Error ? error.message : String(error),
-    );
-  }
-  try {
-    const observations = await observeSessionWithStore(store, sessionId);
-    await appendObservations(session, observations);
-  } catch (error) {
-    store.appendEvent(
-      sessionId,
-      "closeout_warning",
-      error instanceof Error ? error.message : String(error),
-    );
+  if (!alreadyClosedOut) {
+    try {
+      const narrative = await generateModelNarrative({
+        session,
+        events,
+        changedFiles: files,
+        nextAction: input.nextAction,
+      });
+      await appendDailyNarrative({
+        session,
+        events,
+        exitCode,
+        nextAction: input.nextAction,
+        narrative,
+      });
+    } catch (error) {
+      store.appendEvent(
+        sessionId,
+        "closeout_warning",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    try {
+      const observations = await observeSessionWithStore(store, sessionId);
+      await appendObservations(session, observations);
+    } catch (error) {
+      store.appendEvent(
+        sessionId,
+        "closeout_warning",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
   if (
     !store
