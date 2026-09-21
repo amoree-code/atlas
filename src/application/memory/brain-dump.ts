@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
@@ -18,6 +18,40 @@ function safeText(value: string, max = 400): string {
 function isGenericContent(text: string | null | undefined): boolean {
   const trimmed = (text ?? "").trim();
   return trimmed.length === 0 || GENERIC_TITLE.test(trimmed);
+}
+
+const MIN_USEFUL_SLUG_LENGTH = 3;
+
+// ASCII-only by design: ranks a Latin-alphabet slug of the title over one
+// derived from the (already ASCII) project name, and falls back to the
+// session id only when both are too short to be useful — e.g. a title in a
+// non-Latin script, where this strips down to nothing.
+function slugify(text: string, maxLength = 60): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, maxLength)
+    .replace(/-+$/g, "");
+}
+
+async function uniqueFilename(
+  directory: string,
+  base: string,
+  ext: string,
+): Promise<string> {
+  let existing: Set<string>;
+  try {
+    existing = new Set(await readdir(directory));
+  } catch {
+    existing = new Set();
+  }
+  if (!existing.has(`${base}${ext}`)) return `${base}${ext}`;
+  for (let suffix = 2; suffix < 1000; suffix++) {
+    const candidate = `${base}-${suffix}${ext}`;
+    if (!existing.has(candidate)) return candidate;
+  }
+  return `${base}-${Date.now()}${ext}`;
 }
 
 /**
@@ -121,8 +155,21 @@ export async function writeBrainDump(input: {
   ];
 
   const directory = atlasPath("personal", "brain-dump");
-  const file = path.join(directory, `${date}-${session.sessionId}.md`);
   await mkdir(directory, { recursive: true });
+
+  const titleSlug = slugify(title);
+  const slug =
+    titleSlug.length >= MIN_USEFUL_SLUG_LENGTH
+      ? titleSlug
+      : slugify(project).length >= MIN_USEFUL_SLUG_LENGTH
+        ? slugify(project)
+        : session.sessionId.slice(0, 8);
+  const filename = await uniqueFilename(
+    directory,
+    `${date}-${time.replace(":", "")}-${slug}`,
+    ".md",
+  );
+  const file = path.join(directory, filename);
   await writeFile(file, `${lines.join("\n")}\n`, "utf8");
   return {
     brainDumpPath: path.relative(atlasRoot(), file).split(path.sep).join("/"),
