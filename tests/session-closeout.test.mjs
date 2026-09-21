@@ -6,13 +6,15 @@ import test from "node:test";
 import { finalizeSession } from "../dist/application/memory/session-closeout.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
-async function readBrainDump(root, sessionId) {
+// Each test uses a fresh temp ATLAS_ROOT, so at most one brain-dump file
+// exists at a time — no need to match by session id, which (deliberately)
+// no longer appears in the filename.
+async function readBrainDump(root) {
   const files = await readdir(path.join(root, "personal", "brain-dump")).catch(
     () => [],
   );
-  const match = files.find((name) => name.includes(sessionId));
-  if (!match) return null;
-  return readFile(path.join(root, "personal", "brain-dump", match), "utf8");
+  if (!files.length) return null;
+  return readFile(path.join(root, "personal", "brain-dump", files[0]), "utf8");
 }
 
 test("finalizes a session with a bounded human summary, metadata, and handoff", async () => {
@@ -79,7 +81,7 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   assert.doesNotMatch(summary, new RegExp(providerSecret));
   assert.match(summary, /## Next action/);
 
-  const brainDump = await readBrainDump(root, sessionId);
+  const brainDump = await readBrainDump(root);
   assert.match(brainDump, /# Review the session closeout behavior/);
   assert.doesNotMatch(brainDump, new RegExp(providerSecret));
   assert.match(brainDump, /Session id: closeout-session-1/);
@@ -160,7 +162,7 @@ test("skips the daily Work log line and the brain-dump for a generic, no-project
   assert.doesNotMatch(daily, /## Work log\n- /);
   assert.doesNotMatch(daily, /claude session/);
 
-  const brainDump = await readBrainDump(root, sessionId);
+  const brainDump = await readBrainDump(root);
   assert.equal(brainDump, null);
 
   store.close();
@@ -203,7 +205,7 @@ test("still logs a generic-title session and its brain-dump when it has a real g
   );
   assert.match(daily, /## Work log\n- .*claude session — completed/);
 
-  const brainDump = await readBrainDump(root, sessionId);
+  const brainDump = await readBrainDump(root);
   assert.match(brainDump, /^# project/);
   assert.match(brainDump, /Session id: closeout-session-real-project/);
 

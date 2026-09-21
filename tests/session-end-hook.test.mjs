@@ -103,12 +103,9 @@ test("claudeSessionEndHook registers a desktop session from its transcript and r
   const brainDumpFiles = await readdir(
     path.join(root, "personal", "brain-dump"),
   );
-  const brainDumpFile = brainDumpFiles.find((name) =>
-    name.includes("desktop-hook-session-1"),
-  );
-  assert.ok(brainDumpFile);
+  assert.equal(brainDumpFiles.length, 1);
   const brainDump = await readFile(
-    path.join(root, "personal", "brain-dump", brainDumpFile),
+    path.join(root, "personal", "brain-dump", brainDumpFiles[0]),
     "utf8",
   );
   assert.match(brainDump, /wire the brain-dump hook/);
