@@ -165,6 +165,33 @@ docker run --rm atlas-test
 The image validates the Atlas engine and test suite. Provider CLIs and their credentials
 remain on the host and are not included in the image.
 
+## Agent skills
+
+Atlas ships a small set of provider-neutral Agent Skills under `skills/core/`, invoked
+by name from any registered client:
+
+- `catch-up` — reconstruct project state, completed work, blockers, and the next action.
+- `core-thinking` — separate facts from assumptions and choose the smallest valid
+  solution before executing.
+- `verification` — turn an implementation claim into a focused, repeatable check.
+- `session-handoff` — produce a compact continuation packet for the next session.
+
+Skills are not hand-authored from scratch: `atlas skill learn <completed-session-id>`
+extracts a candidate from a finished session, and `atlas skill review <candidate-id>
+promoted` reviews and activates it. See [skills/index.json](skills/index.json) for the
+current catalog.
+
+```mermaid
+flowchart LR
+    A[catch-up] --> B[core-thinking]
+    B --> C[Execute the task]
+    C --> D[verification]
+    D --> E[session-handoff]
+    C -.observation.-> F["atlas skill learn"]
+    F --> G["atlas skill review --promoted"]
+    G -->|activates| H[New skill candidate]
+```
+
 ## Documentation
 
 - [Architecture](docs/architecture.md) — layers, execution flow, and the public/private boundary
