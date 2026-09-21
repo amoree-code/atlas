@@ -53,6 +53,30 @@ test("archives verified done tasks and leaves other states live", async () => {
   await access(path.join(root, "T-003", "task.md"));
 });
 
+test("archives cancelled tasks alongside done ones", async () => {
+  const root = await mkdtemp(
+    path.join(os.tmpdir(), "atlas-task-archive-cancelled-"),
+  );
+  await mkdir(path.join(root, "T-009"), { recursive: true });
+  await writeFile(
+    path.join(root, "T-009", "task.md"),
+    task("T-009", "cancelled"),
+  );
+
+  const preview = await archiveDoneTasks(root);
+  assert.deepEqual(preview.candidates, ["T-009"]);
+
+  const applied = await archiveDoneTasks(root, true);
+  assert.deepEqual(applied.moved, ["T-009"]);
+  assert.equal(
+    await readFile(
+      path.join(root, "archive", "Atlas", "T-009", "task.md"),
+      "utf8",
+    ),
+    task("T-009", "cancelled"),
+  );
+});
+
 test("repairs artifacts left by the old task-only archiver", async () => {
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-task-archive-repair-"),
