@@ -466,7 +466,14 @@ installed(
 
 installed(
   "CLI/direct-import parity: the shim and a direct engine call produce the same context packet",
-  () => {
+  async () => {
+    // The shim always execs the engine checkout it was installed against, while "direct"
+    // runs whichever dist/main.js happens to be built in the invoking checkout. Both
+    // resolve their project purely from ATLAS_ROOT and cwd, so pin those explicitly for
+    // both invocations — otherwise this only passes by accident, when the suite happens
+    // to run from inside the exact checkout the shim points at.
+    const root = await mkdtemp(path.join(os.tmpdir(), "atlas-shim-parity-"));
+    const env = { ...process.env, ATLAS_ROOT: root };
     const shim = path.join(
       os.homedir(),
       "atlas",
@@ -476,16 +483,18 @@ installed(
       "atlas",
     );
     const viaShim = spawnSync(shim, ["context", "--json"], {
+      cwd: root,
+      env,
       encoding: "utf8",
       timeout: 60_000,
     });
     const direct = spawnSync(
       process.execPath,
       [path.resolve("dist/main.js"), "context", "--json"],
-      { encoding: "utf8", timeout: 60_000 },
+      { cwd: root, env, encoding: "utf8", timeout: 60_000 },
     );
-    assert.equal(viaShim.status, 0);
-    assert.equal(direct.status, 0);
+    assert.equal(viaShim.status, 0, viaShim.stderr);
+    assert.equal(direct.status, 0, direct.stderr);
     const a = JSON.parse(viaShim.stdout);
     const b = JSON.parse(direct.stdout);
     assert.equal(a.project, b.project);
