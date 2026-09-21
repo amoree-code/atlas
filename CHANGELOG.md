@@ -9,6 +9,22 @@
 - Add Biome and Knip quality gates plus a unified `pnpm check` command.
 - Align task creation and validation with the current task contract while retaining legacy-task compatibility.
 - Exclude Git-ignored, machine-generated files from the public privacy scan.
+- Add an interactive approval gate for pending observations (capped to the 5 most recent);
+  approving one now creates a skill candidate, with signal quality scoped to user input.
+- Surface task observations in the daily narrative, and generate a human-readable session
+  closeout and daily narrative with an opt-in model call.
+- Wire in `graft` for local code-graph context during development.
+- Harden Atlas runtime contracts and recovery, and fix newline-delimited JSON-RPC framing
+  for the MCP stdio transport.
+- Add reviewed skill learning from completed sessions, with auto-activation of reviewed skills.
+- Add Kilo and Kimi as supported headless providers.
+- Add provider-neutral MCP setup and complete Atlas client integration.
+- Add governed Obsidian vault integration: read-only discovery, automatic hash sync, guarded
+  writes, inbox promotion, and exposure through the provider-neutral MCP server.
+- Make Atlas client-neutral with bounded context and cross-client sync (T-198); remediate
+  security-audit findings.
+- Add workspace context and safe maintenance commands (`atlas doctor`, `atlas repair`),
+  `.nvmrc`/lefthook for local dev tooling, and a cross-platform Docker release gate.
 
 ## 0.3.6
 
