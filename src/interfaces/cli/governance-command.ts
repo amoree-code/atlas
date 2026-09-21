@@ -50,8 +50,8 @@ export async function runPolicyCommand(name = "list"): Promise<void> {
 }
 
 export async function runLifecycleCommand(args: string[]): Promise<void> {
-  const ticketIndex = args.indexOf("--ticket");
-  const ticketId = ticketIndex >= 0 ? args[ticketIndex + 1] : undefined;
+  const taskIndex = args.indexOf("--task");
+  const taskId = taskIndex >= 0 ? args[taskIndex + 1] : undefined;
   const verificationIndex = args.indexOf("--verification");
   const verification =
     verificationIndex >= 0 ? args[verificationIndex + 1] : undefined;
@@ -60,7 +60,7 @@ export async function runLifecycleCommand(args: string[]): Promise<void> {
     complete && verification === "passed" ? "CHECKPOINT" : "CONTINUE";
   const result = {
     decision,
-    ticketId: ticketId ?? null,
+    taskId: taskId ?? null,
     complete,
     verification: verification ?? "unknown",
     reason:

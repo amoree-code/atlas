@@ -13,7 +13,7 @@ import { SessionStore } from "../dist/infrastructure/persistence/session-store.j
 test("one bounded handoff keeps semantic context equivalent across read-only clients", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t193-"));
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
-  await mkdir(path.join(root, "projects", "atlas", "tickets", "T-193"), {
+  await mkdir(path.join(root, "projects", "atlas", "tasks", "T-193"), {
     recursive: true,
   });
   await writeFile(
@@ -47,13 +47,13 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     }),
   );
   await writeFile(
-    path.join(root, "projects", "atlas", "tickets", "T-193", "task.md"),
+    path.join(root, "projects", "atlas", "tasks", "T-193", "task.md"),
     `---\nid: T-193\ntitle: Continuity test\nstate: in_progress\nrequirement: Share one bounded task context\n---\n\n## Objective\nKeep context small and provider-neutral.\n`,
   );
   process.env.ATLAS_ROOT = root;
   try {
     const handoff = await createHandoff({
-      ticketId: "T-193",
+      taskId: "T-193",
       nextAction: "Run the bounded verification",
     });
     const seen = [];
@@ -62,7 +62,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
         {
           profileName: "universal",
           client,
-          ticketId: "T-193",
+          taskId: "T-193",
           handoffId: handoff.handoffId,
           prompt: "Continue the task",
           cwd: root,
@@ -72,7 +72,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
           return { exitCode: 0, events: [], stderr: "" };
         },
       );
-      assert.equal(session.ticketId, "T-193");
+      assert.equal(session.taskId, "T-193");
       assert.equal(session.handoffId, handoff.handoffId);
     }
     assert.deepEqual(
@@ -82,7 +82,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     assert.ok(
       seen.every(
         ({ prompt }) =>
-          prompt.includes('"ticketId":"T-193"') &&
+          prompt.includes('"taskId":"T-193"') &&
           prompt.includes("Run the bounded verification") &&
           prompt.includes("handoff-read"),
       ),
@@ -94,7 +94,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
             {
               profileName: "universal",
               client,
-              ticketId: "T-193",
+              taskId: "T-193",
               handoffId: handoff.handoffId,
               prompt: "Continue the task",
               cwd: root,

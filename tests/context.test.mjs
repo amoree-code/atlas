@@ -7,7 +7,7 @@ import test from "node:test";
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
 import { buildContext } from "../dist/infrastructure/filesystem/context-manager.js";
 
-test("context returns a compact JSON packet without loading ticket bodies", () => {
+test("context returns a compact JSON packet without loading task bodies", () => {
   const result = spawnSync(
     process.execPath,
     [path.resolve("dist/main.js"), "context", "--json"],
@@ -18,7 +18,7 @@ test("context returns a compact JSON packet without loading ticket bodies", () =
   assert.equal(packet.project, "atlas");
   assert.equal(packet.version, "0.3.6");
   assert.deepEqual(packet.roots, ["personal", "projects", "system"]);
-  assert.ok(Array.isArray(packet.tickets));
+  assert.ok(Array.isArray(packet.tasks));
 });
 
 test("context rejects symlinks that escape allowed paths", async () => {

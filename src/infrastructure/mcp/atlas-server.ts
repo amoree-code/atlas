@@ -6,7 +6,7 @@ import {
 } from "../../application/doctor/workspace-doctor.js";
 import {
   getHandoff,
-  getTicket,
+  getTask,
   listHandoffs,
 } from "../../application/handoff/handoff-service.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
@@ -14,7 +14,7 @@ import {
   actionFingerprint,
   mcpApprovalSchema,
 } from "../../domain/mcp/mcp-contract.js";
-import { listTickets } from "../../interfaces/cli/tickets-command.js";
+import { listTasks } from "../../interfaces/cli/tasks-command.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 import { openSessionStoreReadOnly } from "../persistence/session-store.js";
 
@@ -63,8 +63,8 @@ const tools = [
     },
   },
   {
-    name: "atlas_tickets_list",
-    description: "List Atlas tickets, optionally filtered by state.",
+    name: "atlas_tasks_list",
+    description: "List Atlas tasks, optionally filtered by state.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
@@ -73,13 +73,13 @@ const tools = [
     },
   },
   {
-    name: "atlas_ticket_get",
-    description: "Read one bounded Atlas ticket record.",
+    name: "atlas_task_get",
+    description: "Read one bounded Atlas task record.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
-      properties: { ticketId: { type: "string" } },
-      required: ["ticketId"],
+      properties: { taskId: { type: "string" } },
+      required: ["taskId"],
       additionalProperties: false,
     },
   },
@@ -89,7 +89,7 @@ const tools = [
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
-      properties: { ticketId: { type: "string" } },
+      properties: { taskId: { type: "string" } },
       additionalProperties: false,
     },
   },
@@ -177,9 +177,9 @@ const resources = [
     description: "Available Atlas role profiles.",
   },
   {
-    uri: "atlas://tickets",
-    name: "Atlas tickets",
-    description: "Current Atlas tickets.",
+    uri: "atlas://tasks",
+    name: "Atlas tasks",
+    description: "Current Atlas tasks.",
   },
   {
     uri: "atlas://handoffs",
@@ -196,11 +196,10 @@ const prompts = [
     arguments: [],
   },
   {
-    name: "atlas_review_ticket",
-    description:
-      "Review one Atlas ticket and identify its next verified action.",
+    name: "atlas_review_task",
+    description: "Review one Atlas task and identify its next verified action.",
     arguments: [
-      { name: "ticket", description: "Ticket identifier", required: true },
+      { name: "task", description: "Task identifier", required: true },
     ],
   },
 ];
@@ -248,18 +247,18 @@ async function callTool(
     };
   }
   if (name === "atlas_profiles_list") return { profiles: await profiles() };
-  if (name === "atlas_tickets_list")
+  if (name === "atlas_tasks_list")
     return {
-      tickets: await listTickets(
+      tasks: await listTasks(
         typeof args.state === "string" ? args.state : undefined,
       ),
     };
-  if (name === "atlas_ticket_get")
-    return await getTicket(requiredArgument(args, "ticketId"));
+  if (name === "atlas_task_get")
+    return await getTask(requiredArgument(args, "taskId"));
   if (name === "atlas_handoffs_list")
     return {
       handoffs: await listHandoffs(
-        typeof args.ticketId === "string" ? args.ticketId : undefined,
+        typeof args.taskId === "string" ? args.taskId : undefined,
       ),
     };
   if (name === "atlas_handoff_get")
@@ -352,7 +351,7 @@ async function readResource(
       findings: report.findings,
     };
   } else if (uri === "atlas://profiles") value = { profiles: await profiles() };
-  else if (uri === "atlas://tickets") value = { tickets: await listTickets() };
+  else if (uri === "atlas://tasks") value = { tasks: await listTasks() };
   else if (uri === "atlas://handoffs")
     value = { handoffs: await listHandoffs() };
   else throw new Error(`Unknown Atlas resource: ${uri}`);
@@ -387,16 +386,16 @@ async function getPrompt(
         },
       ],
     };
-  if (name === "atlas_review_ticket") {
-    const ticket = requiredArgument(args, "ticket");
+  if (name === "atlas_review_task") {
+    const task = requiredArgument(args, "task");
     return {
-      description: `Review ${ticket}`,
+      description: `Review ${task}`,
       messages: [
         {
           role: "user",
           content: {
             type: "text",
-            text: `Read the Atlas ticket ${ticket}, report PROVEN, NOT PROVEN, or BLOCKED, and propose exactly one next verified action.`,
+            text: `Read the Atlas task ${task}, report PROVEN, NOT PROVEN, or BLOCKED, and propose exactly one next verified action.`,
           },
         },
       ],

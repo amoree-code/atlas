@@ -16,7 +16,7 @@ export type SessionPointer = {
   projectId: string | null;
   provider: string;
   status: SessionStatus;
-  ticketId: string | null;
+  taskId: string | null;
   checkpointRef: string | null;
   nextAction: string;
   updatedAt: string;
@@ -88,7 +88,7 @@ export async function buildSessionPointer(
     projectId: await projectIdFor(session.workingDirectory),
     provider: session.provider,
     status: session.status,
-    ticketId: session.ticketId,
+    taskId: session.taskId,
     checkpointRef: session.summaryPath,
     nextAction: clip(session.nextAction ?? ""),
     updatedAt: session.updatedAt,

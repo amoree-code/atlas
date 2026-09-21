@@ -1,7 +1,7 @@
 const commandGroups = [
   [
     "Workspace",
-    "setup, context, project, tickets, policy, lifecycle, doctor, repair",
+    "setup, context, project, tasks, policy, lifecycle, doctor, repair",
   ],
   ["Execution", "run, session, service, intercept, operate, gateway, schedule"],
   ["Providers", "client, install, update, remove, auth, mcp, browser"],

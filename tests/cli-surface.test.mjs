@@ -24,7 +24,7 @@ test("CLI help exposes every top-level command", () => {
     "setup",
     "context",
     "project",
-    "tickets",
+    "tasks",
     "policy",
     "lifecycle",
     "doctor",

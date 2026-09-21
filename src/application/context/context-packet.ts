@@ -18,12 +18,12 @@ import {
 // Compact context packet: the bounded, deterministic, provider-agnostic result a caller
 // gets after intent-router (slice 4) classifies a request and context-ladder (slice 5)
 // decides what, if anything, may be read. This slice adds no real retrieval or search —
-// today at most one candidate (a single budget-approved exact-record ticket file) can ever
-// appear in selectedReferences; ranked-reference search across memory/knowledge/tickets is
+// today at most one candidate (a single budget-approved exact-record task file) can ever
+// appear in selectedReferences; ranked-reference search across memory/knowledge/tasks is
 // T-198 slice 7. See T-198 slice 6.
 
 export type RecordType =
-  | "ticket"
+  | "task"
   | "memory"
   | "knowledge"
   | "work-style"
@@ -118,8 +118,8 @@ function recordTypeForIntent(
   intent: IntentClassification["intent"],
 ): RecordType {
   switch (intent) {
-    case "ticket-lookup":
-      return "ticket";
+    case "task-lookup":
+      return "task";
     case "memory-lookup":
       return "memory";
     case "knowledge-lookup":

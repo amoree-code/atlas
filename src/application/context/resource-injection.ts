@@ -3,7 +3,7 @@ import type { ProjectResolution } from "./project-resolution.js";
 // This module used to read Atlas files (memory, knowledge, inbox, README, governance rules)
 // and inject their full content into every provider launch. That bulk injection is removed
 // per T-198: providers get a tiny identity/bootstrap signal only, never Atlas file contents.
-// On-demand reads happen through explicit Atlas operations (tickets, memory, knowledge, …),
+// On-demand reads happen through explicit Atlas operations (tasks, memory, knowledge, …),
 // not through what gets stuffed into a launch argument or env var at startup.
 export const ATLAS_BOOTSTRAP_MAX_BYTES = 256;
 
@@ -12,7 +12,7 @@ export type AtlasBootstrap = {
   manifest: { bytes: number; source: "atlas"; transport: "bootstrap-env" };
 };
 
-const SUPPORTED_OPERATIONS = "context,tickets,memory-search,knowledge-search";
+const SUPPORTED_OPERATIONS = "context,tasks,memory-search,knowledge-search";
 
 function projectTag(project: ProjectResolution): string {
   if (project.status === "bound") return project.projectId;

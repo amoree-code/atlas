@@ -26,7 +26,7 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   store.create({
     sessionId,
     title: "Closeout test",
-    ticketId: null,
+    taskId: null,
     handoffId: null,
     provider: "claude",
     providerSessionId: null,
@@ -105,11 +105,24 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   );
   assert.equal(store.listHandoffs().length, 1);
 
+  // A second closeout for an already-closed-out session must not append a
+  // duplicate "Work log" line to the daily narrative (the bug this guards
+  // against: a caller's success path closes out, then a later step in the
+  // same caller throws and its catch block calls finalizeSession again).
+  const dailyAfterSecond = await readFile(
+    path.join(root, "personal", "daily", `${today}.md`),
+    "utf8",
+  );
+  assert.equal(
+    dailyAfterSecond.split("\n").filter((line) => line.startsWith("- ")).length,
+    1,
+  );
+
   store.close();
   delete process.env.ATLAS_ROOT;
 });
 
-test("skips the brain-dump for a generic, no-project session", async () => {
+test("skips the daily Work log line and the brain-dump for a generic, no-project session", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
   process.env.ATLAS_ROOT = root;
   await mkdir(path.join(root, "system", "sessions"), { recursive: true });
@@ -120,7 +133,7 @@ test("skips the brain-dump for a generic, no-project session", async () => {
   store.create({
     sessionId,
     title: "claude session",
-    ticketId: null,
+    taskId: null,
     handoffId: null,
     provider: "claude",
     providerSessionId: null,
@@ -136,6 +149,17 @@ test("skips the brain-dump for a generic, no-project session", async () => {
 
   await finalizeSession(store, sessionId, { exitCode: 0 });
 
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyPath = path.join(root, "personal", "daily", `${today}.md`);
+  let daily = "";
+  try {
+    daily = await readFile(dailyPath, "utf8");
+  } catch {
+    // No daily file at all is also an acceptable outcome of skipping.
+  }
+  assert.doesNotMatch(daily, /## Work log\n- /);
+  assert.doesNotMatch(daily, /claude session/);
+
   const brainDump = await readBrainDump(root, sessionId);
   assert.equal(brainDump, null);
 
@@ -143,7 +167,7 @@ test("skips the brain-dump for a generic, no-project session", async () => {
   delete process.env.ATLAS_ROOT;
 });
 
-test("still writes a brain-dump for a generic-title session with a real git project", async () => {
+test("still logs a generic-title session and its brain-dump when it has a real git project", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
   process.env.ATLAS_ROOT = root;
   await mkdir(path.join(root, "system", "sessions"), { recursive: true });
@@ -156,7 +180,7 @@ test("still writes a brain-dump for a generic-title session with a real git proj
   store.create({
     sessionId,
     title: "claude session",
-    ticketId: null,
+    taskId: null,
     handoffId: null,
     provider: "claude",
     providerSessionId: null,
@@ -171,6 +195,13 @@ test("still writes a brain-dump for a generic-title session with a real git proj
   store.updateStatus(sessionId, "completed");
 
   await finalizeSession(store, sessionId, { exitCode: 0 });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const daily = await readFile(
+    path.join(root, "personal", "daily", `${today}.md`),
+    "utf8",
+  );
+  assert.match(daily, /## Work log\n- .*claude session — completed/);
 
   const brainDump = await readBrainDump(root, sessionId);
   assert.match(brainDump, /^# project/);

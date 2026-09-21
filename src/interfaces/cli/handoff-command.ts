@@ -9,12 +9,12 @@ export async function runHandoffCommand(
   args: string[],
 ): Promise<void> {
   if (action === "create") {
-    const ticketIndex = args.indexOf("--ticket");
+    const taskIndex = args.indexOf("--task");
     const sessionIndex = args.indexOf("--session");
     const nextIndex = args.indexOf("--next");
     const providerIndex = args.indexOf("--provider");
     const handoff = await createHandoff({
-      ticketId: ticketIndex >= 0 ? args[ticketIndex + 1] : undefined,
+      taskId: taskIndex >= 0 ? args[taskIndex + 1] : undefined,
       sessionId: sessionIndex >= 0 ? args[sessionIndex + 1] : undefined,
       nextAction:
         nextIndex >= 0 ? args.slice(nextIndex + 1).join(" ") : undefined,
@@ -31,12 +31,10 @@ export async function runHandoffCommand(
     return;
   }
   if (action === "list") {
-    const ticketIndex = args.indexOf("--ticket");
+    const taskIndex = args.indexOf("--task");
     console.log(
       JSON.stringify(
-        await listHandoffs(
-          ticketIndex >= 0 ? args[ticketIndex + 1] : undefined,
-        ),
+        await listHandoffs(taskIndex >= 0 ? args[taskIndex + 1] : undefined),
         null,
         2,
       ),
@@ -44,7 +42,7 @@ export async function runHandoffCommand(
     return;
   }
   console.error(
-    "Usage: atlas handoff create [--ticket <id>] [--session <id>] [--next <action>]|show <id>|context <id>|list [--ticket <id>]",
+    "Usage: atlas handoff create [--task <id>] [--session <id>] [--next <action>]|show <id>|context <id>|list [--task <id>]",
   );
   process.exitCode = 1;
 }

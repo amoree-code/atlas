@@ -46,7 +46,7 @@ export type AgentRunRequest = {
   client?: string;
   actor?: string;
   title?: string;
-  ticketId?: string;
+  taskId?: string;
   handoffId?: string;
 };
 
@@ -65,9 +65,9 @@ export async function runAgent(
   const handoff = request.handoffId
     ? await getHandoff(request.handoffId)
     : null;
-  const effectiveTicketId =
-    request.ticketId ??
-    (typeof handoff?.ticketId === "string" ? handoff.ticketId : null);
+  const effectiveTaskId =
+    request.taskId ??
+    (typeof handoff?.taskId === "string" ? handoff.taskId : null);
   const clientHome = resolveClientHome(profile);
   executionPolicy(profile, request.cwd);
   assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
@@ -88,7 +88,7 @@ export async function runAgent(
       (typeof handoff?.title === "string"
         ? handoff.title
         : request.prompt.slice(0, 120)),
-    ticketId: effectiveTicketId,
+    taskId: effectiveTaskId,
     handoffId: request.handoffId ?? null,
     provider: profile.provider,
     providerSessionId: null,
@@ -197,7 +197,7 @@ export async function runAgent(
       approvalRequired: profile.governance?.approvalRequired ?? false,
       verification: profile.verification.commands,
       memoryScope: profile.memory.enabled ? profile.memory.scope : "disabled",
-      ticketId: effectiveTicketId,
+      taskId: effectiveTaskId,
       handoffId: request.handoffId ?? null,
       contextCompression: profile.contextCompression,
     });

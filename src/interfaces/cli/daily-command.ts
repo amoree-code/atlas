@@ -8,7 +8,7 @@ import {
 import type { Session } from "../../domain/sessions/session.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { atlasPath } from "../../paths.js";
-import { listTickets } from "./tickets-command.js";
+import { listTasks } from "./tasks-command.js";
 
 /**
  * Interactive human-in-the-loop gate for observations sitting in "observed"
@@ -77,7 +77,7 @@ export async function runDailyCommand(
           .join(" ")
           .slice(0, 4_000)
       : "";
-  const tickets = await listTickets();
+  const tasks = await listTasks();
   const store = await openSessionStore();
   let sessions: Array<
     Pick<Session, "sessionId" | "title" | "provider" | "status" | "nextAction">
@@ -103,11 +103,11 @@ export async function runDailyCommand(
     "",
     "## Brief",
     "",
-    tickets.length
-      ? tickets
-          .map((ticket) => `- ${ticket.id}: ${ticket.title} — ${ticket.goal}`)
+    tasks.length
+      ? tasks
+          .map((task) => `- ${task.id}: ${task.title} — ${task.goal}`)
           .join("\n")
-      : "- No active tickets.",
+      : "- No active tasks.",
     "",
     "## Check-in",
     "",
@@ -141,7 +141,7 @@ export async function runDailyCommand(
         date,
         file,
         bytes: Buffer.byteLength(content),
-        tickets: tickets.length,
+        tasks: tasks.length,
         sessions: sessions.length,
         news: Boolean(news),
         content,

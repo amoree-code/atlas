@@ -17,11 +17,11 @@ const GOOD_BUDGET = {
   maxOperationCost: 5,
 };
 
-async function withTempTicket(bytes, fn) {
+async function withTempTask(bytes, fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ladder-"));
-  const ticketDir = path.join(root, "projects", "atlas", "tickets", "T-1");
-  await mkdir(ticketDir, { recursive: true });
-  await writeFile(path.join(ticketDir, "task.md"), "x".repeat(bytes));
+  const taskDir = path.join(root, "projects", "atlas", "tasks", "T-1");
+  await mkdir(taskDir, { recursive: true });
+  await writeFile(path.join(taskDir, "task.md"), "x".repeat(bytes));
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = root;
   try {
@@ -160,8 +160,8 @@ test("missing budget on any classification stops immediately with violation inva
   assert.deepEqual(result.files, []);
 });
 
-test("exact-limit success: ticket exactly at budget.maxBytes is allowed", () =>
-  withTempTicket(1000, async () => {
+test("exact-limit success: task exactly at budget.maxBytes is allowed", () =>
+  withTempTask(1000, async () => {
     const classification = classifyIntent("show T-1");
     const result = await planContextRead(classification, {
       ...GOOD_BUDGET,
@@ -172,8 +172,8 @@ test("exact-limit success: ticket exactly at budget.maxBytes is allowed", () =>
     assert.equal(result.truncated, false);
   }));
 
-test("one-over-limit failure: ticket one byte over budget.maxBytes is rejected, not silently truncated", () =>
-  withTempTicket(1000, async () => {
+test("one-over-limit failure: task one byte over budget.maxBytes is rejected, not silently truncated", () =>
+  withTempTask(1000, async () => {
     const classification = classifyIntent("show T-1");
     const result = await planContextRead(classification, {
       ...GOOD_BUDGET,
@@ -186,8 +186,8 @@ test("one-over-limit failure: ticket one byte over budget.maxBytes is rejected, 
     assert.match(result.reason, /refusing to silently truncate/);
   }));
 
-test("exact-limit success on maxFiles=1 for a single-file ticket record", () =>
-  withTempTicket(10, async () => {
+test("exact-limit success on maxFiles=1 for a single-file task record", () =>
+  withTempTask(10, async () => {
     const classification = classifyIntent("show T-1");
     const result = await planContextRead(classification, {
       ...GOOD_BUDGET,
@@ -197,7 +197,7 @@ test("exact-limit success on maxFiles=1 for a single-file ticket record", () =>
   }));
 
 test("operation-cost limit stops an exact-record read before any file is touched", () =>
-  withTempTicket(10, async () => {
+  withTempTask(10, async () => {
     const classification = classifyIntent("show T-1");
     const result = await planContextRead(classification, {
       ...GOOD_BUDGET,
@@ -208,7 +208,7 @@ test("operation-cost limit stops an exact-record read before any file is touched
   }));
 
 test("multiple sequential operations do not leak state between calls (deterministic isolation)", () =>
-  withTempTicket(1000, async () => {
+  withTempTask(1000, async () => {
     const a = await planContextRead(classifyIntent("show T-1"), {
       ...GOOD_BUDGET,
       maxBytes: 999,
@@ -227,8 +227,8 @@ test("multiple sequential operations do not leak state between calls (determinis
     assert.equal(c.allowed, true);
   }));
 
-test("missing identifier on a ticket-shaped request without a valid T-id never guesses a path", async () => {
-  const classification = classifyIntent("show me ticket 123");
+test("missing identifier on a task-shaped request without a valid T-id never guesses a path", async () => {
+  const classification = classifyIntent("show me task 123");
   assert.equal(classification.identifier, null);
   const result = await planContextRead(classification, GOOD_BUDGET);
   assert.equal(result.rung, "identity");
@@ -237,8 +237,8 @@ test("missing identifier on a ticket-shaped request without a valid T-id never g
 
 // --- path traversal ---
 
-test("path traversal: a ticket id that isn't a clean T-<digits> shape is rejected before any filesystem access, never resolved outside the ticket root", () =>
-  withTempTicket(10, async () => {
+test("path traversal: a task id that isn't a clean T-<digits> shape is rejected before any filesystem access, never resolved outside the task root", () =>
+  withTempTask(10, async () => {
     // These can never satisfy classifyIntent's own T-\d+ extraction, so route the malformed
     // "identifier" straight at the ladder's public entry via a hand-built classification —
     // proving the ladder itself refuses to trust an unshaped identifier, not just the router.
@@ -251,8 +251,8 @@ test("path traversal: a ticket id that isn't a clean T-<digits> shape is rejecte
     ];
     for (const identifier of malformed) {
       const classification = {
-        intent: "ticket-lookup",
-        entityType: "ticket",
+        intent: "task-lookup",
+        entityType: "task",
         identifier,
         action: "get",
         confidence: "high",
@@ -267,7 +267,7 @@ test("path traversal: a ticket id that isn't a clean T-<digits> shape is rejecte
       assert.deepEqual(result.files, []);
       assert.doesNotMatch(
         result.reason,
-        /not found under the Atlas ticket root/,
+        /not found under the Atlas task root/,
         "should be rejected at shape validation, never reach a filesystem stat",
       );
     }
@@ -284,8 +284,8 @@ test("large adversarial input is classified and planned without unbounded work",
 
 // --- Arabic and English intent output through the ladder ---
 
-test("Arabic ticket-lookup ('عرض T-1') reaches exact-record exactly like its English equivalent", () =>
-  withTempTicket(10, async () => {
+test("Arabic task-lookup ('عرض T-1') reaches exact-record exactly like its English equivalent", () =>
+  withTempTask(10, async () => {
     const ar = await planContextRead(classifyIntent("عرض T-1"), GOOD_BUDGET);
     const en = await planContextRead(classifyIntent("show T-1"), GOOD_BUDGET);
     assert.equal(ar.rung, "exact-record");
@@ -309,7 +309,7 @@ test("Arabic project-detect ('شنو المشروع الحالي') reaches proje
 // --- determinism ---
 
 test("identical input produces identical output across repeated calls", () =>
-  withTempTicket(500, async () => {
+  withTempTask(500, async () => {
     const classification = classifyIntent("show T-1");
     const first = await planContextRead(classification, GOOD_BUDGET);
     const second = await planContextRead(classification, GOOD_BUDGET);
@@ -319,10 +319,10 @@ test("identical input produces identical output across repeated calls", () =>
 // --- no persistence ---
 
 test("planContextRead never writes any file (no persistence of user content or results)", () =>
-  withTempTicket(500, async (root) => {
+  withTempTask(500, async (root) => {
     const before = JSON.stringify(
       await import("node:fs/promises").then((fs) =>
-        fs.readdir(path.join(root, "projects", "atlas", "tickets", "T-1")),
+        fs.readdir(path.join(root, "projects", "atlas", "tasks", "T-1")),
       ),
     );
     await planContextRead(classifyIntent("show T-1"), GOOD_BUDGET);
@@ -332,7 +332,7 @@ test("planContextRead never writes any file (no persistence of user content or r
     );
     const after = JSON.stringify(
       await import("node:fs/promises").then((fs) =>
-        fs.readdir(path.join(root, "projects", "atlas", "tickets", "T-1")),
+        fs.readdir(path.join(root, "projects", "atlas", "tasks", "T-1")),
       ),
     );
     assert.equal(before, after);

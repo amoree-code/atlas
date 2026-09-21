@@ -22,7 +22,7 @@ type SessionRow = Omit<
 > & {
   session_id: string;
   title: string;
-  ticket_id: string | null;
+  task_id: string | null;
   handoff_id: string | null;
   provider_session_id: string | null;
   parent_session_id: string | null;
@@ -64,7 +64,7 @@ export class SessionStore {
       CREATE TABLE IF NOT EXISTS sessions (
         session_id TEXT PRIMARY KEY,
         title TEXT NOT NULL DEFAULT '',
-        ticket_id TEXT,
+        task_id TEXT,
         handoff_id TEXT,
         provider TEXT NOT NULL,
         provider_session_id TEXT,
@@ -89,7 +89,7 @@ export class SessionStore {
       );
       CREATE TABLE IF NOT EXISTS handoffs (
         handoff_id TEXT PRIMARY KEY,
-        ticket_id TEXT,
+        task_id TEXT,
         title TEXT NOT NULL,
         objective TEXT NOT NULL DEFAULT '',
         state TEXT NOT NULL DEFAULT 'paused',
@@ -148,11 +148,35 @@ export class SessionStore {
       CREATE INDEX IF NOT EXISTS session_events_session_id ON session_events(session_id);
       CREATE INDEX IF NOT EXISTS session_links_parent_id ON session_links(parent_session_id);
       CREATE INDEX IF NOT EXISTS sessions_status_updated_at ON sessions(status, updated_at);
-      CREATE INDEX IF NOT EXISTS handoffs_ticket_id ON handoffs(ticket_id);
       CREATE INDEX IF NOT EXISTS handoffs_updated_at ON handoffs(updated_at);
     `);
+    this.migrateTicketIdToTaskId();
     this.migrateProfileIdentityColumn();
     this.migrateHandoffSummaryColumn();
+    this.database.exec(
+      "CREATE INDEX IF NOT EXISTS handoffs_task_id ON handoffs(task_id);",
+    );
+  }
+
+  // Older databases used `ticket_id`. Rename it in place so history survives the
+  // terminology change instead of silently dropping the association.
+  private migrateTicketIdToTaskId(): void {
+    for (const table of ["sessions", "handoffs"] as const) {
+      const columns = this.database
+        .prepare(`PRAGMA table_info(${table})`)
+        .all() as Array<{ name: string }>;
+      const hasTicketId = columns.some((column) => column.name === "ticket_id");
+      const hasTaskId = columns.some((column) => column.name === "task_id");
+      if (hasTicketId && !hasTaskId) {
+        this.database.exec(
+          `ALTER TABLE ${table} RENAME COLUMN ticket_id TO task_id`,
+        );
+      } else if (hasTicketId && hasTaskId) {
+        this.database.exec(
+          `UPDATE ${table} SET task_id = ticket_id WHERE task_id IS NULL AND ticket_id IS NOT NULL`,
+        );
+      }
+    }
   }
 
   // CREATE TABLE IF NOT EXISTS does not add columns to a table that already exists, so a
@@ -168,7 +192,7 @@ export class SessionStore {
     }
     const additions: Array<[string, string]> = [
       ["title", "TEXT NOT NULL DEFAULT ''"],
-      ["ticket_id", "TEXT"],
+      ["task_id", "TEXT"],
       ["handoff_id", "TEXT"],
       ["context_hash", "TEXT"],
       ["context_bytes", "INTEGER NOT NULL DEFAULT 0"],
@@ -207,7 +231,7 @@ export class SessionStore {
       | "updatedAt"
       | "status"
       | "title"
-      | "ticketId"
+      | "taskId"
       | "handoffId"
       | "contextHash"
       | "contextBytes"
@@ -222,7 +246,7 @@ export class SessionStore {
     > & {
       status?: SessionStatus;
       title?: string;
-      ticketId?: string | null;
+      taskId?: string | null;
       handoffId?: string | null;
       contextHash?: string | null;
       contextBytes?: number;
@@ -239,14 +263,14 @@ export class SessionStore {
     });
     this.database
       .prepare(`
-      INSERT INTO sessions (session_id, title, ticket_id, handoff_id, provider, provider_session_id, parent_session_id, profile,
+      INSERT INTO sessions (session_id, title, task_id, handoff_id, provider, provider_session_id, parent_session_id, profile,
         profile_identity, working_directory, status, created_at, updated_at, resume_data, context_hash, context_bytes, next_action, verification_status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
       .run(
         session.sessionId,
         session.title,
-        session.ticketId,
+        session.taskId,
         session.handoffId,
         session.provider,
         session.providerSessionId,
@@ -366,12 +390,12 @@ export class SessionStore {
       JSON.stringify(input[key] ?? fallback);
     this.database
       .prepare(`
-      INSERT INTO handoffs (handoff_id, ticket_id, title, objective, state, profile_id, profile_identity,
+      INSERT INTO handoffs (handoff_id, task_id, title, objective, state, profile_id, profile_identity,
         source_session_id, provider, parent_session_id, decisions_json, changed_files_json, commit_ref,
         verification_json, not_proven_json, blocked_json, permissions_json, context_manifest_json,
         next_action, source_summary_path, content, content_bytes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(handoff_id) DO UPDATE SET ticket_id=excluded.ticket_id, title=excluded.title,
+      ON CONFLICT(handoff_id) DO UPDATE SET task_id=excluded.task_id, title=excluded.title,
         objective=excluded.objective, state=excluded.state, profile_id=excluded.profile_id,
         profile_identity=excluded.profile_identity, source_session_id=excluded.source_session_id,
         provider=excluded.provider, parent_session_id=excluded.parent_session_id,
@@ -385,7 +409,7 @@ export class SessionStore {
     `)
       .run(
         value("handoffId", ""),
-        value("ticketId", null),
+        value("taskId", null),
         value("title", ""),
         value("objective", ""),
         value("state", "paused"),
@@ -418,14 +442,14 @@ export class SessionStore {
     return row ? this.deserializeHandoff(row) : null;
   }
 
-  listHandoffs(ticketId?: string): Array<Record<string, unknown>> {
+  listHandoffs(taskId?: string): Array<Record<string, unknown>> {
     const rows = (
-      ticketId
+      taskId
         ? this.database
             .prepare(
-              "SELECT * FROM handoffs WHERE ticket_id = ? ORDER BY updated_at DESC",
+              "SELECT * FROM handoffs WHERE task_id = ? ORDER BY updated_at DESC",
             )
-            .all(ticketId)
+            .all(taskId)
         : this.database
             .prepare("SELECT * FROM handoffs ORDER BY updated_at DESC")
             .all()
@@ -502,7 +526,7 @@ export class SessionStore {
     };
     return {
       handoffId: row.handoff_id,
-      ticketId: row.ticket_id,
+      taskId: row.task_id,
       title: row.title,
       objective: row.objective,
       state: row.state,
@@ -705,7 +729,7 @@ export class SessionStore {
     return validateSession({
       sessionId: row.session_id,
       title: row.title,
-      ticketId: row.ticket_id,
+      taskId: row.task_id,
       handoffId: row.handoff_id,
       provider: row.provider,
       providerSessionId: row.provider_session_id,

@@ -17,8 +17,8 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
       "atlas_status",
       "atlas_doctor",
       "atlas_profiles_list",
-      "atlas_tickets_list",
-      "atlas_ticket_get",
+      "atlas_tasks_list",
+      "atlas_task_get",
       "atlas_handoffs_list",
       "atlas_handoff_get",
       "atlas_session_get",
@@ -68,12 +68,7 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
   });
   assert.deepEqual(
     listedResources.result.resources.map((resource) => resource.uri),
-    [
-      "atlas://status",
-      "atlas://profiles",
-      "atlas://tickets",
-      "atlas://handoffs",
-    ],
+    ["atlas://status", "atlas://profiles", "atlas://tasks", "atlas://handoffs"],
   );
   const resource = await handleAtlasMcpRequest({
     jsonrpc: "2.0",
@@ -89,13 +84,13 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
   });
   assert.deepEqual(
     listedPrompts.result.prompts.map((prompt) => prompt.name),
-    ["atlas_review_workspace", "atlas_review_ticket"],
+    ["atlas_review_workspace", "atlas_review_task"],
   );
   const prompt = await handleAtlasMcpRequest({
     jsonrpc: "2.0",
     id: 6,
     method: "prompts/get",
-    params: { name: "atlas_review_ticket", arguments: { ticket: "T-1" } },
+    params: { name: "atlas_review_task", arguments: { task: "T-1" } },
   });
   assert.match(prompt.result.messages[0].content.text, /T-1/);
 });

@@ -16,7 +16,7 @@ import { atlasPath, engineRoot, resolveWithin } from "../../paths.js";
 const execFile = promisify(execFileCallback);
 const maxContentBytes = 16_000;
 
-export type Ticket = {
+export type Task = {
   id: string;
   title: string;
   state: string;
@@ -27,7 +27,7 @@ export type Ticket = {
 };
 
 export async function createHandoff(input: {
-  ticketId?: string;
+  taskId?: string;
   sessionId?: string;
   profileId?: string;
   nextAction?: string;
@@ -38,10 +38,10 @@ export async function createHandoff(input: {
   notProven?: string[];
   blocked?: string[];
 }): Promise<Handoff> {
-  const ticket = input.ticketId ? await getTicket(input.ticketId) : null;
+  const task = input.taskId ? await getTask(input.taskId) : null;
   const store = await openSessionStore();
   try {
-    return await createHandoffWithStore(store, { ...input, ticket });
+    return await createHandoffWithStore(store, { ...input, task });
   } finally {
     store.close();
   }
@@ -50,7 +50,7 @@ export async function createHandoff(input: {
 export async function createHandoffWithStore(
   store: SessionStore,
   input: {
-    ticketId?: string;
+    taskId?: string;
     sessionId?: string;
     profileId?: string;
     nextAction?: string;
@@ -60,27 +60,27 @@ export async function createHandoffWithStore(
     verification?: string[];
     notProven?: string[];
     blocked?: string[];
-    ticket?: Ticket | null;
+    task?: Task | null;
   },
 ): Promise<Handoff> {
-  const ticket =
-    input.ticket === undefined && input.ticketId
-      ? await getTicket(input.ticketId)
-      : (input.ticket ?? null);
+  const task =
+    input.task === undefined && input.taskId
+      ? await getTask(input.taskId)
+      : (input.task ?? null);
   const session = input.sessionId ? store.get(input.sessionId) : null;
   if (input.sessionId && !session)
     throw new Error(`Session not found: ${input.sessionId}`);
   const commit = await currentCommit();
   const now = new Date().toISOString();
-  const content = (ticket?.body ?? "").slice(0, maxContentBytes);
+  const content = (task?.body ?? "").slice(0, maxContentBytes);
   const handoff = validateHandoff({
     handoffId: `handoff-${randomUUID()}`,
-    ticketId: ticket?.id ?? session?.ticketId ?? null,
-    title: ticket?.title ?? session?.title ?? "Atlas session handoff",
+    taskId: task?.id ?? session?.taskId ?? null,
+    title: task?.title ?? session?.title ?? "Atlas session handoff",
     objective:
-      ticket?.objective ??
+      task?.objective ??
       "Continue the selected Atlas session with bounded context.",
-    state: ticket?.state ?? session?.status ?? "paused",
+    state: task?.state ?? session?.status ?? "paused",
     profileId: input.profileId ?? session?.profile ?? "",
     profileIdentity: session?.profileIdentity ?? "",
     sourceSessionId: session?.sessionId ?? null,
@@ -136,23 +136,23 @@ export async function getHandoff(
 }
 
 export async function listHandoffs(
-  ticketId?: string,
+  taskId?: string,
 ): Promise<Array<Record<string, unknown>>> {
   const store = await openSessionStore();
   try {
     return store
-      .listHandoffs(ticketId)
+      .listHandoffs(taskId)
       .map(({ content: _content, ...handoff }) => handoff);
   } finally {
     store.close();
   }
 }
 
-export async function getTicket(id: string): Promise<Ticket> {
-  const ticketsRoot = atlasPath("projects", "atlas", "tickets");
+export async function getTask(id: string): Promise<Task> {
+  const tasksRoot = atlasPath("projects", "atlas", "tasks");
   const candidates = [
-    resolveWithin(ticketsRoot, id, "task.md"),
-    resolveWithin(ticketsRoot, "archive", "Atlas", id, "task.md"),
+    resolveWithin(tasksRoot, id, "task.md"),
+    resolveWithin(tasksRoot, "archive", "Atlas", id, "task.md"),
   ];
   let file = "";
   for (const candidate of candidates) {
@@ -163,7 +163,7 @@ export async function getTicket(id: string): Promise<Ticket> {
       /* try the archived authority */
     }
   }
-  if (!file) throw new Error(`Ticket not found: ${id}`);
+  if (!file) throw new Error(`Task not found: ${id}`);
   const end = file.indexOf("\n---", 4);
   const frontmatter = file
     .slice(0, end < 0 ? 0 : end)

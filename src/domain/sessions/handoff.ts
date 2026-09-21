@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const handoffSchema = z.object({
   handoffId: z.string().min(1),
-  ticketId: z.string().nullable(),
+  taskId: z.string().nullable(),
   title: z.string().min(1),
   objective: z.string().default(""),
   state: z.string().min(1),
@@ -36,7 +36,7 @@ export function validateHandoff(input: unknown): Handoff {
 export function compactHandoff(handoff: Handoff, maxBytes = 8_000): string {
   const value = {
     handoffId: handoff.handoffId,
-    ticketId: handoff.ticketId,
+    taskId: handoff.taskId,
     title: handoff.title,
     objective: handoff.objective,
     state: handoff.state,
@@ -70,7 +70,7 @@ export function compactHandoff(handoff: Handoff, maxBytes = 8_000): string {
   if (Buffer.byteLength(serialized) <= maxBytes) return serialized;
   return JSON.stringify({
     handoffId: handoff.handoffId,
-    ticketId: handoff.ticketId,
+    taskId: handoff.taskId,
     title: handoff.title,
     state: handoff.state,
     nextAction: handoff.nextAction,
