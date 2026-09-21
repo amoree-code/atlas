@@ -55,7 +55,7 @@ const rendered = `${JSON.stringify(catalog, null, 2)}\n`;
 
 if (checkOnly) {
   const current = await readFile(indexPath, "utf8").catch(() => null);
-  if (current !== rendered) {
+  if (current?.replace(/\r\n/g, "\n") !== rendered) {
     console.error(
       `${indexPath} is out of date. Run: node scripts/generate-skills-index.mjs ${root}`,
     );
