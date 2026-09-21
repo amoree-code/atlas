@@ -7,6 +7,7 @@ import {
 } from "../../infrastructure/persistence/session-store.js";
 import { createHandoffWithStore } from "../handoff/handoff-service.js";
 import { observeSessionWithStore } from "../skills/task-observer.js";
+import { writeBrainDump } from "./brain-dump.js";
 import { appendDailyNarrative, appendObservations } from "./daily-narrative.js";
 import { generateModelNarrative } from "./model-narrative.js";
 import {
@@ -150,6 +151,14 @@ export async function finalizeSession(
     await appendDailyNarrative({
       session,
       events,
+      exitCode,
+      nextAction: input.nextAction,
+      narrative,
+    });
+    await writeBrainDump({
+      session,
+      events,
+      changedFiles: files,
       exitCode,
       nextAction: input.nextAction,
       narrative,
