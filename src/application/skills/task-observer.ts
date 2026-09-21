@@ -16,7 +16,7 @@ export type ObservationStatus =
 export type TaskObservation = {
   observationId: string;
   sourceSessionId: string;
-  ticketId: string | null;
+  taskId: string | null;
   profileId: string;
   signalType:
     | "repeated-correction"
@@ -147,7 +147,7 @@ export async function observeSessionWithStore(
     created.push({
       observationId: id,
       sourceSessionId: sessionId,
-      ticketId: session.ticketId,
+      taskId: session.taskId,
       profileId: session.profile,
       signalType: candidate.signalType,
       summary: candidate.summary,

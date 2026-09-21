@@ -14,11 +14,11 @@ import type { IntentClassification } from "../context/intent-router.js";
 // an identifier, a project, or a destination.
 
 export type OperationName =
-  | "ticket.get"
-  | "ticket.list"
-  | "ticket.update"
-  | "ticket.complete"
-  | "ticket.create"
+  | "task.get"
+  | "task.list"
+  | "task.update"
+  | "task.complete"
+  | "task.create"
   | "memory.search"
   | "memory.write"
   | "knowledge.search"
@@ -30,11 +30,11 @@ export type OperationName =
 export type OperationKind = "read" | "write";
 
 export const OPERATION_KIND: Record<OperationName, OperationKind> = {
-  "ticket.get": "read",
-  "ticket.list": "read",
-  "ticket.update": "write",
-  "ticket.complete": "write",
-  "ticket.create": "write",
+  "task.get": "read",
+  "task.list": "read",
+  "task.update": "write",
+  "task.complete": "write",
+  "task.create": "write",
   "memory.search": "read",
   "memory.write": "write",
   "knowledge.search": "read",
@@ -54,7 +54,7 @@ export type OperationRecord = {
     | "lesson"
     | "proposal"
     | "temporary-note"
-    | "ticket"
+    | "task"
     | "project"
     | "execution"
     | "unknown";
@@ -103,22 +103,22 @@ export function operationResult(
 
 // --- identifier and path validation -------------------------------------------------
 
-export const TICKET_ID_SHAPE = /^T-\d+$/;
+export const TASK_ID_SHAPE = /^T-\d+$/;
 // Record slugs and project names: conservative allow-list, no dots that could build "..",
 // no separators, no shell syntax, no whitespace.
 export const SLUG_SHAPE = /^[a-z0-9][a-z0-9-]{0,63}$/i;
 
-export function validateTicketIdentifier(
+export function validateTaskIdentifier(
   identifier: unknown,
 ): { valid: true; value: string } | { valid: false; reason: string } {
   if (typeof identifier !== "string" || identifier.length === 0)
-    return { valid: false, reason: "ticket identifier is missing" };
+    return { valid: false, reason: "task identifier is missing" };
   if (identifier.includes("\0"))
-    return { valid: false, reason: "ticket identifier contains a null byte" };
-  if (!TICKET_ID_SHAPE.test(identifier))
+    return { valid: false, reason: "task identifier contains a null byte" };
+  if (!TASK_ID_SHAPE.test(identifier))
     return {
       valid: false,
-      reason: `ticket identifier '${identifier}' does not match the required T-<digits> shape`,
+      reason: `task identifier '${identifier}' does not match the required T-<digits> shape`,
     };
   return { valid: true, value: identifier };
 }
@@ -181,13 +181,13 @@ export function operationForIntent(
   classification: IntentClassification,
 ): { operation: OperationName } | { operation: null; reason: string } {
   const { intent, action, identifier } = classification;
-  if (intent === "ticket-lookup") {
-    if (action === "complete") return { operation: "ticket.complete" };
-    if (action === "update") return { operation: "ticket.update" };
-    if (identifier) return { operation: "ticket.get" };
-    return { operation: "ticket.list" };
+  if (intent === "task-lookup") {
+    if (action === "complete") return { operation: "task.complete" };
+    if (action === "update") return { operation: "task.update" };
+    if (identifier) return { operation: "task.get" };
+    return { operation: "task.list" };
   }
-  if (intent === "ticket-create") return { operation: "ticket.create" };
+  if (intent === "task-create") return { operation: "task.create" };
   if (intent === "memory-lookup") return { operation: "memory.search" };
   if (intent === "work-style-lookup") return { operation: "memory.search" };
   if (intent === "knowledge-lookup") return { operation: "knowledge.search" };

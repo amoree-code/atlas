@@ -1,14 +1,14 @@
 import { resolveProject } from "../../application/context/project-resolution.js";
 import { atlasVersion } from "../../version.js";
-import { listTickets } from "./tickets-command.js";
+import { listTasks } from "./tasks-command.js";
 
 export async function runContextCommand(json = false): Promise<void> {
   const version = await atlasVersion();
   const resolution = await resolveProject(process.cwd());
   const project = resolution.status === "bound" ? resolution.projectId : null;
-  const tickets = project
-    ? (await listTickets(undefined, project)).filter(
-        (ticket) => ticket.state === "active" || ticket.state === "blocked",
+  const tasks = project
+    ? (await listTasks(undefined, project)).filter(
+        (task) => task.state === "active" || task.state === "blocked",
       )
     : [];
   const context = {
@@ -16,7 +16,7 @@ export async function runContextCommand(json = false): Promise<void> {
     projectResolution: resolution,
     version,
     roots: ["personal", "projects", "system"],
-    tickets,
+    tasks,
   };
   if (json) {
     console.log(JSON.stringify(context, null, 2));
@@ -33,10 +33,10 @@ export async function runContextCommand(json = false): Promise<void> {
     console.log(
       `project: ${resolution.projectId} (confidence: ${resolution.confidence})`,
     );
-  if (!tickets.length) console.log("active tickets: none");
+  if (!tasks.length) console.log("active tasks: none");
   else
-    for (const ticket of tickets)
+    for (const task of tasks)
       console.log(
-        `${ticket.id} [${ticket.state}] ${ticket.title} — ${ticket.goal}`,
+        `${task.id} [${task.state}] ${task.title} — ${task.goal}`,
       );
 }

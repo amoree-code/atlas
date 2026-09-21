@@ -12,7 +12,7 @@ export type SessionStatus = z.infer<typeof sessionStatusSchema>;
 export const sessionSchema = z.object({
   sessionId: z.string().min(1),
   title: z.string().default(""),
-  ticketId: z.string().nullable().default(null),
+  taskId: z.string().nullable().default(null),
   handoffId: z.string().nullable().default(null),
   provider: z.string().min(1),
   providerSessionId: z.string().nullable(),

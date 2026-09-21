@@ -27,11 +27,11 @@ const BUDGET = {
 async function withRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-slice9-"));
   await mkdir(path.join(root, "personal", "memory"), { recursive: true });
-  await mkdir(path.join(root, "projects", "atlas", "tickets", "T-1"), {
+  await mkdir(path.join(root, "projects", "atlas", "tasks", "T-1"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "projects", "atlas", "tickets", "T-1", "task.md"),
+    path.join(root, "projects", "atlas", "tasks", "T-1", "task.md"),
     "---\nid: T-1\nstate: active\n---\n\nbody\n",
   );
   const previous = process.env.ATLAS_ROOT;
@@ -425,7 +425,7 @@ test("an allowed provider invocation yields no record approval object", () => {
 
 test("read operations pass the guard without requiring approval", () => {
   const scope = {
-    action: "ticket.get",
+    action: "task.get",
     target: "/tmp",
     identifier: "T-1",
     projectId: "atlas",

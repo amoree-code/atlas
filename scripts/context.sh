@@ -19,16 +19,16 @@ atlas session list 2>/dev/null | jq -r '.[0:3][] | "\(.updatedAt)  \(.status)  \
   || echo "(none yet, or atlas session list unavailable)"
 
 echo
-echo "=== active/blocked tickets ==="
+echo "=== active/blocked tasks ==="
 found=0
 for state in active blocked; do
-  count=$(atlas tickets list "$state" 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+  count=$(atlas tasks list "$state" 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
   if [ "$count" != "0" ]; then
-    atlas tickets list "$state" 2>/dev/null | jq -r --arg st "$state" '.[] | "  \(.id)  \($st)  \(.project)  \(.title)"'
+    atlas tasks list "$state" 2>/dev/null | jq -r --arg st "$state" '.[] | "  \(.id)  \($st)  \(.project)  \(.title)"'
     found=1
   fi
 done
-[ "$found" = 0 ] && echo "  (none — see atlas tickets list)"
+[ "$found" = 0 ] && echo "  (none — see atlas tasks list)"
 
 echo
 echo "=== registry active rows ==="

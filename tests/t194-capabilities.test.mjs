@@ -127,7 +127,7 @@ test("observer records proven repeated work without creating or promoting a skil
     profileIdentity: "profile-hash",
     workingDirectory: root,
     resumeData: null,
-    ticketId: "T-194",
+    taskId: "T-194",
   });
   store.updateStatus(sessionId, "running");
   store.appendEvent(
@@ -151,7 +151,7 @@ test("observer records proven repeated work without creating or promoting a skil
     assert.ok(observation);
     assert.equal(observation.status, "observed");
     assert.equal(observation.sourceSessionId, sessionId);
-    assert.equal(observation.ticketId, "T-194");
+    assert.equal(observation.taskId, "T-194");
     assert.ok(observation.evidenceRefs.length > 0);
     assert.deepEqual(await listObservations(), observations);
     assert.equal(
@@ -178,7 +178,7 @@ test("observer only treats real user corrections as repeated-correction, not pro
     profileIdentity: "profile-hash",
     workingDirectory: root,
     resumeData: null,
-    ticketId: null,
+    taskId: null,
   });
   store.updateStatus(sessionId, "running");
   store.appendEvent(
@@ -224,7 +224,7 @@ test("approving an observation creates a skill candidate, not just a status flag
     profileIdentity: "profile-hash",
     workingDirectory: root,
     resumeData: null,
-    ticketId: null,
+    taskId: null,
   });
   store.updateStatus(sessionId, "running");
   store.appendEvent(

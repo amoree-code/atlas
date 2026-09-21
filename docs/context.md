@@ -54,10 +54,10 @@ context-specific allow list.
 
 ## Loading phases
 
-Atlas does not scan all sessions, tickets, personal files, daily files, or transcripts at startup:
+Atlas does not scan all sessions, tasks, personal files, daily files, or transcripts at startup:
 
 1. Bootstrap session metadata and the selected profile.
-2. Load the requested ticket or compact handoff, when supplied.
+2. Load the requested task or compact handoff, when supplied.
 3. Load selected profile facts, skills, and context sources within their byte budgets.
 4. Read full artifacts only through an explicit CLI or MCP retrieval.
 

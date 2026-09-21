@@ -17,7 +17,7 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   store.create({
     sessionId,
     title: "Closeout test",
-    ticketId: null,
+    taskId: null,
     handoffId: null,
     provider: "claude",
     providerSessionId: null,
@@ -118,7 +118,7 @@ test("skips the daily Work log line for a generic, no-project session", async ()
   store.create({
     sessionId,
     title: "claude session",
-    ticketId: null,
+    taskId: null,
     handoffId: null,
     provider: "claude",
     providerSessionId: null,
@@ -162,7 +162,7 @@ test("still logs a generic-title session when it has a real git project", async 
   store.create({
     sessionId,
     title: "claude session",
-    ticketId: null,
+    taskId: null,
     handoffId: null,
     provider: "claude",
     providerSessionId: null,

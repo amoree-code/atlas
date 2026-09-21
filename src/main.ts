@@ -95,7 +95,7 @@ import { runMigrateCommand } from "./interfaces/cli/migrate-command.js";
 import { runObserveCommand } from "./interfaces/cli/observe-command.js";
 import { runOperateCommand } from "./interfaces/cli/operate-command.js";
 import { runFirstRunWizard, setup } from "./interfaces/cli/setup-command.js";
-import { runTicketsCommand } from "./interfaces/cli/tickets-command.js";
+import { runTasksCommand } from "./interfaces/cli/tasks-command.js";
 import { atlasRoot } from "./paths.js";
 import { atlasVersion } from "./version.js";
 
@@ -165,16 +165,16 @@ if (command === "--version" || command === "-v") {
       process.exitCode = 1;
     } else {
       const providerArgs = process.argv.slice(5);
-      const ticketIndex = providerArgs.indexOf("--ticket");
+      const taskIndex = providerArgs.indexOf("--task");
       const handoffIndex = providerArgs.indexOf("--handoff");
-      const ticketId =
-        ticketIndex >= 0 ? providerArgs[ticketIndex + 1] : undefined;
+      const taskId =
+        taskIndex >= 0 ? providerArgs[taskIndex + 1] : undefined;
       const handoffId =
         handoffIndex >= 0 ? providerArgs[handoffIndex + 1] : undefined;
       const metadataFlags = new Set<number>();
-      if (ticketIndex >= 0) {
-        metadataFlags.add(ticketIndex);
-        metadataFlags.add(ticketIndex + 1);
+      if (taskIndex >= 0) {
+        metadataFlags.add(taskIndex);
+        metadataFlags.add(taskIndex + 1);
       }
       if (handoffIndex >= 0) {
         metadataFlags.add(handoffIndex);
@@ -186,7 +186,7 @@ if (command === "--version" || command === "-v") {
         {
           entryPoint: "interactive-managed",
           controlLevel: "managed-partial",
-          ticketId,
+          taskId,
           handoffId,
         },
       );
@@ -283,8 +283,8 @@ if (command === "--version" || command === "-v") {
   }
 } else if (command === "auth") {
   await runAuthCommand(process.argv[3] ?? "", process.argv[4] ?? "");
-} else if (command === "tickets") {
-  await runTicketsCommand(process.argv[3] ?? "", process.argv.slice(4));
+} else if (command === "tasks") {
+  await runTasksCommand(process.argv[3] ?? "", process.argv.slice(4));
 } else if (command === "policy") {
   try {
     await runPolicyCommand(process.argv[3] ?? "list");
@@ -752,26 +752,26 @@ if (command === "--version" || command === "-v") {
   const profileIndex = process.argv.indexOf("--profile");
   const promptIndex = process.argv.indexOf("--prompt");
   const clientIndex = process.argv.indexOf("--client");
-  const ticketIndex = process.argv.indexOf("--ticket");
+  const taskIndex = process.argv.indexOf("--task");
   const handoffIndex = process.argv.indexOf("--handoff");
   const profileName =
     profileIndex >= 0 ? process.argv[profileIndex + 1] : "default";
   const client = clientIndex >= 0 ? process.argv[clientIndex + 1] : undefined;
-  const ticketId = ticketIndex >= 0 ? process.argv[ticketIndex + 1] : undefined;
+  const taskId = taskIndex >= 0 ? process.argv[taskIndex + 1] : undefined;
   const handoffId =
     handoffIndex >= 0 ? process.argv[handoffIndex + 1] : undefined;
   const prompt =
     promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
   if (!profileName || !prompt) {
     console.error(
-      "Usage: atlas run --profile <name> [--client <client>] [--ticket <id>] [--handoff <id>] --prompt <text>",
+      "Usage: atlas run --profile <name> [--client <client>] [--task <id>] [--handoff <id>] --prompt <text>",
     );
     process.exitCode = 1;
   } else {
     const session = await runAgent({
       profileName,
       client,
-      ticketId,
+      taskId,
       handoffId,
       prompt,
       cwd: atlasRoot(),

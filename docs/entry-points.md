@@ -93,7 +93,7 @@ Each governed provider session records a `session_entry_contract` event containi
 
 Runtime sessions and bounded events live in the private Atlas session store.
 Provider credentials remain provider-owned. Session summaries are not knowledge.
-Captures, knowledge, projects, tickets, Obsidian notes, browser actions, and
+Captures, knowledge, projects, tasks, Obsidian notes, browser actions, and
 schedules require their own explicit operation and approval boundary.
 
 ## Status language

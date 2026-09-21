@@ -4,8 +4,8 @@
 // a project when the request does not name one clearly. See T-198 slice 4.
 
 export type IntentCategory =
-  | "ticket-lookup"
-  | "ticket-create"
+  | "task-lookup"
+  | "task-create"
   | "memory-lookup"
   | "knowledge-lookup"
   | "work-style-lookup"
@@ -17,7 +17,7 @@ export type IntentCategory =
   | "unknown";
 
 export type EntityType =
-  | "ticket"
+  | "task"
   | "memory"
   | "knowledge"
   | "work-style"
@@ -50,11 +50,11 @@ export type IntentClassification = {
   ambiguityReason: string | null;
 };
 
-const TICKET_ID_PATTERN = /\bT-(\d+)\b/gi;
+const TASK_ID_PATTERN = /\bT-(\d+)\b/gi;
 
-function extractTicketIds(text: string): string[] {
+function extractTaskIds(text: string): string[] {
   const ids = new Set<string>();
-  for (const match of text.matchAll(TICKET_ID_PATTERN))
+  for (const match of text.matchAll(TASK_ID_PATTERN))
     ids.add(`T-${match[1]}`);
   return [...ids];
 }
@@ -63,18 +63,18 @@ function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-const TICKET_COMPLETE = [
+const TASK_COMPLETE = [
   /\b(complete|close|finish|done|archive)\b/i,
   /خلص|انهي|سكر|أرشف/,
 ];
-const TICKET_UPDATE = [/\b(update|edit|change)\b/i, /عدل|حدث|غير/];
-const TICKET_CONTINUE = [/\b(continue|resume)\b/i, /كمل|استمر/];
-const TICKET_CREATE = [
-  /\b(create|new|open)\b[^.\n]*\bticket\b/i,
-  /\bticket\b[^.\n]*\b(create|new|open)\b/i,
+const TASK_UPDATE = [/\b(update|edit|change)\b/i, /عدل|حدث|غير/];
+const TASK_CONTINUE = [/\b(continue|resume)\b/i, /كمل|استمر/];
+const TASK_CREATE = [
+  /\b(create|new|open)\b[^.\n]*\btask\b/i,
+  /\btask\b[^.\n]*\b(create|new|open)\b/i,
   /تكت جديدة|انشئ تكت|سوي تكت|افتح تكت/,
 ];
-const TICKET_CREATE_NAME =
+const TASK_CREATE_NAME =
   /\b(?:called|named|title(?:d)?)(?:\s+is)?\s+["']?(.+?)["']?(?:[.!?]|$)/i;
 
 const SAVE_VERB = [/\bsave\b/i, /احفظ|خزن|سجل/];
@@ -151,42 +151,42 @@ export function classifyIntent(rawText: string): IntentClassification {
   const text = (rawText ?? "").trim();
   if (!text) return safeResult("empty request");
 
-  const ticketIds = extractTicketIds(text);
-  if (ticketIds.length > 1) {
+  const taskIds = extractTaskIds(text);
+  if (taskIds.length > 1) {
     return safeResult(
-      `multiple ticket identifiers found (${ticketIds.join(", ")}); specify exactly one`,
+      `multiple task identifiers found (${taskIds.join(", ")}); specify exactly one`,
     );
   }
-  if (ticketIds.length === 1) {
-    const action: IntentAction = matchesAny(text, TICKET_COMPLETE)
+  if (taskIds.length === 1) {
+    const action: IntentAction = matchesAny(text, TASK_COMPLETE)
       ? "complete"
-      : matchesAny(text, TICKET_UPDATE)
+      : matchesAny(text, TASK_UPDATE)
         ? "update"
-        : matchesAny(text, TICKET_CONTINUE)
+        : matchesAny(text, TASK_CONTINUE)
           ? "continue"
           : "get";
     return {
-      intent: "ticket-lookup",
-      entityType: "ticket",
-      identifier: ticketIds[0],
+      intent: "task-lookup",
+      entityType: "task",
+      identifier: taskIds[0],
       action,
       confidence: "high",
       ambiguityReason: null,
     };
   }
 
-  if (matchesAny(text, TICKET_CREATE)) {
-    const titleMatch = TICKET_CREATE_NAME.exec(text);
+  if (matchesAny(text, TASK_CREATE)) {
+    const titleMatch = TASK_CREATE_NAME.exec(text);
     const identifier = titleMatch?.[1]?.trim() || null;
     return {
-      intent: "ticket-create",
-      entityType: "ticket",
+      intent: "task-create",
+      entityType: "task",
       identifier,
       action: "create",
       confidence: identifier ? "high" : "medium",
       ambiguityReason: identifier
         ? null
-        : "no ticket title captured ('called <title>' / 'named <title>')",
+        : "no task title captured ('called <title>' / 'named <title>')",
     };
   }
 
@@ -291,15 +291,15 @@ export function classifyIntent(rawText: string): IntentClassification {
   // both the noun "work" and the verb "run", so "كمل شغل اللوكين" ("continue the login
   // work") would otherwise be read as an execution request. Continue wording wins and the
   // result stays medium-confidence and ambiguous, which is the fail-closed direction.
-  if (matchesAny(text, TICKET_CONTINUE)) {
+  if (matchesAny(text, TASK_CONTINUE)) {
     return {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier: null,
       action: "continue",
       confidence: "medium",
       ambiguityReason:
-        "'continue'/'resume' matched without an explicit ticket id or resolved project; could be a ticket or a project — confirm before retrieval",
+        "'continue'/'resume' matched without an explicit task id or resolved project; could be a task or a project — confirm before retrieval",
     };
   }
 

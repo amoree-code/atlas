@@ -3,7 +3,7 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const explicitRoot = process.argv[2];
-const root = path.resolve(explicitRoot ?? "../projects/atlas/tickets");
+const root = path.resolve(explicitRoot ?? "../projects/atlas/tasks");
 const records = [];
 const errors = [];
 
@@ -11,7 +11,7 @@ try {
   await access(root);
 } catch (error) {
   if (!explicitRoot && error.code === "ENOENT") {
-    console.log("No private ticket workspace found; skipped ticket validation");
+    console.log("No private task workspace found; skipped task validation");
     process.exit(0);
   }
   throw error;
@@ -22,10 +22,10 @@ async function walk(directory, archived = false) {
     const target = path.join(directory, entry.name);
     if (entry.isDirectory())
       await walk(target, archived || entry.name === "archive");
-    else if (entry.name === "task.md") await readTicket(target, archived);
+    else if (entry.name === "task.md") await readTask(target, archived);
   }
 }
-async function readTicket(file, archived) {
+async function readTask(file, archived) {
   const source = await readFile(file, "utf8");
   if (!source.startsWith("---\n"))
     return errors.push(`${file}: missing frontmatter`);
@@ -68,7 +68,7 @@ async function readTicket(file, archived) {
         fields.state === "done" &&
         checklist.some((line) => line.includes("[ ]"))
       )
-        errors.push(`${file}: done ticket has unchecked work`);
+        errors.push(`${file}: done task has unchecked work`);
     } else {
       for (const heading of [
         "Objective",
@@ -90,7 +90,7 @@ const live = records.filter((record) => !record.archived);
 const liveIds = new Set();
 for (const record of live) {
   if (liveIds.has(record.id))
-    errors.push(`duplicate live ticket: ${record.id}`);
+    errors.push(`duplicate live task: ${record.id}`);
   liveIds.add(record.id);
 }
 const knownIds = new Set(records.map((record) => record.id));
@@ -100,7 +100,7 @@ if (knownIds.size !== records.length) {
     counts.set(record.id, (counts.get(record.id) ?? 0) + 1);
   for (const [id, count] of counts)
     if (count > 1)
-      errors.push(`duplicate ticket id across live/archive records: ${id}`);
+      errors.push(`duplicate task id across live/archive records: ${id}`);
 }
 for (const record of records) {
   const refs = [...(record.fields.references?.match(/T-\d+/g) ?? [])];
@@ -113,5 +113,5 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(
-  `Validated ${live.length} live and ${records.length - live.length} archived tickets`,
+  `Validated ${live.length} live and ${records.length - live.length} archived tasks`,
 );

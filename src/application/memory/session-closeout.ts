@@ -118,7 +118,7 @@ export async function finalizeSession(
   });
   let handoffId = session.handoffId;
   const enoughEvidence = Boolean(
-    session.ticketId ||
+    session.taskId ||
       (closeoutStatus === "completed" &&
         events.some((event) =>
           ["user_input", "provider_output", "text", "json"].includes(
@@ -130,7 +130,7 @@ export async function finalizeSession(
     try {
       const handoff = await createHandoffWithStore(store, {
         sessionId,
-        ticketId: session.ticketId ?? undefined,
+        taskId: session.taskId ?? undefined,
         nextAction: input.nextAction,
         sourceSummaryPath: summary.summaryPath,
         changedFiles: files,

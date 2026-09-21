@@ -20,13 +20,13 @@ if absent:
 - `session_links` — parent/child session id pairs, for sessions created by `resumeAgent`
   or with an explicit `parentSessionId`.
 
-- `handoffs` — compact provider-neutral task continuity records linked to tickets and sessions.
+- `handoffs` — compact provider-neutral task continuity records linked to tasks and sessions.
 - `ideas` — explicit raw idea records; ordinary conversation is not written here.
 - `capture_items` — reviewable references to explicit `user_input` events. Use `atlas capture` to list,
   promote, or discard candidates; provider completion does not sync them into the inbox view.
 
 Completed proven sessions may also produce bounded observations in
-`<workspace>/system/skills/observations.json`. Observations link source sessions, tickets,
+`<workspace>/system/skills/observations.json`. Observations link source sessions, tasks,
 profiles, signal types, confidence, and evidence references. They are not skills or memory,
 and normal runs never promote them automatically. Review with:
 
@@ -44,7 +44,7 @@ callers must `close()` it when done.
 {
   sessionId: string,
   title: string,
-  ticketId: string | null,
+  taskId: string | null,
   handoffId: string | null,
   provider: string,
   providerSessionId: string | null,
@@ -129,11 +129,11 @@ secrets, private home paths, prompts, and provider documents are redacted or exc
 ## Cross-client handoff
 
 ```bash
-atlas handoff create --ticket T-193 --session <session-id> --next "Run verification"
+atlas handoff create --task T-193 --session <session-id> --next "Run verification"
 atlas handoff context <handoff-id>
-atlas handoff list --ticket T-193
-atlas run --profile reviewer --client codex --ticket T-193 --handoff <handoff-id> --prompt "Continue"
-atlas client open hermes --ticket T-193 --handoff <handoff-id>
+atlas handoff list --task T-193
+atlas run --profile reviewer --client codex --task T-193 --handoff <handoff-id> --prompt "Continue"
+atlas client open hermes --task T-193 --handoff <handoff-id>
 ```
 
 The handoff contains compact task metadata, decisions, changed files, verification, limitations,

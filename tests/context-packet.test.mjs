@@ -16,11 +16,11 @@ const GOOD_BUDGET = {
   maxOperationCost: 5,
 };
 
-async function withTempTicket(bytes, fn) {
+async function withTempTask(bytes, fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-"));
-  const ticketDir = path.join(root, "projects", "atlas", "tickets", "T-1");
-  await mkdir(ticketDir, { recursive: true });
-  const file = path.join(ticketDir, "task.md");
+  const taskDir = path.join(root, "projects", "atlas", "tasks", "T-1");
+  await mkdir(taskDir, { recursive: true });
+  const file = path.join(taskDir, "task.md");
   await writeFile(file, "x".repeat(bytes));
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = root;
@@ -50,15 +50,15 @@ async function withTempDecision(bytes, fn) {
 
 // --- valid packet from a clear intent ---
 
-test("a valid, high-confidence ticket-lookup with a real ticket produces a packet with exactly one selected reference", () =>
-  withTempTicket(500, async (root) => {
+test("a valid, high-confidence task-lookup with a real task produces a packet with exactly one selected reference", () =>
+  withTempTask(500, async (root) => {
     const classification = classifyIntent("show T-1");
     const packet = await buildContextPacket(classification, GOOD_BUDGET, root);
     assert.equal(packet.selectedReferences.length, 1);
     assert.equal(packet.selectedReferences[0].identifier, "T-1");
-    assert.equal(packet.selectedReferences[0].recordType, "ticket");
+    assert.equal(packet.selectedReferences[0].recordType, "task");
     assert.equal(packet.sourcePaths.length, 1);
-    assert.deepEqual(packet.recordTypes, ["ticket"]);
+    assert.deepEqual(packet.recordTypes, ["task"]);
     assert.equal(packet.confidence, "high");
     assert.equal(packet.violations.length, 0);
     assert.equal(packet.activeProject.status, "bound");
@@ -114,8 +114,8 @@ test("decision lookup selects bounded authoritative decision references", () =>
 
 test("invalid identifier shape (hand-crafted, bypassing the router) is rejected with a violation, never a guessed path", async () => {
   const classification = {
-    intent: "ticket-lookup",
-    entityType: "ticket",
+    intent: "task-lookup",
+    entityType: "task",
     identifier: "T-1/../../etc/passwd",
     action: "get",
     confidence: "high",
@@ -131,8 +131,8 @@ test("invalid identifier shape (hand-crafted, bypassing the router) is rejected 
 test("buildSelectedReferences drops an exact duplicate (same identifier + sourcePath) and reports it", () => {
   const candidate = {
     identifier: "T-1",
-    recordType: "ticket",
-    sourcePath: "projects/atlas/tickets/T-1/task.md",
+    recordType: "task",
+    sourcePath: "projects/atlas/tasks/T-1/task.md",
     freshness: "current",
     confidence: "high",
     selectionReason: "test",
@@ -150,16 +150,16 @@ test("buildSelectedReferences drops an exact duplicate (same identifier + source
 test("buildSelectedReferences keeps multiple distinct references", () => {
   const a = {
     identifier: "T-1",
-    recordType: "ticket",
-    sourcePath: "projects/atlas/tickets/T-1/task.md",
+    recordType: "task",
+    sourcePath: "projects/atlas/tasks/T-1/task.md",
     freshness: "current",
     confidence: "high",
     selectionReason: "a",
   };
   const b = {
     identifier: "T-2",
-    recordType: "ticket",
-    sourcePath: "projects/atlas/tickets/T-2/task.md",
+    recordType: "task",
+    sourcePath: "projects/atlas/tasks/T-2/task.md",
     freshness: "current",
     confidence: "high",
     selectionReason: "b",
@@ -174,8 +174,8 @@ test("buildSelectedReferences keeps multiple distinct references", () => {
 test("buildSelectedReferences preserves stable insertion order", () => {
   const c = (id) => ({
     identifier: id,
-    recordType: "ticket",
-    sourcePath: `projects/atlas/tickets/${id}/task.md`,
+    recordType: "task",
+    sourcePath: `projects/atlas/tasks/${id}/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -194,7 +194,7 @@ test("buildSelectedReferences preserves stable insertion order", () => {
 // --- explicit project path ---
 
 test("explicit project path (cwd inside the Atlas root) resolves a bound active project, never guessed", () =>
-  withTempTicket(10, async (root) => {
+  withTempTask(10, async (root) => {
     const classification = classifyIntent("what project am I in");
     const packet = await buildContextPacket(classification, GOOD_BUDGET, root);
     assert.equal(packet.activeProject.status, "bound");
@@ -229,8 +229,8 @@ test("missing project (cwd outside any binding and outside the Atlas root) repor
 
 // --- stale source ---
 
-test("a ticket file older than the freshness threshold is reported stale, not current", () =>
-  withTempTicket(10, async (root, file) => {
+test("a task file older than the freshness threshold is reported stale, not current", () =>
+  withTempTask(10, async (root, file) => {
     const old = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // 60 days ago
     await utimes(file, old, old);
     const classification = classifyIntent("show T-1");
@@ -279,8 +279,8 @@ test("packet.selectionReason is non-empty and reflects the ladder's rung resolut
 
 // --- exact budget limit ---
 
-test("exact-limit success: a ticket exactly at budget.maxBytes is selected", () =>
-  withTempTicket(1000, async (root) => {
+test("exact-limit success: a task exactly at budget.maxBytes is selected", () =>
+  withTempTask(1000, async (root) => {
     const classification = classifyIntent("show T-1");
     const packet = await buildContextPacket(
       classification,
@@ -293,8 +293,8 @@ test("exact-limit success: a ticket exactly at budget.maxBytes is selected", () 
 
 // --- one-over-budget failure ---
 
-test("one-over-limit failure: a ticket one byte over budget.maxBytes is rejected, not truncated into the packet", () =>
-  withTempTicket(1000, async (root) => {
+test("one-over-limit failure: a task one byte over budget.maxBytes is rejected, not truncated into the packet", () =>
+  withTempTask(1000, async (root) => {
     const classification = classifyIntent("show T-1");
     const packet = await buildContextPacket(
       classification,
@@ -308,7 +308,7 @@ test("one-over-limit failure: a ticket one byte over budget.maxBytes is rejected
 // --- invalid budget ---
 
 test("invalid budget (missing) stops before any filesystem read: project stays unbound/none, no reference selected", () =>
-  withTempTicket(10, async (root) => {
+  withTempTask(10, async (root) => {
     const classification = classifyIntent("show T-1");
     const packet = await buildContextPacket(classification, undefined, root);
     assert.equal(packet.activeProject.status, "unbound");
@@ -342,8 +342,8 @@ test("path traversal via a hand-crafted identifier never reaches the filesystem 
   ];
   for (const identifier of payloads) {
     const classification = {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier,
       action: "get",
       confidence: "high",
@@ -357,8 +357,8 @@ test("path traversal via a hand-crafted identifier never reaches the filesystem 
 test("buildSelectedReferences rejects a traversal sourcePath even if identifier alone looked fine", () => {
   const candidate = {
     identifier: "T-1",
-    recordType: "ticket",
-    sourcePath: "projects/atlas/tickets/../../../etc/passwd",
+    recordType: "task",
+    sourcePath: "projects/atlas/tasks/../../../etc/passwd",
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -373,7 +373,7 @@ test("buildSelectedReferences rejects a traversal sourcePath even if identifier 
 test("buildSelectedReferences rejects an absolute sourcePath", () => {
   const candidate = {
     identifier: "T-1",
-    recordType: "ticket",
+    recordType: "task",
     sourcePath: "/etc/passwd",
     freshness: "current",
     confidence: "high",
@@ -389,16 +389,16 @@ test("buildSelectedReferences rejects an absolute sourcePath", () => {
 test("buildSelectedReferences rejects a null byte in the sourcePath or identifier", () => {
   const a = {
     identifier: "T-1",
-    recordType: "ticket",
-    sourcePath: "projects/atlas/tickets/T-1/task.md\0.png",
+    recordType: "task",
+    sourcePath: "projects/atlas/tasks/T-1/task.md\0.png",
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
   };
   const b = {
     identifier: "T-1\0",
-    recordType: "ticket",
-    sourcePath: "projects/atlas/tickets/T-1/task.md",
+    recordType: "task",
+    sourcePath: "projects/atlas/tasks/T-1/task.md",
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -410,8 +410,8 @@ test("buildSelectedReferences rejects a null byte in the sourcePath or identifie
 test("buildSelectedReferences rejects shell metacharacters in the sourcePath", () => {
   const candidate = {
     identifier: "T-1",
-    recordType: "ticket",
-    sourcePath: "projects/atlas/tickets/T-1/task.md; rm -rf /",
+    recordType: "task",
+    sourcePath: "projects/atlas/tasks/T-1/task.md; rm -rf /",
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -433,8 +433,8 @@ test("a very large classified request still produces a small, bounded packet", a
 test("a pathologically large synthetic reference list is cleared rather than left unbounded", () => {
   const candidates = Array.from({ length: 500 }, (_, index) => ({
     identifier: `T-${index}`,
-    recordType: "ticket",
-    sourcePath: `projects/atlas/tickets/T-${index}/task.md`,
+    recordType: "task",
+    sourcePath: `projects/atlas/tasks/T-${index}/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "synthetic bulk candidate for bound testing",
@@ -450,7 +450,7 @@ test("a pathologically large synthetic reference list is cleared rather than lef
 // --- deterministic repeated calls ---
 
 test("identical classification + budget + cwd produces identical packets across repeated calls", () =>
-  withTempTicket(300, async (root) => {
+  withTempTask(300, async (root) => {
     const classification = classifyIntent("show T-1");
     const first = await buildContextPacket(classification, GOOD_BUDGET, root);
     const second = await buildContextPacket(classification, GOOD_BUDGET, root);
@@ -460,17 +460,17 @@ test("identical classification + budget + cwd produces identical packets across 
 // --- no persistence ---
 
 test("buildContextPacket never writes any file", () =>
-  withTempTicket(300, async (root) => {
+  withTempTask(300, async (root) => {
     const { readdir } = await import("node:fs/promises");
-    const ticketDir = path.join(root, "projects", "atlas", "tickets", "T-1");
-    const before = (await readdir(ticketDir)).sort();
+    const taskDir = path.join(root, "projects", "atlas", "tasks", "T-1");
+    const before = (await readdir(taskDir)).sort();
     await buildContextPacket(classifyIntent("show T-1"), GOOD_BUDGET, root);
     await buildContextPacket(
       classifyIntent("save this as a decision"),
       GOOD_BUDGET,
       root,
     );
-    const after = (await readdir(ticketDir)).sort();
+    const after = (await readdir(taskDir)).sort();
     assert.deepEqual(before, after);
   }));
 
@@ -514,8 +514,8 @@ test("context-packet.ts imports only existing local modules and node:fs/promises
 
 // --- English/Arabic parity ---
 
-test("Arabic ticket-lookup ('عرض T-1') produces the same packet shape as its English equivalent", () =>
-  withTempTicket(200, async (root) => {
+test("Arabic task-lookup ('عرض T-1') produces the same packet shape as its English equivalent", () =>
+  withTempTask(200, async (root) => {
     const ar = await buildContextPacket(
       classifyIntent("عرض T-1"),
       GOOD_BUDGET,
@@ -530,7 +530,7 @@ test("Arabic ticket-lookup ('عرض T-1') produces the same packet shape as its 
   }));
 
 test("Arabic project-detect ('شنو المشروع الحالي') produces the same active-project result as its English equivalent", () =>
-  withTempTicket(10, async (root) => {
+  withTempTask(10, async (root) => {
     const ar = await buildContextPacket(
       classifyIntent("شنو المشروع الحالي"),
       GOOD_BUDGET,

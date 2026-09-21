@@ -8,7 +8,7 @@ import test from "node:test";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
 import { projectConfirmationQuestion } from "../dist/application/context/project-resolution.js";
 import { runOperation } from "../dist/application/operations/record-operations.js";
-import { rankTicketCandidates } from "../dist/application/operations/ticket-linker.js";
+import { rankTaskCandidates } from "../dist/application/operations/task-linker.js";
 import {
   createGrant,
   guardedRunOperation,
@@ -57,12 +57,12 @@ test("atlas operate routes deterministic natural-language reads through the Atla
   const root = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "atlas-t198-cli-")),
   );
-  fs.mkdirSync(path.join(root, "projects", "atlas", "tickets", "T-198"), {
+  fs.mkdirSync(path.join(root, "projects", "atlas", "tasks", "T-198"), {
     recursive: true,
   });
   fs.writeFileSync(
-    path.join(root, "projects", "atlas", "tickets", "T-198", "task.md"),
-    "---\nid: T-198\ntitle: Test ticket\nstate: active\nproject: atlas\ngoal: test\npriority: level_2\nupdated_at: 2026-09-16\n---\n",
+    path.join(root, "projects", "atlas", "tasks", "T-198", "task.md"),
+    "---\nid: T-198\ntitle: Test task\nstate: active\nproject: atlas\ngoal: test\npriority: level_2\nupdated_at: 2026-09-16\n---\n",
   );
   const result = spawnSync(
     process.execPath,
@@ -71,10 +71,10 @@ test("atlas operate routes deterministic natural-language reads through the Atla
   );
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.equal(output.classification.intent, "ticket-lookup");
-  assert.equal(output.operation, "ticket.get");
+  assert.equal(output.classification.intent, "task-lookup");
+  assert.equal(output.operation, "task.get");
   assert.equal(output.ok, true);
-  assert.equal(output.records[0].provenance, "ticket");
+  assert.equal(output.records[0].provenance, "task");
 });
 
 test("atlas operate routes durable capture to the guarded path and refuses without approval", () => {
@@ -90,8 +90,8 @@ test("atlas operate routes durable capture to the guarded path and refuses witho
   assert.match(output.reason, /no explicit approval/i);
 });
 
-test("metadata-first ticket linking ranks explicit relationships before project, state, keywords, and recency", () => {
-  const ranked = rankTicketCandidates(
+test("metadata-first task linking ranks explicit relationships before project, state, keywords, and recency", () => {
+  const ranked = rankTaskCandidates(
     [
       {
         id: "T-2",

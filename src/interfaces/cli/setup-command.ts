@@ -15,7 +15,7 @@ const personalDirectories = [
   "personal/daily",
   "personal/inbox",
   "personal/templates",
-  "projects/atlas/tickets",
+  "projects/atlas/tasks",
 ];
 
 const stateDirectories = [

@@ -40,7 +40,7 @@ function createSession(store, overrides = {}) {
   store.create({
     sessionId,
     title: "test session",
-    ticketId: overrides.ticketId ?? null,
+    taskId: overrides.taskId ?? null,
     handoffId: null,
     provider: overrides.provider ?? "claude",
     providerSessionId: null,
@@ -65,7 +65,7 @@ test("valid pointer: a real session identifier resolves to a compact pointer", (
     const sessionId = createSession(store, {
       status: "running",
       workingDirectory: root,
-      ticketId: "T-198",
+      taskId: "T-198",
     });
     const plan = await planSessionResume(store, sessionId, BUDGET, {
       cwd: root,
@@ -73,7 +73,7 @@ test("valid pointer: a real session identifier resolves to a compact pointer", (
     assert.equal(plan.ok, true, plan.reason);
     assert.equal(plan.mode, "attach-child");
     assert.equal(plan.pointer.sessionId, sessionId);
-    assert.equal(plan.pointer.ticketId, "T-198");
+    assert.equal(plan.pointer.taskId, "T-198");
     assert.equal(plan.parentSessionId, sessionId);
   }));
 
@@ -287,7 +287,7 @@ test("resume metadata is bounded: no transcript, no event content, clipped next 
       "provider",
       "sessionId",
       "status",
-      "ticketId",
+      "taskId",
       "updatedAt",
     ]);
   }));

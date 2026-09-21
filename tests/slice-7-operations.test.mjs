@@ -16,7 +16,7 @@ import { classifyIntent } from "../dist/application/context/intent-router.js";
 import { bindProject } from "../dist/application/context/project-resolution.js";
 import {
   operationForIntent,
-  validateTicketIdentifier,
+  validateTaskIdentifier,
   validateWriteTarget,
 } from "../dist/application/operations/operation-contract.js";
 import { runOperation } from "../dist/application/operations/record-operations.js";
@@ -33,9 +33,9 @@ const BUDGET = {
   maxOperationCost: 5,
 };
 
-function ticketDoc(id, state = "active", checked = true) {
+function taskDoc(id, state = "active", checked = true) {
   const item = checked ? '- "[x] done work"' : '- "[ ] unfinished work"';
-  return `---\nkind: ticket\nid: ${id}\ntitle: Ticket ${id}\nstate: ${state}\nproject: atlas\ngoal: goal for ${id}\npriority: level_2\nupdated_at: 2026-09-16\n---\n\nchecklist:\n  ${item}\n\n## Objective\nbody of ${id}\n`;
+  return `---\nkind: task\nid: ${id}\ntitle: Task ${id}\nstate: ${state}\nproject: atlas\ngoal: goal for ${id}\npriority: level_2\nupdated_at: 2026-09-16\n---\n\nchecklist:\n  ${item}\n\n## Objective\nbody of ${id}\n`;
 }
 
 function recordDoc(name, description) {
@@ -44,19 +44,19 @@ function recordDoc(name, description) {
 
 async function withFixture(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-slice7-"));
-  await mkdir(path.join(root, "projects", "atlas", "tickets", "T-1"), {
+  await mkdir(path.join(root, "projects", "atlas", "tasks", "T-1"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "projects", "atlas", "tickets", "T-1", "task.md"),
-    ticketDoc("T-1"),
+    path.join(root, "projects", "atlas", "tasks", "T-1", "task.md"),
+    taskDoc("T-1"),
   );
-  await mkdir(path.join(root, "projects", "atlas", "tickets", "T-2"), {
+  await mkdir(path.join(root, "projects", "atlas", "tasks", "T-2"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "projects", "atlas", "tickets", "T-2", "task.md"),
-    ticketDoc("T-2"),
+    path.join(root, "projects", "atlas", "tasks", "T-2", "task.md"),
+    taskDoc("T-2"),
   );
   await mkdir(path.join(root, "personal", "memory"), { recursive: true });
   await writeFile(
@@ -90,7 +90,7 @@ const approval = (operation, target) => ({ approved: true, operation, target });
 
 test("every required intent maps to exactly one operation", () => {
   const cases = [
-    ["show T-1", "ticket.get"],
+    ["show T-1", "task.get"],
     ["what do you remember about the client", "memory.search"],
     ["what knowledge do we have about deployments", "knowledge.search"],
     ["what is my work style", "memory.search"],
@@ -109,16 +109,16 @@ test("every required intent maps to exactly one operation", () => {
   }
 });
 
-test("ticket.create requires explicit title and approval, then creates the next bounded ticket", async () => {
+test("task.create requires explicit title and approval, then creates the next bounded task", async () => {
   await withFixture(async (root) => {
     await bindProject("atlas", root);
     const classification = classifyIntent(
-      "create a new ticket called Improve onboarding",
+      "create a new task called Improve onboarding",
     );
-    assert.equal(classification.intent, "ticket-create");
-    assert.equal(operationForIntent(classification).operation, "ticket.create");
+    assert.equal(classification.intent, "task-create");
+    assert.equal(operationForIntent(classification).operation, "task.create");
     const budget = BUDGET;
-    const denied = await runOperation("ticket.create", classification, budget, {
+    const denied = await runOperation("task.create", classification, budget, {
       cwd: root,
     });
     assert.equal(denied.ok, false);
@@ -126,22 +126,22 @@ test("ticket.create requires explicit title and approval, then creates the next 
       root,
       "projects",
       "atlas",
-      "tickets",
+      "tasks",
       "T-3",
       "task.md",
     );
     const scope = {
-      action: "ticket.create",
+      action: "task.create",
       target,
       identifier: null,
       projectId: "atlas",
     };
-    const sessionId = "ticket-create-session";
+    const sessionId = "task-create-session";
     const grant = createGrant(sessionId, scope);
     const { decision, result } = await guardedRunOperation(
       { sessionId, classification, scope, budget, grant },
       (approval) =>
-        runOperation("ticket.create", classification, budget, {
+        runOperation("task.create", classification, budget, {
           cwd: root,
           content: "Implement onboarding improvements",
           approval,
@@ -173,12 +173,12 @@ test("an operation that does not match the classified intent is refused, never c
     assert.match(result.reason, /does not match intent/);
   }));
 
-// ---------------------------------------------------------------- ticket read operations
+// ---------------------------------------------------------------- task read operations
 
-test("ticket.get returns one bounded record with selected fields only", () =>
+test("task.get returns one bounded record with selected fields only", () =>
   withFixture(async (root) => {
     const result = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       BUDGET,
       {
@@ -189,8 +189,8 @@ test("ticket.get returns one bounded record with selected fields only", () =>
     assert.equal(result.records.length, 1);
     const record = result.records[0];
     assert.equal(record.identifier, "T-1");
-    assert.equal(record.recordType, "ticket");
-    assert.equal(record.sourcePath, "projects/atlas/tickets/T-1/task.md");
+    assert.equal(record.recordType, "task");
+    assert.equal(record.sourcePath, "projects/atlas/tasks/T-1/task.md");
     assert.deepEqual(Object.keys(record.fields).sort(), [
       "goal",
       "id",
@@ -205,10 +205,10 @@ test("ticket.get returns one bounded record with selected fields only", () =>
     assert.ok(record.selectionReason.length > 0);
   }));
 
-test("ticket.list returns every live ticket, stably ordered, never the archive directory", () =>
+test("task.list returns every live task, stably ordered, never the archive directory", () =>
   withFixture(async (root) => {
     const result = await runOperation(
-      "ticket.list",
+      "task.list",
       classifyIntent("continue"),
       BUDGET,
       {
@@ -221,14 +221,14 @@ test("ticket.list returns every live ticket, stably ordered, never the archive d
       "bare 'continue' is ambiguous and must fail closed",
     );
     const listable = {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier: null,
       action: "list",
       confidence: "high",
       ambiguityReason: null,
     };
-    const listed = await runOperation("ticket.list", listable, BUDGET, {
+    const listed = await runOperation("task.list", listable, BUDGET, {
       cwd: root,
     });
     assert.equal(listed.ok, true);
@@ -241,27 +241,27 @@ test("ticket.list returns every live ticket, stably ordered, never the archive d
     );
   }));
 
-test("ticket.list ordering is stable regardless of filesystem ordering", () =>
+test("task.list ordering is stable regardless of filesystem ordering", () =>
   withFixture(async (root) => {
-    await mkdir(path.join(root, "projects", "atlas", "tickets", "T-10"), {
+    await mkdir(path.join(root, "projects", "atlas", "tasks", "T-10"), {
       recursive: true,
     });
     await writeFile(
-      path.join(root, "projects", "atlas", "tickets", "T-10", "task.md"),
-      ticketDoc("T-10"),
+      path.join(root, "projects", "atlas", "tasks", "T-10", "task.md"),
+      taskDoc("T-10"),
     );
     const listable = {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier: null,
       action: "list",
       confidence: "high",
       ambiguityReason: null,
     };
-    const first = await runOperation("ticket.list", listable, BUDGET, {
+    const first = await runOperation("task.list", listable, BUDGET, {
       cwd: root,
     });
-    const second = await runOperation("ticket.list", listable, BUDGET, {
+    const second = await runOperation("task.list", listable, BUDGET, {
       cwd: root,
     });
     assert.deepEqual(
@@ -270,10 +270,10 @@ test("ticket.list ordering is stable regardless of filesystem ordering", () =>
     );
   }));
 
-test("ticket.get on a missing ticket reports not-found, never a guessed record", () =>
+test("task.get on a missing task reports not-found, never a guessed record", () =>
   withFixture(async (root) => {
     const result = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-9999"),
       BUDGET,
       {
@@ -285,20 +285,20 @@ test("ticket.get on a missing ticket reports not-found, never a guessed record",
     assert.deepEqual(result.records, []);
   }));
 
-test("ticket.get freshness reports stale for an old record", () =>
+test("task.get freshness reports stale for an old record", () =>
   withFixture(async (root) => {
     const file = path.join(
       root,
       "projects",
       "atlas",
-      "tickets",
+      "tasks",
       "T-1",
       "task.md",
     );
     const old = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     await utimes(file, old, old);
     const result = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       BUDGET,
       {
@@ -310,13 +310,13 @@ test("ticket.get freshness reports stale for an old record", () =>
 
 // ---------------------------------------------------------------- identifier validation
 
-test("valid and invalid ticket identifiers are separated deterministically", () => {
-  assert.equal(validateTicketIdentifier("T-1").valid, true);
-  assert.equal(validateTicketIdentifier("T-0001").valid, true);
+test("valid and invalid task identifiers are separated deterministically", () => {
+  assert.equal(validateTaskIdentifier("T-1").valid, true);
+  assert.equal(validateTaskIdentifier("T-0001").valid, true);
   for (const bad of [
     "",
     "T1",
-    "TICKET-1",
+    "TASK-1",
     "T-",
     "t-1x",
     "T-1/../etc",
@@ -325,25 +325,25 @@ test("valid and invalid ticket identifiers are separated deterministically", () 
     undefined,
     12,
   ]) {
-    assert.equal(validateTicketIdentifier(bad).valid, false, String(bad));
+    assert.equal(validateTaskIdentifier(bad).valid, false, String(bad));
   }
 });
 
-test("a missing identifier never produces a ticket.get read", () =>
+test("a missing identifier never produces a task.get read", () =>
   withFixture(async (root) => {
     const classification = {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier: null,
       action: "get",
       confidence: "high",
       ambiguityReason: null,
     };
-    const result = await runOperation("ticket.get", classification, BUDGET, {
+    const result = await runOperation("task.get", classification, BUDGET, {
       cwd: root,
     });
     // Refused at the intent-mapping gate: without an identifier the intent maps to
-    // ticket.list, so an exact-record read is never reachable.
+    // task.list, so an exact-record read is never reachable.
     assert.equal(result.ok, false);
     assert.match(result.reason, /does not match intent|identifier is missing/);
     assert.deepEqual(result.records, []);
@@ -351,7 +351,7 @@ test("a missing identifier never produces a ticket.get read", () =>
 
 // ---------------------------------------------------------------- memory / knowledge read
 
-test("memory.search returns only personal/memory records — no tickets, no engine files", () =>
+test("memory.search returns only personal/memory records — no tasks, no engine files", () =>
   withFixture(async (root) => {
     const result = await runOperation(
       "memory.search",
@@ -504,15 +504,15 @@ test("medium-confidence and low-confidence intents never execute a write", () =>
 test("unknown and ambiguous intents fail closed for both reads and writes", () =>
   withFixture(async (root) => {
     const unknown = classifyIntent("show me that thing");
-    const read = await runOperation("ticket.get", unknown, BUDGET, {
+    const read = await runOperation("task.get", unknown, BUDGET, {
       cwd: root,
     });
     assert.equal(read.ok, false);
     const ambiguous = classifyIntent("continue the login work");
-    const write = await runOperation("ticket.update", ambiguous, BUDGET, {
+    const write = await runOperation("task.update", ambiguous, BUDGET, {
       cwd: root,
       patch: { state: "done" },
-      approval: approval("ticket.update", "/x"),
+      approval: approval("task.update", "/x"),
     });
     assert.equal(write.ok, false);
   }));
@@ -520,7 +520,7 @@ test("unknown and ambiguous intents fail closed for both reads and writes", () =
 test("an invalid budget blocks every operation, read or write", () =>
   withFixture(async (root) => {
     const read = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       { ...BUDGET, maxBytes: -1 },
       { cwd: root },
@@ -528,7 +528,7 @@ test("an invalid budget blocks every operation, read or write", () =>
     assert.equal(read.ok, false);
     assert.match(read.reason, /invalid-budget/);
     const missing = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       undefined,
       {
@@ -629,56 +629,56 @@ test("a record write never overwrites an existing record", () =>
     assert.match(await readFile(target, "utf8"), /Long term objectives/);
   }));
 
-test("ticket.update patches only allow-listed frontmatter fields, atomically", () =>
+test("task.update patches only allow-listed frontmatter fields, atomically", () =>
   withFixture(async (root) => {
     const target = path.join(
       root,
       "projects",
       "atlas",
-      "tickets",
+      "tasks",
       "T-1",
       "task.md",
     );
     const classification = {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier: "T-1",
       action: "update",
       confidence: "high",
       ambiguityReason: null,
     };
-    const result = await runOperation("ticket.update", classification, BUDGET, {
+    const result = await runOperation("task.update", classification, BUDGET, {
       cwd: root,
       patch: { state: "blocked" },
-      approval: approval("ticket.update", target),
+      approval: approval("task.update", target),
     });
     assert.equal(result.ok, true, result.reason);
     assert.match(await readFile(target, "utf8"), /^state: blocked$/m);
     const rejected = await runOperation(
-      "ticket.update",
+      "task.update",
       classification,
       BUDGET,
       {
         cwd: root,
         patch: { secret: "x" },
-        approval: approval("ticket.update", target),
+        approval: approval("task.update", target),
       },
     );
     assert.equal(rejected.ok, false);
-    assert.match(rejected.reason, /not an updatable ticket field/);
+    assert.match(rejected.reason, /not an updatable task field/);
   }));
 
-test("ticket.complete reuses the governed completion path and refuses unchecked work", () =>
+test("task.complete reuses the governed completion path and refuses unchecked work", () =>
   withFixture(async (root) => {
-    const dir = path.join(root, "projects", "atlas", "tickets", "T-3");
+    const dir = path.join(root, "projects", "atlas", "tasks", "T-3");
     await mkdir(dir, { recursive: true });
     await writeFile(
       path.join(dir, "task.md"),
-      ticketDoc("T-3", "active", false),
+      taskDoc("T-3", "active", false),
     );
     const classification = {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier: "T-3",
       action: "complete",
       confidence: "high",
@@ -686,43 +686,43 @@ test("ticket.complete reuses the governed completion path and refuses unchecked 
     };
     const target = path.join(dir, "task.md");
     const result = await runOperation(
-      "ticket.complete",
+      "task.complete",
       classification,
       BUDGET,
       {
         cwd: root,
-        approval: approval("ticket.complete", target),
+        approval: approval("task.complete", target),
       },
     );
     assert.equal(result.ok, false);
     assert.match(result.reason, /unchecked work/);
   }));
 
-test("ticket.complete succeeds for a fully checked ticket", () =>
+test("task.complete succeeds for a fully checked task", () =>
   withFixture(async (root) => {
     const target = path.join(
       root,
       "projects",
       "atlas",
-      "tickets",
+      "tasks",
       "T-2",
       "task.md",
     );
     const classification = {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier: "T-2",
       action: "complete",
       confidence: "high",
       ambiguityReason: null,
     };
     const result = await runOperation(
-      "ticket.complete",
+      "task.complete",
       classification,
       BUDGET,
       {
         cwd: root,
-        approval: approval("ticket.complete", target),
+        approval: approval("task.complete", target),
       },
     );
     assert.equal(result.ok, true, result.reason);
@@ -821,7 +821,7 @@ test("project.update confirms the active project binding only", () =>
 test("a cross-project request is refused explicitly", () =>
   withFixture(async (root) => {
     const result = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       BUDGET,
       {
@@ -883,17 +883,17 @@ test("path traversal, absolute paths, null bytes, and shell syntax are all refus
     }
   }));
 
-test("traversal in a ticket identifier never resolves outside the ticket root", () =>
+test("traversal in a task identifier never resolves outside the task root", () =>
   withFixture(async (root) => {
     const classification = {
-      intent: "ticket-lookup",
-      entityType: "ticket",
+      intent: "task-lookup",
+      entityType: "task",
       identifier: "T-1/../../../etc",
       action: "get",
       confidence: "high",
       ambiguityReason: null,
     };
-    const result = await runOperation("ticket.get", classification, BUDGET, {
+    const result = await runOperation("task.get", classification, BUDGET, {
       cwd: root,
     });
     assert.equal(result.ok, false);
@@ -902,19 +902,19 @@ test("traversal in a ticket identifier never resolves outside the ticket root", 
 
 // ---------------------------------------------------------------- budget boundaries
 
-test("exact-limit success: a ticket exactly at budget.maxBytes is returned", () =>
+test("exact-limit success: a task exactly at budget.maxBytes is returned", () =>
   withFixture(async (root) => {
     const file = path.join(
       root,
       "projects",
       "atlas",
-      "tickets",
+      "tasks",
       "T-1",
       "task.md",
     );
     const size = (await stat(file)).size;
     const result = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       { ...BUDGET, maxBytes: size },
       { cwd: root },
@@ -922,19 +922,19 @@ test("exact-limit success: a ticket exactly at budget.maxBytes is returned", () 
     assert.equal(result.ok, true, result.reason);
   }));
 
-test("one-over-limit failure: a ticket one byte over budget.maxBytes is refused, not truncated", () =>
+test("one-over-limit failure: a task one byte over budget.maxBytes is refused, not truncated", () =>
   withFixture(async (root) => {
     const file = path.join(
       root,
       "projects",
       "atlas",
-      "tickets",
+      "tasks",
       "T-1",
       "task.md",
     );
     const size = (await stat(file)).size;
     const result = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       { ...BUDGET, maxBytes: size - 1 },
       { cwd: root },
@@ -1015,7 +1015,7 @@ test("read operations never write anything to the record directories", () =>
         cwd: root,
       },
     );
-    await runOperation("ticket.get", classifyIntent("show T-1"), BUDGET, {
+    await runOperation("task.get", classifyIntent("show T-1"), BUDGET, {
       cwd: root,
     });
     const after = (await readdir(memoryDir)).sort();
@@ -1027,7 +1027,7 @@ test("read operations never write anything to the record directories", () =>
 test("repeated identical operations return identical results", () =>
   withFixture(async (root) => {
     const first = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       BUDGET,
       {
@@ -1035,7 +1035,7 @@ test("repeated identical operations return identical results", () =>
       },
     );
     const second = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       BUDGET,
       {
@@ -1048,7 +1048,7 @@ test("repeated identical operations return identical results", () =>
 test("Arabic and English requests reach the same operation and the same records", () =>
   withFixture(async (root) => {
     const arabic = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("عرض T-1"),
       BUDGET,
       {
@@ -1056,7 +1056,7 @@ test("Arabic and English requests reach the same operation and the same records"
       },
     );
     const english = await runOperation(
-      "ticket.get",
+      "task.get",
       classifyIntent("show T-1"),
       BUDGET,
       {

@@ -18,7 +18,7 @@ import {
   projectConfirmationQuestion,
   resolveProject,
 } from "../context/project-resolution.js";
-import { completeTicket } from "../tickets/archive-tickets.js";
+import { completeTask } from "../tasks/archive-tasks.js";
 import {
   approvalMatchesTarget,
   gateOperation,
@@ -29,7 +29,7 @@ import {
   selectFields,
   shapeRecords,
   validateSlug,
-  validateTicketIdentifier,
+  validateTaskIdentifier,
   validateWriteTarget,
   type WriteApproval,
 } from "./operation-contract.js";
@@ -174,13 +174,13 @@ async function activeProjectId(cwd: string): Promise<ProjectScope> {
   };
 }
 
-function ticketRoot(projectId: string): string {
-  return atlasPath("projects", projectId, "tickets");
+function taskRoot(projectId: string): string {
+  return atlasPath("projects", projectId, "tasks");
 }
 
-// --- ticket operations ---------------------------------------------------------------
+// --- task operations ---------------------------------------------------------------
 
-const TICKET_FIELDS = [
+const TASK_FIELDS = [
   "id",
   "title",
   "state",
@@ -221,59 +221,59 @@ async function crossProjectGuard(
   return active;
 }
 
-async function ticketGet(
+async function taskGet(
   classification: IntentClassification,
   budget: ContextBudget,
   options: OperationOptions,
   cwd: string,
 ): Promise<OperationResult> {
-  const identifier = validateTicketIdentifier(classification.identifier);
+  const identifier = validateTaskIdentifier(classification.identifier);
   if (!identifier.valid)
-    return operationResult("ticket.get", identifier.reason);
+    return operationResult("task.get", identifier.reason);
   const project = await crossProjectGuard(options, cwd);
-  if (!project.ok) return operationResult("ticket.get", project.reason);
+  if (!project.ok) return operationResult("task.get", project.reason);
 
   let file: string;
   try {
     file = resolveWithin(
-      ticketRoot(project.projectId),
+      taskRoot(project.projectId),
       identifier.value,
       "task.md",
     );
   } catch {
     return operationResult(
-      "ticket.get",
-      "resolved ticket path escapes the project ticket root",
+      "task.get",
+      "resolved task path escapes the project task root",
     );
   }
 
   const record = await readFrontmatterFile(file);
   if (!record)
     return operationResult(
-      "ticket.get",
-      `ticket ${identifier.value} was not found in project '${project.projectId}'`,
+      "task.get",
+      `task ${identifier.value} was not found in project '${project.projectId}'`,
     );
   if (record.size > budget.maxBytes) {
     return operationResult(
-      "ticket.get",
-      `ticket ${identifier.value} is ${record.size} bytes, budget.maxBytes allows ${budget.maxBytes} — refusing to silently truncate`,
+      "task.get",
+      `task ${identifier.value} is ${record.size} bytes, budget.maxBytes allows ${budget.maxBytes} — refusing to silently truncate`,
       { violations: ["max-bytes-exceeded"] },
     );
   }
   const shaped: OperationRecord = {
     identifier: identifier.value,
-    recordType: "ticket",
-    provenance: "ticket",
+    recordType: "task",
+    provenance: "task",
     sourcePath: relativeToAtlas(file),
     freshness: freshnessFor(record.mtimeMs),
     confidence: classification.confidence,
-    selectionReason: `exact ticket record requested by identifier ${identifier.value}`,
-    fields: selectFields(record.fields, TICKET_FIELDS),
+    selectionReason: `exact task record requested by identifier ${identifier.value}`,
+    fields: selectFields(record.fields, TASK_FIELDS),
   };
   return {
-    operation: "ticket.get",
+    operation: "task.get",
     ok: true,
-    reason: `ticket ${identifier.value} selected`,
+    reason: `task ${identifier.value} selected`,
     records: [shaped],
     violations: [],
     written: null,
@@ -281,23 +281,23 @@ async function ticketGet(
   };
 }
 
-async function ticketList(
+async function taskList(
   classification: IntentClassification,
   budget: ContextBudget,
   options: OperationOptions,
   cwd: string,
 ): Promise<OperationResult> {
   const project = await crossProjectGuard(options, cwd);
-  if (!project.ok) return operationResult("ticket.list", project.reason);
+  if (!project.ok) return operationResult("task.list", project.reason);
 
-  const root = ticketRoot(project.projectId);
+  const root = taskRoot(project.projectId);
   let entries: Dirent[];
   try {
     entries = await readdir(root, { withFileTypes: true });
   } catch {
     return operationResult(
-      "ticket.list",
-      `no ticket directory for project '${project.projectId}'`,
+      "task.list",
+      `no task directory for project '${project.projectId}'`,
     );
   }
 
@@ -306,7 +306,7 @@ async function ticketList(
   let bytes = 0;
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name === "archive") continue;
-    if (!TICKET_ID_LIST_SHAPE.test(entry.name)) continue;
+    if (!TASK_ID_LIST_SHAPE.test(entry.name)) continue;
     const file = path.join(root, entry.name, "task.md");
     const record = await readFrontmatterFile(file);
     if (!record) continue;
@@ -319,20 +319,20 @@ async function ticketList(
     }
     records.push({
       identifier: record.fields.id ?? entry.name,
-      recordType: "ticket",
-      provenance: "ticket",
+      recordType: "task",
+      provenance: "task",
       sourcePath: relativeToAtlas(file),
       freshness: freshnessFor(record.mtimeMs),
       confidence: classification.confidence,
-      selectionReason: `live ticket in project '${project.projectId}'`,
-      fields: selectFields(record.fields, TICKET_FIELDS),
+      selectionReason: `live task in project '${project.projectId}'`,
+      fields: selectFields(record.fields, TASK_FIELDS),
     });
   }
   const shaped = shapeRecords(records, budget.maxFiles);
   return {
-    operation: "ticket.list",
+    operation: "task.list",
     ok: true,
-    reason: `${shaped.records.length} ticket(s) listed for project '${project.projectId}'`,
+    reason: `${shaped.records.length} task(s) listed for project '${project.projectId}'`,
     records: shaped.records,
     violations: [...violations, ...shaped.violations],
     written: null,
@@ -340,9 +340,9 @@ async function ticketList(
   };
 }
 
-const TICKET_ID_LIST_SHAPE = /^T-\d+$/;
+const TASK_ID_LIST_SHAPE = /^T-\d+$/;
 
-async function nextTicketId(root: string): Promise<string> {
+async function nextTaskId(root: string): Promise<string> {
   const ids: number[] = [];
   const collect = async (directory: string): Promise<void> => {
     let entries: Dirent[];
@@ -353,7 +353,7 @@ async function nextTicketId(root: string): Promise<string> {
     }
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const match = TICKET_ID_LIST_SHAPE.exec(entry.name);
+      const match = TASK_ID_LIST_SHAPE.exec(entry.name);
       if (match) ids.push(Number(entry.name.slice(2)));
       if (entry.name === "archive")
         await collect(path.join(directory, entry.name));
@@ -363,45 +363,45 @@ async function nextTicketId(root: string): Promise<string> {
   return `T-${(ids.length ? Math.max(...ids) : 0) + 1}`;
 }
 
-async function ticketCreate(
+async function taskCreate(
   classification: IntentClassification,
   options: OperationOptions,
   cwd: string,
 ): Promise<OperationResult> {
   const project = await crossProjectGuard(options, cwd);
-  if (!project.ok) return operationResult("ticket.create", project.reason);
+  if (!project.ok) return operationResult("task.create", project.reason);
   const title = classification.identifier?.trim();
   if (!title || title.length > 200 || /[\r\n]/.test(title))
     return operationResult(
-      "ticket.create",
-      "write refused: an explicit single-line ticket title is required",
+      "task.create",
+      "write refused: an explicit single-line task title is required",
     );
-  const root = ticketRoot(project.projectId);
-  const id = await nextTicketId(root);
+  const root = taskRoot(project.projectId);
+  const id = await nextTaskId(root);
   const target = validateWriteTarget(
     "projects",
     project.projectId,
-    "tickets",
+    "tasks",
     id,
     "task.md",
   );
-  if (!target.valid) return operationResult("ticket.create", target.reason);
+  if (!target.valid) return operationResult("task.create", target.reason);
   const approvalCheck = approvalMatchesTarget(
     options.approval as WriteApproval,
     target.value,
   );
   if (!approvalCheck.ok)
-    return operationResult("ticket.create", approvalCheck.reason);
+    return operationResult("task.create", approvalCheck.reason);
   const absent = await requireAbsentTarget(target.value);
-  if (!absent.ok) return operationResult("ticket.create", absent.reason);
+  if (!absent.ok) return operationResult("task.create", absent.reason);
   const today = new Date().toISOString().slice(0, 10);
   const objective = (options.content ?? title).trim().replace(/[\r\n]+/g, " ");
-  const source = `---\nid: ${id}\ntitle: ${title}\nstate: active\nproject: ${project.projectId}\nopened: ${today}\nupdated: ${today}\nartifacts: []\nclass: medium\nexpected_context: medium\n---\n\n## Objective\n\n${objective}\n\n## Definition of done\n\nThe requested outcome is implemented and its verification passes.\n\n## Next action\n\nInspect the project and define the first implementation slice.\n\n## Verification\n\nPending.\n\n## Blockers\n\nNone.\n\n## Log\n\n- ${today} — Ticket created.\n`;
+  const source = `---\nid: ${id}\ntitle: ${title}\nstate: active\nproject: ${project.projectId}\nopened: ${today}\nupdated: ${today}\nartifacts: []\nclass: medium\nexpected_context: medium\n---\n\n## Objective\n\n${objective}\n\n## Definition of done\n\nThe requested outcome is implemented and its verification passes.\n\n## Next action\n\nInspect the project and define the first implementation slice.\n\n## Verification\n\nPending.\n\n## Blockers\n\nNone.\n\n## Log\n\n- ${today} — Task created.\n`;
   try {
     await mkdir(path.dirname(target.value), { recursive: true });
     const bytes = await atomicWrite(target.value, source);
     return {
-      operation: "ticket.create",
+      operation: "task.create",
       ok: true,
       reason: `${id} created for project '${project.projectId}'`,
       records: [],
@@ -411,13 +411,13 @@ async function ticketCreate(
     };
   } catch (error) {
     return operationResult(
-      "ticket.create",
-      `ticket creation failed atomically, no partial content left: ${error instanceof Error ? error.message : String(error)}`,
+      "task.create",
+      `task creation failed atomically, no partial content left: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }
 
-const MUTABLE_TICKET_FIELDS = [
+const MUTABLE_TASK_FIELDS = [
   "state",
   "goal",
   "priority",
@@ -425,61 +425,61 @@ const MUTABLE_TICKET_FIELDS = [
   "next_action",
 ];
 
-async function ticketUpdate(
+async function taskUpdate(
   classification: IntentClassification,
   budget: ContextBudget,
   options: OperationOptions,
   cwd: string,
 ): Promise<OperationResult> {
-  const identifier = validateTicketIdentifier(classification.identifier);
+  const identifier = validateTaskIdentifier(classification.identifier);
   if (!identifier.valid)
-    return operationResult("ticket.update", identifier.reason);
+    return operationResult("task.update", identifier.reason);
   const project = await crossProjectGuard(options, cwd);
-  if (!project.ok) return operationResult("ticket.update", project.reason);
+  if (!project.ok) return operationResult("task.update", project.reason);
   const patch = options.patch ?? {};
   const patchKeys = Object.keys(patch);
   if (patchKeys.length === 0)
     return operationResult(
-      "ticket.update",
+      "task.update",
       "write refused: no explicit field patch supplied",
     );
   const unknownField = patchKeys.find(
-    (key) => !MUTABLE_TICKET_FIELDS.includes(key),
+    (key) => !MUTABLE_TASK_FIELDS.includes(key),
   );
   if (unknownField)
     return operationResult(
-      "ticket.update",
-      `write refused: field '${unknownField}' is not an updatable ticket field`,
+      "task.update",
+      `write refused: field '${unknownField}' is not an updatable task field`,
     );
 
   const target = validateWriteTarget(
     "projects",
     project.projectId,
-    "tickets",
+    "tasks",
     identifier.value,
     "task.md",
   );
-  if (!target.valid) return operationResult("ticket.update", target.reason);
+  if (!target.valid) return operationResult("task.update", target.reason);
   const approvalCheck = approvalMatchesTarget(
     options.approval as WriteApproval,
     target.value,
   );
   if (!approvalCheck.ok)
-    return operationResult("ticket.update", approvalCheck.reason);
+    return operationResult("task.update", approvalCheck.reason);
 
   let source: string;
   try {
     source = await readFile(target.value, "utf8");
   } catch {
     return operationResult(
-      "ticket.update",
-      `ticket ${identifier.value} was not found in project '${project.projectId}'`,
+      "task.update",
+      `task ${identifier.value} was not found in project '${project.projectId}'`,
     );
   }
   if (Buffer.byteLength(source, "utf8") > budget.maxBytes) {
     return operationResult(
-      "ticket.update",
-      `ticket ${identifier.value} exceeds budget.maxBytes (${budget.maxBytes}) — refusing to rewrite a record it cannot fully read`,
+      "task.update",
+      `task ${identifier.value} exceeds budget.maxBytes (${budget.maxBytes}) — refusing to rewrite a record it cannot fully read`,
       { violations: ["max-bytes-exceeded"] },
     );
   }
@@ -488,7 +488,7 @@ async function ticketUpdate(
   for (const [key, value] of Object.entries(patch)) {
     if (value.includes("\n"))
       return operationResult(
-        "ticket.update",
+        "task.update",
         `write refused: value for '${key}' must be a single line`,
       );
     const pattern = new RegExp(`^${key}:.*$`, "m");
@@ -498,15 +498,15 @@ async function ticketUpdate(
   }
   if (updated === source)
     return operationResult(
-      "ticket.update",
+      "task.update",
       "write refused: patch did not match any existing frontmatter field",
     );
 
   const bytes = await atomicWrite(target.value, updated);
   return {
-    operation: "ticket.update",
+    operation: "task.update",
     ok: true,
-    reason: `ticket ${identifier.value} updated (${patchKeys.join(", ")})`,
+    reason: `task ${identifier.value} updated (${patchKeys.join(", ")})`,
     records: [],
     violations: [],
     written: { sourcePath: relativeToAtlas(target.value), bytes },
@@ -514,43 +514,43 @@ async function ticketUpdate(
   };
 }
 
-async function ticketCompleteOperation(
+async function taskCompleteOperation(
   classification: IntentClassification,
   _budget: ContextBudget,
   options: OperationOptions,
   cwd: string,
 ): Promise<OperationResult> {
-  const identifier = validateTicketIdentifier(classification.identifier);
+  const identifier = validateTaskIdentifier(classification.identifier);
   if (!identifier.valid)
-    return operationResult("ticket.complete", identifier.reason);
+    return operationResult("task.complete", identifier.reason);
   const project = await crossProjectGuard(options, cwd);
-  if (!project.ok) return operationResult("ticket.complete", project.reason);
+  if (!project.ok) return operationResult("task.complete", project.reason);
 
   const target = validateWriteTarget(
     "projects",
     project.projectId,
-    "tickets",
+    "tasks",
     identifier.value,
     "task.md",
   );
-  if (!target.valid) return operationResult("ticket.complete", target.reason);
+  if (!target.valid) return operationResult("task.complete", target.reason);
   const approvalCheck = approvalMatchesTarget(
     options.approval as WriteApproval,
     target.value,
   );
   if (!approvalCheck.ok)
-    return operationResult("ticket.complete", approvalCheck.reason);
+    return operationResult("task.complete", approvalCheck.reason);
 
   try {
-    // Reuses the existing governed completion path: it refuses a ticket with unchecked work.
-    const result = await completeTicket(
+    // Reuses the existing governed completion path: it refuses a task with unchecked work.
+    const result = await completeTask(
       identifier.value,
-      ticketRoot(project.projectId),
+      taskRoot(project.projectId),
     );
     return {
-      operation: "ticket.complete",
+      operation: "task.complete",
       ok: true,
-      reason: `ticket ${identifier.value} completed (state: ${result.state})`,
+      reason: `task ${identifier.value} completed (state: ${result.state})`,
       records: [],
       violations: [],
       written: { sourcePath: relativeToAtlas(target.value), bytes: 0 },
@@ -558,7 +558,7 @@ async function ticketCompleteOperation(
     };
   } catch (error) {
     return operationResult(
-      "ticket.complete",
+      "task.complete",
       error instanceof Error ? error.message : String(error),
     );
   }
@@ -591,7 +591,7 @@ function provenanceFor(
     ].includes(declared)
   )
     return declared as OperationRecord["provenance"];
-  if (recordType === "ticket") return "ticket";
+  if (recordType === "task") return "task";
   if (recordType === "project") return "project";
   if (recordType === "execution") return "execution";
   return recordType === "knowledge"
@@ -923,16 +923,16 @@ export async function runOperation(
   const cwd = options.cwd ?? process.cwd();
 
   switch (operation) {
-    case "ticket.get":
-      return ticketGet(classification, bounded, options, cwd);
-    case "ticket.list":
-      return ticketList(classification, bounded, options, cwd);
-    case "ticket.update":
-      return ticketUpdate(classification, bounded, options, cwd);
-    case "ticket.complete":
-      return ticketCompleteOperation(classification, bounded, options, cwd);
-    case "ticket.create":
-      return ticketCreate(classification, options, cwd);
+    case "task.get":
+      return taskGet(classification, bounded, options, cwd);
+    case "task.list":
+      return taskList(classification, bounded, options, cwd);
+    case "task.update":
+      return taskUpdate(classification, bounded, options, cwd);
+    case "task.complete":
+      return taskCompleteOperation(classification, bounded, options, cwd);
+    case "task.create":
+      return taskCreate(classification, options, cwd);
     case "memory.search":
       return searchRecords(
         "memory.search",

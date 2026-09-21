@@ -85,7 +85,7 @@ export function renderSessionSummary(input: {
     "",
     `- Session: ${session.sessionId}`,
     `- Provider: ${session.provider}`,
-    `- Ticket: ${session.ticketId ?? "none"}`,
+    `- Task: ${session.taskId ?? "none"}`,
     `- Profile: ${session.profile}`,
     `- Status: ${status}`,
     `- Working directory: ${safeText(session.workingDirectory, 240)}`,
@@ -169,7 +169,7 @@ export async function appendSessionSummary(input: {
   const session: Session = {
     sessionId: input.sessionId,
     title: `${input.provider} session`,
-    ticketId: null,
+    taskId: null,
     handoffId: null,
     provider: input.provider,
     providerSessionId: null,
