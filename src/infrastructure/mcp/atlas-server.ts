@@ -197,8 +197,7 @@ const prompts = [
   },
   {
     name: "atlas_review_task",
-    description:
-      "Review one Atlas task and identify its next verified action.",
+    description: "Review one Atlas task and identify its next verified action.",
     arguments: [
       { name: "task", description: "Task identifier", required: true },
     ],

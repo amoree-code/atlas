@@ -36,7 +36,5 @@ export async function runContextCommand(json = false): Promise<void> {
   if (!tasks.length) console.log("active tasks: none");
   else
     for (const task of tasks)
-      console.log(
-        `${task.id} [${task.state}] ${task.title} — ${task.goal}`,
-      );
+      console.log(`${task.id} [${task.state}] ${task.title} — ${task.goal}`);
 }

@@ -167,8 +167,7 @@ if (command === "--version" || command === "-v") {
       const providerArgs = process.argv.slice(5);
       const taskIndex = providerArgs.indexOf("--task");
       const handoffIndex = providerArgs.indexOf("--handoff");
-      const taskId =
-        taskIndex >= 0 ? providerArgs[taskIndex + 1] : undefined;
+      const taskId = taskIndex >= 0 ? providerArgs[taskIndex + 1] : undefined;
       const handoffId =
         handoffIndex >= 0 ? providerArgs[handoffIndex + 1] : undefined;
       const metadataFlags = new Set<number>();

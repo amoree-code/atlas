@@ -34,9 +34,7 @@ export async function runHandoffCommand(
     const taskIndex = args.indexOf("--task");
     console.log(
       JSON.stringify(
-        await listHandoffs(
-          taskIndex >= 0 ? args[taskIndex + 1] : undefined,
-        ),
+        await listHandoffs(taskIndex >= 0 ? args[taskIndex + 1] : undefined),
         null,
         2,
       ),

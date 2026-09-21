@@ -654,16 +654,11 @@ test("task.update patches only allow-listed frontmatter fields, atomically", () 
     });
     assert.equal(result.ok, true, result.reason);
     assert.match(await readFile(target, "utf8"), /^state: blocked$/m);
-    const rejected = await runOperation(
-      "task.update",
-      classification,
-      BUDGET,
-      {
-        cwd: root,
-        patch: { secret: "x" },
-        approval: approval("task.update", target),
-      },
-    );
+    const rejected = await runOperation("task.update", classification, BUDGET, {
+      cwd: root,
+      patch: { secret: "x" },
+      approval: approval("task.update", target),
+    });
     assert.equal(rejected.ok, false);
     assert.match(rejected.reason, /not an updatable task field/);
   }));
@@ -672,10 +667,7 @@ test("task.complete reuses the governed completion path and refuses unchecked wo
   withFixture(async (root) => {
     const dir = path.join(root, "projects", "atlas", "tasks", "T-3");
     await mkdir(dir, { recursive: true });
-    await writeFile(
-      path.join(dir, "task.md"),
-      taskDoc("T-3", "active", false),
-    );
+    await writeFile(path.join(dir, "task.md"), taskDoc("T-3", "active", false));
     const classification = {
       intent: "task-lookup",
       entityType: "task",
@@ -685,15 +677,10 @@ test("task.complete reuses the governed completion path and refuses unchecked wo
       ambiguityReason: null,
     };
     const target = path.join(dir, "task.md");
-    const result = await runOperation(
-      "task.complete",
-      classification,
-      BUDGET,
-      {
-        cwd: root,
-        approval: approval("task.complete", target),
-      },
-    );
+    const result = await runOperation("task.complete", classification, BUDGET, {
+      cwd: root,
+      approval: approval("task.complete", target),
+    });
     assert.equal(result.ok, false);
     assert.match(result.reason, /unchecked work/);
   }));
@@ -716,15 +703,10 @@ test("task.complete succeeds for a fully checked task", () =>
       confidence: "high",
       ambiguityReason: null,
     };
-    const result = await runOperation(
-      "task.complete",
-      classification,
-      BUDGET,
-      {
-        cwd: root,
-        approval: approval("task.complete", target),
-      },
-    );
+    const result = await runOperation("task.complete", classification, BUDGET, {
+      cwd: root,
+      approval: approval("task.complete", target),
+    });
     assert.equal(result.ok, true, result.reason);
   }));
 

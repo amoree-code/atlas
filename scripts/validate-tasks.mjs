@@ -89,8 +89,7 @@ await walk(root);
 const live = records.filter((record) => !record.archived);
 const liveIds = new Set();
 for (const record of live) {
-  if (liveIds.has(record.id))
-    errors.push(`duplicate live task: ${record.id}`);
+  if (liveIds.has(record.id)) errors.push(`duplicate live task: ${record.id}`);
   liveIds.add(record.id);
 }
 const knownIds = new Set(records.map((record) => record.id));

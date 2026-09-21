@@ -68,12 +68,7 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
   });
   assert.deepEqual(
     listedResources.result.resources.map((resource) => resource.uri),
-    [
-      "atlas://status",
-      "atlas://profiles",
-      "atlas://tasks",
-      "atlas://handoffs",
-    ],
+    ["atlas://status", "atlas://profiles", "atlas://tasks", "atlas://handoffs"],
   );
   const resource = await handleAtlasMcpRequest({
     jsonrpc: "2.0",

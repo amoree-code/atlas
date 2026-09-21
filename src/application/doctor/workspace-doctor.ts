@@ -232,10 +232,7 @@ async function checkWorkspaceContracts(): Promise<Finding[]> {
     [
       "TASK_RECORDS",
       "node",
-      [
-        "scripts/validate-tasks.mjs",
-        atlasPath("projects", "atlas", "tasks"),
-      ],
+      ["scripts/validate-tasks.mjs", atlasPath("projects", "atlas", "tasks")],
     ],
   ] as const;
   const findings: Finding[] = [];

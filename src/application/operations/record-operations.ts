@@ -180,14 +180,7 @@ function taskRoot(projectId: string): string {
 
 // --- task operations ---------------------------------------------------------------
 
-const TASK_FIELDS = [
-  "id",
-  "title",
-  "state",
-  "goal",
-  "priority",
-  "updated_at",
-];
+const TASK_FIELDS = ["id", "title", "state", "goal", "priority", "updated_at"];
 
 export type OperationOptions = {
   cwd?: string;
@@ -228,8 +221,7 @@ async function taskGet(
   cwd: string,
 ): Promise<OperationResult> {
   const identifier = validateTaskIdentifier(classification.identifier);
-  if (!identifier.valid)
-    return operationResult("task.get", identifier.reason);
+  if (!identifier.valid) return operationResult("task.get", identifier.reason);
   const project = await crossProjectGuard(options, cwd);
   if (!project.ok) return operationResult("task.get", project.reason);
 

@@ -22,10 +22,7 @@ test("archives verified done tasks and leaves other states live", async () => {
     path.join(root, "T-001", "migration-manifest.md"),
     "manifest",
   );
-  await writeFile(
-    path.join(root, "T-002", "task.md"),
-    task("T-002", "active"),
-  );
+  await writeFile(path.join(root, "T-002", "task.md"), task("T-002", "active"));
   await writeFile(
     path.join(root, "T-003", "task.md"),
     task("T-003", "done", "[ ]"),
@@ -88,10 +85,7 @@ test("repairs artifacts left by the old task-only archiver", async () => {
 test("completes and archives a task in one governed transition", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-task-complete-"));
   await mkdir(path.join(root, "T-005"), { recursive: true });
-  await writeFile(
-    path.join(root, "T-005", "task.md"),
-    task("T-005", "active"),
-  );
+  await writeFile(path.join(root, "T-005", "task.md"), task("T-005", "active"));
   await writeFile(path.join(root, "T-005", "notes.md"), "preserve me");
 
   const result = await completeTask("T-005", root);

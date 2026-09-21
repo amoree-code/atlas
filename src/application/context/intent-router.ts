@@ -54,8 +54,7 @@ const TASK_ID_PATTERN = /\bT-(\d+)\b/gi;
 
 function extractTaskIds(text: string): string[] {
   const ids = new Set<string>();
-  for (const match of text.matchAll(TASK_ID_PATTERN))
-    ids.add(`T-${match[1]}`);
+  for (const match of text.matchAll(TASK_ID_PATTERN)) ids.add(`T-${match[1]}`);
   return [...ids];
 }
 
