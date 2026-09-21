@@ -14,3 +14,20 @@ plus `atlas://handoffs`. Every client receives the same Atlas-owned metadata; pr
 transcripts and credentials are not copied between clients.
 
 The server reads the private connection at `ATLAS_ROOT/system/integrations/obsidian/connection.json`. It never receives provider credentials. Keep the connection `read-only` until the client route is verified. Mutating tools require both client approval and an explicit `read-write` connection.
+
+## Obsidian sync flow
+
+`atlas obsidian discover` and `atlas obsidian sync` run read-only by default; a write only
+happens when the connection is explicitly `read-write` and the caller (client or MCP tool)
+approves it.
+
+```mermaid
+flowchart LR
+    Discover["atlas obsidian discover\n(vault-discovery.ts)"] --> Sync["atlas obsidian sync\n(vault-sync.ts)"]
+    Sync --> Hash["Hash comparison\n(vault-ingestion.ts)"]
+    Hash -->|unchanged| Done[No write]
+    Hash -->|changed| Gate{"read-write connection\n+ approval?"}
+    Gate -->|no| Conflict["Logged, not written\n(conflict-log.ts)"]
+    Gate -->|yes| Write["vault-writer.ts writes the note"]
+    Inbox["atlas obsidian inbox promote"] --> Gate
+```

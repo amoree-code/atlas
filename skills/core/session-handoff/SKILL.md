@@ -1,6 +1,8 @@
 ---
 name: session-handoff
 description: Produce a compact continuation packet with the next action and verification commands.
+version: 1.0.0
+category: core
 ---
 
 # Session handoff
