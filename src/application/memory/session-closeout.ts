@@ -6,7 +6,10 @@ import {
   type SessionStore,
 } from "../../infrastructure/persistence/session-store.js";
 import { createHandoffWithStore } from "../handoff/handoff-service.js";
-import { observeSessionWithStore } from "../skills/task-observer.js";
+import {
+  observeSessionWithStore,
+  type TaskObservation,
+} from "../skills/task-observer.js";
 import { writeBrainDump } from "./brain-dump.js";
 import { appendDailyNarrative, appendObservations } from "./daily-narrative.js";
 import { generateModelNarrative } from "./model-narrative.js";
@@ -151,6 +154,20 @@ export async function finalizeSession(
   const closedAt = new Date().toISOString();
   store.updateCloseout(sessionId, { ...summary, closeoutStatus, closedAt });
   if (!alreadyClosedOut) {
+    // Computed first so writeBrainDump can surface the same signals as the
+    // daily narrative, but kept in its own try/catch: a failure here must
+    // not skip the narrative/summary work below, and vice versa.
+    let observations: TaskObservation[] = [];
+    try {
+      observations = await observeSessionWithStore(store, sessionId);
+      await appendObservations(session, observations);
+    } catch (error) {
+      store.appendEvent(
+        sessionId,
+        "closeout_warning",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
     try {
       const narrative = await generateModelNarrative({
         session,
@@ -172,17 +189,8 @@ export async function finalizeSession(
         exitCode,
         nextAction: input.nextAction,
         narrative,
+        observations,
       });
-    } catch (error) {
-      store.appendEvent(
-        sessionId,
-        "closeout_warning",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-    try {
-      const observations = await observeSessionWithStore(store, sessionId);
-      await appendObservations(session, observations);
     } catch (error) {
       store.appendEvent(
         sessionId,
