@@ -13,6 +13,7 @@ import {
   workspaceReport,
 } from "./application/doctor/workspace-doctor.js";
 import { createWebhookGateway } from "./application/gateway/webhook-gateway.js";
+import { claudeSessionEndHook } from "./application/hooks/session-end-hook.js";
 import {
   claudeSessionStartHook,
   readBoundedStdin,
@@ -496,9 +497,18 @@ if (command === "--version" || command === "-v") {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
     }
+  } else if (action === "session-end") {
+    try {
+      const raw = await readBoundedStdin();
+      const payload = raw.trim() ? JSON.parse(raw) : {};
+      await claudeSessionEndHook(payload);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
   } else {
     console.error(
-      "Usage: atlas hook session-start (reads a Claude Code hook payload from stdin)",
+      "Usage: atlas hook session-start|session-end (reads a Claude Code hook payload from stdin)",
     );
     process.exitCode = 1;
   }
