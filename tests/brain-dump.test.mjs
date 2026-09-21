@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir } from "node:fs/promises";
+import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -120,6 +120,60 @@ test("appends a numeric suffix instead of overwriting when two sessions land on 
 
   const files = await readdir(path.join(root, "personal", "brain-dump"));
   assert.equal(files.length, 2);
+
+  delete process.env.ATLAS_ROOT;
+});
+
+test("mirrors task-observer signals under a Signals section when present, and omits it otherwise", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
+  process.env.ATLAS_ROOT = root;
+
+  const withSignals = await writeBrainDump({
+    session: baseSession({ sessionId: "session-signals" }),
+    events: [],
+    changedFiles: [],
+    narrative: { workLog: "Fix the flaky retry logic" },
+    observations: [
+      {
+        observationId: "obs-1",
+        sourceSessionId: "session-signals",
+        taskId: null,
+        profileId: "reviewer",
+        signalType: "repeated-correction",
+        summary: "Don't mock the database in integration tests",
+        evidenceRefs: [],
+        confidence: 0.8,
+        status: "observed",
+        createdAt: "2026-09-21T15:52:00.000Z",
+        reviewedAt: null,
+        skillCandidateId: null,
+      },
+    ],
+  });
+  assert.ok(withSignals);
+  const contentWithSignals = await readFile(
+    path.join(root, withSignals.brainDumpPath),
+    "utf8",
+  );
+  assert.match(contentWithSignals, /## Signals/);
+  assert.match(
+    contentWithSignals,
+    /- \[repeated-correction\] Don't mock the database in integration tests \(confidence 0\.8\)/,
+  );
+
+  const withoutSignals = await writeBrainDump({
+    session: baseSession({ sessionId: "session-no-signals" }),
+    events: [],
+    changedFiles: [],
+    narrative: { workLog: "Fix the flaky retry logic, take two" },
+    observations: [],
+  });
+  assert.ok(withoutSignals);
+  const contentWithoutSignals = await readFile(
+    path.join(root, withoutSignals.brainDumpPath),
+    "utf8",
+  );
+  assert.doesNotMatch(contentWithoutSignals, /## Signals/);
 
   delete process.env.ATLAS_ROOT;
 });

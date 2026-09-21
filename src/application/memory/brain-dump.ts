@@ -4,6 +4,7 @@ import type { Session, SessionEvent } from "../../domain/sessions/session.js";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 import { findGitRoot } from "../context/project-resolution.js";
+import type { TaskObservation } from "../skills/task-observer.js";
 import type { ModelNarrative } from "./model-narrative.js";
 
 // Same fallback title stamped on a session with no explicit title (see
@@ -59,6 +60,10 @@ async function uniqueFilename(
  * separate from the machine-oriented system/sessions/summaries/ dump. Prefers
  * the cheap model narrative (see model-narrative.ts) and falls back to the
  * same deterministic heuristics as daily-narrative.ts when it is unavailable.
+ * When task-observer.ts already found signals for this session (corrections,
+ * repeated procedures, explicit decisions), they're mirrored under
+ * "## Signals" — the same events already surfaced in personal/daily/, so a
+ * later cross-session sweep has one place to look instead of two.
  *
  * Skipped for the same low-value case daily-narrative.ts skips: a generic
  * title with no real (git) project behind it — nothing a human would want to
@@ -71,8 +76,9 @@ export async function writeBrainDump(input: {
   exitCode?: number;
   nextAction?: string;
   narrative?: ModelNarrative | null;
+  observations?: TaskObservation[];
 }): Promise<{ brainDumpPath: string } | null> {
-  const { session, events, narrative, changedFiles } = input;
+  const { session, events, narrative, changedFiles, observations } = input;
 
   const workLog =
     narrative?.workLog ??
@@ -147,6 +153,17 @@ export async function writeBrainDump(input: {
       : []),
     ...(hasNextAction
       ? ["", "## Next", "", safeText(nextAction as string, 300)]
+      : []),
+    ...(observations?.length
+      ? [
+          "",
+          "## Signals",
+          "",
+          ...observations.map(
+            (o) =>
+              `- [${o.signalType}] ${safeText(o.summary, 300)} (confidence ${o.confidence})`,
+          ),
+        ]
       : []),
     "",
     "---",
