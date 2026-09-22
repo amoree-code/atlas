@@ -13,6 +13,7 @@ export type HeadlessRequest = {
   timeoutMs?: number;
   maxOutputBytes?: number;
   onEvent?: (event: RuntimeEvent) => void;
+  onSpawn?: (pid: number) => void;
 };
 
 export type HeadlessResult = {
@@ -28,6 +29,7 @@ export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
       env: { ...process.env, ...request.env },
       stdio: ["ignore", "pipe", "pipe"],
     });
+    if (child.pid) request.onSpawn?.(child.pid);
     const events: RuntimeEvent[] = [];
     let stdoutBuffer = "";
     let stderr = "";

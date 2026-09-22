@@ -30,6 +30,7 @@ export type ProviderRequest = {
   timeoutMs?: number;
   maxOutputBytes?: number;
   onEvent?: (event: RuntimeEvent) => void;
+  onSpawn?: (pid: number) => void;
   readOnly?: boolean;
 };
 
@@ -145,5 +146,6 @@ export function runProvider(request: ProviderRequest): Promise<HeadlessResult> {
     timeoutMs: request.timeoutMs,
     maxOutputBytes: request.maxOutputBytes,
     onEvent: request.onEvent,
+    onSpawn: request.onSpawn,
   });
 }

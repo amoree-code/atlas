@@ -240,6 +240,7 @@ export async function runAgent(
       timeoutMs: request.runContract?.budget.timeoutMs,
       maxOutputBytes: request.runContract?.budget.maxOutputBytes,
       readOnly: true,
+      onSpawn: (pid) => sessionStore.setProviderPid(sessionId, pid),
       onEvent: (event) => {
         captureProviderSessionId(sessionStore, sessionId, event);
         sessionStore.appendEvent(
@@ -249,6 +250,7 @@ export async function runAgent(
         );
       },
     });
+    sessionStore.clearProviderPid(sessionId);
     sessionStore.updateStatus(
       sessionId,
       result.exitCode === 0 ? "completed" : "failed",
@@ -295,6 +297,7 @@ export async function runAgent(
     });
     return sessionStore.get(sessionId) ?? session;
   } catch (error) {
+    sessionStore.clearProviderPid(sessionId);
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
     sessionStore.appendEvent(
@@ -377,6 +380,7 @@ export async function resumeAgent(
       timeoutMs: runContract?.budget.timeoutMs,
       maxOutputBytes: runContract?.budget.maxOutputBytes,
       readOnly: true,
+      onSpawn: (pid) => sessionStore.setProviderPid(sessionId, pid),
       onEvent: (event) => {
         captureProviderSessionId(sessionStore, sessionId, event);
         sessionStore.appendEvent(
@@ -386,6 +390,7 @@ export async function resumeAgent(
         );
       },
     });
+    sessionStore.clearProviderPid(sessionId);
     sessionStore.updateStatus(
       sessionId,
       result.exitCode === 0 ? "completed" : "failed",
@@ -404,6 +409,7 @@ export async function resumeAgent(
     });
     return sessionStore.get(sessionId) ?? existing;
   } catch (error) {
+    sessionStore.clearProviderPid(sessionId);
     sessionStore.updateStatus(sessionId, "failed");
     sessionStore.scanCaptureItems(sessionId);
     sessionStore.appendEvent(
