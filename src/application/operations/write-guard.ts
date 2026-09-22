@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
-import { atlasRoot, engineRoot } from "../../paths.js";
+import { atlasRoot, engineRoot, resolveWithin } from "../../paths.js";
 import { validateBudget } from "../context/context-ladder.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import {
@@ -234,12 +234,14 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
     );
   }
   // A record write must resolve inside the private Atlas root and never inside the public
-  // engine package, whatever path the caller passed.
+  // engine package, whatever path the caller passed. resolveWithin (paths.js) rejects both a
+  // lexical escape and a symlink that resolves outside the given root, so a symlink planted
+  // inside the Atlas root pointing outside it can't be used to land a write elsewhere.
   if (isRecordOperation) {
     const resolved = path.resolve(request.scope.target);
-    const root = path.resolve(atlasRoot());
-    const engine = path.resolve(engineRoot());
-    if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    try {
+      resolveWithin(atlasRoot(), resolved);
+    } catch {
       return decision(
         request,
         "invalid-target",
@@ -248,7 +250,13 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
         scopeHash,
       );
     }
-    if (resolved === engine || resolved.startsWith(`${engine}${path.sep}`)) {
+    let insideEngine = true;
+    try {
+      resolveWithin(engineRoot(), resolved);
+    } catch {
+      insideEngine = false;
+    }
+    if (insideEngine) {
       return decision(
         request,
         "invalid-target",
