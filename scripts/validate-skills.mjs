@@ -25,19 +25,20 @@ async function validate(file) {
     return errors.push(`${file}: missing frontmatter`);
   const end = source.indexOf("\n---", 4);
   if (end < 0) return errors.push(`${file}: unterminated frontmatter`);
-  const fields = Object.fromEntries(
-    source
-      .slice(4, end)
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => {
-        const separator = line.indexOf(":");
-        return [
-          line.slice(0, separator).trim(),
-          line.slice(separator + 1).trim(),
-        ];
-      }),
-  );
+  const fields = {};
+  let currentKey = null;
+  for (const line of source.slice(4, end).split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    if (/^\s/.test(line) && currentKey) {
+      // Continuation of a folded multi-line scalar (e.g. a wrapped description).
+      fields[currentKey] += ` ${line.trim()}`;
+      continue;
+    }
+    const separator = line.indexOf(":");
+    if (separator < 0) continue;
+    currentKey = line.slice(0, separator).trim();
+    fields[currentKey] = line.slice(separator + 1).trim();
+  }
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(fields.name ?? ""))
     errors.push(`${file}: invalid name`);
   if (fields.name !== name)

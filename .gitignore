@@ -66,3 +66,8 @@ __pycache__/
 # graft shims bake an absolute npx cache path (leaks local username) — regenerate per machine
 /.claude/helpers/graft-hooks.cjs
 /.claude/helpers/graft-statusline.cjs
+/.cursor/hooks/graft-hooks.cjs
+
+# graft's Cursor hook config bakes this machine's absolute repo path (leaks local
+# username, won't resolve on another machine) — regenerate per machine with `graft init`
+/.cursor/hooks.json
