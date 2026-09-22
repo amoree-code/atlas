@@ -27,6 +27,12 @@ test("redacts generic credentials before applying the payload bound", () => {
   assert.ok(safe.length <= 64_000);
 });
 
+test("redacts JWTs with short segments, not just long ones", () => {
+  const safe = redactRuntimeText("token=eyJhbGc.eyJzdWI.abc123 trailing text");
+  assert.doesNotMatch(safe, /eyJ/);
+  assert.ok(safe.includes("[REDACTED]"));
+});
+
 test("writes structured runtime logs outside engine", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-logs-"));
   process.env.ATLAS_ROOT = root;
