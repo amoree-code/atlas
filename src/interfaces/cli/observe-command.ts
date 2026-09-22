@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { redactSecrets } from "../../infrastructure/observability/runtime-logger.js";
 import { atlasPath, resolveWithin } from "../../paths.js";
 
 type Observation = {
@@ -84,8 +85,8 @@ async function capture(command: string[]): Promise<Observation> {
         command,
         cwd: process.cwd(),
         exitCode: code ?? 1,
-        stdout,
-        stderr,
+        stdout: redactSecrets(stdout),
+        stderr: redactSecrets(stderr),
         createdAt: new Date().toISOString(),
       }),
     );
