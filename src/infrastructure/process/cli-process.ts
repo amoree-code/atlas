@@ -1,5 +1,10 @@
 import { spawn } from "node:child_process";
 
+// Applied whenever a caller doesn't pass an explicit maxOutputBytes, so a headless run
+// without a budget contract can never buffer unbounded output (disk/memory exhaustion,
+// unbounded secret/log capture surface).
+export const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
+
 export type RuntimeEvent = {
   type: "json" | "text";
   data: unknown;
@@ -34,6 +39,7 @@ export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
     let timedOut = false;
     let outputLimitExceeded = false;
     let outputBytes = 0;
+    const maxOutputBytes = request.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
     let forceKillTimer: NodeJS.Timeout | undefined;
     const terminate = (): void => {
       child.kill("SIGTERM");
@@ -44,14 +50,21 @@ export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
       terminate();
     }, request.timeoutMs ?? 60_000);
 
-    const emitLines = (chunk: Buffer): void => {
-      const maxOutputBytes = request.maxOutputBytes ?? Number.MAX_SAFE_INTEGER;
+    // Both streams count against the same budget: an unbounded stderr would defeat the
+    // point of capping stdout.
+    const withinBudget = (chunk: Buffer): boolean => {
+      if (outputLimitExceeded) return false;
       if (outputBytes + chunk.byteLength > maxOutputBytes) {
         outputLimitExceeded = true;
         terminate();
-        return;
+        return false;
       }
       outputBytes += chunk.byteLength;
+      return true;
+    };
+
+    const emitLines = (chunk: Buffer): void => {
+      if (!withinBudget(chunk)) return;
       stdoutBuffer += chunk.toString("utf8");
       const lines = stdoutBuffer.split(/\r?\n/);
       stdoutBuffer = lines.pop() ?? "";
@@ -70,6 +83,7 @@ export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
 
     child.stdout.on("data", emitLines);
     child.stderr.on("data", (chunk: Buffer) => {
+      if (!withinBudget(chunk)) return;
       stderr += chunk.toString("utf8");
     });
     child.once("error", (error) => {
