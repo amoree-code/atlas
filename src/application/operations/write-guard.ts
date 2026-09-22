@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import { atlasRoot, engineRoot } from "../../paths.js";
 import { validateBudget } from "../context/context-ladder.js";
@@ -80,6 +81,25 @@ const DEFAULT_GRANT_TTL_MS = 15 * 60 * 1000;
 // A grant is bound to the exact scope it was granted for. Any change to the action, the
 // resolved target, the record identifier, or the project produces a different hash, so a
 // reused grant cannot silently cover a different write.
+// Resolves symlinks like realpath, but tolerates a target that doesn't exist yet (the
+// common case for a write): it walks up to the nearest existing ancestor, resolves that,
+// and reattaches the remaining path segments — so a boundary check on the result can't be
+// bypassed by a symlink planted anywhere along the path.
+function resolveRealOrNearest(target: string): string {
+  let current = path.resolve(target);
+  const remaining: string[] = [];
+  while (true) {
+    try {
+      return path.join(realpathSync(current), ...remaining);
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return path.join(current, ...remaining);
+      remaining.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
 export function computeScopeHash(scope: GuardScope): string {
   const canonical = JSON.stringify({
     action: scope.action,
@@ -236,9 +256,9 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
   // A record write must resolve inside the private Atlas root and never inside the public
   // engine package, whatever path the caller passed.
   if (isRecordOperation) {
-    const resolved = path.resolve(request.scope.target);
-    const root = path.resolve(atlasRoot());
-    const engine = path.resolve(engineRoot());
+    const resolved = resolveRealOrNearest(request.scope.target);
+    const root = resolveRealOrNearest(atlasRoot());
+    const engine = resolveRealOrNearest(engineRoot());
     if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
       return decision(
         request,

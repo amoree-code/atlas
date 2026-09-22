@@ -4,8 +4,13 @@
 
 Atlas never stores, reads, or manages provider credentials. Authentication is delegated
 entirely to each provider's own CLI (`claude`, `codex`, `gemini`, `agy`, `hermes`) — Atlas only spawns
-that binary and streams its stdout/stderr (see [providers.md](providers.md)). No API keys,
-tokens, or secrets are ever written to profiles, sessions, logs, or the repository.
+that binary and streams its stdout/stderr (see [providers.md](providers.md)). Before any of
+that stdout/stderr is persisted, `redactRuntimeText()`
+(`src/infrastructure/observability/runtime-logger.ts`) strips known credential shapes
+(vendor API key prefixes, bearer tokens, JWTs, PEM keys, connection strings, webhook URLs)
+plus a high-entropy-token fallback for unrecognized secrets. This is pattern- and
+entropy-based, best-effort redaction, not a filesystem-level or cryptographic guarantee — a
+credential shaped like ordinary low-entropy text could still slip through.
 
 ## Public engine / private workspace boundary
 
