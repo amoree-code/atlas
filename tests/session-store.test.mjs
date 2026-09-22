@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -167,6 +168,56 @@ test("previews and reconciles stale running sessions without deleting their audi
     integrity: "ok",
     foreignKeys: [],
   });
+  store.close();
+});
+
+test("reconciling a stale running session signals its tracked provider process", async () => {
+  const store = await openStore();
+  store.create({
+    sessionId: "stale-with-pid",
+    provider: "hermes",
+    providerSessionId: null,
+    parentSessionId: null,
+    profile: "default",
+    workingDirectory: "/tmp",
+    resumeData: null,
+  });
+  store.updateStatus("stale-with-pid", "running");
+  const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], {
+    stdio: "ignore",
+  });
+  await new Promise((resolve) => child.once("spawn", resolve));
+  store.setProviderPid("stale-with-pid", child.pid);
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+
+  const now = Date.now() + 2 * 60 * 60 * 1000;
+  const reconciled = store.reconcileStaleRunning(60 * 60 * 1000, now);
+
+  assert.equal(reconciled.length, 1);
+  await exited;
+  assert.equal(store.getProviderPid("stale-with-pid"), null);
+  const lastEvent = JSON.parse(store.listEvents("stale-with-pid").at(-1).data);
+  assert.equal(lastEvent.providerProcessSignaled, true);
+  store.close();
+});
+
+test("reconciling a stale running session with no tracked pid does not throw", async () => {
+  const store = await openStore();
+  store.create({
+    sessionId: "stale-no-pid",
+    provider: "hermes",
+    providerSessionId: null,
+    parentSessionId: null,
+    profile: "default",
+    workingDirectory: "/tmp",
+    resumeData: null,
+  });
+  store.updateStatus("stale-no-pid", "running");
+  const now = Date.now() + 2 * 60 * 60 * 1000;
+  const reconciled = store.reconcileStaleRunning(60 * 60 * 1000, now);
+  assert.equal(reconciled.length, 1);
+  const lastEvent = JSON.parse(store.listEvents("stale-no-pid").at(-1).data);
+  assert.equal(lastEvent.providerProcessSignaled, false);
   store.close();
 });
 

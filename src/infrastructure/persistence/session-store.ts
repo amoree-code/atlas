@@ -145,6 +145,11 @@ export class SessionStore {
         created_at TEXT NOT NULL,
         reviewed_at TEXT
       );
+      CREATE TABLE IF NOT EXISTS session_pids (
+        session_id TEXT PRIMARY KEY REFERENCES sessions(session_id) ON DELETE CASCADE,
+        pid INTEGER NOT NULL,
+        updated_at TEXT NOT NULL
+      );
       CREATE INDEX IF NOT EXISTS session_events_session_id ON session_events(session_id);
       CREATE INDEX IF NOT EXISTS session_links_parent_id ON session_links(parent_session_id);
       CREATE INDEX IF NOT EXISTS sessions_status_updated_at ON sessions(status, updated_at);
@@ -326,6 +331,30 @@ export class SessionStore {
         "UPDATE sessions SET provider_session_id = ?, updated_at = ? WHERE session_id = ?",
       )
       .run(providerSessionId, new Date().toISOString(), sessionId);
+  }
+
+  // Tracks the OS pid of the provider process currently running for a session, so a
+  // stale-session reconciliation can actually stop the work instead of only relabeling it.
+  setProviderPid(sessionId: string, pid: number): void {
+    this.database
+      .prepare(
+        "INSERT INTO session_pids (session_id, pid, updated_at) VALUES (?, ?, ?) " +
+          "ON CONFLICT(session_id) DO UPDATE SET pid = excluded.pid, updated_at = excluded.updated_at",
+      )
+      .run(sessionId, pid, new Date().toISOString());
+  }
+
+  getProviderPid(sessionId: string): number | null {
+    const row = this.database
+      .prepare("SELECT pid FROM session_pids WHERE session_id = ?")
+      .get(sessionId) as { pid: number } | undefined;
+    return row?.pid ?? null;
+  }
+
+  clearProviderPid(sessionId: string): void {
+    this.database
+      .prepare("DELETE FROM session_pids WHERE session_id = ?")
+      .run(sessionId);
   }
 
   updateContext(
@@ -576,6 +605,7 @@ export class SessionStore {
   reconcileStaleRunning(olderThanMs: number, now = Date.now()): Session[] {
     const stale = this.listStaleRunning(olderThanMs, now);
     for (const session of stale) {
+      const killed = this.reapProviderProcess(session.sessionId);
       this.updateStatus(session.sessionId, "cancelled");
       this.appendEvent(
         session.sessionId,
@@ -584,10 +614,29 @@ export class SessionStore {
           reason: "stale-running",
           thresholdMs: olderThanMs,
           reconciledAt: new Date(now).toISOString(),
+          providerProcessSignaled: killed,
         }),
       );
     }
     return stale;
+  }
+
+  // Best-effort: send SIGTERM to the tracked provider pid, if any. A missing pid (process
+  // already exited, or it started before this tracking existed) is not an error. Always
+  // clears the tracked pid afterward so a reused pid can never be signaled twice.
+  private reapProviderProcess(sessionId: string): boolean {
+    const pid = this.getProviderPid(sessionId);
+    let signaled = false;
+    if (pid !== null) {
+      try {
+        process.kill(pid, "SIGTERM");
+        signaled = true;
+      } catch {
+        /* process already gone */
+      }
+      this.clearProviderPid(sessionId);
+    }
+    return signaled;
   }
 
   integrityCheck(): { integrity: string; foreignKeys: unknown[] } {
