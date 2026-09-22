@@ -24,13 +24,17 @@ export type RuntimeLog = {
   payload?: string;
 };
 
-export function redactRuntimeText(value: string): string {
+// Pattern replacement only, no length bound — for callers that need to persist a redacted
+// payload of arbitrary size (e.g. `atlas observe`'s captured command output).
+export function redactSecrets(value: string): string {
   let safe = value;
   for (const pattern of secretPatterns)
     safe = safe.replace(pattern, "[REDACTED]");
-  return safe
-    .replace(privatePathPattern, "[PRIVATE_PATH]")
-    .slice(0, MAX_PAYLOAD);
+  return safe.replace(privatePathPattern, "[PRIVATE_PATH]");
+}
+
+export function redactRuntimeText(value: string): string {
+  return redactSecrets(value).slice(0, MAX_PAYLOAD);
 }
 
 export async function appendRuntimeLog(log: RuntimeLog): Promise<void> {
