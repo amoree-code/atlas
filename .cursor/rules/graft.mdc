@@ -1,43 +1,7 @@
-# Working in Atlas
-
-Local-first Node.js runtime for headless AI agents (Claude, Codex, Gemini, Hermes,
-Antigravity). Public, provider-neutral engine; private data lives outside it.
-
-## Commands
-
-```bash
-pnpm install          # deps
-pnpm build            # tsc
-pnpm test             # build + node --test tests/*.test.mjs
-pnpm typecheck        # tsc --noEmit
-pnpm check:style      # biome check .
-```
-
-## Hard rules
-
-- No credentials, no personal data — anywhere in source, config, logs, tests, docs.
-- Public code only under `src/`. Provider execution only under `src/infrastructure/providers/`.
-- Private data (`personal/`, `projects/`, `profiles/`, `sessions/`, `config/`,
-  `control-plane/`, `integrations/`, `archive/`) stays outside the engine, git-ignored.
-- `sessions/sessions.sqlite` holds session metadata/events/links only — nothing else.
-- Never add: `Adapters`, `Handoff`, `Mission`, `Coordinator`, the legacy Python/Bash
-  runtime, hosted services, Postgres, Redis, dashboards.
-- Never touch `.mcp.json`, `.cursor/`, `.gemini/`, `.claude/settings.json`, or any
-  `pnpm-lock.yaml` entry without asking first.
-
-## Cut tokens before reading code
-
-1. `graft ask "<question>" --source` first, always — never grep or open files cold.
-   Full tool set: `skills/core/graft/SKILL.md`.
-2. `catch-up` skill before touching anything you didn't just finish.
-3. `core-thinking` before executing; smallest valid solution, not the biggest.
-4. `verification` after — a claim isn't done until it's independently checked.
-5. `session-handoff` when done — compact packet, not a transcript.
-
-Prompts are hard-capped at 32KB via `profile.contextSources`
-(`src/infrastructure/filesystem/context-manager.ts`) — don't paste more than a profile allows.
-
-<!-- graft:start -->
+---
+description: Use the Graft context graph in graft/ before exploring source
+alwaysApply: true
+---
 ## Graft — repo context graph
 
 This repo is indexed in `graft/`: small linked markdown nodes that explain each
@@ -77,4 +41,3 @@ re-read whole files.
 
 After big code changes, refresh the graph with `graft build` (deterministic,
 no API key, $0).
-<!-- graft:end -->

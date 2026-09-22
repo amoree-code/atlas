@@ -175,6 +175,8 @@ by name from any registered client:
   solution before executing.
 - `verification` — turn an implementation claim into a focused, repeatable check.
 - `session-handoff` — produce a compact continuation packet for the next session.
+- `graft` — query the repo graph for locating code, tracing callers, and scoping edits
+  instead of grepping or reading source files directly.
 
 Skills are not hand-authored from scratch: `atlas skill learn <completed-session-id>`
 extracts a candidate from a finished session, and `atlas skill review <candidate-id>

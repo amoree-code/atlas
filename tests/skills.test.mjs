@@ -23,6 +23,7 @@ test("lists the public core skill catalog without loading full instructions", as
   assert.deepEqual(skills.map((skill) => skill.name).sort(), [
     "catch-up",
     "core-thinking",
+    "graft",
     "session-handoff",
     "verification",
   ]);
