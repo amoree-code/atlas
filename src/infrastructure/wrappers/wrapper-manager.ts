@@ -4,6 +4,7 @@ import {
   chmod,
   mkdir,
   readFile,
+  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -203,6 +204,19 @@ async function shellProfilePath(): Promise<string> {
   return path.join(home, ".profile");
 }
 
+// Atomic write: content lands in a sibling temp file and is renamed into place, so an
+// interrupted write (disk full, OOM kill) never leaves the target truncated.
+async function atomicWrite(target: string, content: string): Promise<void> {
+  const temp = `${target}.atlas-tmp-${process.pid}-${Date.now()}`;
+  try {
+    await writeFile(temp, content, "utf8");
+    await rename(temp, target);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
+}
+
 export async function installShellIntegration(): Promise<string> {
   const file = await shellProfilePath();
   const marker =
@@ -216,7 +230,7 @@ export async function installShellIntegration(): Promise<string> {
   const line = await installShellPath();
   const block = `\n# >>> atlas interception >>>\n${line}\n# <<< atlas interception <<<\n`;
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, existing.replace(marker, "\n") + block);
+  await atomicWrite(file, existing.replace(marker, "\n") + block);
   return file;
 }
 
