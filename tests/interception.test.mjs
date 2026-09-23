@@ -18,7 +18,10 @@ import {
   syncProviderWrappers,
   wrapperDoctor,
 } from "../dist/infrastructure/wrappers/wrapper-manager.js";
-import { intercept } from "../dist/interfaces/cli/intercept-command.js";
+import {
+  intercept,
+  isUtilityInvocation,
+} from "../dist/interfaces/cli/intercept-command.js";
 
 const unixOnly = process.platform === "win32" ? test.skip : test;
 
@@ -172,6 +175,32 @@ unixOnly("intercepts a registered CLI and persists the execution", async () => {
     });
     store.close();
     assert.equal(resolveProviderExecutable("demo-ai"), executable);
+  });
+});
+
+test("classifies utility invocations separately from working sessions", () => {
+  assert.equal(isUtilityInvocation("claude", ["agents", "--json"]), true);
+  assert.equal(isUtilityInvocation("claude", ["mcp", "list"]), true);
+  assert.equal(isUtilityInvocation("codex", ["--version"]), true);
+  assert.equal(isUtilityInvocation("claude", []), false);
+  assert.equal(isUtilityInvocation("claude", ["attach", "abc"]), false);
+  assert.equal(isUtilityInvocation("claude", ["-p", "hello"]), false);
+  assert.equal(isUtilityInvocation("claude", ["--version", "extra"]), false);
+  assert.equal(isUtilityInvocation("codex", ["mcp"]), false);
+});
+
+unixOnly("passes utility invocations through without a session", async () => {
+  await withEnvironment(async (root) => {
+    const bin = path.join(root, "bin");
+    await mkdir(bin, { recursive: true });
+    const executable = path.join(bin, "claude");
+    await writeFile(executable, "#!/bin/sh\nexit 3\n");
+    await chmod(executable, 0o755);
+    process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
+    assert.equal(await intercept("claude", ["agents", "--json"]), 3);
+    const store = await openSessionStore();
+    assert.equal(store.list().length, 0);
+    store.close();
   });
 });
 
