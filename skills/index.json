@@ -1,5 +1,11 @@
 [
   {
+    "name": "business-logic",
+    "description": "Convert a product request into explicit rules, states, permissions, exceptions, and verifiable acceptance criteria.",
+    "version": "1.0.0",
+    "category": "core"
+  },
+  {
     "name": "catch-up",
     "description": "Reconstruct the current project state, completed work, blockers, and next action.",
     "version": "1.0.0",
@@ -12,14 +18,32 @@
     "category": "core"
   },
   {
+    "name": "design-thinking",
+    "description": "Frame a problem, clarify the desired outcome, compare simple solutions, and define success before implementation.",
+    "version": "1.0.0",
+    "category": "core"
+  },
+  {
     "name": "graft",
     "description": "This repo is indexed by graft/. For ANY task here, whether understanding how something works, finding where code lives, tracing what calls a symbol or what a change breaks, or scoping an edit, get your context from graft before grepping or reading source files.",
     "version": "1.0.0",
     "category": "core"
   },
   {
+    "name": "loop",
+    "description": "Continue a bounded task across runs with checkpoints, verification, retries, and explicit stop conditions.",
+    "version": "1.0.0",
+    "category": "core"
+  },
+  {
     "name": "session-handoff",
     "description": "Produce a compact continuation packet with the next action and verification commands.",
+    "version": "1.0.0",
+    "category": "core"
+  },
+  {
+    "name": "use-browser",
+    "description": "Open a supplied URL, understand the user's requested outcome from the live page, complete the browser task, and verify the result.",
     "version": "1.0.0",
     "category": "core"
   },

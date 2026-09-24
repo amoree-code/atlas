@@ -71,9 +71,12 @@ export async function runAgent(
   const clientHome = resolveClientHome(profile);
   executionPolicy(profile, request.cwd);
   assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
-  if (profile.writePolicy !== "none") {
+  if (
+    profile.writePolicy !== "none" &&
+    (!request.runContract || !request.runContract.approval.approved)
+  ) {
     throw new Error(
-      "Writable profile runs require an enforcing sandbox; direct execution cannot enforce writePolicy",
+      "Writable profile runs require an approved run contract",
     );
   }
   if (profile.governance?.approvalRequired && !request.runContract) {

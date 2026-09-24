@@ -32,6 +32,16 @@ test("real Playwright browser lifecycle and basic operations", {
       (await handle.observe()).elements.some((element) => element.id === "go"),
       true,
     );
+    await handle.navigate(
+      "data:text/html,<div id='editor' contenteditable='true'></div>",
+    );
+    const typed = await handle.type("#editor", "const answer = 42;");
+    assert.equal(typed.value, "const answer = 42;");
+    await handle.navigate(
+      "data:text/html,<iframe id='frame' srcdoc=\"<textarea id='code'></textarea>\"></iframe>",
+    );
+    const framed = await handle.type("#frame >>> #code", "frame code");
+    assert.equal(framed.value, "frame code");
   } finally {
     await handle?.release().catch(() => undefined);
     await provider.close(launch).catch(() => undefined);

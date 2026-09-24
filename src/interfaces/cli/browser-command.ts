@@ -8,6 +8,7 @@ import {
 } from "../../application/browser/browser-session.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { PlaywrightBrowserProvider } from "../../infrastructure/providers/playwright-browser-provider.js";
+import { BrowserTaskRunner } from "../../application/browser/browser-task-runner.js";
 
 export async function runBrowserCommand(
   action: string,
@@ -18,6 +19,7 @@ export async function runBrowserCommand(
     store,
     new BrowserService(new PlaywrightBrowserProvider()),
   );
+  const runner = new BrowserTaskRunner(manager);
   try {
     if (action === "detect") return print(await manager.detect());
     if (action === "open") {
@@ -138,6 +140,11 @@ export async function runBrowserCommand(
           numberFlag(args, "--timeout"),
         ),
       );
+    if (action === "run") {
+      const taskPath = required(args, 1, "task-file");
+      const task = await BrowserTaskRunner.fromFile(taskPath);
+      return print(await runner.run(sessionId, task, args.includes("--approve")));
+    }
 
     usage();
     process.exitCode = 1;
@@ -188,6 +195,6 @@ function print(value: unknown): void {
 
 function usage(): void {
   console.error(
-    "Usage: atlas browser detect|open|show|events|close|navigate|read|observe|extract|click|type|select|scroll|wait|upload|download|submit",
+    "Usage: atlas browser detect|open|show|events|close|navigate|read|observe|extract|click|type|select|scroll|wait|upload|download|submit|run",
   );
 }

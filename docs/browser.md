@@ -34,11 +34,33 @@ atlas browser wait <session-id> [--selector <selector>] [--url-contains <text>]
 atlas browser upload <session-id> <selector> <path>... --approve
 atlas browser download <session-id> <selector> [--destination <directory>] --approve
 atlas browser submit <session-id> <selector> --approve
+atlas browser run <session-id> <task-file> [--approve]
 ```
 
 Cross-origin navigation and upload/download/submit require explicit `--approve`.
 Every operation returns JSON and records only bounded operation metadata in the
 session event log; page content, cookies, tokens, and credentials are not persisted.
+
+`type` supports normal form controls, `contenteditable` elements, and editor containers
+that expose a nested `textarea` (the pattern used by CodeMirror/Monaco). It focuses the
+live editor, replaces its contents with keyboard input, then re-reads the live value.
+
+Task files are JSON with an ordered `steps` array and optional `retries` (capped at 3):
+
+```json
+{
+  "retries": 1,
+  "steps": [
+    { "action": "navigate", "url": "https://www.freecodecamp.org/learn/" },
+    { "action": "type", "selector": ".monaco-editor", "text": "const answer = 42;" },
+    { "action": "click", "selector": "button[type=submit]", "expect": "stays" },
+    { "action": "submit", "selector": "button[type=submit]" }
+  ]
+}
+```
+
+The runner stops on the first failed verification. Submit and cross-origin navigation
+still require `--approve`.
 
 ## Browser availability
 

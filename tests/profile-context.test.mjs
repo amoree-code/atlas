@@ -75,7 +75,14 @@ test("defaults skills, allowedPaths, allowedCommands, contextSources, and writeP
     model: "sonnet",
     role: "assistant",
   });
-  assert.deepEqual(profile.skills, ["core-thinking", "verification"]);
+  assert.deepEqual(profile.skills, [
+    "design-thinking",
+    "business-logic",
+    "core-thinking",
+    "verification",
+    "loop",
+    "use-browser",
+  ]);
   assert.deepEqual(profile.allowedPaths, []);
   assert.deepEqual(profile.allowedCommands, []);
   assert.deepEqual(profile.contextSources, []);

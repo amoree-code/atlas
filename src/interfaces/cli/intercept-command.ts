@@ -46,6 +46,18 @@ export async function intercept(
   options: InterceptOptions = {},
 ): Promise<number> {
   const provider = findProvider(command);
+  if (isUtilityInvocation(provider.id, args)) {
+    const executable = options.originalExecutable
+      ? validateExplicitExecutable(options.originalExecutable)
+      : resolveOriginalExecutable(provider.command);
+    const result = await runPassthrough({
+      command: executable,
+      args,
+      cwd: path.resolve(process.cwd()),
+      env: { ATLAS_INTERCEPTED: "1" },
+    });
+    return result.exitCode;
+  }
   const entryPoint =
     options.entryPoint ??
     (options.originalExecutable ? "desktop-wrapper" : "terminal-shim");
@@ -324,6 +336,50 @@ export async function intercept(
   } finally {
     store.close();
   }
+}
+
+const UTILITY_FLAGS = new Set(["--help", "-h", "--version", "-v", "-V"]);
+
+// Management subcommands that never start a working session. `attach` and
+// `ultrareview` are excluded on purpose: both are real work.
+const UTILITY_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
+  claude: new Set([
+    "agents",
+    "auth",
+    "auto-mode",
+    "doctor",
+    "gateway",
+    "import",
+    "install",
+    "logs",
+    "mcp",
+    "plugin",
+    "plugins",
+    "project",
+    "respawn",
+    "rm",
+    "setup-token",
+    "stop",
+    "kill",
+    "update",
+    "upgrade",
+  ]),
+};
+
+/**
+ * True when an invocation is a lookup or management command (a version check,
+ * `claude agents --json` polled by a desktop client, `claude mcp list`) rather
+ * than a working session. These run straight through without a session record,
+ * which otherwise floods the store with hundreds of empty summaries a day.
+ */
+export function isUtilityInvocation(
+  providerId: string,
+  args: readonly string[],
+): boolean {
+  const first = args[0];
+  if (first === undefined) return false;
+  if (args.length === 1 && UTILITY_FLAGS.has(first)) return true;
+  return UTILITY_SUBCOMMANDS[providerId]?.has(first) ?? false;
 }
 
 function classifyProviderResult(

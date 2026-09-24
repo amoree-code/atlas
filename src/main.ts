@@ -61,6 +61,10 @@ import {
   reviewSkillCandidate,
 } from "./application/skills/skill-curation.js";
 import {
+  coreSkillReports,
+  syncCoreSkills,
+} from "./application/skills/core-skill-sync.js";
+import {
   listObservations,
   observeSession,
   reviewObservation,
@@ -69,6 +73,13 @@ import { runAtlasMcpServer } from "./infrastructure/mcp/atlas-server.js";
 import { runObsidianMcpServer } from "./infrastructure/mcp/obsidian-server.js";
 import { openSessionStore } from "./infrastructure/persistence/session-store.js";
 import { runService } from "./infrastructure/process/service.js";
+import {
+  listTaskLoops,
+  runTaskLoopWorker,
+  runTaskLoopsOnce,
+  startTaskLoop,
+  stopTaskLoop,
+} from "./application/loops/task-loop.js";
 import { loadProviderRegistry } from "./infrastructure/providers/provider-registry.js";
 import {
   installShellPath,
@@ -597,6 +608,42 @@ if (command === "--version" || command === "-v") {
     );
     process.exitCode = 1;
   }
+} else if (command === "loop") {
+  const action = process.argv[3] ?? "status";
+  if (action === "status") console.log(JSON.stringify(await listTaskLoops(), null, 2));
+  else if (action === "start") {
+    const taskId = process.argv[4];
+    const profile = process.argv[5] ?? "developer";
+    const promptIndex = process.argv.indexOf("--prompt");
+    const prompt = promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
+    if (!taskId || !prompt || !process.argv.includes("--approve")) {
+      console.error("Usage: atlas loop start <task-id> <profile> --prompt <text> --approve [--max-iterations N] [--interval-ms N] [--max-attempts N]");
+      process.exitCode = 1;
+    } else {
+      const value = (flag: string, fallback: number) => {
+        const index = process.argv.indexOf(flag);
+        return index >= 0 ? Number(process.argv[index + 1]) : fallback;
+      };
+      console.log(JSON.stringify(await startTaskLoop({ taskId, profile, prompt, cwd: atlasRoot(), approved: true, maxIterations: value("--max-iterations", 10), intervalMs: value("--interval-ms", 60_000), maxAttempts: value("--max-attempts", 2) }), null, 2));
+    }
+  } else if (action === "worker-once") {
+    console.log(JSON.stringify({ ran: await runTaskLoopsOnce(atlasRoot()) }, null, 2));
+  } else if (action === "worker") {
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+    await runTaskLoopWorker(atlasRoot(), { signal: controller.signal, pollMs: Number(process.env.ATLAS_LOOP_POLL_MS ?? 30_000) });
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
+  } else if (action === "stop") {
+    const id = process.argv[4];
+    if (!id) { console.error("Usage: atlas loop stop <loop-id>"); process.exitCode = 1; }
+    else console.log(JSON.stringify(await stopTaskLoop(id), null, 2));
+  } else {
+    console.error("Usage: atlas loop start|status|stop|worker-once|worker");
+    process.exitCode = 1;
+  }
 } else if (command === "gateway") {
   const port = Number(process.env.ATLAS_GATEWAY_PORT ?? 8787);
   const token = process.env.ATLAS_GATEWAY_TOKEN;
@@ -611,7 +658,11 @@ if (command === "--version" || command === "-v") {
   }
 } else if (command === "skill") {
   const action = process.argv[3] ?? "list";
-  if (action === "list")
+  if (action === "sync")
+    console.log(JSON.stringify(await syncCoreSkills(), null, 2));
+  else if (action === "doctor")
+    console.log(JSON.stringify(await coreSkillReports(), null, 2));
+  else if (action === "list")
     console.log(JSON.stringify(await listSkillCandidates(), null, 2));
   else if (action === "observe") {
     const sessionId = process.argv[4];
@@ -676,7 +727,7 @@ if (command === "--version" || command === "-v") {
       );
   } else {
     console.error(
-      "Usage: atlas skill list|observe [session-id]|observation-review <id> approved|promoted|discarded|rejected|add|learn|review",
+      "Usage: atlas skill sync|doctor|list|observe [session-id]|observation-review <id> approved|promoted|discarded|rejected|add|learn|review",
     );
     process.exitCode = 1;
   }
