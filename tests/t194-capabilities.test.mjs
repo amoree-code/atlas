@@ -16,12 +16,20 @@ import { openSessionStore } from "../dist/infrastructure/persistence/session-sto
 
 test("default skill policy stays small and verification-first", () => {
   assert.deepEqual(defaultSkillNames("general assistant"), [
+    "design-thinking",
+    "business-logic",
     "core-thinking",
     "verification",
+    "loop",
+    "use-browser",
   ]);
   assert.deepEqual(defaultSkillNames("developer"), [
+    "design-thinking",
+    "business-logic",
     "core-thinking",
     "verification",
+    "loop",
+    "use-browser",
   ]);
 });
 

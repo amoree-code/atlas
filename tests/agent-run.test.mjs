@@ -20,7 +20,7 @@ test("bounds provider session identifiers before persistence", () => {
   assert.equal(isValidProviderSessionId("x".repeat(257)), false);
 });
 
-test("rejects writable profiles when no enforcing sandbox is configured", async () => {
+test("rejects writable profiles without an approved run contract", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-policy-boundary-"));
   await mkdir(path.join(root, "system", "profiles"), { recursive: true });
   await writeFile(
@@ -40,9 +40,51 @@ test("rejects writable profiles when no enforcing sandbox is configured", async 
         { profileName: "writer", prompt: "write", cwd: root },
         async () => ({ exitCode: 0, events: [], stderr: "" }),
       ),
-    /cannot enforce writePolicy/,
+    /approved run contract/,
   );
   delete process.env.ATLAS_ROOT;
+});
+
+test("allows an explicitly approved writable run contract", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-approved-write-"));
+  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await writeFile(
+    path.join(root, "system", "profiles", "writer.json"),
+    JSON.stringify({
+      name: "writer",
+      provider: "claude",
+      model: "sonnet",
+      role: "writer",
+      writePolicy: "workspace",
+    }),
+  );
+  process.env.ATLAS_ROOT = root;
+  try {
+    const sessionId = "approved-write-session";
+    const session = await runAgent(
+      {
+        sessionId,
+        profileName: "writer",
+        prompt: "write one bounded change",
+        cwd: root,
+        runContract: {
+          runId: "approved-write-run",
+          sessionId,
+          profile: "writer",
+          workingDirectory: root,
+          allowedTools: [],
+          deniedTools: [],
+          stopConditions: ["verification failure"],
+          approval: { required: true, approved: true },
+          budget: { timeoutMs: 1000, maxAttempts: 1, maxOutputBytes: 10000 },
+        },
+      },
+      async () => ({ exitCode: 0, events: [], stderr: "" }),
+    );
+    assert.equal(session.status, "completed");
+  } finally {
+    delete process.env.ATLAS_ROOT;
+  }
 });
 
 test("approval-required profiles fail closed without an approved run contract", async () => {

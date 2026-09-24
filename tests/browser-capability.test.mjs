@@ -7,6 +7,7 @@ import {
   BrowserApprovalRequiredError,
   BrowserService,
 } from "../dist/application/browser/browser-service.js";
+import { BrowserTaskRunner } from "../dist/application/browser/browser-task-runner.js";
 import { BrowserSessionManager } from "../dist/application/browser/browser-session.js";
 import { browserContracts } from "../dist/domain/capabilities/browser-contract.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
@@ -218,4 +219,44 @@ test("browser sessions persist launch metadata and reconnect through the session
   );
   store.close();
   await rm(root, { recursive: true, force: true });
+});
+
+test("browser task runner executes bounded steps and retries failed verification", async () => {
+  let attempts = 0;
+  const manager = {
+    async type() {
+      attempts += 1;
+      return { verified: attempts > 1, result: { value: "code" } };
+    },
+  };
+  const runner = new BrowserTaskRunner(manager);
+  const result = await runner.run("session", {
+    retries: 1,
+    steps: [{ action: "type", selector: ".monaco-editor", text: "code" }],
+  });
+  assert.equal(result.completed, true);
+  assert.equal(result.steps, 1);
+  assert.equal(attempts, 2);
+});
+
+test("browser task runner stops at an unverified step", async () => {
+  const manager = {
+    async click() {
+      return { verified: false };
+    },
+    async read() {
+      throw new Error("must not continue");
+    },
+  };
+  const runner = new BrowserTaskRunner(manager);
+  await assert.rejects(
+    () =>
+      runner.run("session", {
+        steps: [
+          { action: "click", selector: "#run" },
+          { action: "read" },
+        ],
+      }),
+    /not verified/,
+  );
 });

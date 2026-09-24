@@ -227,10 +227,46 @@ class PlaywrightHandle implements BrowserHandle {
   }
 
   async type(selector: string, text: string, clear = true) {
-    if (clear) await this.page.fill(selector, "", { timeout: 15_000 });
-    await this.page.type(selector, text, { timeout: 15_000 });
-    const value = await this.page.inputValue(selector, { timeout: 5_000 });
+    let locator = this.editorLocator(selector);
+    await locator.waitFor({ state: "visible", timeout: 15_000 });
+    const nestedEditor = locator.locator("textarea, input").first();
+    if ((await nestedEditor.count()) > 0) locator = nestedEditor;
+    const kind = await locator.evaluate((node) => ({
+      tag: node.tagName.toLowerCase(),
+      contentEditable: node instanceof HTMLElement && node.isContentEditable,
+      value: "value" in node ? String((node as HTMLInputElement).value) : null,
+    }));
+
+    if (kind.contentEditable || (kind.tag !== "input" && kind.tag !== "textarea")) {
+      await locator.click();
+      if (clear) {
+        await this.page.keyboard.press("ControlOrMeta+A");
+        await this.page.keyboard.press("Backspace");
+      }
+      await this.page.keyboard.insertText(text);
+    } else {
+      if (clear) await locator.fill("");
+      await locator.pressSequentially(text, { timeout: 15_000 });
+    }
+
+    const value = await locator.evaluate((node) => {
+      if ("value" in node) return String((node as HTMLInputElement).value);
+      return (node.textContent || (node as HTMLElement).innerText || "").trim();
+    });
     return { selector, typed: text.length, value };
+  }
+
+  private editorLocator(selector: string) {
+    const separator = " >>> ";
+    const frameIndex = selector.indexOf(separator);
+    if (frameIndex >= 0) {
+      const frameSelector = selector.slice(0, frameIndex);
+      const editorSelector = selector.slice(frameIndex + separator.length);
+      if (!frameSelector || !editorSelector)
+        throw new Error("Editor frame selector must use 'frame >>> editor'.");
+      return this.page.frameLocator(frameSelector).locator(editorSelector).first();
+    }
+    return this.page.locator(selector).first();
   }
 
   async select(selector: string, value: string) {
