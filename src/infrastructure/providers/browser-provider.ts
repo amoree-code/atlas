@@ -38,6 +38,18 @@ export interface BrowserHandle {
     text: string,
     clear?: boolean,
   ): Promise<{ selector: string; typed: number; value: string }>;
+  replaceText(
+    selector: string,
+    oldText: string,
+    newText: string,
+    occurrence?: number,
+  ): Promise<{
+    selector: string;
+    oldText: string;
+    newText: string;
+    occurrence: number;
+    value: string;
+  }>;
   select(
     selector: string,
     value: string,

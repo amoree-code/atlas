@@ -8,6 +8,17 @@ import type {
   BrowserProvider,
 } from "./browser-provider.js";
 
+function nthIndex(value: string, needle: string, occurrence: number): number {
+  let from = 0;
+  for (let current = 1; current <= occurrence; current += 1) {
+    const index = value.indexOf(needle, from);
+    if (index < 0) return -1;
+    if (current === occurrence) return index;
+    from = index + needle.length;
+  }
+  return -1;
+}
+
 class FakePage {
   url = "about:blank";
   title = "";
@@ -73,6 +84,15 @@ class FakeHandle implements BrowserHandle {
     const value = current + text;
     this.page.inputs.set(selector, value);
     return { selector, typed: text.length, value };
+  }
+
+  async replaceText(selector: string, oldText: string, newText: string, occurrence = 1) {
+    const value = this.page.inputs.get(selector) ?? "";
+    const index = nthIndex(value, oldText, occurrence);
+    if (index < 0) throw new Error(`Text occurrence not found: ${occurrence}`);
+    const next = value.slice(0, index) + newText + value.slice(index + oldText.length);
+    this.page.inputs.set(selector, next);
+    return { selector, oldText, newText, occurrence, value: next };
   }
 
   async select(selector: string, value: string) {

@@ -77,6 +77,17 @@ async function fetchWebSocketDebuggerUrl(port: number): Promise<string | null> {
   }
 }
 
+function nthIndex(value: string, needle: string, occurrence: number): number {
+  let from = 0;
+  for (let current = 1; current <= occurrence; current += 1) {
+    const index = value.indexOf(needle, from);
+    if (index < 0) return -1;
+    if (current === occurrence) return index;
+    from = index + needle.length;
+  }
+  return -1;
+}
+
 function resolveChromiumExecutable(): string | null {
   const candidates = [
     process.env.ATLAS_BROWSER_EXECUTABLE,
@@ -254,6 +265,65 @@ class PlaywrightHandle implements BrowserHandle {
       return (node.textContent || (node as HTMLElement).innerText || "").trim();
     });
     return { selector, typed: text.length, value };
+  }
+
+  async replaceText(
+    selector: string,
+    oldText: string,
+    newText: string,
+    occurrence = 1,
+  ) {
+    if (!oldText) throw new Error("old-text must not be empty");
+    if (!Number.isInteger(occurrence) || occurrence < 1)
+      throw new Error("occurrence must be a positive integer");
+    const locator = this.editorLocator(selector);
+    await locator.waitFor({ state: "visible", timeout: 15_000 });
+    const result = await locator.evaluate(
+      (node, input) => {
+        const root = node as HTMLElement;
+        const global = window as typeof window & {
+          monaco?: {
+            editor?: {
+              getEditors?: () => Array<{
+                getDomNode?: () => HTMLElement | null;
+                getModel?: () => { getValue(): string; findMatches(text: string): Array<{ range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number } }>; pushEditOperations(_: unknown, edits: unknown[], __: unknown): void } | null;
+              }>;
+              getModels?: () => Array<{
+                getValue(): string;
+                findMatches(text: string): Array<{ range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number } }>;
+                pushEditOperations(_: unknown, edits: unknown[], __: unknown): void;
+              }>;
+            };
+          };
+        };
+        const editors = global.monaco?.editor?.getEditors?.() ?? [];
+        const editor = editors.find((candidate) => candidate.getDomNode?.() === root);
+        const model =
+          editor?.getModel?.() ??
+          global.monaco?.editor?.getModels?.().find((candidate) =>
+            candidate.getValue().includes(input.oldText),
+          );
+        if (model) {
+          const matches = model.findMatches(input.oldText);
+          const match = matches[input.occurrence - 1];
+          if (!match) throw new Error(`Text occurrence not found: ${input.occurrence}`);
+          model.pushEditOperations([], [{ range: match.range, text: input.newText }], null);
+          return { value: model.getValue(), occurrence: input.occurrence };
+        }
+        const target = root.matches("textarea,input") ? root as HTMLInputElement : root.querySelector("textarea,input") as HTMLInputElement | null;
+        const value = target && "value" in target ? String(target.value) : root.textContent ?? "";
+        const index = nthIndex(value, input.oldText, input.occurrence);
+        if (index < 0) throw new Error(`Text occurrence not found: ${input.occurrence}`);
+        const next = value.slice(0, index) + input.newText + value.slice(index + input.oldText.length);
+        if (target) {
+          target.value = next;
+          target.dispatchEvent(new Event("input", { bubbles: true }));
+        } else root.textContent = next;
+        return { value: next, occurrence: input.occurrence };
+      },
+      { oldText, newText, occurrence },
+    );
+    return { selector, oldText, newText, occurrence: result.occurrence, value: result.value };
   }
 
   private editorLocator(selector: string) {

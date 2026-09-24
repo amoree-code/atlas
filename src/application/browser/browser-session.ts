@@ -197,6 +197,17 @@ export class BrowserSessionManager {
       this.service.select(handle, selector, value),
     );
   }
+  async replaceText(
+    sessionId: string,
+    selector: string,
+    oldText: string,
+    newText: string,
+    occurrence?: number,
+  ) {
+    return this.withHandle(sessionId, "replace-text", (handle) =>
+      this.service.replaceText(handle, selector, oldText, newText, occurrence),
+    );
+  }
   async scroll(sessionId: string, deltaY: number) {
     return this.withHandle(sessionId, "scroll", (handle) =>
       handle.scroll(deltaY),
