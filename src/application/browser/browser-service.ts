@@ -214,4 +214,20 @@ export class BrowserService {
       result,
     };
   }
+
+  async replaceText(
+    handle: BrowserHandle,
+    selector: string,
+    oldText: string,
+    newText: string,
+    occurrence = 1,
+  ): Promise<BrowserOperationResult<Awaited<ReturnType<BrowserHandle["replaceText"]>>>> {
+    const result = await handle.replaceText(selector, oldText, newText, occurrence);
+    return {
+      operation: "replace-text",
+      approved: true,
+      verified: result.value.includes(newText),
+      result,
+    };
+  }
 }

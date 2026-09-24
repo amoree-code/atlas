@@ -13,6 +13,7 @@ export const browserOperationSchema = z.enum([
   "extract",
   "click",
   "type",
+  "replace-text",
   "select",
   "scroll",
   "wait",
@@ -123,6 +124,13 @@ export const browserContracts: Record<
     "non-repeatable",
     "none",
     "live input value is re-read from the target element after typing",
+  ),
+  "replace-text": define(
+    "replace-text",
+    "session",
+    "non-repeatable",
+    "none",
+    "the live editor value contains the requested replacement and the selected occurrence was unique or explicit",
   ),
   select: define(
     "select",

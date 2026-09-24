@@ -86,6 +86,16 @@ export async function runBrowserCommand(
           required(args, 2, "value"),
         ),
       );
+    if (action === "replace-text")
+      return print(
+        await manager.replaceText(
+          sessionId,
+          required(args, 1, "selector"),
+          required(args, 2, "old-text"),
+          required(args, 3, "new-text"),
+          numberFlag(args, "--occurrence"),
+        ),
+      );
     if (action === "scroll")
       return print(
         await manager.scroll(
@@ -195,6 +205,6 @@ function print(value: unknown): void {
 
 function usage(): void {
   console.error(
-    "Usage: atlas browser detect|open|show|events|close|navigate|read|observe|extract|click|type|select|scroll|wait|upload|download|submit|run",
+    "Usage: atlas browser detect|open|show|events|close|navigate|read|observe|extract|click|type|replace-text|select|scroll|wait|upload|download|submit|run",
   );
 }
