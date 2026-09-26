@@ -1,7 +1,8 @@
 # Atlas
 
-Atlas is a local-first runtime for running Claude, Codex, Gemini, Antigravity, and Hermes as
-headless agents inside one workspace. It manages profiles, bounded context,
+Atlas is a **local-first operating layer for AI agents** (an "AI OS") — a runtime for
+running Claude, Codex, Gemini, Antigravity, and Hermes as headless agents inside one
+workspace. It manages profiles, bounded context,
 sessions, artifacts, and local hooks without a hosted service.
 
 ## Quick start
