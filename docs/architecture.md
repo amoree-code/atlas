@@ -3,8 +3,9 @@
 See [operating-model.md](operating-model.md) for the canonical ownership, request-flow,
 provenance, credential, CLI/MCP, and provider-boundary contract.
 
-Atlas is a local-first Node.js runtime for running headless AI agent CLIs (Claude, Codex,
-Gemini, Antigravity, Hermes) inside one workspace. The engine repository is public and
+Atlas is a local-first operating layer for AI agents (an "AI OS"), implemented as a Node.js
+runtime for running headless AI agent CLIs (Claude, Codex, Gemini, Antigravity, Hermes)
+inside one workspace. The engine repository is public and
 provider-neutral; all user data and technical state live in a private workspace next to it.
 
 Capabilities declare the operation, authority, idempotency, and independent verification
