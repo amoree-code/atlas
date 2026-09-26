@@ -187,7 +187,11 @@ class PlaywrightHandle implements BrowserHandle {
   }
 
   async readText() {
-    const text = (await this.page.innerText("body")).slice(0, 20_000);
+    const text = (
+      (await this.page.innerText("body")) ||
+      (await this.page.locator("body").textContent()) ||
+      ""
+    ).slice(0, 20_000);
     return { ...(await this.state()), text };
   }
 
@@ -278,9 +282,37 @@ class PlaywrightHandle implements BrowserHandle {
       throw new Error("occurrence must be a positive integer");
     const locator = this.editorLocator(selector);
     await locator.waitFor({ state: "visible", timeout: 15_000 });
+    const editorKind = await locator.evaluate((node) => ({
+      monaco: node.classList.contains("monaco-editor") || Boolean(node.querySelector(".monaco-editor")),
+      codeMirror: node.classList.contains("CodeMirror") || Boolean(node.querySelector(".CodeMirror")),
+    }));
+    if (editorKind.monaco) {
+      const input = locator.locator("textarea.inputarea").first();
+      await input.click();
+      await this.page.keyboard.press("ControlOrMeta+f");
+      await this.page.keyboard.insertText(oldText);
+      for (let index = 1; index < occurrence; index += 1)
+        await this.page.keyboard.press("Enter");
+      await this.page.keyboard.press("Escape");
+      await this.page.keyboard.insertText(newText);
+      const value = await locator.locator(".view-lines").innerText();
+      if (value.includes(oldText))
+        throw new Error(`Text occurrence was not replaced: ${occurrence}`);
+      return { selector, oldText, newText, occurrence, value };
+    }
     const result = await locator.evaluate(
       (node, input) => {
         const root = node as HTMLElement;
+        const nthIndexInPage = (value: string, needle: string, occurrence: number): number => {
+          let from = 0;
+          for (let current = 1; current <= occurrence; current += 1) {
+            const index = value.indexOf(needle, from);
+            if (index < 0) return -1;
+            if (current === occurrence) return index;
+            from = index + needle.length;
+          }
+          return -1;
+        };
         const global = window as typeof window & {
           monaco?: {
             editor?: {
@@ -312,7 +344,7 @@ class PlaywrightHandle implements BrowserHandle {
         }
         const target = root.matches("textarea,input") ? root as HTMLInputElement : root.querySelector("textarea,input") as HTMLInputElement | null;
         const value = target && "value" in target ? String(target.value) : root.textContent ?? "";
-        const index = nthIndex(value, input.oldText, input.occurrence);
+        const index = nthIndexInPage(value, input.oldText, input.occurrence);
         if (index < 0) throw new Error(`Text occurrence not found: ${input.occurrence}`);
         const next = value.slice(0, index) + input.newText + value.slice(index + input.oldText.length);
         if (target) {
@@ -395,6 +427,7 @@ class PlaywrightHandle implements BrowserHandle {
 
   async submit(selector: string, timeoutMs = 20_000) {
     const urlBefore = this.page.url();
+    const bodyBefore = (await this.page.innerText("body")).slice(0, 20_000);
     await this.page.click(selector, { timeout: timeoutMs });
     try {
       await this.page.waitForLoadState("domcontentloaded", {
@@ -404,7 +437,8 @@ class PlaywrightHandle implements BrowserHandle {
       /* best-effort */
     }
     await this.page.waitForTimeout(400);
-    return { ...(await this.state()), urlBefore };
+    const bodyAfter = (await this.page.innerText("body")).slice(0, 20_000);
+    return { ...(await this.state()), urlBefore, bodyBefore, bodyAfter };
   }
 
   async release() {

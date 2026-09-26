@@ -123,7 +123,8 @@ class FakeHandle implements BrowserHandle {
 
   async submit(_selector: string) {
     const urlBefore = this.page.url;
-    return { ...(await this.state()), urlBefore };
+    const bodyBefore = this.page.elements.map((element) => element.text).join(" ");
+    return { ...(await this.state()), urlBefore, bodyBefore, bodyAfter: bodyBefore };
   }
 
   async release() {}

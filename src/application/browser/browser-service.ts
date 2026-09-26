@@ -157,7 +157,8 @@ export class BrowserService {
       "submitting a form is irreversible from Atlas's point of view",
     );
     const result = await handle.submit(selector, options.timeoutMs);
-    const verified = result.url !== result.urlBefore;
+    const verified =
+      result.url !== result.urlBefore || result.bodyAfter !== result.bodyBefore;
     return { operation: "submit", approved: true, verified, result };
   }
 

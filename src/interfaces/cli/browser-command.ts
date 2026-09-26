@@ -39,6 +39,8 @@ export async function runBrowserCommand(
       return print(manager.events(required(args, 0, "session-id")));
     if (action === "close")
       return print(await manager.close(required(args, 0, "session-id")));
+    if (action === "approve")
+      return print(await manager.approve(required(args, 0, "session-id")));
 
     const sessionId = required(args, 0, "session-id");
     if (action === "navigate")
@@ -205,6 +207,6 @@ function print(value: unknown): void {
 
 function usage(): void {
   console.error(
-    "Usage: atlas browser detect|open|show|events|close|navigate|read|observe|extract|click|type|replace-text|select|scroll|wait|upload|download|submit|run",
+    "Usage: atlas browser detect|open|show|events|close|approve|navigate|read|observe|extract|click|type|replace-text|select|scroll|wait|upload|download|submit|run",
   );
 }

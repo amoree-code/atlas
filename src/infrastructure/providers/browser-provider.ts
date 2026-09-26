@@ -72,7 +72,7 @@ export interface BrowserHandle {
   submit(
     selector: string,
     timeoutMs?: number,
-  ): Promise<BrowserPageState & { urlBefore: string }>;
+  ): Promise<BrowserPageState & { urlBefore: string; bodyBefore: string; bodyAfter: string }>;
   release(): Promise<void>;
 }
 
