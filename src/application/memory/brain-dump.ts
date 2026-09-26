@@ -1,7 +1,7 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
+import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 import { findGitRoot } from "../context/project-resolution.js";
 import type { TaskObservation } from "../skills/task-observer.js";

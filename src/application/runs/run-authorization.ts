@@ -2,10 +2,10 @@ import {
   assertRunCanStart,
   type RunContract,
 } from "../../domain/runs/run-contract.js";
-import type { SessionStore } from "../../infrastructure/persistence/session-store.js";
+import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 
 export function authorizeRun(
-  store: SessionStore,
+  store: SessionStorePort,
   contract: RunContract,
   attempt = 1,
 ): void {

@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { Session, SessionStatus } from "../../domain/sessions/session.js";
-import type { SessionStore } from "../../infrastructure/persistence/session-store.js";
+import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import { validateBudget } from "../context/context-ladder.js";
 import { resolveProject } from "../context/project-resolution.js";
 
@@ -103,7 +103,7 @@ export type ResumeOptions = {
 
 // Deterministic, read-only resume planning. Budget is validated before the store is read.
 export async function planSessionResume(
-  store: SessionStore,
+  store: SessionStorePort,
   sessionId: unknown,
   budget: unknown,
   options: ResumeOptions = {},
@@ -196,7 +196,7 @@ export async function planSessionResume(
 // Validates an explicitly supplied parent before a caller passes it to store.create().
 // A missing parent is reported as "none", never inferred from the most recent session.
 export function validateParentSession(
-  store: SessionStore,
+  store: SessionStorePort,
   parentSessionId: unknown,
   childSessionId?: string,
 ):

@@ -14,7 +14,7 @@ import {
   actionFingerprint,
   mcpApprovalSchema,
 } from "../../domain/mcp/mcp-contract.js";
-import { listTasks } from "../../interfaces/cli/tasks-command.js";
+import { listTasks } from "../../application/tasks/list-tasks.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 import { openSessionStoreReadOnly } from "../persistence/session-store.js";
 

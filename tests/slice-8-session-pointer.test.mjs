@@ -403,7 +403,7 @@ test("session-pointer.ts imports no provider, network, or MCP module and invokes
   );
   const allowed = new Set([
     "node:path",
-    "../../infrastructure/persistence/session-store.js",
+    "../../domain/ports/session-store-port.js",
     "../../domain/sessions/session.js",
     "../context/context-ladder.js",
     "../context/project-resolution.js",

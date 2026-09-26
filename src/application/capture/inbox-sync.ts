@@ -1,10 +1,10 @@
 import { readFile, writeFile } from "node:fs/promises";
-import type { SessionStore } from "../../infrastructure/persistence/session-store.js";
+import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import { atlasPath } from "../../paths.js";
 
 const marker = "## Capture candidates (generated)";
 
-export async function syncCaptureInbox(store: SessionStore): Promise<void> {
+export async function syncCaptureInbox(store: SessionStorePort): Promise<void> {
   const file = atlasPath("personal", "inbox", "INBOX.md");
   let current: string;
   try {

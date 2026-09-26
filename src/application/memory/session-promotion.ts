@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
+import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { atlasPath } from "../../paths.js";
 import { syncMemoryIndexes } from "./index-sync.js";
