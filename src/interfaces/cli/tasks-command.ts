@@ -7,6 +7,8 @@ import {
   archiveDoneTasks,
   completeTask,
 } from "../../application/tasks/archive-tasks.js";
+import { checkpointTask } from "../../application/tasks/checkpoint-task.js";
+import { verifyTask } from "../../application/tasks/verify-task.js";
 import { atlasPath, enginePath, resolveWithin } from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
@@ -125,31 +127,30 @@ export async function runTasksCommand(
       throw new Error(
         "Usage: atlas tasks checkpoint <id> --note <text> [--next <text>] [--project <id>]",
       );
-    const target = resolveWithin(
-      atlasPath("projects"),
-      projectId,
-      "tasks",
+    const result = await checkpointTask(
       id,
-      "task.md",
+      resolveWithin(atlasPath("projects"), projectId, "tasks"),
+      {
+        note: args[noteIndex + 1],
+        next: nextIndex >= 0 ? args[nextIndex + 1] : undefined,
+      },
     );
-    let source = await readFile(target, "utf8");
-    const entry = `- ${new Date().toISOString().slice(0, 10)} — ${args[noteIndex + 1]}`;
-    if (/^## Log\s*$/m.test(source))
-      source = source.replace(/^## Log\s*$/m, `## Log\n\n${entry}`);
-    else source = `${source.trimEnd()}\n\n## Log\n\n${entry}\n`;
-    const next = nextIndex >= 0 ? args[nextIndex + 1] : undefined;
-    if (next) {
-      if (/^## Next action\s*$/m.test(source))
-        source = source.replace(
-          /^## Next action\s*$[\s\S]*?(?=^## |\s*$)/m,
-          `## Next action\n\n${next}\n\n`,
-        );
-      else source = `${source.trimEnd()}\n\n## Next action\n\n${next}\n`;
+    console.log(JSON.stringify({ ...result, project: projectId }, null, 2));
+    return;
+  }
+  if (action === "verify") {
+    const id = args.find((arg) => !arg.startsWith("--"));
+    if (!id) {
+      console.error("Usage: atlas tasks verify <id> [--project <id>]");
+      process.exitCode = 1;
+      return;
     }
-    await writeFile(target, source, "utf8");
-    console.log(
-      JSON.stringify({ checkpointed: id, project: projectId }, null, 2),
+    const outcome = await verifyTask(
+      id,
+      resolveWithin(atlasPath("projects"), projectId, "tasks"),
     );
+    console.log(JSON.stringify(outcome, null, 2));
+    if (!outcome.passed) process.exitCode = 1;
     return;
   }
   if (action === "complete") {
@@ -165,6 +166,7 @@ export async function runTasksCommand(
           await completeTask(
             id,
             resolveWithin(atlasPath("projects"), projectId, "tasks"),
+            { verify: !args.includes("--no-verify") },
           ),
           null,
           2,
@@ -178,7 +180,7 @@ export async function runTasksCommand(
   }
   if (action !== "archive") {
     console.error(
-      "Usage: atlas tasks list [state] [--project <id>]|doctor|index [--write]|checkpoint <id> --note <text> [--next <text>]|complete <id>|archive [--apply|--auto]",
+      "Usage: atlas tasks list [state] [--project <id>]|doctor|index [--write]|checkpoint <id> --note <text> [--next <text>]|verify <id>|complete <id>|archive [--apply|--auto]",
     );
     process.exitCode = 1;
     return;
