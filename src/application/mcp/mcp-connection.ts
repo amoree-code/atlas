@@ -33,3 +33,21 @@ export function obsidianMcpConfig(): { mcpServers: { atlas: StdioMcpServer } } {
     },
   };
 }
+
+export type PlaywrightMcpServer = {
+  command: string;
+  args: string[];
+};
+
+export function playwrightMcpConfig(): {
+  mcpServers: { playwright: PlaywrightMcpServer };
+} {
+  return {
+    mcpServers: {
+      playwright: {
+        command: "npx",
+        args: ["@playwright/mcp@latest", "--extension"],
+      },
+    },
+  };
+}

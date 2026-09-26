@@ -27,7 +27,10 @@ import {
   updateProvider,
 } from "./application/install/provider-installer.js";
 import { configureClaudeCodeWrapper } from "./application/integrations/claude-vscode.js";
-import { atlasMcpConfig } from "./application/mcp/mcp-connection.js";
+import {
+  atlasMcpConfig,
+  playwrightMcpConfig,
+} from "./application/mcp/mcp-connection.js";
 import { promoteSessionToKnowledge } from "./application/memory/session-promotion.js";
 import { resolveConflict } from "./application/obsidian/conflict-log.js";
 import {
@@ -320,9 +323,11 @@ if (command === "--version" || command === "-v") {
   const action = process.argv[3] ?? "config";
   if (action === "config")
     console.log(JSON.stringify(atlasMcpConfig(), null, 2));
+  else if (action === "playwright-config")
+    console.log(JSON.stringify(playwrightMcpConfig(), null, 2));
   else if (action === "serve") await runAtlasMcpServer();
   else {
-    console.error("Usage: atlas mcp config|serve");
+    console.error("Usage: atlas mcp config|playwright-config|serve");
     process.exitCode = 1;
   }
 } else if (command === "obsidian") {

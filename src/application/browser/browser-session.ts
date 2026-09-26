@@ -13,6 +13,7 @@ import type { BrowserService, ClickExpectation } from "./browser-service.js";
 type BrowserResumeData = BrowserLaunch & {
   profileKey: string;
   provider: "playwright";
+  approved?: boolean;
 };
 
 function safeProfileKey(value: string): string {
@@ -28,6 +29,12 @@ function safeProfileKey(value: string): string {
     );
   }
   return key;
+}
+
+function normalizeBrowserUrl(value: string): string {
+  const trimmed = value.trim();
+  const markdown = trimmed.match(/^\[([^\]]+)\]\([^)]*\)$/);
+  return (markdown?.[1] ?? trimmed).trim();
 }
 
 function parseResumeData(session: Session): BrowserResumeData {
@@ -64,6 +71,49 @@ export class BrowserSessionManager {
 
   async open(profileKey = "default", port?: number): Promise<Session> {
     const key = safeProfileKey(profileKey);
+    const existing = this.store
+      .list()
+      .find((session) => {
+        if (session.provider !== "browser" || session.status !== "running")
+          return false;
+        try {
+          return parseResumeData(session).profileKey === key;
+        } catch {
+          return false;
+        }
+      });
+    if (existing) {
+      this.store.appendEvent(
+        existing.sessionId,
+        "browser_reused",
+        JSON.stringify({ profileKey: key, reason: "running-session-for-profile" }),
+      );
+      return existing;
+    }
+    const recoverable = this.store.list().find((session) => {
+      if (session.provider !== "browser" || session.status !== "failed") return false;
+      try {
+        return parseResumeData(session).profileKey === key;
+      } catch {
+        return false;
+      }
+    });
+    if (recoverable) {
+      const resume = parseResumeData(recoverable);
+      try {
+        const handle = await this.service.connect(resume);
+        await handle.release();
+        this.store.updateStatus(recoverable.sessionId, "running");
+        this.store.appendEvent(
+          recoverable.sessionId,
+          "browser_recovered",
+          JSON.stringify({ profileKey: key, reason: "endpoint-reachable" }),
+        );
+        return this.requireSession(recoverable.sessionId);
+      } catch {
+        // Stale failed session; continue with a new launch below.
+      }
+    }
     const sessionId = randomUUID();
     const profileDir = atlasPath("system", "browser", "profiles", key);
     await mkdir(profileDir, { recursive: true });
@@ -92,6 +142,10 @@ export class BrowserSessionManager {
         }),
       ),
     );
+    // Browser startup is a provider run. Mark it running before launching so a
+    // launch failure can transition legally to failed without weakening the
+    // global session state machine with created -> failed.
+    this.store.updateStatus(sessionId, "running");
     try {
       const launch = await this.service.launch(profileDir, port);
       const resumeData: BrowserResumeData = {
@@ -150,14 +204,31 @@ export class BrowserSessionManager {
     }
   }
 
+  async approve(sessionId: string): Promise<Session> {
+    const session = this.requireSession(sessionId, false);
+    const resume = parseResumeData(session);
+    this.store.updateStatus(
+      sessionId,
+      session.status,
+      JSON.stringify({ ...resume, approved: true }),
+    );
+    this.store.appendEvent(
+      sessionId,
+      "browser_session_approved",
+      JSON.stringify({ scope: "session", expires: "on-close" }),
+    );
+    return this.requireSession(sessionId);
+  }
+
   async navigate(
     sessionId: string,
     url: string,
     approved: boolean,
     timeoutMs?: number,
   ) {
+    const normalizedUrl = normalizeBrowserUrl(url);
     return this.withHandle(sessionId, "navigate", (handle) =>
-      this.service.navigate(handle, url, { approved, timeoutMs }),
+      this.service.navigate(handle, normalizedUrl, { approved: approved || this.isApproved(sessionId), timeoutMs }),
     );
   }
 
@@ -226,7 +297,7 @@ export class BrowserSessionManager {
     approved: boolean,
   ) {
     return this.withHandle(sessionId, "upload", (handle) =>
-      this.service.upload(handle, selector, paths, { approved }),
+      this.service.upload(handle, selector, paths, { approved: approved || this.isApproved(sessionId) }),
     );
   }
   async download(
@@ -238,7 +309,7 @@ export class BrowserSessionManager {
   ) {
     return this.withHandle(sessionId, "download", (handle) =>
       this.service.download(handle, selector, destinationDir, {
-        approved,
+        approved: approved || this.isApproved(sessionId),
         timeoutMs,
       }),
     );
@@ -250,7 +321,7 @@ export class BrowserSessionManager {
     timeoutMs?: number,
   ) {
     return this.withHandle(sessionId, "submit", (handle) =>
-      this.service.submit(handle, selector, { approved, timeoutMs }),
+      this.service.submit(handle, selector, { approved: approved || this.isApproved(sessionId), timeoutMs }),
     );
   }
 
@@ -266,7 +337,6 @@ export class BrowserSessionManager {
       try {
         handle = await this.service.connect(launch);
       } catch (error) {
-        this.store.updateStatus(sessionId, "failed");
         this.store.appendEvent(
           sessionId,
           "browser_unreachable",
@@ -297,6 +367,15 @@ export class BrowserSessionManager {
       throw error;
     } finally {
       await handle?.release().catch(() => undefined);
+    }
+  }
+
+  private isApproved(sessionId: string): boolean {
+    const session = this.requireSession(sessionId, false);
+    try {
+      return parseResumeData(session).approved === true;
+    } catch {
+      return false;
     }
   }
 

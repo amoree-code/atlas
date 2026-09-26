@@ -7,6 +7,7 @@ import {
 export const browserOperationSchema = z.enum([
   "open",
   "close",
+  "approve",
   "navigate",
   "read",
   "observe",
@@ -82,6 +83,13 @@ export const browserContracts: Record<
     "repeatable",
     "none",
     "session record reaches a terminal status and the browser process has exited",
+  ),
+  approve: define(
+    "approve",
+    "owner",
+    "repeatable",
+    "required",
+    "session approval is persisted and expires when the browser session closes",
   ),
   navigate: define(
     "navigate",
