@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { atlasPath, resolveWithin } from "../../paths.js";
+import { type CommandRunner, verifyTask } from "./verify-task.js";
 
 export type ArchiveResult = {
   candidates: string[];
@@ -36,6 +37,7 @@ function setState(source: string, state: string): string {
 export async function completeTask(
   id: string,
   root = atlasPath("projects", "atlas", "tasks"),
+  options: { verify?: boolean; cwd?: string; run?: CommandRunner } = {},
 ): Promise<CompletionResult> {
   const taskFile = resolveWithin(root, id, "task.md");
   const source = await readFile(taskFile, "utf8");
@@ -49,6 +51,16 @@ export async function completeTask(
       ?.trim();
     if (!verification || /^pending\b/i.test(verification))
       throw new Error(`Cannot complete ${id}: verification is pending`);
+  }
+  // An independent check must pass before the task is marked done — a
+  // self-reported `state: done` is never enough on its own.
+  if (options.verify) {
+    const outcome = await verifyTask(id, root, {
+      cwd: options.cwd,
+      run: options.run,
+    });
+    if (!outcome.passed)
+      throw new Error(`Cannot complete ${id}: ${outcome.reason}`);
   }
   if (field(source, "state") !== "done")
     await writeFile(taskFile, setState(source, "done"));
