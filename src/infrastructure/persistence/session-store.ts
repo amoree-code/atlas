@@ -1,5 +1,12 @@
 import { access, mkdir } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
+import type {
+  CaptureItem,
+  CloseoutInput,
+  SaveIdeaInput,
+  SessionCreateInput,
+  SessionStorePort,
+} from "../../domain/ports/session-store-port.js";
 import {
   assertValidStatusTransition,
   type Session,
@@ -8,6 +15,14 @@ import {
 } from "../../domain/sessions/session.js";
 import { atlasPath } from "../../paths.js";
 import { validateSession } from "./session-validator.js";
+
+export type {
+  CaptureItem,
+  CloseoutInput,
+  SaveIdeaInput,
+  SessionCreateInput,
+  SessionStorePort,
+} from "../../domain/ports/session-store-port.js";
 
 type SessionRow = Omit<
   Session,
@@ -43,7 +58,7 @@ type SessionRow = Omit<
   closed_at: string | null;
 };
 
-export class SessionStore {
+export class SessionStore implements SessionStorePort {
   private readonly database: DatabaseSync;
 
   constructor(
@@ -229,36 +244,7 @@ export class SessionStore {
     }
   }
 
-  create(
-    input: Omit<
-      Session,
-      | "createdAt"
-      | "updatedAt"
-      | "status"
-      | "title"
-      | "taskId"
-      | "handoffId"
-      | "contextHash"
-      | "contextBytes"
-      | "nextAction"
-      | "verificationStatus"
-      | "summaryPath"
-      | "summaryHash"
-      | "summaryBytes"
-      | "closeoutStatus"
-      | "closeoutVersion"
-      | "closedAt"
-    > & {
-      status?: SessionStatus;
-      title?: string;
-      taskId?: string | null;
-      handoffId?: string | null;
-      contextHash?: string | null;
-      contextBytes?: number;
-      nextAction?: string;
-      verificationStatus?: "unknown" | "proven" | "not_proven" | "blocked";
-    },
-  ): Session {
+  create(input: SessionCreateInput): Session {
     const now = new Date().toISOString();
     const session = validateSession({
       ...input,
@@ -377,16 +363,7 @@ export class SessionStore {
       .run(handoffId, nextAction, new Date().toISOString(), sessionId);
   }
 
-  updateCloseout(
-    sessionId: string,
-    input: {
-      summaryPath: string;
-      summaryHash: string;
-      summaryBytes: number;
-      closeoutStatus: "completed" | "failed";
-      closedAt: string;
-    },
-  ): void {
+  updateCloseout(sessionId: string, input: CloseoutInput): void {
     this.database
       .prepare(
         `UPDATE sessions SET summary_path = ?, summary_hash = ?, summary_bytes = ?, closeout_status = ?, closeout_version = '1', closed_at = ?, updated_at = ? WHERE session_id = ?`,
@@ -486,12 +463,7 @@ export class SessionStore {
     return rows.map((row) => this.deserializeHandoff(row));
   }
 
-  saveIdea(input: {
-    ideaId: string;
-    title: string;
-    content: string;
-    sourceSessionId?: string | null;
-  }): void {
+  saveIdea(input: SaveIdeaInput): void {
     const now = new Date().toISOString();
     this.database
       .prepare(`INSERT INTO ideas (idea_id, title, content, source_session_id, status, created_at, updated_at)
@@ -708,16 +680,7 @@ export class SessionStore {
     return rows.length;
   }
 
-  listCaptureItems(status = "new"): Array<{
-    captureId: number;
-    sourceEventId: number;
-    sessionId: string;
-    content: string;
-    type: string;
-    status: string;
-    target: string | null;
-    createdAt: string;
-  }> {
+  listCaptureItems(status = "new"): CaptureItem[] {
     const rows = this.database
       .prepare(`
       SELECT c.capture_id, c.source_event_id, e.session_id, e.data, c.type, c.status, c.target, c.created_at
@@ -746,9 +709,7 @@ export class SessionStore {
     }));
   }
 
-  getCaptureItem(
-    captureId: number,
-  ): ReturnType<SessionStore["listCaptureItems"]>[number] | null {
+  getCaptureItem(captureId: number): CaptureItem | null {
     return (
       this.listCaptureItems("new").find(
         (item) => item.captureId === captureId,

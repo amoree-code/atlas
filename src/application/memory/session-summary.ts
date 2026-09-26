@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
+import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 
 const maxSummaryBytes = 12_000;

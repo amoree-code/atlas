@@ -11,7 +11,7 @@ import type {
   BrowserHandle,
   BrowserLaunch,
   BrowserProvider,
-} from "../../infrastructure/providers/browser-provider.js";
+} from "../../domain/ports/browser-port.js";
 
 export class BrowserApprovalRequiredError extends Error {
   constructor(operation: BrowserOperation, reason: string) {

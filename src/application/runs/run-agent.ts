@@ -10,10 +10,8 @@ import type { Session } from "../../domain/sessions/session.js";
 import { buildContext } from "../../infrastructure/filesystem/context-manager.js";
 import { loadProfile } from "../../infrastructure/filesystem/profile-loader.js";
 import { loadSkills } from "../../infrastructure/filesystem/skill-loader.js";
-import {
-  appendRuntimeLog,
-  redactRuntimeText,
-} from "../../infrastructure/observability/runtime-logger.js";
+import { redactRuntimeText } from "../../domain/redaction/redaction.js";
+import { appendRuntimeLog } from "../../infrastructure/observability/runtime-logger.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import type {
   HeadlessResult,

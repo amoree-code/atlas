@@ -2,11 +2,11 @@ import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import type { SessionStore } from "../../infrastructure/persistence/session-store.js";
+import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import type {
   BrowserHandle,
   BrowserLaunch,
-} from "../../infrastructure/providers/browser-provider.js";
+} from "../../domain/ports/browser-port.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 import type { BrowserService, ClickExpectation } from "./browser-service.js";
 
@@ -61,7 +61,7 @@ function parseResumeData(session: Session): BrowserResumeData {
 
 export class BrowserSessionManager {
   constructor(
-    private readonly store: SessionStore,
+    private readonly store: SessionStorePort,
     private readonly service: BrowserService,
   ) {}
 

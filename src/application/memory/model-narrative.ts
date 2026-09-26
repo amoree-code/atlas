@@ -1,7 +1,7 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
+import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 
 const execFile = promisify(execFileCallback);
 
