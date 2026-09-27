@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import readline from "node:readline";
-import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
+import type { SessionStoreFactory } from "../../domain/ports/session-store-port.js";
 import { finalizeSession } from "../memory/session-closeout.js";
 
 // The documented Claude Code SessionEnd hook contract (same family as the
@@ -110,12 +110,13 @@ export async function readTranscriptEvents(
  */
 export async function claudeSessionEndHook(
   payload: ClaudeSessionEndPayload,
+  openStore: SessionStoreFactory,
 ): Promise<void> {
   const sessionId = payload.session_id;
   if (!sessionId) return;
   const cwd = payload.cwd ?? process.cwd();
 
-  const store = await openSessionStore();
+  const store = await openStore();
   try {
     let session = store.get(sessionId);
     if (!session) {

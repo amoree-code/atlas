@@ -1,23 +1,15 @@
 import { spawn } from "node:child_process";
 import { type IPty, spawn as spawnPty } from "node-pty";
 
-export type InteractiveProcessRequest = {
-  command: string;
-  args: string[];
-  cwd: string;
-  env?: Record<string, string>;
-  onData?: (data: string) => void;
-  onInput?: (data: string) => void;
-  timeoutMs?: number;
-  signal?: AbortSignal;
-};
+import type {
+  InteractiveProcessRequest,
+  InteractiveProcessResult,
+} from "../../domain/process/process-events.js";
 
-export type InteractiveProcessResult = {
-  exitCode: number;
-  output: string;
-  timedOut?: boolean;
-  cancelled?: boolean;
-};
+export type {
+  InteractiveProcessRequest,
+  InteractiveProcessResult,
+} from "../../domain/process/process-events.js";
 
 export function runInteractive(
   request: InteractiveProcessRequest,

@@ -1,6 +1,14 @@
-import { runHeadless } from "../../infrastructure/process/cli-process.js";
-import { runInteractive } from "../../infrastructure/process/interactive-process.js";
-import { resolveOriginalExecutable } from "../../infrastructure/providers/provider-registry.js";
+import type {
+  HeadlessRunner,
+  InteractiveRunner,
+  ProviderRegistryPort,
+} from "../../domain/ports/platform-ports.js";
+
+export type AuthDeps = {
+  registry: ProviderRegistryPort;
+  runHeadless: HeadlessRunner;
+  runInteractive: InteractiveRunner;
+};
 
 export type AuthState =
   | "authenticated"
@@ -48,12 +56,15 @@ export function authAdapter(provider: string): AuthAdapter | undefined {
   return adapters.find((adapter) => adapter.provider === provider);
 }
 
-export async function authStatus(provider: string): Promise<AuthState> {
+export async function authStatus(
+  provider: string,
+  deps: AuthDeps,
+): Promise<AuthState> {
   const adapter = authAdapter(provider);
   if (!adapter) return "not_supported";
   try {
-    const executable = resolveOriginalExecutable(adapter.command);
-    const result = await runHeadless({
+    const executable = deps.registry.resolveOriginalExecutable(adapter.command);
+    const result = await deps.runHeadless({
       command: executable,
       args: adapter.statusArgs,
       cwd: process.cwd(),
@@ -82,13 +93,14 @@ export async function authStatus(provider: string): Promise<AuthState> {
 
 export async function authLogin(
   provider: string,
+  deps: AuthDeps,
   options: { timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<AuthState> {
   const adapter = authAdapter(provider);
   if (!adapter) return "not_supported";
   try {
-    const executable = resolveOriginalExecutable(adapter.command);
-    const result = await runInteractive({
+    const executable = deps.registry.resolveOriginalExecutable(adapter.command);
+    const result = await deps.runInteractive({
       command: executable,
       args: adapter.loginArgs,
       cwd: process.cwd(),
@@ -96,7 +108,7 @@ export async function authLogin(
     });
     if (result.cancelled || result.timedOut) return "cancelled";
     if (result.exitCode !== 0) return "failed";
-    return await authStatus(provider);
+    return await authStatus(provider, deps);
   } catch {
     return "failed";
   }

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promoteSessionToKnowledge } from "../dist/application/memory/session-promotion.js";
+import { defaultSessionStoreFactory } from "../dist/composition/runtime.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
 test("promotes an approved completed session into knowledge and rejects missing approval", async () => {
@@ -44,11 +45,12 @@ test("promotes an approved completed session into knowledge and rejects missing 
   store.updateStatus(sessionId, "completed");
   store.close();
   await assert.rejects(
-    promoteSessionToKnowledge(sessionId),
+    promoteSessionToKnowledge(sessionId, defaultSessionStoreFactory),
     /explicit approval/,
   );
   const result = await promoteSessionToKnowledge(
     sessionId,
+    defaultSessionStoreFactory,
     "knowledge/results",
     true,
   );

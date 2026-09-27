@@ -7,8 +7,9 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
 import { atlasPath } from "../../paths.js";
-import { type ProviderExecutor, runAgent } from "../runs/run-agent.js";
+import { runAgent } from "../runs/run-agent.js";
 
 export type Schedule = {
   id: string;
@@ -60,19 +61,19 @@ export async function setScheduleEnabled(
 export async function runSchedule(
   id: string,
   cwd: string,
-  execute?: ProviderExecutor,
+  runtime: AgentRuntimeDeps,
 ): Promise<void> {
   const schedule = (await listSchedules()).find((item) => item.id === id);
   if (!schedule) throw new Error(`Schedule not found: ${id}`);
   await runAgent(
     { profileName: schedule.profile, prompt: schedule.prompt, cwd },
-    execute,
+    runtime,
   );
 }
 
 export async function runDueSchedules(
   cwd: string,
-  execute?: ProviderExecutor,
+  runtime: AgentRuntimeDeps,
 ): Promise<string[]> {
   const now = Date.now();
   const schedules = await listSchedules();
@@ -91,7 +92,7 @@ export async function runDueSchedules(
     try {
       const session = await runAgent(
         { profileName: schedule.profile, prompt: schedule.prompt, cwd },
-        execute,
+        runtime,
       );
       if (session.status !== "completed")
         throw new Error(`Scheduled run failed: ${session.sessionId}`);
@@ -117,7 +118,7 @@ export async function runDueSchedules(
 
 export async function runSchedulerWorkerOnce(
   cwd: string,
-  execute?: ProviderExecutor,
+  runtime: AgentRuntimeDeps,
 ): Promise<string[]> {
   const schedules = await listSchedules();
   const ran: string[] = [];
@@ -131,7 +132,7 @@ export async function runSchedulerWorkerOnce(
       try {
         const session = await runAgent(
           { profileName: schedule.profile, prompt: schedule.prompt, cwd },
-          execute,
+          runtime,
         );
         if (session.status !== "completed")
           throw new Error(`Scheduled run failed: ${session.sessionId}`);
@@ -181,15 +182,15 @@ export async function runSchedulerWorkerOnce(
 
 export async function runSchedulerWorker(
   cwd: string,
+  runtime: AgentRuntimeDeps,
   options: {
     pollMs?: number;
     signal?: AbortSignal;
-    execute?: ProviderExecutor;
   } = {},
 ): Promise<void> {
   const pollMs = Math.max(1_000, options.pollMs ?? 30_000);
   while (!options.signal?.aborted) {
-    await runSchedulerWorkerOnce(cwd, options.execute);
+    await runSchedulerWorkerOnce(cwd, runtime);
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, pollMs);
       options.signal?.addEventListener(

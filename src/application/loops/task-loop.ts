@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
 import { atlasPath, resolveWithin } from "../../paths.js";
-import { type ProviderExecutor, runAgent } from "../runs/run-agent.js";
+import { runAgent } from "../runs/run-agent.js";
 import { checkpointTask } from "../tasks/checkpoint-task.js";
 import { type CommandRunner, verifyTask } from "../tasks/verify-task.js";
 
@@ -92,7 +93,7 @@ export async function stopTaskLoop(id: string): Promise<TaskLoop> {
 
 export async function runTaskLoopsOnce(
   cwd: string,
-  execute?: ProviderExecutor,
+  runtime: AgentRuntimeDeps,
   options: { verifyRun?: CommandRunner } = {},
 ): Promise<string[]> {
   const loops = await listTaskLoops();
@@ -138,7 +139,7 @@ export async function runTaskLoopsOnce(
             },
           },
         },
-        execute,
+        runtime,
       );
       if (session.status !== "completed")
         throw new Error(`session ${session.status}`);
@@ -220,11 +221,12 @@ async function persistWorkerResult(
 
 export async function runTaskLoopWorker(
   cwd: string,
+  runtime: AgentRuntimeDeps,
   options: { signal?: AbortSignal; pollMs?: number } = {},
 ): Promise<void> {
   const pollMs = options.pollMs ?? 30_000;
   while (!options.signal?.aborted) {
-    await runTaskLoopsOnce(cwd);
+    await runTaskLoopsOnce(cwd, runtime);
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, pollMs);
       options.signal?.addEventListener(

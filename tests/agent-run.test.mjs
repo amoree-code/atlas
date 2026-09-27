@@ -9,10 +9,27 @@ import {
 } from "../dist/application/hooks/lifecycle-hooks.js";
 import {
   isValidProviderSessionId,
-  resumeAgent,
-  runAgent,
+  resumeAgent as resumeAgentRaw,
+  runAgent as runAgentRaw,
 } from "../dist/application/runs/run-agent.js";
+import { createAgentRuntime } from "../dist/composition/runtime.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
+
+// Test shim: the real runAgent/resumeAgent take an AgentRuntimeDeps bag; these
+// wrap a bare provider-executor into a runtime with the real deps otherwise, so
+// the test bodies keep passing just an executor.
+const runAgent = (request, execute) =>
+  runAgentRaw(
+    request,
+    createAgentRuntime(execute ? { executeProvider: execute } : {}),
+  );
+const resumeAgent = (sessionId, prompt, execute, runContract) =>
+  resumeAgentRaw(
+    sessionId,
+    prompt,
+    createAgentRuntime(execute ? { executeProvider: execute } : {}),
+    runContract,
+  );
 
 test("bounds provider session identifiers before persistence", () => {
   assert.equal(isValidProviderSessionId("codex-session_1"), true);

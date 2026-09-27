@@ -8,6 +8,7 @@ import {
   authLogin,
   authStatus,
 } from "../dist/application/auth/auth-orchestrator.js";
+import { defaultAuthDeps } from "../dist/composition/runtime.js";
 
 const unixOnly = process.platform === "win32" ? test.skip : test;
 
@@ -38,7 +39,7 @@ test("exposes only provider-owned auth adapters", () => {
 });
 
 test("reports unsupported auth without invoking a client", async () => {
-  assert.equal(await authStatus("hermes"), "not_supported");
+  assert.equal(await authStatus("hermes", defaultAuthDeps), "not_supported");
 });
 
 unixOnly(
@@ -48,7 +49,10 @@ unixOnly(
       "claude",
       'if [ "$1" = "auth" ] && [ "$2" = "status" ]; then printf \'{"loggedIn":true}\\n\'; exit 0; fi',
       async () => {
-        assert.equal(await authStatus("claude"), "authenticated");
+        assert.equal(
+          await authStatus("claude", defaultAuthDeps),
+          "authenticated",
+        );
       },
     );
   },
@@ -61,8 +65,8 @@ unixOnly(
       "kilo",
       "printf 'login failed\n' >&2; exit 1",
       async () => {
-        assert.equal(await authStatus("kilo"), "failed");
-        assert.equal(await authLogin("kilo"), "failed");
+        assert.equal(await authStatus("kilo", defaultAuthDeps), "failed");
+        assert.equal(await authLogin("kilo", defaultAuthDeps), "failed");
       },
     );
   },
@@ -70,9 +74,14 @@ unixOnly(
 
 unixOnly("cancels and times out the official login flow", async () => {
   await withFakeProvider("kilo", "sleep 5", async () => {
-    assert.equal(await authLogin("kilo", { timeoutMs: 25 }), "cancelled");
+    assert.equal(
+      await authLogin("kilo", defaultAuthDeps, { timeoutMs: 25 }),
+      "cancelled",
+    );
     const controller = new AbortController();
-    const pending = authLogin("kilo", { signal: controller.signal });
+    const pending = authLogin("kilo", defaultAuthDeps, {
+      signal: controller.signal,
+    });
     setTimeout(() => controller.abort(), 25);
     assert.equal(await pending, "cancelled");
   });

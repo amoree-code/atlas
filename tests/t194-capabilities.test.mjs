@@ -10,6 +10,7 @@ import {
   observeSession,
   reviewObservation,
 } from "../dist/application/skills/task-observer.js";
+import { defaultSessionStoreFactory } from "../dist/composition/runtime.js";
 import { defaultSkillNames } from "../dist/domain/skills/default-skills.js";
 import { buildContext } from "../dist/infrastructure/filesystem/context-manager.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
@@ -151,7 +152,10 @@ test("observer records proven repeated work without creating or promoting a skil
   store.updateStatus(sessionId, "completed");
   store.close();
   try {
-    const observations = await observeSession(sessionId);
+    const observations = await observeSession(
+      sessionId,
+      defaultSessionStoreFactory,
+    );
     assert.ok(observations.length >= 1);
     const observation = observations.find(
       (item) => item.signalType === "explicit-decision",
@@ -207,7 +211,10 @@ test("observer only treats real user corrections as repeated-correction, not pro
   store.updateStatus(sessionId, "completed");
   store.close();
   try {
-    const observations = await observeSession(sessionId);
+    const observations = await observeSession(
+      sessionId,
+      defaultSessionStoreFactory,
+    );
     const corrections = observations.filter(
       (item) => item.signalType === "repeated-correction",
     );
@@ -248,7 +255,10 @@ test("approving an observation creates a skill candidate, not just a status flag
   store.updateStatus(sessionId, "completed");
   store.close();
   try {
-    const [observation] = await observeSession(sessionId);
+    const [observation] = await observeSession(
+      sessionId,
+      defaultSessionStoreFactory,
+    );
     assert.equal(observation.skillCandidateId, null);
     const reviewed = await reviewObservation(
       observation.observationId,

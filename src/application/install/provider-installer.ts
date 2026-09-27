@@ -2,14 +2,11 @@ import { execFile, spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import {
-  type ProviderRecord,
-  resolveOriginalExecutable,
-} from "../../infrastructure/providers/provider-registry.js";
-import {
-  registerProvider,
-  removeProvider,
-} from "../../infrastructure/wrappers/wrapper-manager.js";
+import type {
+  ProviderRegistryPort,
+  WrapperManagerPort,
+} from "../../domain/ports/platform-ports.js";
+import type { ProviderRecord } from "../../domain/providers/provider.js";
 import { atlasPath } from "../../paths.js";
 
 const execFileAsync = promisify(execFile);
@@ -151,6 +148,8 @@ export function assertSupportedPlatform(
 export async function installProvider(
   id: string,
   approved: boolean,
+  wrapperManager: WrapperManagerPort,
+  registry: ProviderRegistryPort,
 ): Promise<{ provider: ProviderRecord; executable: string }> {
   const spec = findInstallSpec(id);
   if (!approved)
@@ -160,13 +159,13 @@ export async function installProvider(
   assertSupportedPlatform(spec, process.platform);
 
   await runInstaller(spec.installer.command, spec.installer.args);
-  const executable = resolveOriginalExecutable(spec.verify.command);
+  const executable = registry.resolveOriginalExecutable(spec.verify.command);
   await execFileAsync(spec.verify.command, spec.verify.args, {
     env: process.env,
     maxBuffer: 16_000,
     timeout: 60_000,
   });
-  const provider = await registerProvider(
+  const provider = await wrapperManager.registerProvider(
     spec.provider.id,
     spec.provider.command,
   );
@@ -183,20 +182,23 @@ export async function installProvider(
 export async function updateProvider(
   id: string,
   approved: boolean,
+  wrapperManager: WrapperManagerPort,
+  registry: ProviderRegistryPort,
 ): Promise<{ provider: ProviderRecord; executable: string }> {
-  return installProvider(id, approved);
+  return installProvider(id, approved, wrapperManager, registry);
 }
 
 export async function removeInstalledProvider(
   id: string,
   approved: boolean,
+  wrapperManager: WrapperManagerPort,
 ): Promise<ProviderRecord> {
   if (!approved)
     throw new Error(
       `Removal approval required. Re-run with: atlas remove ${id} --yes`,
     );
   const spec = findInstallSpec(id);
-  const provider = await removeProvider(spec.provider.id);
+  const provider = await wrapperManager.removeProvider(spec.provider.id);
   await removeInstallationReceipt(provider.id);
   return provider;
 }

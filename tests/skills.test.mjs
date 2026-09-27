@@ -11,6 +11,7 @@ import {
   loadPromotedSkills,
   reviewSkillCandidate,
 } from "../dist/application/skills/skill-curation.js";
+import { defaultSessionStoreFactory } from "../dist/composition/runtime.js";
 import {
   listSkills,
   loadSkill,
@@ -187,7 +188,10 @@ test("learns a bounded skill candidate from a completed session without auto-pro
   );
   store.updateStatus(sessionId, "completed");
   store.close();
-  const candidate = await learnSkillFromSession(sessionId);
+  const candidate = await learnSkillFromSession(
+    sessionId,
+    defaultSessionStoreFactory,
+  );
   assert.equal(candidate.status, "candidate");
   assert.equal(candidate.sourceSessionId, sessionId);
   assert.match(candidate.instructions, /bounded review/);

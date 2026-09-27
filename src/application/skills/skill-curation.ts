@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { SessionStoreFactory } from "../../domain/ports/session-store-port.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
-import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { atlasPath } from "../../paths.js";
 
 export type SkillCandidate = {
@@ -95,8 +95,9 @@ export async function loadPromotedSkills(
 
 export async function learnSkillFromSession(
   sessionId: string,
+  openStore: SessionStoreFactory,
 ): Promise<SkillCandidate> {
-  const store = await openSessionStore();
+  const store = await openStore();
   try {
     const session = store.get(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);

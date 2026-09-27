@@ -1,29 +1,17 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
+import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
+import type { RuntimeEvent } from "../../domain/process/process-events.js";
 import {
   profileIdentity,
   selectProfileClient,
 } from "../../domain/profiles/profile.js";
 import { executionPolicy } from "../../domain/profiles/profile-policy.js";
+import type { HeadlessProvider } from "../../domain/providers/provider.js";
+import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import type { RunContract } from "../../domain/runs/run-contract.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 import type { Session } from "../../domain/sessions/session.js";
-import { buildContext } from "../../infrastructure/filesystem/context-manager.js";
-import { loadProfile } from "../../infrastructure/filesystem/profile-loader.js";
-import { loadSkills } from "../../infrastructure/filesystem/skill-loader.js";
-import { redactRuntimeText } from "../../domain/redaction/redaction.js";
-import { appendRuntimeLog } from "../../infrastructure/observability/runtime-logger.js";
-import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
-import type {
-  HeadlessResult,
-  RuntimeEvent,
-} from "../../infrastructure/process/cli-process.js";
-import { resolveClientHome } from "../../infrastructure/providers/client-home.js";
-import {
-  assertProviderSupportsReadOnly,
-  type HeadlessProvider,
-  type ProviderRequest,
-  runProvider,
-} from "../../infrastructure/providers/providers.js";
 import { getHandoff } from "../handoff/handoff-service.js";
 import { emitHook } from "../hooks/lifecycle-hooks.js";
 import {
@@ -33,6 +21,12 @@ import {
 import { finalizeSession } from "../memory/session-closeout.js";
 import { loadPromotedSkills } from "../skills/skill-curation.js";
 import { authorizeRun } from "./run-authorization.js";
+
+// Re-exported for existing importers (scheduler, task-loop, gateway).
+export type {
+  AgentRuntimeDeps,
+  ProviderExecutor,
+} from "../../domain/ports/runtime-ports.js";
 
 export type AgentRunRequest = {
   profileName: string;
@@ -48,39 +42,34 @@ export type AgentRunRequest = {
   handoffId?: string;
 };
 
-export type ProviderExecutor = (
-  request: ProviderRequest,
-) => Promise<HeadlessResult>;
-
 export async function runAgent(
   request: AgentRunRequest,
-  execute: ProviderExecutor = runProvider,
+  deps: AgentRuntimeDeps,
 ): Promise<Session> {
+  const execute = deps.executeProvider;
   const profile = selectProfileClient(
-    await loadProfile(request.profileName),
+    await deps.loadProfile(request.profileName),
     request.client,
   );
   const handoff = request.handoffId
-    ? await getHandoff(request.handoffId)
+    ? await getHandoff(request.handoffId, deps.openStore)
     : null;
   const effectiveTaskId =
     request.taskId ??
     (typeof handoff?.taskId === "string" ? handoff.taskId : null);
-  const clientHome = resolveClientHome(profile);
+  const clientHome = deps.resolveClientHome(profile);
   executionPolicy(profile, request.cwd);
-  assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
+  deps.assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
   if (
     profile.writePolicy !== "none" &&
     (!request.runContract || !request.runContract.approval.approved)
   ) {
-    throw new Error(
-      "Writable profile runs require an approved run contract",
-    );
+    throw new Error("Writable profile runs require an approved run contract");
   }
   if (profile.governance?.approvalRequired && !request.runContract) {
     throw new Error("Profile requires an approved run contract");
   }
-  const sessionStore = await openSessionStore();
+  const sessionStore = await deps.openStore();
   const sessionId = request.sessionId ?? randomUUID();
   const session = sessionStore.create({
     sessionId,
@@ -134,11 +123,11 @@ export async function runAgent(
         }),
       ),
     );
-    const context = await buildContext(profile, request.cwd, 32_000, {
+    const context = await deps.buildContext(profile, request.cwd, 32_000, {
       compression: profile.contextCompression,
     });
     const profileFacts = await readProfileFacts(profile.name);
-    const skills = await loadSkills(profile.skills, 32_000, request.cwd);
+    const skills = await deps.loadSkills(profile.skills, 32_000, request.cwd);
     const autoSkills = await loadPromotedSkills(
       request.prompt,
       Math.max(
@@ -279,7 +268,7 @@ export async function runAgent(
       }),
     );
     sessionStore.scanCaptureItems(sessionId);
-    await appendRuntimeLog({
+    await deps.appendRuntimeLog({
       timestamp: new Date().toISOString(),
       event: result.exitCode === 124 ? "provider_timeout" : "run_finished",
       correlationId: sessionId,
@@ -311,7 +300,7 @@ export async function runAgent(
       sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
-    await appendRuntimeLog({
+    await deps.appendRuntimeLog({
       timestamp: new Date().toISOString(),
       event: "run_failed",
       correlationId: sessionId,
@@ -328,10 +317,11 @@ export async function runAgent(
 export async function resumeAgent(
   sessionId: string,
   prompt: string,
-  execute: ProviderExecutor = runProvider,
+  deps: AgentRuntimeDeps,
   runContract?: RunContract,
 ): Promise<Session> {
-  const sessionStore = await openSessionStore();
+  const execute = deps.executeProvider;
+  const sessionStore = await deps.openStore();
   try {
     const existing = sessionStore.get(sessionId);
     if (!existing) throw new Error(`Session not found: ${sessionId}`);
@@ -341,11 +331,11 @@ export async function resumeAgent(
       );
     }
     const profile = selectProfileClient(
-      await loadProfile(existing.profile),
+      await deps.loadProfile(existing.profile),
       existing.provider,
     );
     executionPolicy(profile, existing.workingDirectory);
-    assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
+    deps.assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
     if (profile.writePolicy !== "none")
       throw new Error("Writable profile resumes require an enforcing sandbox");
     if (profileIdentity(profile) !== existing.profileIdentity)
@@ -377,7 +367,7 @@ export async function resumeAgent(
       prompt,
       cwd: existing.workingDirectory,
       resumeId: existing.providerSessionId,
-      clientHome: resolveClientHome(profile),
+      clientHome: deps.resolveClientHome(profile),
       timeoutMs: runContract?.budget.timeoutMs,
       maxOutputBytes: runContract?.budget.maxOutputBytes,
       readOnly: true,
@@ -432,7 +422,7 @@ function boundedEventData(event: RuntimeEvent): string {
 }
 
 function captureProviderSessionId(
-  store: Awaited<ReturnType<typeof openSessionStore>>,
+  store: SessionStorePort,
   sessionId: string,
   event: RuntimeEvent,
 ): void {

@@ -7,8 +7,18 @@ import {
   createHandoff,
   getHandoff,
 } from "../dist/application/handoff/handoff-service.js";
-import { runAgent } from "../dist/application/runs/run-agent.js";
+import { runAgent as runAgentRaw } from "../dist/application/runs/run-agent.js";
+import {
+  createAgentRuntime,
+  defaultSessionStoreFactory,
+} from "../dist/composition/runtime.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
+
+const runAgent = (request, execute) =>
+  runAgentRaw(
+    request,
+    createAgentRuntime(execute ? { executeProvider: execute } : {}),
+  );
 
 test("one bounded handoff keeps semantic context equivalent across read-only clients", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t193-"));
@@ -52,10 +62,13 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
   );
   process.env.ATLAS_ROOT = root;
   try {
-    const handoff = await createHandoff({
-      taskId: "T-193",
-      nextAction: "Run the bounded verification",
-    });
+    const handoff = await createHandoff(
+      {
+        taskId: "T-193",
+        nextAction: "Run the bounded verification",
+      },
+      defaultSessionStoreFactory,
+    );
     const seen = [];
     for (const client of ["claude", "codex", "gemini", "antigravity", "kimi"]) {
       const session = await runAgent(
@@ -104,7 +117,11 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
         /cannot enforce read-only/,
       );
     }
-    const stored = await getHandoff(handoff.handoffId, 2_000);
+    const stored = await getHandoff(
+      handoff.handoffId,
+      defaultSessionStoreFactory,
+      2_000,
+    );
     assert.ok(Buffer.byteLength(stored.compactContext) <= 2_000);
     const store = new SessionStore(
       path.join(root, "system", "sessions", "sessions.sqlite"),

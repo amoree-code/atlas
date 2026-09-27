@@ -11,10 +11,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import {
-  syncProviderWrappers,
-  wrapperDoctor,
-} from "../../infrastructure/wrappers/wrapper-manager.js";
+import type { WrapperManagerPort } from "../../domain/ports/platform-ports.js";
 import { atlasPath, enginePath } from "../../paths.js";
 import {
   doctorMemoryIndexes,
@@ -159,8 +156,10 @@ async function checkMemory(): Promise<Finding[]> {
   }
 }
 
-async function checkWrappers(): Promise<Finding[]> {
-  const errors = await wrapperDoctor();
+async function checkWrappers(
+  wrapperManager: WrapperManagerPort,
+): Promise<Finding[]> {
+  const errors = await wrapperManager.wrapperDoctor();
   return errors.length
     ? errors.map((message) => ({
         code: "WRAPPER_DRIFT",
@@ -444,14 +443,16 @@ async function checkGovernance(): Promise<Finding[]> {
       ];
 }
 
-export async function scanWorkspace(): Promise<Finding[]> {
+export async function scanWorkspace(
+  wrapperManager: WrapperManagerPort,
+): Promise<Finding[]> {
   return [
     ...(await checkStructure()),
     ...(await checkLinks()),
     ...(await checkMemory()),
     ...(await checkVersion()),
     ...(await checkGovernance()),
-    ...(await checkWrappers()),
+    ...(await checkWrappers(wrapperManager)),
     ...(await checkDependencies()),
     ...(await checkWorkspaceContracts()),
     ...(await checkPermissions()),
@@ -464,11 +465,13 @@ export function hasFailures(findings: Finding[]): boolean {
   return findings.some((finding) => finding.severity === "FAIL");
 }
 
-export async function repairWorkspace(): Promise<{
+export async function repairWorkspace(
+  wrapperManager: WrapperManagerPort,
+): Promise<{
   changes: string[];
   findings: Finding[];
 }> {
-  const before = await scanWorkspace();
+  const before = await scanWorkspace(wrapperManager);
   const changes: string[] = [];
   if (before.some((finding) => finding.code === "INDEX_DRIFT")) {
     await syncMemoryIndexes(true);
@@ -483,9 +486,9 @@ export async function repairWorkspace(): Promise<{
       await chmod(directory, 0o700);
     changes.push("restricted active system directories to owner-only");
   }
-  await syncProviderWrappers();
+  await wrapperManager.syncProviderWrappers();
   changes.push("synchronized provider wrappers");
-  const after = await scanWorkspace();
+  const after = await scanWorkspace(wrapperManager);
   const reportDirectory = atlasPath("system", "runtime", "reports");
   await mkdir(reportDirectory, { recursive: true });
   await writeFile(
@@ -495,12 +498,14 @@ export async function repairWorkspace(): Promise<{
   return { changes, findings: after };
 }
 
-export async function workspaceReport(): Promise<{
+export async function workspaceReport(
+  wrapperManager: WrapperManagerPort,
+): Promise<{
   findings: Finding[];
   generatedAt: string;
 }> {
   return {
-    findings: await scanWorkspace(),
+    findings: await scanWorkspace(wrapperManager),
     generatedAt: new Date().toISOString(),
   };
 }

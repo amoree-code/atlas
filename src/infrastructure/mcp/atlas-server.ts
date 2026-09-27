@@ -10,11 +10,15 @@ import {
   listHandoffs,
 } from "../../application/handoff/handoff-service.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
+import { listTasks } from "../../application/tasks/list-tasks.js";
+import {
+  defaultSessionStoreFactory,
+  defaultWrapperManager,
+} from "../../composition/runtime.js";
 import {
   actionFingerprint,
   mcpApprovalSchema,
 } from "../../domain/mcp/mcp-contract.js";
-import { listTasks } from "../../application/tasks/list-tasks.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 import { openSessionStoreReadOnly } from "../persistence/session-store.js";
 
@@ -240,7 +244,7 @@ async function callTool(
       mcp: "stdio",
     };
   if (name === "atlas_doctor") {
-    const report = await workspaceReport();
+    const report = await workspaceReport(defaultWrapperManager);
     return {
       healthy: !hasFailures(report.findings),
       findings: report.findings,
@@ -258,12 +262,14 @@ async function callTool(
   if (name === "atlas_handoffs_list")
     return {
       handoffs: await listHandoffs(
+        defaultSessionStoreFactory,
         typeof args.taskId === "string" ? args.taskId : undefined,
       ),
     };
   if (name === "atlas_handoff_get")
     return await getHandoff(
       requiredArgument(args, "handoffId"),
+      defaultSessionStoreFactory,
       typeof args.maxBytes === "number"
         ? Math.min(16_000, Math.max(512, args.maxBytes))
         : 8_000,
@@ -330,6 +336,7 @@ async function callTool(
       );
     return promoteSessionToKnowledge(
       requiredArgument(args, "sessionId"),
+      defaultSessionStoreFactory,
       typeof args.target === "string" ? args.target : "knowledge/results",
       true,
     );
@@ -342,7 +349,7 @@ async function readResource(
 ): Promise<{ uri: string; mimeType: string; text: string }> {
   let value: unknown;
   if (uri === "atlas://status") {
-    const report = await workspaceReport();
+    const report = await workspaceReport(defaultWrapperManager);
     value = {
       name: "Atlas",
       version: "0.3.6",
@@ -353,7 +360,7 @@ async function readResource(
   } else if (uri === "atlas://profiles") value = { profiles: await profiles() };
   else if (uri === "atlas://tasks") value = { tasks: await listTasks() };
   else if (uri === "atlas://handoffs")
-    value = { handoffs: await listHandoffs() };
+    value = { handoffs: await listHandoffs(defaultSessionStoreFactory) };
   else throw new Error(`Unknown Atlas resource: ${uri}`);
   return {
     uri,
