@@ -7,18 +7,33 @@ import process from "node:process";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  createWebhookGateway,
-  handleGatewayRequest,
+  createWebhookGateway as createWebhookGatewayRaw,
+  handleGatewayRequest as handleGatewayRequestRaw,
   telegramAdapter,
 } from "../dist/application/gateway/webhook-gateway.js";
 import {
   listSchedules,
-  runDueSchedules,
-  runSchedulerWorker,
-  runSchedulerWorkerOnce,
+  runDueSchedules as runDueSchedulesRaw,
+  runSchedulerWorkerOnce as runSchedulerWorkerOnceRaw,
+  runSchedulerWorker as runSchedulerWorkerRaw,
   saveSchedule,
 } from "../dist/application/scheduler/local-scheduler.js";
+import { createAgentRuntime } from "../dist/composition/runtime.js";
 import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
+
+// Test shims: scheduler/gateway now take an AgentRuntimeDeps bag; wrap a bare
+// provider executor into a runtime so the test bodies keep passing an executor.
+const rt = (execute) =>
+  createAgentRuntime(execute ? { executeProvider: execute } : {});
+const runDueSchedules = (cwd, execute) => runDueSchedulesRaw(cwd, rt(execute));
+const runSchedulerWorkerOnce = (cwd, execute) =>
+  runSchedulerWorkerOnceRaw(cwd, rt(execute));
+const runSchedulerWorker = (cwd, options) =>
+  runSchedulerWorkerRaw(cwd, rt(), options);
+const handleGatewayRequest = (input, token, expected, cwd, execute) =>
+  handleGatewayRequestRaw(input, token, expected, cwd, rt(execute));
+const createWebhookGateway = (cwd, secret, execute) =>
+  createWebhookGatewayRaw(cwd, secret, rt(execute));
 
 const mainScript = path.join(import.meta.dirname, "..", "dist", "main.js");
 

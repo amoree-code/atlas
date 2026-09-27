@@ -28,6 +28,13 @@ import {
 } from "./application/install/provider-installer.js";
 import { configureClaudeCodeWrapper } from "./application/integrations/claude-vscode.js";
 import {
+  listTaskLoops,
+  runTaskLoopsOnce,
+  runTaskLoopWorker,
+  startTaskLoop,
+  stopTaskLoop,
+} from "./application/loops/task-loop.js";
+import {
   atlasMcpConfig,
   playwrightMcpConfig,
 } from "./application/mcp/mcp-connection.js";
@@ -58,31 +65,30 @@ import {
   setScheduleEnabled,
 } from "./application/scheduler/local-scheduler.js";
 import {
+  coreSkillReports,
+  syncCoreSkills,
+} from "./application/skills/core-skill-sync.js";
+import {
   addSkillCandidate,
   learnSkillFromSession,
   listSkillCandidates,
   reviewSkillCandidate,
 } from "./application/skills/skill-curation.js";
 import {
-  coreSkillReports,
-  syncCoreSkills,
-} from "./application/skills/core-skill-sync.js";
-import {
   listObservations,
   observeSession,
   reviewObservation,
 } from "./application/skills/task-observer.js";
+import {
+  defaultAgentRuntime,
+  defaultProviderRegistry,
+  defaultSessionStoreFactory,
+  defaultWrapperManager,
+} from "./composition/runtime.js";
 import { runAtlasMcpServer } from "./infrastructure/mcp/atlas-server.js";
 import { runObsidianMcpServer } from "./infrastructure/mcp/obsidian-server.js";
 import { openSessionStore } from "./infrastructure/persistence/session-store.js";
 import { runService } from "./infrastructure/process/service.js";
-import {
-  listTaskLoops,
-  runTaskLoopWorker,
-  runTaskLoopsOnce,
-  startTaskLoop,
-  stopTaskLoop,
-} from "./application/loops/task-loop.js";
 import { loadProviderRegistry } from "./infrastructure/providers/provider-registry.js";
 import {
   installShellPath,
@@ -242,6 +248,7 @@ if (command === "--version" || command === "-v") {
     console.log(
       JSON.stringify(
         await configureClaudeCodeWrapper(
+          defaultWrapperManager,
           settingsPath,
           process.argv.includes("--apply"),
         ),
@@ -277,7 +284,12 @@ if (command === "--version" || command === "-v") {
         );
         process.exitCode = 2;
       } else {
-        const result = await installProvider(spec.provider.id, true);
+        const result = await installProvider(
+          spec.provider.id,
+          true,
+          defaultWrapperManager,
+          defaultProviderRegistry,
+        );
         console.log(
           JSON.stringify(
             {
@@ -517,7 +529,7 @@ if (command === "--version" || command === "-v") {
     try {
       const raw = await readBoundedStdin();
       const payload = raw.trim() ? JSON.parse(raw) : {};
-      await claudeSessionEndHook(payload);
+      await claudeSessionEndHook(payload, defaultSessionStoreFactory);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
@@ -576,12 +588,16 @@ if (command === "--version" || command === "-v") {
       });
   } else if (action === "run-due")
     console.log(
-      JSON.stringify({ ran: await runDueSchedules(atlasRoot()) }, null, 2),
+      JSON.stringify(
+        { ran: await runDueSchedules(atlasRoot(), defaultAgentRuntime) },
+        null,
+        2,
+      ),
     );
   else if (action === "worker-once")
     console.log(
       JSON.stringify(
-        { ran: await runSchedulerWorkerOnce(atlasRoot()) },
+        { ran: await runSchedulerWorkerOnce(atlasRoot(), defaultAgentRuntime) },
         null,
         2,
       ),
@@ -591,7 +607,7 @@ if (command === "--version" || command === "-v") {
     const stop = () => controller.abort();
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
-    await runSchedulerWorker(atlasRoot(), {
+    await runSchedulerWorker(atlasRoot(), defaultAgentRuntime, {
       signal: controller.signal,
       pollMs: Number(process.env.ATLAS_SCHEDULER_POLL_MS ?? 30_000),
     });
@@ -606,7 +622,7 @@ if (command === "--version" || command === "-v") {
       ),
     );
   else if (action === "run-now")
-    await runSchedule(process.argv[4] ?? "", atlasRoot());
+    await runSchedule(process.argv[4] ?? "", atlasRoot(), defaultAgentRuntime);
   else {
     console.error(
       "Usage: atlas schedule list|add|enable|disable|run-due|run-now|worker-once|worker",
@@ -615,36 +631,66 @@ if (command === "--version" || command === "-v") {
   }
 } else if (command === "loop") {
   const action = process.argv[3] ?? "status";
-  if (action === "status") console.log(JSON.stringify(await listTaskLoops(), null, 2));
+  if (action === "status")
+    console.log(JSON.stringify(await listTaskLoops(), null, 2));
   else if (action === "start") {
     const taskId = process.argv[4];
     const profile = process.argv[5] ?? "developer";
     const promptIndex = process.argv.indexOf("--prompt");
-    const prompt = promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
+    const prompt =
+      promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
     if (!taskId || !prompt || !process.argv.includes("--approve")) {
-      console.error("Usage: atlas loop start <task-id> <profile> --prompt <text> --approve [--max-iterations N] [--interval-ms N] [--max-attempts N]");
+      console.error(
+        "Usage: atlas loop start <task-id> <profile> --prompt <text> --approve [--max-iterations N] [--interval-ms N] [--max-attempts N]",
+      );
       process.exitCode = 1;
     } else {
       const value = (flag: string, fallback: number) => {
         const index = process.argv.indexOf(flag);
         return index >= 0 ? Number(process.argv[index + 1]) : fallback;
       };
-      console.log(JSON.stringify(await startTaskLoop({ taskId, profile, prompt, cwd: atlasRoot(), approved: true, maxIterations: value("--max-iterations", 10), intervalMs: value("--interval-ms", 60_000), maxAttempts: value("--max-attempts", 2) }), null, 2));
+      console.log(
+        JSON.stringify(
+          await startTaskLoop({
+            taskId,
+            profile,
+            prompt,
+            cwd: atlasRoot(),
+            approved: true,
+            maxIterations: value("--max-iterations", 10),
+            intervalMs: value("--interval-ms", 60_000),
+            maxAttempts: value("--max-attempts", 2),
+          }),
+          null,
+          2,
+        ),
+      );
     }
   } else if (action === "worker-once") {
-    console.log(JSON.stringify({ ran: await runTaskLoopsOnce(atlasRoot()) }, null, 2));
+    console.log(
+      JSON.stringify(
+        { ran: await runTaskLoopsOnce(atlasRoot(), defaultAgentRuntime) },
+        null,
+        2,
+      ),
+    );
   } else if (action === "worker") {
     const controller = new AbortController();
     const stop = () => controller.abort();
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
-    await runTaskLoopWorker(atlasRoot(), { signal: controller.signal, pollMs: Number(process.env.ATLAS_LOOP_POLL_MS ?? 30_000) });
+    await runTaskLoopWorker(atlasRoot(), defaultAgentRuntime, {
+      signal: controller.signal,
+      pollMs: Number(process.env.ATLAS_LOOP_POLL_MS ?? 30_000),
+    });
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
   } else if (action === "stop") {
     const id = process.argv[4];
-    if (!id) { console.error("Usage: atlas loop stop <loop-id>"); process.exitCode = 1; }
-    else console.log(JSON.stringify(await stopTaskLoop(id), null, 2));
+    if (!id) {
+      console.error("Usage: atlas loop stop <loop-id>");
+      process.exitCode = 1;
+    } else console.log(JSON.stringify(await stopTaskLoop(id), null, 2));
   } else {
     console.error("Usage: atlas loop start|status|stop|worker-once|worker");
     process.exitCode = 1;
@@ -656,7 +702,11 @@ if (command === "--version" || command === "-v") {
     console.error("ATLAS_GATEWAY_TOKEN is required");
     process.exitCode = 1;
   } else {
-    const server = createWebhookGateway(atlasRoot(), token);
+    const server = createWebhookGateway(
+      atlasRoot(),
+      token,
+      defaultAgentRuntime,
+    );
     server.listen(port, "127.0.0.1", () =>
       console.log(`Atlas webhook gateway listening on 127.0.0.1:${port}`),
     );
@@ -672,7 +722,13 @@ if (command === "--version" || command === "-v") {
   else if (action === "observe") {
     const sessionId = process.argv[4];
     if (sessionId)
-      console.log(JSON.stringify(await observeSession(sessionId), null, 2));
+      console.log(
+        JSON.stringify(
+          await observeSession(sessionId, defaultSessionStoreFactory),
+          null,
+          2,
+        ),
+      );
     else console.log(JSON.stringify(await listObservations(), null, 2));
   } else if (action === "observation-review") {
     const [observationId, status] = process.argv.slice(4);
@@ -728,7 +784,11 @@ if (command === "--version" || command === "-v") {
       process.exitCode = 1;
     } else
       console.log(
-        JSON.stringify(await learnSkillFromSession(sessionId), null, 2),
+        JSON.stringify(
+          await learnSkillFromSession(sessionId, defaultSessionStoreFactory),
+          null,
+          2,
+        ),
       );
   } else {
     console.error(
@@ -759,8 +819,13 @@ if (command === "--version" || command === "-v") {
     try {
       const result =
         command === "update"
-          ? await updateProvider(id, true)
-          : await removeInstalledProvider(id, true);
+          ? await updateProvider(
+              id,
+              true,
+              defaultWrapperManager,
+              defaultProviderRegistry,
+            )
+          : await removeInstalledProvider(id, true, defaultWrapperManager);
       console.log(
         JSON.stringify(
           {
@@ -777,7 +842,7 @@ if (command === "--version" || command === "-v") {
     }
   }
 } else if (command === "doctor") {
-  const report = await workspaceReport();
+  const report = await workspaceReport(defaultWrapperManager);
   if (process.argv.includes("--json"))
     console.log(JSON.stringify(report, null, 2));
   else
@@ -788,7 +853,7 @@ if (command === "--version" || command === "-v") {
 } else if (command === "repair") {
   const apply = process.argv.includes("--apply");
   if (!apply) {
-    const report = await workspaceReport();
+    const report = await workspaceReport(defaultWrapperManager);
     console.log(
       JSON.stringify(
         {
@@ -801,7 +866,7 @@ if (command === "--version" || command === "-v") {
       ),
     );
   } else {
-    const result = await repairWorkspace();
+    const result = await repairWorkspace(defaultWrapperManager);
     console.log(
       JSON.stringify(
         { applied: result.changes, findings: result.findings },
@@ -833,14 +898,17 @@ if (command === "--version" || command === "-v") {
     );
     process.exitCode = 1;
   } else {
-    const session = await runAgent({
-      profileName,
-      client,
-      taskId,
-      handoffId,
-      prompt,
-      cwd: atlasRoot(),
-    });
+    const session = await runAgent(
+      {
+        profileName,
+        client,
+        taskId,
+        handoffId,
+        prompt,
+        cwd: atlasRoot(),
+      },
+      defaultAgentRuntime,
+    );
     console.log(
       JSON.stringify({ sessionId: session.sessionId, status: session.status }),
     );
@@ -910,7 +978,7 @@ if (command === "--version" || command === "-v") {
       console.error("Usage: atlas session resume <session-id> <prompt>");
       process.exitCode = 1;
     } else {
-      const session = await resumeAgent(sessionId, prompt);
+      const session = await resumeAgent(sessionId, prompt, defaultAgentRuntime);
       console.log(
         JSON.stringify({
           sessionId: session.sessionId,
@@ -933,6 +1001,7 @@ if (command === "--version" || command === "-v") {
           JSON.stringify(
             await promoteSessionToKnowledge(
               sessionId,
+              defaultSessionStoreFactory,
               target,
               process.argv.includes("--approve"),
             ),

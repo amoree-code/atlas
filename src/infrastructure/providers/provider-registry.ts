@@ -1,14 +1,10 @@
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { ProviderRecord } from "../../domain/providers/provider.js";
 import { atlasPath } from "../../paths.js";
 
-export type ProviderRecord = {
-  id: string;
-  command: string;
-  interactive: boolean;
-  headless: boolean;
-};
+export type { ProviderRecord } from "../../domain/providers/provider.js";
 
 const builtInProviders: ProviderRecord[] = [
   { id: "claude", command: "claude", interactive: true, headless: true },

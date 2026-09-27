@@ -7,6 +7,7 @@ import {
   claudeSessionEndHook,
   readTranscriptEvents,
 } from "../dist/application/hooks/session-end-hook.js";
+import { defaultSessionStoreFactory } from "../dist/composition/runtime.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
 test("readTranscriptEvents extracts bounded user/assistant text turns and skips everything else", async () => {
@@ -71,13 +72,16 @@ test("claudeSessionEndHook registers a desktop session from its transcript and r
     "utf8",
   );
 
-  await claudeSessionEndHook({
-    session_id: "desktop-hook-session-1",
-    transcript_path: transcriptPath,
-    cwd: projectDir,
-    hook_event_name: "SessionEnd",
-    reason: "other",
-  });
+  await claudeSessionEndHook(
+    {
+      session_id: "desktop-hook-session-1",
+      transcript_path: transcriptPath,
+      cwd: projectDir,
+      hook_event_name: "SessionEnd",
+      reason: "other",
+    },
+    defaultSessionStoreFactory,
+  );
 
   const store = await openSessionStore();
   const saved = store.get("desktop-hook-session-1");
@@ -115,7 +119,9 @@ test("claudeSessionEndHook registers a desktop session from its transcript and r
 });
 
 test("claudeSessionEndHook is a no-op without a session_id and never throws", async () => {
-  await assert.doesNotReject(claudeSessionEndHook({}));
+  await assert.doesNotReject(
+    claudeSessionEndHook({}, defaultSessionStoreFactory),
+  );
 });
 
 test("claudeSessionEndHook is idempotent for a session that already closed out", async () => {
@@ -128,8 +134,10 @@ test("claudeSessionEndHook is idempotent for a session that already closed out",
     hook_event_name: "SessionEnd",
     reason: "other",
   };
-  await claudeSessionEndHook(payload);
-  await assert.doesNotReject(claudeSessionEndHook(payload));
+  await claudeSessionEndHook(payload, defaultSessionStoreFactory);
+  await assert.doesNotReject(
+    claudeSessionEndHook(payload, defaultSessionStoreFactory),
+  );
 
   delete process.env.ATLAS_ROOT;
 });

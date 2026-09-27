@@ -1,38 +1,18 @@
 import path from "node:path";
-import {
-  type HeadlessResult,
-  type RuntimeEvent,
-  runHeadless,
-} from "../process/cli-process.js";
+import type {
+  HeadlessProvider,
+  ProviderAdapter,
+  ProviderRequest,
+} from "../../domain/providers/provider.js";
+import { type HeadlessResult, runHeadless } from "../process/cli-process.js";
 import { resolveOriginalExecutable } from "./provider-registry.js";
 
-export type HeadlessProvider =
-  | "claude"
-  | "codex"
-  | "gemini"
-  | "antigravity"
-  | "hermes"
-  | "kilo"
-  | "kimi";
-export type ProviderAdapter = {
-  provider: HeadlessProvider;
-  capabilities: readonly string[];
-  readOnlyArgs?: readonly string[];
-  build: (request: ProviderRequest) => string[];
-};
-
-export type ProviderRequest = {
-  provider: HeadlessProvider;
-  prompt: string;
-  cwd: string;
-  clientHome?: string;
-  resumeId?: string;
-  timeoutMs?: number;
-  maxOutputBytes?: number;
-  onEvent?: (event: RuntimeEvent) => void;
-  onSpawn?: (pid: number) => void;
-  readOnly?: boolean;
-};
+// Provider contracts live in the domain layer; re-exported here for existing callers.
+export type {
+  HeadlessProvider,
+  ProviderAdapter,
+  ProviderRequest,
+} from "../../domain/providers/provider.js";
 
 export const providerAdapterRegistry: Readonly<
   Record<HeadlessProvider, ProviderAdapter>

@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type {
+  SessionStoreFactory,
+  SessionStorePort,
+} from "../../domain/ports/session-store-port.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
-import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { atlasPath } from "../../paths.js";
 import { addSkillCandidate } from "./skill-curation.js";
 
@@ -63,7 +66,7 @@ function observationId(
 }
 
 export async function observeSessionWithStore(
-  store: Awaited<ReturnType<typeof openSessionStore>>,
+  store: SessionStorePort,
   sessionId: string,
 ): Promise<TaskObservation[]> {
   const session = store.get(sessionId);
@@ -165,8 +168,9 @@ export async function observeSessionWithStore(
 
 export async function observeSession(
   sessionId: string,
+  openStore: SessionStoreFactory,
 ): Promise<TaskObservation[]> {
-  const store = await openSessionStore();
+  const store = await openStore();
   try {
     return await observeSessionWithStore(store, sessionId);
   } finally {

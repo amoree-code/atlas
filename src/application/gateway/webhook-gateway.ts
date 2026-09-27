@@ -5,8 +5,8 @@ import {
   type ServerResponse,
 } from "node:http";
 import { actionFingerprint } from "../../domain/mcp/mcp-contract.js";
-import { loadProfile } from "../../infrastructure/filesystem/profile-loader.js";
-import { type ProviderExecutor, runAgent } from "../runs/run-agent.js";
+import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
+import { runAgent } from "../runs/run-agent.js";
 
 export type GatewayRequest = {
   profile: string;
@@ -73,7 +73,7 @@ export const telegramAdapter: GatewayAdapter = {
 export function createGatewayHandler(
   expectedToken: string,
   cwd: string,
-  execute?: ProviderExecutor,
+  runtime: AgentRuntimeDeps,
 ) {
   const requestTimes: number[] = [];
   return async (
@@ -133,7 +133,7 @@ export function createGatewayHandler(
     if ((input as GatewayRequest).prompt.length > 8_000)
       return { status: 413, body: "Prompt too large" };
     try {
-      await loadProfile((input as GatewayRequest).profile);
+      await runtime.loadProfile((input as GatewayRequest).profile);
     } catch {
       return { status: 400, body: "Invalid profile" };
     }
@@ -144,7 +144,7 @@ export function createGatewayHandler(
         cwd,
         actor: `gateway:${identity}`,
       },
-      execute,
+      runtime,
     );
     return {
       status: 200,
@@ -161,17 +161,17 @@ export async function handleGatewayRequest(
   token: string | undefined,
   expectedToken: string,
   cwd: string,
-  execute?: ProviderExecutor,
+  runtime: AgentRuntimeDeps,
 ): Promise<{ status: number; body: string }> {
-  return createGatewayHandler(expectedToken, cwd, execute)(input, token);
+  return createGatewayHandler(expectedToken, cwd, runtime)(input, token);
 }
 
 export function createWebhookGateway(
   cwd: string,
   expectedToken: string,
-  execute?: ProviderExecutor,
+  runtime: AgentRuntimeDeps,
 ) {
-  const handleRequest = createGatewayHandler(expectedToken, cwd, execute);
+  const handleRequest = createGatewayHandler(expectedToken, cwd, runtime);
   return createServer(
     async (request: IncomingMessage, response: ServerResponse) => {
       if (request.method !== "POST") {

@@ -1,31 +1,21 @@
 import { spawn } from "node:child_process";
+import type {
+  HeadlessRequest,
+  HeadlessResult,
+  RuntimeEvent,
+} from "../../domain/process/process-events.js";
+
+// Process contracts live in the domain layer; re-exported here for existing callers.
+export type {
+  HeadlessRequest,
+  HeadlessResult,
+  RuntimeEvent,
+} from "../../domain/process/process-events.js";
 
 // Applied whenever a caller doesn't pass an explicit maxOutputBytes, so a headless run
 // without a budget contract can never buffer unbounded output (disk/memory exhaustion,
 // unbounded secret/log capture surface).
 export const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
-
-export type RuntimeEvent = {
-  type: "json" | "text";
-  data: unknown;
-};
-
-export type HeadlessRequest = {
-  command: string;
-  args: string[];
-  cwd: string;
-  env?: Record<string, string>;
-  timeoutMs?: number;
-  maxOutputBytes?: number;
-  onEvent?: (event: RuntimeEvent) => void;
-  onSpawn?: (pid: number) => void;
-};
-
-export type HeadlessResult = {
-  exitCode: number;
-  events: RuntimeEvent[];
-  stderr: string;
-};
 
 export function runHeadless(request: HeadlessRequest): Promise<HeadlessResult> {
   return new Promise((resolve, reject) => {

@@ -8,7 +8,7 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { desktopWrapperPath } from "../../infrastructure/wrappers/wrapper-manager.js";
+import type { WrapperManagerPort } from "../../domain/ports/platform-ports.js";
 
 export function defaultClaudeCodeSettingsPath(): string {
   if (process.platform === "darwin")
@@ -31,6 +31,7 @@ export function defaultClaudeCodeSettingsPath(): string {
 }
 
 export async function configureClaudeCodeWrapper(
+  wrapperManager: WrapperManagerPort,
   settingsPath = defaultClaudeCodeSettingsPath(),
   apply = false,
 ): Promise<{
@@ -40,7 +41,7 @@ export async function configureClaudeCodeWrapper(
   changed: boolean;
   backup: string | null;
 }> {
-  const wrapper = desktopWrapperPath("claude");
+  const wrapper = wrapperManager.desktopWrapperPath("claude");
   let source = "{}\n";
   try {
     source = await readFile(settingsPath, "utf8");

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { configureClaudeCodeWrapper } from "../dist/application/integrations/claude-vscode.js";
+import { defaultWrapperManager } from "../dist/composition/runtime.js";
 
 test("Claude Code wrapper setup previews and backs up a plain JSON settings file", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-vscode-settings-"));
@@ -12,10 +13,18 @@ test("Claude Code wrapper setup previews and backs up a plain JSON settings file
     settings,
     '{"editor.formatOnSave":true}\n',
   );
-  const preview = await configureClaudeCodeWrapper(settings, false);
+  const preview = await configureClaudeCodeWrapper(
+    defaultWrapperManager,
+    settings,
+    false,
+  );
   assert.equal(preview.changed, true);
   assert.equal(preview.backup, null);
-  const applied = await configureClaudeCodeWrapper(settings, true);
+  const applied = await configureClaudeCodeWrapper(
+    defaultWrapperManager,
+    settings,
+    true,
+  );
   assert.ok(applied.backup);
   assert.match(
     await readFile(settings, "utf8"),

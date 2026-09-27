@@ -2,15 +2,15 @@ import { execFile as execFileCallback } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
+import type {
+  SessionStoreFactory,
+  SessionStorePort,
+} from "../../domain/ports/session-store-port.js";
 import {
   compactHandoff,
   type Handoff,
   validateHandoff,
 } from "../../domain/sessions/handoff.js";
-import {
-  openSessionStore,
-  type SessionStore,
-} from "../../infrastructure/persistence/session-store.js";
 import { atlasPath, engineRoot, resolveWithin } from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
@@ -26,20 +26,23 @@ export type Task = {
   updatedAt: string;
 };
 
-export async function createHandoff(input: {
-  taskId?: string;
-  sessionId?: string;
-  profileId?: string;
-  nextAction?: string;
-  provider?: string;
-  sourceSummaryPath?: string | null;
-  changedFiles?: string[];
-  verification?: string[];
-  notProven?: string[];
-  blocked?: string[];
-}): Promise<Handoff> {
+export async function createHandoff(
+  input: {
+    taskId?: string;
+    sessionId?: string;
+    profileId?: string;
+    nextAction?: string;
+    provider?: string;
+    sourceSummaryPath?: string | null;
+    changedFiles?: string[];
+    verification?: string[];
+    notProven?: string[];
+    blocked?: string[];
+  },
+  openStore: SessionStoreFactory,
+): Promise<Handoff> {
   const task = input.taskId ? await getTask(input.taskId) : null;
-  const store = await openSessionStore();
+  const store = await openStore();
   try {
     return await createHandoffWithStore(store, { ...input, task });
   } finally {
@@ -48,7 +51,7 @@ export async function createHandoff(input: {
 }
 
 export async function createHandoffWithStore(
-  store: SessionStore,
+  store: SessionStorePort,
   input: {
     taskId?: string;
     sessionId?: string;
@@ -120,9 +123,10 @@ export async function createHandoffWithStore(
 
 export async function getHandoff(
   handoffId: string,
+  openStore: SessionStoreFactory,
   maxBytes = 8_000,
 ): Promise<Record<string, unknown>> {
-  const store = await openSessionStore();
+  const store = await openStore();
   try {
     const handoff = store.getHandoff(handoffId);
     if (!handoff) throw new Error(`Handoff not found: ${handoffId}`);
@@ -136,9 +140,10 @@ export async function getHandoff(
 }
 
 export async function listHandoffs(
+  openStore: SessionStoreFactory,
   taskId?: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const store = await openSessionStore();
+  const store = await openStore();
   try {
     return store
       .listHandoffs(taskId)

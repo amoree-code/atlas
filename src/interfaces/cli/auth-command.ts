@@ -3,6 +3,7 @@ import {
   authLogin,
   authStatus,
 } from "../../application/auth/auth-orchestrator.js";
+import { defaultAuthDeps } from "../../composition/runtime.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 
@@ -50,8 +51,8 @@ export async function runAuthCommand(
   );
   const state =
     action === "status"
-      ? await authStatus(provider)
-      : await authLogin(provider);
+      ? await authStatus(provider, defaultAuthDeps)
+      : await authLogin(provider, defaultAuthDeps);
   store.appendEvent(sessionId, "auth_state", JSON.stringify({ state }));
   store.appendEvent(
     sessionId,

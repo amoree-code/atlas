@@ -3,6 +3,7 @@ import {
   getHandoff,
   listHandoffs,
 } from "../../application/handoff/handoff-service.js";
+import { defaultSessionStoreFactory } from "../../composition/runtime.js";
 
 export async function runHandoffCommand(
   action: string,
@@ -13,20 +14,27 @@ export async function runHandoffCommand(
     const sessionIndex = args.indexOf("--session");
     const nextIndex = args.indexOf("--next");
     const providerIndex = args.indexOf("--provider");
-    const handoff = await createHandoff({
-      taskId: taskIndex >= 0 ? args[taskIndex + 1] : undefined,
-      sessionId: sessionIndex >= 0 ? args[sessionIndex + 1] : undefined,
-      nextAction:
-        nextIndex >= 0 ? args.slice(nextIndex + 1).join(" ") : undefined,
-      provider: providerIndex >= 0 ? args[providerIndex + 1] : undefined,
-    });
+    const handoff = await createHandoff(
+      {
+        taskId: taskIndex >= 0 ? args[taskIndex + 1] : undefined,
+        sessionId: sessionIndex >= 0 ? args[sessionIndex + 1] : undefined,
+        nextAction:
+          nextIndex >= 0 ? args.slice(nextIndex + 1).join(" ") : undefined,
+        provider: providerIndex >= 0 ? args[providerIndex + 1] : undefined,
+      },
+      defaultSessionStoreFactory,
+    );
     console.log(JSON.stringify(handoff, null, 2));
     return;
   }
   if (action === "show" || action === "context") {
     const id = args[0];
     if (!id) throw new Error(`Usage: atlas handoff ${action} <handoff-id>`);
-    const handoff = await getHandoff(id, action === "context" ? 8_000 : 16_000);
+    const handoff = await getHandoff(
+      id,
+      defaultSessionStoreFactory,
+      action === "context" ? 8_000 : 16_000,
+    );
     console.log(JSON.stringify(handoff, null, 2));
     return;
   }
@@ -34,7 +42,10 @@ export async function runHandoffCommand(
     const taskIndex = args.indexOf("--task");
     console.log(
       JSON.stringify(
-        await listHandoffs(taskIndex >= 0 ? args[taskIndex + 1] : undefined),
+        await listHandoffs(
+          defaultSessionStoreFactory,
+          taskIndex >= 0 ? args[taskIndex + 1] : undefined,
+        ),
         null,
         2,
       ),

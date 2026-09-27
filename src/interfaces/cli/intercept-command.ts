@@ -12,6 +12,7 @@ import {
 } from "../../application/context/resource-injection.js";
 import { finalizeSession } from "../../application/memory/session-closeout.js";
 import { authorizeRun } from "../../application/runs/run-authorization.js";
+import { defaultAuthDeps } from "../../composition/runtime.js";
 import {
   type Profile,
   profileIdentity,
@@ -159,7 +160,7 @@ export async function intercept(
     const executable = options.originalExecutable
       ? validateExplicitExecutable(options.originalExecutable)
       : resolveOriginalExecutable(provider.command);
-    const authState = await authStatus(provider.id);
+    const authState = await authStatus(provider.id, defaultAuthDeps);
     store.appendEvent(
       sessionId,
       "auth_state",
@@ -171,7 +172,7 @@ export async function intercept(
         "auth_login_started",
         JSON.stringify({ provider: provider.id }),
       );
-      const verifiedState = await authLogin(provider.id);
+      const verifiedState = await authLogin(provider.id, defaultAuthDeps);
       store.appendEvent(
         sessionId,
         "auth_state",
@@ -258,7 +259,7 @@ export async function intercept(
         "auth_recovery_started",
         JSON.stringify({ provider: provider.id, reason: evidence.criterion }),
       );
-      const recoveredState = await authLogin(provider.id);
+      const recoveredState = await authLogin(provider.id, defaultAuthDeps);
       store.appendEvent(
         sessionId,
         "auth_state",

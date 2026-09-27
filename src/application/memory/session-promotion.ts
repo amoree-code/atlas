@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { SessionStoreFactory } from "../../domain/ports/session-store-port.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
-import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { atlasPath } from "../../paths.js";
 import { syncMemoryIndexes } from "./index-sync.js";
 
@@ -18,6 +18,7 @@ const kinds = new Set([
 
 export async function promoteSessionToKnowledge(
   sessionId: string,
+  openStore: SessionStoreFactory,
   target = "knowledge/results",
   approved = false,
 ): Promise<{ applied: boolean; sessionId: string; file?: string }> {
@@ -30,7 +31,7 @@ export async function promoteSessionToKnowledge(
     throw new Error(
       "Target must be knowledge/<architecture|decisions|discoveries|failures|research|results|solutions|references>",
     );
-  const store = await openSessionStore();
+  const store = await openStore();
   try {
     const session = store.get(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
