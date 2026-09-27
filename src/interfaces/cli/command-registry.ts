@@ -1,0 +1,1140 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { classifyIntent } from "../../application/context/intent-router.js";
+import {
+  bindProject,
+  listProjectBindings,
+  resolveProject,
+} from "../../application/context/project-resolution.js";
+import {
+  hasFailures,
+  repairWorkspace,
+  workspaceReport,
+} from "../../application/doctor/workspace-doctor.js";
+import { createWebhookGateway } from "../../application/gateway/webhook-gateway.js";
+import { claudeSessionEndHook } from "../../application/hooks/session-end-hook.js";
+import {
+  claudeSessionStartHook,
+  readBoundedStdin,
+} from "../../application/hooks/session-start-hook.js";
+import {
+  findInstallSpec,
+  installPlan,
+  installProvider,
+  listInstallSpecs,
+  removeInstalledProvider,
+  updateProvider,
+} from "../../application/install/provider-installer.js";
+import { configureClaudeCodeWrapper } from "../../application/integrations/claude-vscode.js";
+import {
+  listTaskLoops,
+  runTaskLoopsOnce,
+  runTaskLoopWorker,
+  startTaskLoop,
+  stopTaskLoop,
+} from "../../application/loops/task-loop.js";
+import {
+  atlasMcpConfig,
+  playwrightMcpConfig,
+} from "../../application/mcp/mcp-connection.js";
+import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
+import { resolveConflict } from "../../application/obsidian/conflict-log.js";
+import {
+  listInboxCandidates,
+  promoteInboxNote,
+} from "../../application/obsidian/inbox-promotion.js";
+import {
+  connectObsidianVault,
+  discoverObsidianVault,
+  loadObsidianConnection,
+} from "../../application/obsidian/vault-discovery.js";
+import {
+  syncObsidianVault,
+  watchObsidianVault,
+} from "../../application/obsidian/vault-sync.js";
+import { writeObsidianNote } from "../../application/obsidian/vault-writer.js";
+import { resumeAgent, runAgent } from "../../application/runs/run-agent.js";
+import {
+  listSchedules,
+  runDueSchedules,
+  runSchedule,
+  runSchedulerWorker,
+  runSchedulerWorkerOnce,
+  saveSchedule,
+  setScheduleEnabled,
+} from "../../application/scheduler/local-scheduler.js";
+import {
+  coreSkillReports,
+  syncCoreSkills,
+} from "../../application/skills/core-skill-sync.js";
+import {
+  addSkillCandidate,
+  learnSkillFromSession,
+  listSkillCandidates,
+  reviewSkillCandidate,
+} from "../../application/skills/skill-curation.js";
+import {
+  listObservations,
+  observeSession,
+  reviewObservation,
+} from "../../application/skills/task-observer.js";
+import {
+  defaultAgentRuntime,
+  defaultProviderRegistry,
+  defaultSessionStoreFactory,
+  defaultWrapperManager,
+} from "../../composition/runtime.js";
+import { runAtlasMcpServer } from "../../infrastructure/mcp/atlas-server.js";
+import { runObsidianMcpServer } from "../../infrastructure/mcp/obsidian-server.js";
+import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
+import { runService } from "../../infrastructure/process/service.js";
+import { loadProviderRegistry } from "../../infrastructure/providers/provider-registry.js";
+import {
+  installShellPath,
+  registerProvider,
+  syncProviderWrappers,
+  wrapperDoctor,
+  wrapperStatus,
+} from "../../infrastructure/wrappers/wrapper-manager.js";
+import { atlasRoot } from "../../paths.js";
+import { runAuthCommand } from "./auth-command.js";
+import { runBrowserCommand } from "./browser-command.js";
+import { runCaptureCommand } from "./capture-command.js";
+import { runClientTestCommand } from "./client-test-command.js";
+import { runContextCommand } from "./context-command.js";
+import { runDailyCommand } from "./daily-command.js";
+import { runLifecycleCommand, runPolicyCommand } from "./governance-command.js";
+import { runHandoffCommand } from "./handoff-command.js";
+import { runIdeaCommand } from "./idea-command.js";
+import { intercept } from "./intercept-command.js";
+import { runMemoryCommand } from "./memory-command.js";
+import { runMigrateCommand } from "./migrate-command.js";
+import { runObserveCommand } from "./observe-command.js";
+import { runOperateCommand } from "./operate-command.js";
+import { setup } from "./setup-command.js";
+import { runTasksCommand } from "./tasks-command.js";
+
+export type CommandHandler = () => Promise<void> | void;
+
+async function commandSetup(): Promise<void> {
+  const obsidianIndex = process.argv.indexOf("--obsidian");
+  const obsidianPath =
+    obsidianIndex >= 0 ? process.argv[obsidianIndex + 1] : undefined;
+  if (obsidianIndex >= 0 && !obsidianPath) {
+    console.error(
+      "Usage: atlas setup [--obsidian <vault-path>] [--read-write]",
+    );
+    process.exitCode = 1;
+  } else {
+    await setup({
+      obsidianPath,
+      obsidianMode: process.argv.includes("--read-write")
+        ? "read-write"
+        : "read-only",
+    });
+  }
+}
+
+async function commandService(): Promise<void> {
+  const shutdownAfterMs = Number(process.env.ATLAS_SERVICE_TEST_SHUTDOWN_MS);
+  await runService(
+    Number.isFinite(shutdownAfterMs) && shutdownAfterMs > 0
+      ? shutdownAfterMs
+      : undefined,
+  );
+}
+
+async function commandIntercept(): Promise<void> {
+  const clientIndex = process.argv.indexOf("--client");
+  const executableIndex = process.argv.indexOf("--executable");
+  const separatorIndex = process.argv.indexOf("--");
+  const client = clientIndex >= 0 ? process.argv[clientIndex + 1] : "";
+  const args =
+    separatorIndex >= 0 ? process.argv.slice(separatorIndex + 1) : [];
+  if (!client) {
+    console.error("Usage: atlas intercept --client <provider> -- [args]");
+    process.exitCode = 1;
+  } else {
+    process.exitCode = await intercept(
+      client,
+      args,
+      executableIndex >= 0
+        ? {
+            originalExecutable: process.argv[executableIndex + 1],
+            entryPoint: "desktop-wrapper",
+            controlLevel: "managed-partial",
+          }
+        : undefined,
+    );
+  }
+}
+
+async function commandClient(): Promise<void> {
+  const action = process.argv[3] ?? "list";
+  if (action === "list") {
+    console.log(JSON.stringify(loadProviderRegistry(), null, 2));
+  } else if (action === "open") {
+    const provider = process.argv[4];
+    if (!provider) {
+      console.error("Usage: atlas client open <provider> [provider-args]");
+      process.exitCode = 1;
+    } else {
+      const providerArgs = process.argv.slice(5);
+      const taskIndex = providerArgs.indexOf("--task");
+      const handoffIndex = providerArgs.indexOf("--handoff");
+      const taskId = taskIndex >= 0 ? providerArgs[taskIndex + 1] : undefined;
+      const handoffId =
+        handoffIndex >= 0 ? providerArgs[handoffIndex + 1] : undefined;
+      const metadataFlags = new Set<number>();
+      if (taskIndex >= 0) {
+        metadataFlags.add(taskIndex);
+        metadataFlags.add(taskIndex + 1);
+      }
+      if (handoffIndex >= 0) {
+        metadataFlags.add(handoffIndex);
+        metadataFlags.add(handoffIndex + 1);
+      }
+      process.exitCode = await intercept(
+        provider,
+        providerArgs.filter((_, index) => !metadataFlags.has(index)),
+        {
+          entryPoint: "interactive-managed",
+          controlLevel: "managed-partial",
+          taskId,
+          handoffId,
+        },
+      );
+    }
+  } else if (action === "sync") {
+    const result = await syncProviderWrappers();
+    console.log(
+      JSON.stringify(
+        { directory: result.directory, providers: result.providers },
+        null,
+        2,
+      ),
+    );
+  } else if (action === "register") {
+    const id = process.argv[4];
+    const provider = await registerProvider(
+      id ?? "",
+      process.argv[5] ?? id ?? "",
+    );
+    console.log(JSON.stringify(provider, null, 2));
+  } else if (action === "doctor") {
+    const findings = await wrapperDoctor(process.argv[4]);
+    if (findings.length) {
+      findings.forEach((finding) => {
+        console.error(`NOT READY: ${finding}`);
+      });
+      process.exitCode = 1;
+    } else {
+      console.log(
+        "PROVEN: Atlas wrappers are configured and provider binaries resolve outside the shim directory.",
+      );
+    }
+  } else if (action === "status") {
+    console.log(JSON.stringify(await wrapperStatus(), null, 2));
+  } else if (action === "vscode-wrapper") {
+    const settingsIndex = process.argv.indexOf("--settings");
+    const settingsPath =
+      settingsIndex >= 0 ? process.argv[settingsIndex + 1] : undefined;
+    console.log(
+      JSON.stringify(
+        await configureClaudeCodeWrapper(
+          defaultWrapperManager,
+          settingsPath,
+          process.argv.includes("--apply"),
+        ),
+        null,
+        2,
+      ),
+    );
+  } else if (action === "test") {
+    const provider =
+      process.argv[4] === "--json" ? "" : (process.argv[4] ?? "");
+    await runClientTestCommand(provider, process.argv.includes("--json"));
+  } else {
+    console.error(
+      "Usage: atlas client list|status|test [provider] [--json]|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|doctor [absolute-provider-path]",
+    );
+    process.exitCode = 1;
+  }
+}
+
+async function commandInstall(): Promise<void> {
+  const id = process.argv[3];
+  if (!id) {
+    console.error("Usage: atlas install <client> [--yes]");
+    process.exitCode = 1;
+  } else {
+    try {
+      const spec = findInstallSpec(id);
+      if (!process.argv.includes("--yes")) {
+        console.log(
+          JSON.stringify(
+            { approvalRequired: true, plan: installPlan(spec.provider.id) },
+            null,
+            2,
+          ),
+        );
+        process.exitCode = 2;
+      } else {
+        const result = await installProvider(
+          spec.provider.id,
+          true,
+          defaultWrapperManager,
+          defaultProviderRegistry,
+        );
+        console.log(
+          JSON.stringify(
+            {
+              installed: true,
+              provider: result.provider,
+              executable: result.executable,
+            },
+            null,
+            2,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+  }
+}
+
+async function commandAuth(): Promise<void> {
+  await runAuthCommand(process.argv[3] ?? "", process.argv[4] ?? "");
+}
+
+async function commandTasks(): Promise<void> {
+  await runTasksCommand(process.argv[3] ?? "", process.argv.slice(4));
+}
+
+async function commandPolicy(): Promise<void> {
+  try {
+    await runPolicyCommand(process.argv[3] ?? "list");
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function commandLifecycle(): Promise<void> {
+  await runLifecycleCommand(process.argv.slice(3));
+}
+
+async function commandObserve(): Promise<void> {
+  try {
+    await runObserveCommand(process.argv.slice(3));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function commandMigrate(): Promise<void> {
+  await runMigrateCommand(process.argv.includes("--apply"));
+}
+
+async function commandMemory(): Promise<void> {
+  await runMemoryCommand(process.argv[3] ?? "", process.argv.slice(4));
+}
+
+async function commandMcp(): Promise<void> {
+  const action = process.argv[3] ?? "config";
+  if (action === "config")
+    console.log(JSON.stringify(atlasMcpConfig(), null, 2));
+  else if (action === "playwright-config")
+    console.log(JSON.stringify(playwrightMcpConfig(), null, 2));
+  else if (action === "serve") await runAtlasMcpServer();
+  else {
+    console.error("Usage: atlas mcp config|playwright-config|serve");
+    process.exitCode = 1;
+  }
+}
+
+async function commandObsidian(): Promise<void> {
+  const action = process.argv[3] ?? "discover";
+  if (action === "mcp") await runObsidianMcpServer();
+  else if (
+    ![
+      "connect",
+      "discover",
+      "sync",
+      "watch",
+      "inbox",
+      "write",
+      "conflicts",
+    ].includes(action)
+  ) {
+    console.error(
+      "Usage: atlas obsidian connect <vault-path> [--read-write]|discover|sync|watch|inbox|write|conflicts resolve <id> --keep=vault|atlas",
+    );
+    process.exitCode = 1;
+  } else {
+    try {
+      if (action === "connect") {
+        const vaultPath = process.argv[4];
+        if (!vaultPath)
+          throw new Error(
+            "Usage: atlas obsidian connect <vault-path> [--read-write]",
+          );
+        const readWrite = process.argv.includes("--read-write");
+        const mode = readWrite
+          ? ("read-write" as const)
+          : ("read-only" as const);
+        const result = await connectObsidianVault(vaultPath, mode);
+        const synced = await syncObsidianVault(await loadObsidianConnection());
+        console.log(
+          JSON.stringify(
+            {
+              connected: true,
+              mode,
+              vaultPath: result.vaultPath,
+              noteCount: synced.noteCount,
+              added: synced.added,
+              changed: synced.changed,
+              removed: synced.removed,
+              issues: synced.issues,
+            },
+            null,
+            2,
+          ),
+        );
+      } else {
+        const connection = await loadObsidianConnection();
+        if (action === "conflicts") {
+          if (process.argv[4] !== "resolve")
+            throw new Error(
+              "Usage: atlas obsidian conflicts resolve <id> --keep=vault|atlas",
+            );
+          const id = process.argv[5];
+          const keepArg = process.argv.find((arg) => arg.startsWith("--keep="));
+          const keep = keepArg?.slice("--keep=".length);
+          if (!id || (keep !== "vault" && keep !== "atlas"))
+            throw new Error(
+              "Usage: atlas obsidian conflicts resolve <id> --keep=vault|atlas",
+            );
+          console.log(JSON.stringify(await resolveConflict(id, keep), null, 2));
+        } else if (action === "write") {
+          const relative = process.argv[4];
+          const content = process.argv[5];
+          const expectedSha256 = process.argv[6] ?? null;
+          if (!relative || content === undefined)
+            throw new Error(
+              "Usage: atlas obsidian write <relative.md> <content> [expected-sha256] [--apply]",
+            );
+          console.log(
+            JSON.stringify(
+              await writeObsidianNote(
+                connection,
+                relative,
+                content,
+                expectedSha256 === "-" ? null : expectedSha256,
+                process.argv.includes("--apply"),
+              ),
+              null,
+              2,
+            ),
+          );
+        } else if (action === "inbox") {
+          const inboxAction = process.argv[4] ?? "list";
+          if (inboxAction === "list")
+            console.log(
+              JSON.stringify(await listInboxCandidates(connection), null, 2),
+            );
+          else if (inboxAction === "promote") {
+            const source = process.argv[5];
+            const target = process.argv[6];
+            if (!source || !target)
+              throw new Error(
+                "Usage: atlas obsidian inbox promote <source.md> <target-directory> [--apply]",
+              );
+            console.log(
+              JSON.stringify(
+                await promoteInboxNote(
+                  connection,
+                  source,
+                  target,
+                  process.argv.includes("--apply"),
+                ),
+                null,
+                2,
+              ),
+            );
+          } else
+            throw new Error(
+              "Usage: atlas obsidian inbox list|promote <source.md> <target-directory> [--apply]",
+            );
+        } else if (action === "discover")
+          console.log(
+            JSON.stringify(await discoverObsidianVault(connection), null, 2),
+          );
+        else if (action === "sync")
+          console.log(
+            JSON.stringify(await syncObsidianVault(connection), null, 2),
+          );
+        else {
+          const controller = new AbortController();
+          process.once("SIGINT", () => controller.abort());
+          process.once("SIGTERM", () => controller.abort());
+          await watchObsidianVault(connection, undefined, controller.signal);
+        }
+      }
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+  }
+}
+
+async function commandCapture(): Promise<void> {
+  await runCaptureCommand(process.argv[3] ?? "", process.argv.slice(4));
+}
+
+async function commandHandoff(): Promise<void> {
+  try {
+    await runHandoffCommand(process.argv[3] ?? "list", process.argv.slice(4));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function commandContext(): Promise<void> {
+  await runContextCommand(process.argv.includes("--json"));
+}
+
+async function commandProject(): Promise<void> {
+  const action = process.argv[3] ?? "resolve";
+  if (action === "resolve") {
+    console.log(
+      JSON.stringify(
+        await resolveProject(process.argv[4] ?? process.cwd()),
+        null,
+        2,
+      ),
+    );
+  } else if (action === "bind") {
+    const [name, targetPath] = process.argv.slice(4);
+    if (!name || !targetPath) {
+      console.error("Usage: atlas project bind <name> <path>");
+      process.exitCode = 1;
+    } else {
+      const result = await bindProject(name, targetPath);
+      console.log(JSON.stringify(result, null, 2));
+      if (result.conflict) process.exitCode = 2;
+    }
+  } else if (action === "list") {
+    console.log(JSON.stringify(await listProjectBindings(), null, 2));
+  } else {
+    console.error(
+      "Usage: atlas project resolve [path]|bind <name> <path>|list",
+    );
+    process.exitCode = 1;
+  }
+}
+
+async function commandHook(): Promise<void> {
+  const action = process.argv[3] ?? "";
+  if (action === "session-start") {
+    try {
+      const raw = await readBoundedStdin();
+      const payload = raw.trim() ? JSON.parse(raw) : {};
+      console.log(JSON.stringify(await claudeSessionStartHook(payload)));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+  } else if (action === "session-end") {
+    try {
+      const raw = await readBoundedStdin();
+      const payload = raw.trim() ? JSON.parse(raw) : {};
+      await claudeSessionEndHook(payload, defaultSessionStoreFactory);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+  } else {
+    console.error(
+      "Usage: atlas hook session-start|session-end (reads a Claude Code hook payload from stdin)",
+    );
+    process.exitCode = 1;
+  }
+}
+
+async function commandIntent(): Promise<void> {
+  const action = process.argv[3] ?? "classify";
+  if (action !== "classify") {
+    console.error("Usage: atlas intent classify <text>");
+    process.exitCode = 1;
+  } else {
+    const text = process.argv.slice(4).join(" ");
+    console.log(JSON.stringify(classifyIntent(text)));
+  }
+}
+
+async function commandOperate(): Promise<void> {
+  const text = process.argv.slice(3).join(" ");
+  await runOperateCommand(text);
+}
+
+async function commandIdea(): Promise<void> {
+  try {
+    await runIdeaCommand(process.argv[3] ?? "list", process.argv.slice(4));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function commandDaily(): Promise<void> {
+  try {
+    await runDailyCommand(process.argv[3] ?? "start", process.argv.slice(4));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function commandSchedule(): Promise<void> {
+  const action = process.argv[3] ?? "list";
+  if (action === "list")
+    console.log(JSON.stringify(await listSchedules(), null, 2));
+  else if (action === "add") {
+    const [id, profile, intervalMs, ...prompt] = process.argv.slice(4);
+    if (!id || !profile || !intervalMs || !prompt.length) {
+      console.error(
+        "Usage: atlas schedule add <id> <profile> <interval-ms> <prompt>",
+      );
+      process.exitCode = 1;
+    } else
+      await saveSchedule({
+        id,
+        profile,
+        prompt: prompt.join(" "),
+        intervalMs: Number(intervalMs),
+        nextRunAt: new Date().toISOString(),
+        enabled: true,
+      });
+  } else if (action === "run-due")
+    console.log(
+      JSON.stringify(
+        { ran: await runDueSchedules(atlasRoot(), defaultAgentRuntime) },
+        null,
+        2,
+      ),
+    );
+  else if (action === "worker-once")
+    console.log(
+      JSON.stringify(
+        { ran: await runSchedulerWorkerOnce(atlasRoot(), defaultAgentRuntime) },
+        null,
+        2,
+      ),
+    );
+  else if (action === "worker") {
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+    await runSchedulerWorker(atlasRoot(), defaultAgentRuntime, {
+      signal: controller.signal,
+      pollMs: Number(process.env.ATLAS_SCHEDULER_POLL_MS ?? 30_000),
+    });
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
+  } else if (action === "enable" || action === "disable")
+    console.log(
+      JSON.stringify(
+        await setScheduleEnabled(process.argv[4] ?? "", action === "enable"),
+        null,
+        2,
+      ),
+    );
+  else if (action === "run-now")
+    await runSchedule(process.argv[4] ?? "", atlasRoot(), defaultAgentRuntime);
+  else {
+    console.error(
+      "Usage: atlas schedule list|add|enable|disable|run-due|run-now|worker-once|worker",
+    );
+    process.exitCode = 1;
+  }
+}
+
+async function commandLoop(): Promise<void> {
+  const action = process.argv[3] ?? "status";
+  if (action === "status")
+    console.log(JSON.stringify(await listTaskLoops(), null, 2));
+  else if (action === "start") {
+    const taskId = process.argv[4];
+    const profile = process.argv[5] ?? "developer";
+    const promptIndex = process.argv.indexOf("--prompt");
+    const prompt =
+      promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
+    if (!taskId || !prompt || !process.argv.includes("--approve")) {
+      console.error(
+        "Usage: atlas loop start <task-id> <profile> --prompt <text> --approve [--max-iterations N] [--interval-ms N] [--max-attempts N]",
+      );
+      process.exitCode = 1;
+    } else {
+      const value = (flag: string, fallback: number) => {
+        const index = process.argv.indexOf(flag);
+        return index >= 0 ? Number(process.argv[index + 1]) : fallback;
+      };
+      console.log(
+        JSON.stringify(
+          await startTaskLoop({
+            taskId,
+            profile,
+            prompt,
+            cwd: atlasRoot(),
+            approved: true,
+            maxIterations: value("--max-iterations", 10),
+            intervalMs: value("--interval-ms", 60_000),
+            maxAttempts: value("--max-attempts", 2),
+          }),
+          null,
+          2,
+        ),
+      );
+    }
+  } else if (action === "worker-once") {
+    console.log(
+      JSON.stringify(
+        { ran: await runTaskLoopsOnce(atlasRoot(), defaultAgentRuntime) },
+        null,
+        2,
+      ),
+    );
+  } else if (action === "worker") {
+    const controller = new AbortController();
+    const stop = () => controller.abort();
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+    await runTaskLoopWorker(atlasRoot(), defaultAgentRuntime, {
+      signal: controller.signal,
+      pollMs: Number(process.env.ATLAS_LOOP_POLL_MS ?? 30_000),
+    });
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
+  } else if (action === "stop") {
+    const id = process.argv[4];
+    if (!id) {
+      console.error("Usage: atlas loop stop <loop-id>");
+      process.exitCode = 1;
+    } else console.log(JSON.stringify(await stopTaskLoop(id), null, 2));
+  } else {
+    console.error("Usage: atlas loop start|status|stop|worker-once|worker");
+    process.exitCode = 1;
+  }
+}
+
+async function commandGateway(): Promise<void> {
+  const port = Number(process.env.ATLAS_GATEWAY_PORT ?? 8787);
+  const token = process.env.ATLAS_GATEWAY_TOKEN;
+  if (!token) {
+    console.error("ATLAS_GATEWAY_TOKEN is required");
+    process.exitCode = 1;
+  } else {
+    const server = createWebhookGateway(
+      atlasRoot(),
+      token,
+      defaultAgentRuntime,
+    );
+    server.listen(port, "127.0.0.1", () =>
+      console.log(`Atlas webhook gateway listening on 127.0.0.1:${port}`),
+    );
+  }
+}
+
+async function commandSkill(): Promise<void> {
+  const action = process.argv[3] ?? "list";
+  if (action === "sync")
+    console.log(JSON.stringify(await syncCoreSkills(), null, 2));
+  else if (action === "doctor")
+    console.log(JSON.stringify(await coreSkillReports(), null, 2));
+  else if (action === "list")
+    console.log(JSON.stringify(await listSkillCandidates(), null, 2));
+  else if (action === "observe") {
+    const sessionId = process.argv[4];
+    if (sessionId)
+      console.log(
+        JSON.stringify(
+          await observeSession(sessionId, defaultSessionStoreFactory),
+          null,
+          2,
+        ),
+      );
+    else console.log(JSON.stringify(await listObservations(), null, 2));
+  } else if (action === "observation-review") {
+    const [observationId, status] = process.argv.slice(4);
+    if (
+      !observationId ||
+      !["approved", "promoted", "discarded", "rejected"].includes(status)
+    ) {
+      console.error(
+        "Usage: atlas skill observation-review <id> approved|promoted|discarded|rejected",
+      );
+      process.exitCode = 1;
+    } else
+      console.log(
+        JSON.stringify(
+          await reviewObservation(
+            observationId,
+            status as "approved" | "promoted" | "discarded" | "rejected",
+          ),
+          null,
+          2,
+        ),
+      );
+  } else if (action === "add") {
+    const [id, name, ...instructions] = process.argv.slice(4);
+    if (!id || !name || !instructions.length) {
+      console.error("Usage: atlas skill add <id> <name> <instructions>");
+      process.exitCode = 1;
+    } else
+      console.log(
+        JSON.stringify(
+          await addSkillCandidate({
+            id,
+            name,
+            instructions: instructions.join(" "),
+          }),
+          null,
+          2,
+        ),
+      );
+  } else if (action === "review") {
+    const [id, status] = process.argv.slice(4);
+    if (!id || (status !== "promoted" && status !== "rejected")) {
+      console.error("Usage: atlas skill review <id> promoted|rejected");
+      process.exitCode = 1;
+    } else
+      console.log(
+        JSON.stringify(await reviewSkillCandidate(id, status), null, 2),
+      );
+  } else if (action === "learn") {
+    const sessionId = process.argv[4];
+    if (!sessionId) {
+      console.error("Usage: atlas skill learn <completed-session-id>");
+      process.exitCode = 1;
+    } else
+      console.log(
+        JSON.stringify(
+          await learnSkillFromSession(sessionId, defaultSessionStoreFactory),
+          null,
+          2,
+        ),
+      );
+  } else {
+    console.error(
+      "Usage: atlas skill sync|doctor|list|observe [session-id]|observation-review <id> approved|promoted|discarded|rejected|add|learn|review",
+    );
+    process.exitCode = 1;
+  }
+}
+
+async function commandCatalog(): Promise<void> {
+  console.log(
+    JSON.stringify(
+      listInstallSpecs().map((spec) => ({
+        id: spec.provider.id,
+        command: spec.provider.command,
+        installer: installPlan(spec.provider.id),
+      })),
+      null,
+      2,
+    ),
+  );
+}
+
+async function commandEnv(): Promise<void> {
+  console.log(await installShellPath());
+}
+
+async function commandUpdateOrRemove(
+  command: "update" | "remove",
+): Promise<void> {
+  const id = process.argv[3];
+  if (!id || !process.argv.includes("--yes")) {
+    console.error(`Usage: atlas ${command} <client> --yes`);
+    process.exitCode = 2;
+  } else {
+    try {
+      const result =
+        command === "update"
+          ? await updateProvider(
+              id,
+              true,
+              defaultWrapperManager,
+              defaultProviderRegistry,
+            )
+          : await removeInstalledProvider(id, true, defaultWrapperManager);
+      console.log(
+        JSON.stringify(
+          {
+            [command === "update" ? "updated" : "removed"]: true,
+            provider: result,
+          },
+          null,
+          2,
+        ),
+      );
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+  }
+}
+
+async function commandDoctor(): Promise<void> {
+  const report = await workspaceReport(defaultWrapperManager);
+  if (process.argv.includes("--json"))
+    console.log(JSON.stringify(report, null, 2));
+  else
+    report.findings.forEach((finding) => {
+      console.log(`${finding.severity}: ${finding.code} — ${finding.message}`);
+    });
+  if (hasFailures(report.findings)) process.exitCode = 1;
+}
+
+async function commandRepair(): Promise<void> {
+  const apply = process.argv.includes("--apply");
+  if (!apply) {
+    const report = await workspaceReport(defaultWrapperManager);
+    console.log(
+      JSON.stringify(
+        {
+          dryRun: true,
+          fixable: report.findings.filter((finding) => finding.fixable),
+          findings: report.findings,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    const result = await repairWorkspace(defaultWrapperManager);
+    console.log(
+      JSON.stringify(
+        { applied: result.changes, findings: result.findings },
+        null,
+        2,
+      ),
+    );
+    if (hasFailures(result.findings)) process.exitCode = 1;
+  }
+}
+
+async function commandBrowser(): Promise<void> {
+  await runBrowserCommand(process.argv[3] ?? "", process.argv.slice(4));
+}
+
+async function commandRun(): Promise<void> {
+  const profileIndex = process.argv.indexOf("--profile");
+  const promptIndex = process.argv.indexOf("--prompt");
+  const clientIndex = process.argv.indexOf("--client");
+  const taskIndex = process.argv.indexOf("--task");
+  const handoffIndex = process.argv.indexOf("--handoff");
+  const profileName =
+    profileIndex >= 0 ? process.argv[profileIndex + 1] : "default";
+  const client = clientIndex >= 0 ? process.argv[clientIndex + 1] : undefined;
+  const taskId = taskIndex >= 0 ? process.argv[taskIndex + 1] : undefined;
+  const handoffId =
+    handoffIndex >= 0 ? process.argv[handoffIndex + 1] : undefined;
+  const prompt =
+    promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
+  if (!profileName || !prompt) {
+    console.error(
+      "Usage: atlas run --profile <name> [--client <client>] [--task <id>] [--handoff <id>] --prompt <text>",
+    );
+    process.exitCode = 1;
+  } else {
+    const session = await runAgent(
+      { profileName, client, taskId, handoffId, prompt, cwd: atlasRoot() },
+      defaultAgentRuntime,
+    );
+    console.log(
+      JSON.stringify({ sessionId: session.sessionId, status: session.status }),
+    );
+  }
+}
+
+async function commandSession(): Promise<void> {
+  const action = process.argv[3] ?? "list";
+  const store = await openSessionStore();
+  if (action === "list") {
+    console.log(JSON.stringify(store.list()));
+    store.close();
+  } else if (action === "show") {
+    const sessionId = process.argv[4] ?? "";
+    const session = store.get(sessionId);
+    const entryEvent = session
+      ? store
+          .listEvents(sessionId)
+          .find((event) => event.type === "session_entry_contract")
+      : undefined;
+    store.close();
+    if (!session) {
+      console.error("Session not found");
+      process.exitCode = 1;
+    } else
+      console.log(
+        JSON.stringify({
+          ...session,
+          entryContract: entryEvent ? JSON.parse(entryEvent.data) : null,
+        }),
+      );
+  } else if (action === "summary") {
+    const sessionId = process.argv[4] ?? "";
+    const session = store.get(sessionId);
+    store.close();
+    if (!session) {
+      console.error("Session not found");
+      process.exitCode = 1;
+    } else if (!session.summaryPath) {
+      console.error("Session summary not available");
+      process.exitCode = 1;
+    } else {
+      try {
+        console.log(
+          await readFile(
+            path.resolve(atlasRoot(), session.summaryPath),
+            "utf8",
+          ),
+        );
+      } catch {
+        console.error("Session summary file is missing");
+        process.exitCode = 1;
+      }
+    }
+  } else if (action === "events") {
+    const sessionId = process.argv[4] ?? "";
+    const session = store.get(sessionId);
+    const events = session ? store.listEvents(sessionId) : [];
+    store.close();
+    if (!session) {
+      console.error("Session not found");
+      process.exitCode = 1;
+    } else console.log(JSON.stringify(events, null, 2));
+  } else if (action === "resume") {
+    const sessionId = process.argv[4];
+    const prompt = process.argv.slice(5).join(" ");
+    store.close();
+    if (!sessionId || !prompt) {
+      console.error("Usage: atlas session resume <session-id> <prompt>");
+      process.exitCode = 1;
+    } else {
+      const session = await resumeAgent(sessionId, prompt, defaultAgentRuntime);
+      console.log(
+        JSON.stringify({
+          sessionId: session.sessionId,
+          status: session.status,
+        }),
+      );
+    }
+  } else if (action === "promote") {
+    const sessionId = process.argv[4];
+    const target = process.argv[5] ?? "knowledge/results";
+    store.close();
+    if (!sessionId) {
+      console.error(
+        "Usage: atlas session promote <session-id> [knowledge/<kind>] --approve",
+      );
+      process.exitCode = 1;
+    } else {
+      try {
+        console.log(
+          JSON.stringify(
+            await promoteSessionToKnowledge(
+              sessionId,
+              defaultSessionStoreFactory,
+              target,
+              process.argv.includes("--approve"),
+            ),
+            null,
+            2,
+          ),
+        );
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
+    }
+  } else if (action === "doctor") {
+    const thresholdHours = Number(process.argv[4] ?? "24");
+    const apply = process.argv.includes("--apply");
+    if (!Number.isFinite(thresholdHours) || thresholdHours <= 0) {
+      store.close();
+      console.error("Usage: atlas session doctor [hours] [--apply]");
+      process.exitCode = 1;
+    } else {
+      const thresholdMs = thresholdHours * 60 * 60 * 1000;
+      const stale = apply
+        ? store.reconcileStaleRunning(thresholdMs)
+        : store.listStaleRunning(thresholdMs);
+      console.log(
+        JSON.stringify({
+          apply,
+          thresholdHours,
+          stale: stale.map((session) => ({
+            sessionId: session.sessionId,
+            provider: session.provider,
+            updatedAt: session.updatedAt,
+          })),
+          integrity: store.integrityCheck(),
+        }),
+      );
+      store.close();
+    }
+  } else {
+    store.close();
+    console.error(
+      "Usage: atlas session list|show <session-id>|summary <session-id>|events <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]",
+    );
+    process.exitCode = 1;
+  }
+}
+
+export const commandRegistry: Record<string, CommandHandler> = {
+  setup: commandSetup,
+  service: commandService,
+  intercept: commandIntercept,
+  client: commandClient,
+  install: commandInstall,
+  auth: commandAuth,
+  tasks: commandTasks,
+  policy: commandPolicy,
+  lifecycle: commandLifecycle,
+  observe: commandObserve,
+  migrate: commandMigrate,
+  memory: commandMemory,
+  mcp: commandMcp,
+  obsidian: commandObsidian,
+  capture: commandCapture,
+  handoff: commandHandoff,
+  context: commandContext,
+  project: commandProject,
+  hook: commandHook,
+  intent: commandIntent,
+  operate: commandOperate,
+  idea: commandIdea,
+  daily: commandDaily,
+  schedule: commandSchedule,
+  loop: commandLoop,
+  gateway: commandGateway,
+  skill: commandSkill,
+  catalog: commandCatalog,
+  env: commandEnv,
+  update: () => commandUpdateOrRemove("update"),
+  remove: () => commandUpdateOrRemove("remove"),
+  doctor: commandDoctor,
+  repair: commandRepair,
+  browser: commandBrowser,
+  run: commandRun,
+  session: commandSession,
+};
