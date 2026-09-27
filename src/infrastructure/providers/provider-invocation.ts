@@ -50,7 +50,7 @@ export function providerHeadlessSupport(provider: string): ProviderSupport {
   return { supported: true, spec };
 }
 
-export type ProviderStatus =
+type ProviderStatus =
   | "completed"
   | "failed"
   | "timeout"

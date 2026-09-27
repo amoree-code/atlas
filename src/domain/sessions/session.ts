@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const sessionStatusSchema = z.enum([
+const sessionStatusSchema = z.enum([
   "created",
   "running",
   "completed",

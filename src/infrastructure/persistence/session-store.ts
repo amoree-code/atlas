@@ -21,7 +21,6 @@ export type {
   CloseoutInput,
   SaveIdeaInput,
   SessionCreateInput,
-  SessionStorePort,
 } from "../../domain/ports/session-store-port.js";
 
 type SessionRow = Omit<

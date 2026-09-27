@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-export const evidenceResultSchema = z.enum([
-  "proven",
-  "not_proven",
-  "limitation",
-]);
+const evidenceResultSchema = z.enum(["proven", "not_proven", "limitation"]);
 export const evidenceSchema = z.object({
   evidenceId: z.string().min(1),
   sessionId: z.string().min(1),

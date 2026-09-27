@@ -8,12 +8,12 @@ import { actionFingerprint } from "../../domain/mcp/mcp-contract.js";
 import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
 import { runAgent } from "../runs/run-agent.js";
 
-export type GatewayRequest = {
+type GatewayRequest = {
   profile: string;
   prompt: string;
   approval: { approved: true; fingerprint: string };
 };
-export type GatewayMessage = {
+type GatewayMessage = {
   platform: string;
   externalId: string;
   profile: string;
@@ -70,7 +70,7 @@ export const telegramAdapter: GatewayAdapter = {
   },
 };
 
-export function createGatewayHandler(
+function createGatewayHandler(
   expectedToken: string,
   cwd: string,
   runtime: AgentRuntimeDeps,

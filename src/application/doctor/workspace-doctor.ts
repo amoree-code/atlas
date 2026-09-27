@@ -443,7 +443,7 @@ async function checkGovernance(): Promise<Finding[]> {
       ];
 }
 
-export async function scanWorkspace(
+async function scanWorkspace(
   wrapperManager: WrapperManagerPort,
 ): Promise<Finding[]> {
   return [

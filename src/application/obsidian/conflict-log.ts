@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atlasPath } from "../../paths.js";
 
@@ -18,7 +18,7 @@ export type ObsidianConflict = {
   source?: string;
 };
 
-export function conflictsDirectory(
+function conflictsDirectory(
   root = atlasPath("system", "integrations", "obsidian", "conflicts"),
 ): string {
   return root;
@@ -48,28 +48,6 @@ export async function appendConflict(
     mode: 0o600,
   });
   return file;
-}
-
-export async function listConflictLogs(
-  directory = conflictsDirectory(),
-): Promise<ObsidianConflict[]> {
-  try {
-    const entries = await readdir(directory, { withFileTypes: true });
-    const records: ObsidianConflict[] = [];
-    for (const entry of entries.filter(
-      (item) => item.isFile() && item.name.endsWith(".json"),
-    )) {
-      records.push(
-        JSON.parse(
-          await readFile(path.join(directory, entry.name), "utf8"),
-        ) as ObsidianConflict,
-      );
-    }
-    return records;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
 }
 
 function changedFromBaseline(

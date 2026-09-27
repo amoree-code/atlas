@@ -1,5 +1,5 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import type {
@@ -207,8 +207,4 @@ async function currentCommit(): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-export function handoffContextHash(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }

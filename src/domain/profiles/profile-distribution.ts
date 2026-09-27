@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const profileDistributionSchema = z.object({
+const profileDistributionSchema = z.object({
   name: z.string().min(1),
   version: z.string().min(1),
   description: z.string().default(""),

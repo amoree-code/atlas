@@ -7,12 +7,7 @@ import { runAgent } from "../runs/run-agent.js";
 import { checkpointTask } from "../tasks/checkpoint-task.js";
 import { type CommandRunner, verifyTask } from "../tasks/verify-task.js";
 
-export type TaskLoopStatus =
-  | "active"
-  | "paused"
-  | "completed"
-  | "failed"
-  | "stopped";
+type TaskLoopStatus = "active" | "paused" | "completed" | "failed" | "stopped";
 export type TaskLoop = {
   id: string;
   taskId: string;

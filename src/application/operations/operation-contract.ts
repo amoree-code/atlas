@@ -103,10 +103,10 @@ export function operationResult(
 
 // --- identifier and path validation -------------------------------------------------
 
-export const TASK_ID_SHAPE = /^T-\d+$/;
+const TASK_ID_SHAPE = /^T-\d+$/;
 // Record slugs and project names: conservative allow-list, no dots that could build "..",
 // no separators, no shell syntax, no whitespace.
-export const SLUG_SHAPE = /^[a-z0-9][a-z0-9-]{0,63}$/i;
+const SLUG_SHAPE = /^[a-z0-9][a-z0-9-]{0,63}$/i;
 
 export function validateTaskIdentifier(
   identifier: unknown,
@@ -208,7 +208,7 @@ export function operationForIntent(
   };
 }
 
-export function assertOperationMatchesIntent(
+function assertOperationMatchesIntent(
   operation: OperationName,
   classification: IntentClassification,
 ): { ok: true } | { ok: false; reason: string } {
@@ -321,7 +321,7 @@ export function shapeRecords(
 
 // Field selection: only the named fields survive into a record, and each value is clipped
 // so one oversized frontmatter value cannot make a result unbounded.
-export const MAX_FIELD_CHARS = 200;
+const MAX_FIELD_CHARS = 200;
 
 export function selectFields(
   source: Record<string, string>,

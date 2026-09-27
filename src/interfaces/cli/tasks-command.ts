@@ -16,7 +16,6 @@ const execFile = promisify(execFileCallback);
 // Re-exported for existing importers (daily/context commands, tests). The
 // implementation and the MCP server both live in the application layer now.
 export { listTasks };
-export type { TaskSummary } from "../../application/tasks/list-tasks.js";
 
 export async function runTasksCommand(
   action: string,

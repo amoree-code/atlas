@@ -26,7 +26,7 @@ const COMMAND_ALLOWLIST = new Set([
   "biome",
 ]);
 
-export type VerificationCheck = {
+type VerificationCheck = {
   command: string;
   exitCode: number;
   ok: boolean;

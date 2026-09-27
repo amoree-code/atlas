@@ -73,9 +73,3 @@ export function resolveWithin(root: string, ...parts: string[]): string {
   }
   return resolved;
 }
-
-// Private application state (config, profiles, sessions, logs, and integrations)
-// lives at the workspace root, separate from the public engine and user data trees.
-export function atlasStatePath(...parts: string[]): string {
-  return atlasPath(...parts);
-}

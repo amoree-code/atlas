@@ -12,7 +12,6 @@ export const mcpApprovalSchema = z.object({
   approved: z.literal(true),
   fingerprint: z.string().length(64),
 });
-export type McpApproval = z.infer<typeof mcpApprovalSchema>;
 
 export function actionFingerprint(
   name: string,

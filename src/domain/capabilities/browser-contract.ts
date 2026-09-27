@@ -4,7 +4,7 @@ import {
   capabilityContractSchema,
 } from "./capability-contract.js";
 
-export const browserOperationSchema = z.enum([
+const browserOperationSchema = z.enum([
   "open",
   "close",
   "approve",
@@ -27,14 +27,10 @@ export type BrowserOperation = z.infer<typeof browserOperationSchema>;
 // "required" always needs owner approval before execution; "conditional" needs it only
 // when the application layer determines the specific call crosses a trust boundary
 // (navigate: only when the destination origin differs from the session's current origin).
-export const browserApprovalSchema = z.enum([
-  "none",
-  "required",
-  "conditional",
-]);
-export type BrowserApproval = z.infer<typeof browserApprovalSchema>;
+const browserApprovalSchema = z.enum(["none", "required", "conditional"]);
+type BrowserApproval = z.infer<typeof browserApprovalSchema>;
 
-export const browserCapabilityContractSchema = capabilityContractSchema.extend({
+const browserCapabilityContractSchema = capabilityContractSchema.extend({
   capability: z.literal("browser"),
   operation: browserOperationSchema,
   approval: browserApprovalSchema,

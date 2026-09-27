@@ -19,7 +19,7 @@ export type ObsidianConnection = {
   vaultPath: string;
 };
 
-export type ObsidianNote = {
+type ObsidianNote = {
   path: string;
   bytes: number;
   sha256: string;

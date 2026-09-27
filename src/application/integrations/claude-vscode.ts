@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import type { WrapperManagerPort } from "../../domain/ports/platform-ports.js";
 
-export function defaultClaudeCodeSettingsPath(): string {
+function defaultClaudeCodeSettingsPath(): string {
   if (process.platform === "darwin")
     return path.join(
       os.homedir(),

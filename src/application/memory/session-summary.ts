@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Session, SessionEvent } from "../../domain/sessions/session.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
+import type { Session, SessionEvent } from "../../domain/sessions/session.js";
+import { safeJsonParse } from "../../fs-utils.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 
 const maxSummaryBytes = 12_000;
@@ -15,17 +16,6 @@ export type SessionSummaryResult = {
 
 function safeText(value: string, max = 800): string {
   return redactRuntimeText(value).replace(/\s+/g, " ").trim().slice(0, max);
-}
-
-function json(value: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function eventText(
@@ -47,7 +37,7 @@ function lastEvent(
   return [...events].reverse().find((event) => event.type === type);
 }
 
-export function renderSessionSummary(input: {
+function renderSessionSummary(input: {
   session: Session;
   events: SessionEvent[];
   changedFiles?: string[];
@@ -62,7 +52,7 @@ export function renderSessionSummary(input: {
   const errors = eventText(events, ["error", "provider_blocked"], 4);
   const evidence = events
     .filter((event) => event.type === "evidence")
-    .map((event) => json(event.data))
+    .map((event) => safeJsonParse(event.data))
     .filter((value): value is Record<string, unknown> => value !== null);
   const proven = evidence
     .filter((value) => value.result === "proven")
@@ -73,7 +63,7 @@ export function renderSessionSummary(input: {
   const processExit = lastEvent(events, "process_exit");
   const exit =
     input.exitCode ??
-    (processExit ? json(processExit.data)?.exitCode : undefined);
+    (processExit ? safeJsonParse(processExit.data)?.exitCode : undefined);
   const status =
     session.status === "completed" && exit === 0 ? "completed" : session.status;
   const nextAction =
@@ -156,41 +146,4 @@ export async function writeSessionSummary(input: {
     summaryHash: createHash("sha256").update(content).digest("hex"),
     summaryBytes: Buffer.byteLength(content),
   };
-}
-
-/** Compatibility wrapper for older callers; governed closeout uses writeSessionSummary. */
-export async function appendSessionSummary(input: {
-  sessionId: string;
-  provider: string;
-  status: string;
-  exitCode: number;
-}): Promise<void> {
-  const now = new Date().toISOString();
-  const session: Session = {
-    sessionId: input.sessionId,
-    title: `${input.provider} session`,
-    taskId: null,
-    handoffId: null,
-    provider: input.provider,
-    providerSessionId: null,
-    parentSessionId: null,
-    profile: `intercepted:${input.provider}`,
-    profileIdentity: "",
-    workingDirectory: atlasRoot(),
-    status: input.status === "completed" ? "completed" : "failed",
-    createdAt: now,
-    updatedAt: now,
-    resumeData: null,
-    contextHash: null,
-    contextBytes: 0,
-    nextAction: "Review the session summary.",
-    verificationStatus: "unknown",
-    summaryPath: null,
-    summaryHash: null,
-    summaryBytes: 0,
-    closeoutStatus: "pending",
-    closeoutVersion: "1",
-    closedAt: null,
-  };
-  await writeSessionSummary({ session, events: [], exitCode: input.exitCode });
 }
