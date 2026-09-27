@@ -4,13 +4,13 @@ import {
   chmod,
   mkdir,
   readFile,
-  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { atomicWrite } from "../../fs-utils.js";
 import { atlasPath, enginePath } from "../../paths.js";
 import {
   builtInProviderRecords,
@@ -202,19 +202,6 @@ async function shellProfilePath(): Promise<string> {
   if (shell === "zsh") return path.join(home, ".zshrc");
   if (shell === "bash") return path.join(home, ".bashrc");
   return path.join(home, ".profile");
-}
-
-// Atomic write: content lands in a sibling temp file and is renamed into place, so an
-// interrupted write (disk full, OOM kill) never leaves the target truncated.
-async function atomicWrite(target: string, content: string): Promise<void> {
-  const temp = `${target}.atlas-tmp-${process.pid}-${Date.now()}`;
-  try {
-    await writeFile(temp, content, "utf8");
-    await rename(temp, target);
-  } catch (error) {
-    await rm(temp, { force: true });
-    throw error;
-  }
 }
 
 export async function installShellIntegration(): Promise<string> {

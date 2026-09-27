@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Session, SessionEvent } from "../../domain/sessions/session.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
+import type { Session, SessionEvent } from "../../domain/sessions/session.js";
+import { safeJsonParse } from "../../fs-utils.js";
 import { atlasPath, atlasRoot } from "../../paths.js";
 
 const maxSummaryBytes = 12_000;
@@ -15,17 +16,6 @@ export type SessionSummaryResult = {
 
 function safeText(value: string, max = 800): string {
   return redactRuntimeText(value).replace(/\s+/g, " ").trim().slice(0, max);
-}
-
-function json(value: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function eventText(
@@ -62,7 +52,7 @@ export function renderSessionSummary(input: {
   const errors = eventText(events, ["error", "provider_blocked"], 4);
   const evidence = events
     .filter((event) => event.type === "evidence")
-    .map((event) => json(event.data))
+    .map((event) => safeJsonParse(event.data))
     .filter((value): value is Record<string, unknown> => value !== null);
   const proven = evidence
     .filter((value) => value.result === "proven")
@@ -73,7 +63,7 @@ export function renderSessionSummary(input: {
   const processExit = lastEvent(events, "process_exit");
   const exit =
     input.exitCode ??
-    (processExit ? json(processExit.data)?.exitCode : undefined);
+    (processExit ? safeJsonParse(processExit.data)?.exitCode : undefined);
   const status =
     session.status === "completed" && exit === 0 ? "completed" : session.status;
   const nextAction =

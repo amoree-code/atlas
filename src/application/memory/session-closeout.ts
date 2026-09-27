@@ -5,6 +5,7 @@ import type {
   SessionStorePort,
 } from "../../domain/ports/session-store-port.js";
 import type { SessionEvent } from "../../domain/sessions/session.js";
+import { safeJsonParse } from "../../fs-utils.js";
 import { createHandoffWithStore } from "../handoff/handoff-service.js";
 import {
   observeSessionWithStore,
@@ -42,17 +43,6 @@ async function changedFiles(workingDirectory: string): Promise<string[]> {
   }
 }
 
-function json(data: string): Record<string, unknown> | null {
-  try {
-    const value = JSON.parse(data);
-    return value && typeof value === "object"
-      ? (value as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 function lastEvent(
   events: SessionEvent[],
   type: string,
@@ -69,7 +59,7 @@ function evidence(
       (event) => event.type === "evidence" || event.type === "provider_blocked",
     )
     .map((event) => {
-      const value = json(event.data);
+      const value = safeJsonParse(event.data);
       if (event.type === "provider_blocked")
         return result === "blocked"
           ? String(value?.reason ?? event.data)
@@ -106,7 +96,7 @@ export async function finalizeSession(
   const exitCode =
     input.exitCode ??
     (exitEvent
-      ? Number(json(exitEvent.data)?.exitCode ?? 1)
+      ? Number(safeJsonParse(exitEvent.data)?.exitCode ?? 1)
       : session.status === "completed"
         ? 0
         : 1);

@@ -1,14 +1,10 @@
 import type { Dirent } from "node:fs";
-import {
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import {
+  atomicWrite,
+  readFrontmatterFile as readFrontmatterFileWithLimit,
+} from "../../fs-utils.js";
 import { atlasPath, atlasRoot, resolveWithin } from "../../paths.js";
 import type { ContextBudget } from "../context/context-ladder.js";
 import type { Freshness, RecordType } from "../context/context-packet.js";
@@ -61,37 +57,10 @@ function freshnessFor(mtimeMs: number): Freshness {
   return Date.now() - mtimeMs <= STALE_AFTER_MS ? "current" : "stale";
 }
 
-function parseFrontmatter(source: string): Record<string, string> {
-  if (!source.startsWith("---")) return {};
-  const end = source.indexOf("\n---", 3);
-  const block = end < 0 ? source.slice(3) : source.slice(3, end);
-  const fields: Record<string, string> = {};
-  for (const line of block.split("\n")) {
-    const match = /^\s{0,2}([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
-    if (!match) continue;
-    if (fields[match[1]] === undefined)
-      fields[match[1]] = match[2].trim().replace(/^["']|["']$/g, "");
-  }
-  return fields;
-}
-
-async function readFrontmatterFile(file: string): Promise<{
-  fields: Record<string, string>;
-  mtimeMs: number;
-  size: number;
-} | null> {
-  try {
-    const info = await stat(file);
-    if (!info.isFile()) return null;
-    const handle = await readFile(file, "utf8");
-    return {
-      fields: parseFrontmatter(handle.slice(0, FRONTMATTER_READ_BYTES)),
-      mtimeMs: info.mtimeMs,
-      size: info.size,
-    };
-  } catch {
-    return null;
-  }
+async function readFrontmatterFile(
+  file: string,
+): ReturnType<typeof readFrontmatterFileWithLimit> {
+  return readFrontmatterFileWithLimit(file, FRONTMATTER_READ_BYTES);
 }
 
 // Depth-limited, entry-capped listing of one record directory. Never recurses outside the
@@ -128,20 +97,6 @@ async function listRecordFiles(
 
 function relativeToAtlas(file: string): string {
   return path.relative(atlasRoot(), file).split(path.sep).join("/");
-}
-
-// Atomic write: content lands in a sibling temp file and is renamed into place, so a failure
-// never leaves partial content at the destination.
-async function atomicWrite(target: string, content: string): Promise<number> {
-  const temp = `${target}.atlas-tmp-${process.pid}-${Date.now()}`;
-  try {
-    await writeFile(temp, content, "utf8");
-    await rename(temp, target);
-    return Buffer.byteLength(content, "utf8");
-  } catch (error) {
-    await rm(temp, { force: true });
-    throw error;
-  }
 }
 
 async function requireAbsentTarget(
