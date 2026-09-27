@@ -5,8 +5,6 @@
 
 import type { AuthDeps } from "../application/auth/auth-orchestrator.js";
 import type {
-  HeadlessRunner,
-  InteractiveRunner,
   ProviderRegistryPort,
   WrapperManagerPort,
 } from "../domain/ports/platform-ports.js";
@@ -71,9 +69,6 @@ export const defaultWrapperManager: WrapperManagerPort = {
 export const defaultProviderRegistry: ProviderRegistryPort = {
   resolveOriginalExecutable,
 };
-
-export const defaultHeadlessRunner: HeadlessRunner = runHeadless;
-export const defaultInteractiveRunner: InteractiveRunner = runInteractive;
 
 /** Dependencies for the auth flows. */
 export const defaultAuthDeps: AuthDeps = {

@@ -1,9 +1,6 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
-import type {
-  SessionStoreFactory,
-  SessionStorePort,
-} from "../../domain/ports/session-store-port.js";
+import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import type { SessionEvent } from "../../domain/sessions/session.js";
 import { safeJsonParse } from "../../fs-utils.js";
 import { createHandoffWithStore } from "../handoff/handoff-service.js";
@@ -201,17 +198,4 @@ export async function finalizeSession(
     );
   }
   return { ...summary, handoffId, closeoutStatus };
-}
-
-export async function finalizeSessionById(
-  sessionId: string,
-  openStore: SessionStoreFactory,
-  input: { exitCode?: number; nextAction?: string } = {},
-): Promise<SessionCloseoutResult> {
-  const store = await openStore();
-  try {
-    return await finalizeSession(store, sessionId, input);
-  } finally {
-    store.close();
-  }
 }

@@ -36,7 +36,7 @@ export function safeJsonParse(value: string): Record<string, unknown> | null {
 
 // Parses a `---\n...\n---` frontmatter block into a flat field map. First occurrence of a
 // key wins; values are trimmed and stripped of one layer of surrounding quotes.
-export function parseFrontmatter(source: string): Record<string, string> {
+function parseFrontmatter(source: string): Record<string, string> {
   if (!source.startsWith("---")) return {};
   const end = source.indexOf("\n---", 3);
   const block = end < 0 ? source.slice(3) : source.slice(3, end);

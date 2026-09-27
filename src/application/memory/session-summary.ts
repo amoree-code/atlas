@@ -37,7 +37,7 @@ function lastEvent(
   return [...events].reverse().find((event) => event.type === type);
 }
 
-export function renderSessionSummary(input: {
+function renderSessionSummary(input: {
   session: Session;
   events: SessionEvent[];
   changedFiles?: string[];
@@ -146,41 +146,4 @@ export async function writeSessionSummary(input: {
     summaryHash: createHash("sha256").update(content).digest("hex"),
     summaryBytes: Buffer.byteLength(content),
   };
-}
-
-/** Compatibility wrapper for older callers; governed closeout uses writeSessionSummary. */
-export async function appendSessionSummary(input: {
-  sessionId: string;
-  provider: string;
-  status: string;
-  exitCode: number;
-}): Promise<void> {
-  const now = new Date().toISOString();
-  const session: Session = {
-    sessionId: input.sessionId,
-    title: `${input.provider} session`,
-    taskId: null,
-    handoffId: null,
-    provider: input.provider,
-    providerSessionId: null,
-    parentSessionId: null,
-    profile: `intercepted:${input.provider}`,
-    profileIdentity: "",
-    workingDirectory: atlasRoot(),
-    status: input.status === "completed" ? "completed" : "failed",
-    createdAt: now,
-    updatedAt: now,
-    resumeData: null,
-    contextHash: null,
-    contextBytes: 0,
-    nextAction: "Review the session summary.",
-    verificationStatus: "unknown",
-    summaryPath: null,
-    summaryHash: null,
-    summaryBytes: 0,
-    closeoutStatus: "pending",
-    closeoutVersion: "1",
-    closedAt: null,
-  };
-  await writeSessionSummary({ session, events: [], exitCode: input.exitCode });
 }

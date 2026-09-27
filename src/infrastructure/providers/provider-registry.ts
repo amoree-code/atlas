@@ -14,7 +14,7 @@ const builtInProviders: ProviderRecord[] = [
   { id: "hermes", command: "hermes", interactive: true, headless: true },
 ];
 
-export const providerRegistryPath = (): string =>
+const providerRegistryPath = (): string =>
   atlasPath("system", "control-plane", "registry", "providers.json");
 
 export function builtInProviderRecords(): ProviderRecord[] {

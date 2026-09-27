@@ -6,8 +6,6 @@ import type { ContextManifest } from "../../domain/context/context.js";
 import { validateContextManifest } from "../../domain/context/context-validator.js";
 import type { Profile } from "../../domain/profiles/profile.js";
 
-export type { ContextManifest } from "../../domain/context/context.js";
-
 export type BuiltContext = { manifest: ContextManifest; content: string };
 
 export async function buildContext(

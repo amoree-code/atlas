@@ -42,13 +42,13 @@ export type SelectedReference = {
   selectionReason: string;
 };
 
-export type ActiveProjectSummary = {
+type ActiveProjectSummary = {
   status: "bound" | "unbound" | "ambiguous";
   projectId: string | null;
   confidence: "high" | "medium" | "low" | "none";
 };
 
-export type BudgetSummary = {
+type BudgetSummary = {
   maxFiles: number | null;
   maxBytes: number | null;
   maxChars: number | null;

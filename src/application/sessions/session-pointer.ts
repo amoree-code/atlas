@@ -1,6 +1,6 @@
 import path from "node:path";
-import type { Session, SessionStatus } from "../../domain/sessions/session.js";
 import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
+import type { Session, SessionStatus } from "../../domain/sessions/session.js";
 import { validateBudget } from "../context/context-ladder.js";
 import { resolveProject } from "../context/project-resolution.js";
 
@@ -22,7 +22,7 @@ export type SessionPointer = {
   updatedAt: string;
 };
 
-export type ResumeMode = "attach-child" | "pointer-only" | "refused";
+type ResumeMode = "attach-child" | "pointer-only" | "refused";
 
 export type ResumePlan = {
   ok: boolean;

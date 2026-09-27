@@ -31,7 +31,7 @@ const BUDGET_CEILING: ContextBudget = {
   maxOperationCost: 10,
 };
 
-export type BudgetViolation =
+type BudgetViolation =
   | "invalid-budget"
   | "max-files-exceeded"
   | "max-bytes-exceeded"

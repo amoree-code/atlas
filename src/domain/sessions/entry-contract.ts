@@ -1,24 +1,24 @@
 import { z } from "zod";
 
-export const sessionEntryPointSchema = z.enum([
+const sessionEntryPointSchema = z.enum([
   "atlas-run",
   "terminal-shim",
   "interactive-managed",
   "desktop-wrapper",
 ]);
-export const sessionControlLevelSchema = z.enum([
+const sessionControlLevelSchema = z.enum([
   "full-head",
   "managed-partial",
   "observed",
   "bypass",
 ]);
-export const sessionInputCaptureSchema = z.enum([
+const sessionInputCaptureSchema = z.enum([
   "semantic",
   "bounded-terminal",
   "none",
 ]);
 
-export const sessionEntryContractSchema = z.object({
+const sessionEntryContractSchema = z.object({
   entryPoint: sessionEntryPointSchema,
   controlLevel: sessionControlLevelSchema,
   inputCapture: sessionInputCaptureSchema,

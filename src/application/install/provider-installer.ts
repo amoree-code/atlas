@@ -99,7 +99,7 @@ const catalog: InstallSpec[] = [
   },
 ];
 
-export const installationReceiptPath = (): string =>
+const installationReceiptPath = (): string =>
   atlasPath("system", "control-plane", "registry", "installations.json");
 
 export function listInstallSpecs(): InstallSpec[] {

@@ -9,7 +9,6 @@ import type {
 export type {
   HeadlessRequest,
   HeadlessResult,
-  RuntimeEvent,
 } from "../../domain/process/process-events.js";
 
 // Applied whenever a caller doesn't pass an explicit maxOutputBytes, so a headless run

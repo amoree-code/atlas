@@ -14,7 +14,7 @@ import {
 // the user typed: it exists only as an explicit grant object bound to one session, one
 // action, one target, and one scope hash, with an explicit expiry. Defaults are closed.
 
-export type GuardAction = OperationName | "execute.command" | "provider.invoke";
+type GuardAction = OperationName | "execute.command" | "provider.invoke";
 
 export type ConsentState = "none" | "granted" | "revoked" | "expired";
 
@@ -37,7 +37,7 @@ export type GuardScope = {
   projectId: string | null;
 };
 
-export type GuardDenialCode =
+type GuardDenialCode =
   | "allowed"
   | "invalid-budget"
   | "invalid-target"
@@ -55,7 +55,7 @@ export type GuardDenialCode =
 
 // Audit metadata only: ids, action, target, hash, decision. Never the request text, never
 // record content, never credentials.
-export type GuardAudit = {
+type GuardAudit = {
   action: GuardAction;
   target: string;
   sessionId: string;

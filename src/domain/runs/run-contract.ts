@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const runContractSchema = z
+const runContractSchema = z
   .object({
     runId: z.string().min(1),
     sessionId: z.string().min(1),

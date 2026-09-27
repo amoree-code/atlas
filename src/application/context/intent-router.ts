@@ -3,7 +3,7 @@
 // knows what Atlas operation — if any — a request maps to, without guessing an identifier or
 // a project when the request does not name one clearly. See T-198 slice 4.
 
-export type IntentCategory =
+type IntentCategory =
   | "task-lookup"
   | "task-create"
   | "memory-lookup"
@@ -16,7 +16,7 @@ export type IntentCategory =
   | "execute"
   | "unknown";
 
-export type EntityType =
+type EntityType =
   | "task"
   | "memory"
   | "knowledge"
@@ -26,7 +26,7 @@ export type EntityType =
   | "execution"
   | "unknown";
 
-export type IntentAction =
+type IntentAction =
   | "get"
   | "list"
   | "search"

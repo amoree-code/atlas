@@ -23,10 +23,7 @@ import { loadPromotedSkills } from "../skills/skill-curation.js";
 import { authorizeRun } from "./run-authorization.js";
 
 // Re-exported for existing importers (scheduler, task-loop, gateway).
-export type {
-  AgentRuntimeDeps,
-  ProviderExecutor,
-} from "../../domain/ports/runtime-ports.js";
+export type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
 
 export type AgentRunRequest = {
   profileName: string;

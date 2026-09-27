@@ -20,7 +20,7 @@ export type ProjectScope =
   | { ok: true; projectId: string }
   | { ok: false; reason: string };
 
-export async function activeProjectId(cwd: string): Promise<ProjectScope> {
+async function activeProjectId(cwd: string): Promise<ProjectScope> {
   const resolution = await resolveProject(cwd);
   if (resolution.status === "bound")
     return { ok: true, projectId: resolution.projectId };

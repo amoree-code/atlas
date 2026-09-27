@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const handoffSchema = z.object({
+const handoffSchema = z.object({
   handoffId: z.string().min(1),
   taskId: z.string().nullable(),
   title: z.string().min(1),

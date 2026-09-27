@@ -5,6 +5,5 @@ export type {
   BrowserElement,
   BrowserHandle,
   BrowserLaunch,
-  BrowserPageState,
   BrowserProvider,
 } from "../../domain/ports/browser-port.js";
