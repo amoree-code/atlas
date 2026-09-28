@@ -12,7 +12,7 @@ import {
 import path from "node:path";
 import { promisify } from "node:util";
 import type { WrapperManagerPort } from "../../domain/ports/platform-ports.js";
-import { atlasPath, enginePath } from "../../paths.js";
+import { atlasPath, enginePath, repoPath } from "../../paths.js";
 import {
   doctorMemoryIndexes,
   syncMemoryIndexes,
@@ -226,18 +226,19 @@ async function checkDependencies(): Promise<Finding[]> {
 
 async function checkWorkspaceContracts(): Promise<Finding[]> {
   const checks = [
-    ["PRIVACY_BOUNDARY", "node", ["scripts/scan-privacy.mjs", "."]],
-    ["PACKAGE_BOUNDARY", "node", ["scripts/validate-package.mjs"]],
+    ["PRIVACY_BOUNDARY", "node", ["scripts/scan-privacy.mjs", "."], repoPath],
+    ["PACKAGE_BOUNDARY", "node", ["scripts/validate-package.mjs"], repoPath],
     [
       "TASK_RECORDS",
       "node",
       ["scripts/validate-tasks.mjs", atlasPath("projects", "atlas", "tasks")],
+      enginePath,
     ],
   ] as const;
   const findings: Finding[] = [];
-  for (const [code, command, args] of checks) {
+  for (const [code, command, args, basePath] of checks) {
     const script = args[0];
-    if (!(await exists(enginePath(script)))) {
+    if (!(await exists(basePath(script)))) {
       findings.push({
         code,
         severity: "OK",
@@ -248,7 +249,7 @@ async function checkWorkspaceContracts(): Promise<Finding[]> {
     }
     try {
       await execFile(command, [...args], {
-        cwd: enginePath(),
+        cwd: basePath(),
         timeout: 20_000,
       });
       findings.push({
