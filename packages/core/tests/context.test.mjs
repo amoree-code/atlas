@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
 import { buildContext } from "../dist/infrastructure/filesystem/context-manager.js";
 
-test("context returns a compact JSON packet without loading task bodies", () => {
+test("context returns a compact JSON packet without loading task bodies", async () => {
   const result = spawnSync(
     process.execPath,
     [path.resolve("dist/main.js"), "context", "--json"],
@@ -15,8 +15,11 @@ test("context returns a compact JSON packet without loading task bodies", () => 
   );
   assert.equal(result.status, 0, result.stderr);
   const packet = JSON.parse(result.stdout);
+  const { version } = JSON.parse(
+    await readFile(path.resolve("package.json"), "utf8"),
+  );
   assert.equal(packet.project, "atlas");
-  assert.equal(packet.version, "0.3.6");
+  assert.equal(packet.version, version);
   assert.deepEqual(packet.roots, ["personal", "projects", "system"]);
   assert.ok(Array.isArray(packet.tasks));
 });

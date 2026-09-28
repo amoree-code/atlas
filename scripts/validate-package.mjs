@@ -8,7 +8,10 @@ const packageJson = JSON.parse(
   await readFile(path.join(corePackageRoot, "package.json"), "utf8"),
 );
 const version = packageJson.version;
-const changelog = await readFile(path.join(root, "CHANGELOG.md"), "utf8");
+const changelog = await readFile(
+  path.join(corePackageRoot, "CHANGELOG.md"),
+  "utf8",
+);
 const readme = await readFile(path.join(root, "README.md"), "utf8");
 const findings = [];
 

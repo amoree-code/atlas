@@ -34,6 +34,13 @@
 - Add a PR template with a changelog checklist.
 - Add an Obsidian sync flow diagram to `docs/mcp.md`.
 
+## 0.3.7
+
+### Patch Changes
+
+- [#92](https://github.com/amoree-code/atlas/pull/92) [`6e7274c`](https://github.com/amoree-code/atlas/commit/6e7274ccb96e945b94d00afdd587a8dd4285e8d8) Thanks [@amoree-code](https://github.com/amoree-code)! - Adopt changesets for versioning: add `.changeset/` config (GitHub-flavored changelog,
+  restricted access, patch bump for internal dependencies) and a `pnpm changeset` script.
+
 ## 0.3.6
 
 - Add Hermes as a supported headless provider.
