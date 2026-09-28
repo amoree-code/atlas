@@ -22,6 +22,18 @@ export function enginePath(...parts: string[]): string {
   return path.join(engineRoot(), ...parts);
 }
 
+// The pnpm workspace root (engine/), two directories above this package
+// (packages/core → packages → engine). Repo-wide tooling that lives outside any
+// workspace package (e.g. scripts/ shared across packages) is anchored here, not on
+// engineRoot(), which is this package's own root.
+export function repoRoot(): string {
+  return path.resolve(engineDirectory, "..", "..");
+}
+
+export function repoPath(...parts: string[]): string {
+  return path.join(repoRoot(), ...parts);
+}
+
 export function atlasRoot(): string {
   return process.env.ATLAS_ROOT
     ? path.resolve(process.env.ATLAS_ROOT)

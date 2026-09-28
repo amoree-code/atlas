@@ -14,7 +14,7 @@
     "check:skills": "pnpm --filter atlas run check:skills",
     "generate:skills": "pnpm --filter atlas run generate:skills",
     "check:privacy": "node scripts/scan-privacy.mjs",
-    "check:tasks": "node scripts/validate-tasks.mjs",
+    "check:tasks": "node packages/core/scripts/validate-tasks.mjs",
     "check:package": "node scripts/validate-package.mjs",
     "check:system": "sh scripts/health-check.sh",
     "check:providers": "node scripts/provider-smoke.mjs",
