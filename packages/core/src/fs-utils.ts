@@ -1,4 +1,5 @@
 import { readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { StringDecoder } from "node:string_decoder";
 
 // Small filesystem/parsing helpers shared across layers, kept alongside paths.ts rather than
 // under any single layer since both application and infrastructure code use them directly.
@@ -18,6 +19,17 @@ export async function atomicWrite(
     await rm(temp, { force: true });
     throw error;
   }
+}
+
+// Truncates text to at most `maxBytes` UTF-8 bytes without splitting a code point: a partial
+// trailing sequence is dropped rather than rendered as U+FFFD. Callers compare lengths to
+// detect truncation and append their own marker.
+export function truncateUtf8(text: string, maxBytes: number): string {
+  if (Buffer.byteLength(text) <= maxBytes) return text;
+  if (maxBytes <= 0) return "";
+  return new StringDecoder("utf8").write(
+    Buffer.from(text).subarray(0, maxBytes),
+  );
 }
 
 // Parses JSON that may be malformed or may not be an object (e.g. a bare string/number) —

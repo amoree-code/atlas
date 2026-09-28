@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+// A file the prompt points at instead of inlining. `path` is always relative: to the run cwd
+// for a profile contextSources entry, to the Atlas root for a context-packet record.
+export const contextReferenceSchema = z.object({
+  path: z.string().min(1),
+  base: z.enum(["cwd", "atlas-root"]),
+  recordType: z.string().min(1),
+  reason: z.string().min(1),
+  bytes: z.number().int().nonnegative().nullable(),
+});
+
+export type ContextReference = z.infer<typeof contextReferenceSchema>;
+
 export const contextManifestSchema = z.object({
   files: z.array(z.string()),
   bytes: z.number().int().nonnegative(),
@@ -21,6 +33,7 @@ export const contextManifestSchema = z.object({
     })
     .nullable()
     .default(null),
+  references: z.array(contextReferenceSchema).default([]),
 });
 
 export type ContextManifest = z.infer<typeof contextManifestSchema>;

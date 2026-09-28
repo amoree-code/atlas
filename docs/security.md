@@ -24,8 +24,15 @@ workspace outside of `engine/` (see [workspace.md](workspace.md)), which:
 
 ## Filesystem access
 
-Profiles declare `allowedPaths`, and `buildContext` only reads a `contextSources` entry if
-it resolves inside one of those paths (see [context.md](context.md)). The schema also
+Profiles declare `allowedPaths`, and a headless prompt only references a `contextSources`
+entry or a context-packet record if its realpath resolves inside one of those paths; a symlink
+escaping them is omitted. The context packet is used only for an exact task-id lookup, never
+for keyword-triggered memory, knowledge or decision lookups. Atlas reads no context body into
+the prompt (see [context.md](context.md)). Skill folders, the facts store directory (only when the
+facts digest is partial) and reference directories that themselves lie inside `allowedPaths` are
+granted to Claude (`--add-dir`) and Gemini (`--include-directories`) for reading only, on the
+first turn and again on a resumed Claude turn; a single-file `allowedPaths` entry never grants its
+siblings. The schema also
 carries `allowedCommands` and `writePolicy` per profile (see [profiles.md](profiles.md));
 the run boundary rejects an unauthorized provider command and an empty `allowed-paths`
 policy. Direct interception keeps provider-owned execution behavior. Atlas does not currently

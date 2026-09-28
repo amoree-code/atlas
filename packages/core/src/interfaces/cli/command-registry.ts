@@ -101,7 +101,7 @@ import { runAuthCommand } from "./auth-command.js";
 import { runBrowserCommand } from "./browser-command.js";
 import { runCaptureCommand } from "./capture-command.js";
 import { runClientTestCommand } from "./client-test-command.js";
-import { runContextCommand } from "./context-command.js";
+import { runContextCommand, runContextCostCommand } from "./context-command.js";
 import { runDailyCommand } from "./daily-command.js";
 import { runLifecycleCommand, runPolicyCommand } from "./governance-command.js";
 import { runHandoffCommand } from "./handoff-command.js";
@@ -505,6 +505,10 @@ async function commandHandoff(): Promise<void> {
 }
 
 async function commandContext(): Promise<void> {
+  if (process.argv[3] === "cost") {
+    await runContextCostCommand(process.argv.slice(4));
+    return;
+  }
   await runContextCommand(process.argv.includes("--json"));
 }
 

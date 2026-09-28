@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { SessionStoreFactory } from "../../domain/ports/session-store-port.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
+import { truncateUtf8 } from "../../fs-utils.js";
 import { atlasPath } from "../../paths.js";
 
 export type SkillCandidate = {
@@ -14,6 +15,8 @@ export type SkillCandidate = {
   createdAt: string;
   sourceSessionId?: string;
 };
+// A promoted skill selected for a run; `truncated` marks one cut to the run's byte budget.
+export type PromotedSkill = SkillCandidate & { truncated: boolean };
 const file = () => atlasPath("system", "skills", "candidates.json");
 async function load(): Promise<SkillCandidate[]> {
   try {
@@ -69,14 +72,14 @@ export async function listSkillCandidates(): Promise<SkillCandidate[]> {
 export async function loadPromotedSkills(
   prompt: string,
   maxBytes = 32_000,
-): Promise<SkillCandidate[]> {
+): Promise<PromotedSkill[]> {
   const normalizedPrompt = prompt.toLocaleLowerCase();
   const candidates = (await load()).filter(
     (candidate) =>
       candidate.status === "promoted" &&
       candidate.verification === "owner-reviewed",
   );
-  const selected: SkillCandidate[] = [];
+  const selected: PromotedSkill[] = [];
   let bytes = 0;
   for (const candidate of candidates) {
     const aliases = [candidate.id, candidate.name].map((value) =>
@@ -85,9 +88,19 @@ export async function loadPromotedSkills(
     if (!aliases.some((alias) => normalizedPrompt.includes(alias))) continue;
     const remaining = maxBytes - bytes;
     if (remaining <= 0) break;
-    const instructions = candidate.instructions.slice(0, remaining);
-    if (!instructions) break;
-    selected.push({ ...candidate, instructions });
+    const size = Buffer.byteLength(candidate.instructions);
+    if (size <= remaining) {
+      selected.push({ ...candidate, truncated: false });
+      bytes += size;
+      continue;
+    }
+    // A usable pointer: the store file and the command that prints it. The store is not
+    // granted to restricted providers because it also holds unreviewed candidates.
+    const marker = `\n[truncated to the run budget; full text: entry id "${candidate.id}" in \`atlas skill list\` or ${file()}]`;
+    const markerBytes = Buffer.byteLength(marker);
+    if (remaining <= markerBytes) break;
+    const instructions = `${truncateUtf8(candidate.instructions, remaining - markerBytes)}${marker}`;
+    selected.push({ ...candidate, instructions, truncated: true });
     bytes += Buffer.byteLength(instructions);
   }
   return selected;

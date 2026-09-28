@@ -15,7 +15,7 @@ import { defaultSessionStoreFactory } from "../dist/composition/runtime.js";
 import {
   listSkills,
   loadSkill,
-  loadSkills,
+  loadSkillIndex,
 } from "../dist/infrastructure/filesystem/skill-loader.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
@@ -45,16 +45,63 @@ test("rejects unknown skills", async () => {
   await assert.rejects(() => loadSkill("missing-skill"), /Skill not found/);
 });
 
-test("loads profile skills in order, ignores duplicates, and enforces a byte budget", async () => {
-  const skills = await loadSkills(
-    ["verification", "verification", "core-thinking"],
-    80,
-  );
+test("indexes profile skills in order, ignores duplicates, and reads no bodies", async () => {
+  const entries = await loadSkillIndex([
+    "verification",
+    "verification",
+    "core-thinking",
+  ]);
   assert.deepEqual(
-    skills.map((skill) => skill.name),
-    ["verification"],
+    entries.map((entry) => entry.name),
+    ["verification", "core-thinking"],
   );
-  assert.ok(Buffer.byteLength(skills[0].instructions) <= 80);
+  for (const entry of entries) {
+    assert.ok(entry.path.endsWith(path.join("core", entry.name, "SKILL.md")));
+    assert.equal(Object.hasOwn(entry, "instructions"), false);
+    assert.ok(entry.description.length > 0);
+  }
+});
+
+test("the skill index rejects unknown skills", async () => {
+  await assert.rejects(
+    () => loadSkillIndex(["missing-skill"]),
+    /Skill not found/,
+  );
+});
+
+test("promoted skills are truncated by bytes with a marker naming the candidate", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-promoted-bytes-"));
+  const previous = process.env.ATLAS_ROOT;
+  process.env.ATLAS_ROOT = root;
+  try {
+    await addSkillCandidate({
+      id: "arabic-review",
+      name: "Arabic Review",
+      instructions: "مرحبا بالعالم ".repeat(400),
+    });
+    await reviewSkillCandidate("arabic-review", "promoted");
+    const [skill] = await loadPromotedSkills("apply arabic review", 1000);
+    assert.equal(skill.truncated, true);
+    assert.ok(Buffer.byteLength(skill.instructions) <= 1000);
+    // The marker is an actionable pointer: the entry id, the command and the store file.
+    assert.match(skill.instructions, /entry id "arabic-review"/);
+    assert.match(skill.instructions, /`atlas skill list`/);
+    assert.ok(
+      skill.instructions.includes(
+        path.join(root, "system", "skills", "candidates.json"),
+      ),
+    );
+    assert.equal(
+      Buffer.from(skill.instructions, "utf8").toString("utf8"),
+      skill.instructions,
+    );
+    assert.ok(!skill.instructions.includes("\uFFFD"));
+    const [whole] = await loadPromotedSkills("apply arabic review");
+    assert.equal(whole.truncated, false);
+  } finally {
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
+  }
 });
 
 test("auto-activates only owner-reviewed promoted skills matching the prompt", async () => {
@@ -112,12 +159,15 @@ test("resolves private and project skills without reading them from engine", asy
     "Project instructions",
   );
   process.env.ATLAS_ROOT = root;
-  const skills = await loadSkills(
+  const entries = await loadSkillIndex(
     ["project-only"],
-    1000,
     path.join(root, "projects", "demo"),
   );
-  assert.equal(skills[0].instructions, "Project instructions");
+  assert.equal(
+    entries[0].path,
+    path.join(projectSkills, "project", "project-only", "SKILL.md"),
+  );
+  assert.equal(entries[0].description, "Project skill");
   delete process.env.ATLAS_ROOT;
 });
 

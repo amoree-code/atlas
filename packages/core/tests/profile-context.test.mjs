@@ -3,11 +3,11 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { buildContextReferences } from "../dist/application/context/context-references.js";
 import { validateContextManifest } from "../dist/domain/context/context-validator.js";
 import { selectProfileClient } from "../dist/domain/profiles/profile.js";
 import { executionPolicy } from "../dist/domain/profiles/profile-policy.js";
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
-import { buildContext } from "../dist/infrastructure/filesystem/context-manager.js";
 
 test("validates a profile and bounds context to allowed files", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-context-"));
@@ -21,10 +21,16 @@ test("validates a profile and bounds context to allowed files", async () => {
     allowedPaths: ["allowed.md"],
     contextSources: ["allowed.md", "private.md"],
   });
-  const result = await buildContext(profile, root, 100);
+  const result = await buildContextReferences({
+    profile,
+    prompt: "Review",
+    cwd: root,
+  });
   assert.deepEqual(result.manifest.files, ["allowed.md"]);
-  assert.match(result.content, /allowed context/);
-  assert.doesNotMatch(result.content, /private context/);
+  assert.deepEqual(result.manifest.omitted, ["private.md"]);
+  assert.match(result.content, /allowed\.md/);
+  assert.doesNotMatch(result.content, /private\.md/);
+  assert.doesNotMatch(result.content, /allowed context/);
 });
 
 test("rejects a profile missing required fields", () => {
@@ -100,8 +106,13 @@ test("skips context sources outside every allowed path", async () => {
     allowedPaths: [],
     contextSources: ["secret.md"],
   });
-  const result = await buildContext(profile, root, 100);
+  const result = await buildContextReferences({
+    profile,
+    prompt: "Review",
+    cwd: root,
+  });
   assert.deepEqual(result.manifest.files, []);
+  assert.deepEqual(result.manifest.references, []);
   assert.equal(result.content, "");
 });
 
@@ -113,6 +124,7 @@ test("validates a well-formed context manifest", () => {
     lastContextCheckpoint: new Date().toISOString(),
   });
   assert.equal(manifest.bytes, 16);
+  assert.deepEqual(manifest.references, []);
 });
 
 test("accepts multiple enabled clients in one universal profile", () => {

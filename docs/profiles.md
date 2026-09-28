@@ -39,9 +39,9 @@ starts. `description` and `version` are both optional on disk (they default to `
 
 - `provider` and `model` select which provider CLI runs and are passed through to it
   (see [providers.md](providers.md)).
-- `contextSources` and `allowedPaths` bound what `buildContext` reads into the prompt —
-  a source path is only included if it resolves inside one of `allowedPaths`
-  (see [context.md](context.md)).
+- `contextSources` and `allowedPaths` bound what a headless prompt references — a source path,
+  or a task record selected by the context packet, is only referenced (path and size, never its
+  body) if it resolves inside one of `allowedPaths` (see [context.md](context.md)).
 - `allowedCommands` is checked before a run starts: when non-empty, the selected provider
   command must appear in the list. `writePolicy` is validated at the same boundary;
   `allowed-paths` requires at least one allowed path. Provider processes still need a
@@ -55,9 +55,9 @@ starts. `description` and `version` are both optional on disk (they default to `
 
 When `skills` is empty, Atlas selects only `core-thinking` and `verification`. This is the
 small default set; expensive or promoted skills remain prompt-matched and owner-reviewed.
-`contextCompression: "atlas-bounded"` opts a profile into the local bounded compression
-trial. It records source hashes, byte counts, omitted sections, and recovery references;
-unsafe compression falls back to the bounded original.
+`contextCompression` is kept in the schema and the profile identity, but has no effect on
+headless prompts (and is not written into the profile contract): context sources are
+referenced, not inlined, so there is nothing to compress.
 
 Writable profiles fail closed because direct provider execution cannot enforce file writes.
 `writePolicy` is therefore not treated as advisory; an enforcing sandbox must be added before
@@ -140,11 +140,12 @@ The root-level JSON form is canonical. The older directory form with `profile.js
 ## Skill roots
 
 Profile skill names resolve progressively in this order: public `engine/skills/`, private
-`personal/skills/`, then the active project's `skills/` directory under
+`system/integrations/claude-code/skills/`, then the active project's `skills/` directory under
 `projects/<project>/skills/`. Each private or project root uses the same `index.json` and
-`<category>/<name>/SKILL.md` contract as the public catalog. The first matching name wins;
-duplicate profile names are loaded once, and the combined instructions are bounded before
-they are added to the provider prompt. Private and project skill content never belongs in
+`<category>/<name>/SKILL.md` contract as the public catalog. The first matching name wins and
+duplicate profile names are listed once. The prompt carries a skill index (name, description,
+SKILL.md path); the provider reads a skill's body on demand. Owner-reviewed promoted skills,
+which have no SKILL.md, stay inline up to 4 KB in total. Private and project skill content never belongs in
 the public engine repository.
 
 The local Agent Skills validator runs with `pnpm check:skills`. CI runs the same pinned

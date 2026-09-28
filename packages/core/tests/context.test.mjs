@@ -4,8 +4,11 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import {
+  buildContextReferences,
+  resolveContextSources,
+} from "../dist/application/context/context-references.js";
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
-import { buildContext } from "../dist/infrastructure/filesystem/context-manager.js";
 
 test("context returns a compact JSON packet without loading task bodies", async () => {
   const result = spawnSync(
@@ -42,25 +45,45 @@ test("context rejects symlinks that escape allowed paths", async () => {
     allowedPaths: ["allowed"],
     contextSources: ["allowed/linked.md"],
   });
-  const context = await buildContext(profile, root);
+  const resolved = await resolveContextSources(profile, root);
+  assert.deepEqual(resolved.references, []);
+  assert.deepEqual(resolved.omitted, ["allowed/linked.md"]);
+  const context = await buildContextReferences({
+    profile,
+    prompt: "Review",
+    cwd: root,
+  });
   assert.equal(context.content, "");
   assert.deepEqual(context.manifest.omitted, ["allowed/linked.md"]);
+  assert.deepEqual(context.manifest.references, []);
 });
 
-test("context enforces byte budgets for multibyte text", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-context-bytes-"));
-  await writeFile(path.join(root, "arabic.md"), "مرحبا".repeat(100));
+test("context sources are referenced, never read", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-context-ref-"));
+  const rel = "notes.md";
+  await writeFile(path.join(root, rel), "UNIQUE-BODY-MARKER مرحبا");
   const profile = validateProfile({
     name: "reader",
     provider: "claude",
     role: "reader",
-    allowedPaths: ["arabic.md"],
-    contextSources: ["arabic.md"],
+    allowedPaths: [rel],
+    contextSources: [rel],
   });
-  const context = await buildContext(profile, root, 11);
-  assert.ok(context.manifest.bytes <= 11);
-  assert.ok(
-    Buffer.byteLength(context.content.split("\n").slice(1).join("\n")) <= 11,
+  const context = await buildContextReferences({
+    profile,
+    prompt: "Review",
+    cwd: root,
+  });
+  assert.ok(context.content.includes(rel));
+  assert.ok(!context.content.includes("UNIQUE-BODY-MARKER"));
+  assert.deepEqual(context.manifest.files, [rel]);
+  assert.equal(context.manifest.bytes, Buffer.byteLength(context.content));
+  assert.equal(context.manifest.compression, null);
+  assert.equal(context.manifest.references[0].path, rel);
+  assert.equal(context.manifest.references[0].base, "cwd");
+  assert.equal(context.manifest.references[0].recordType, "context-source");
+  assert.equal(
+    context.manifest.references[0].bytes,
+    Buffer.byteLength("UNIQUE-BODY-MARKER مرحبا"),
   );
-  assert.ok(!context.content.includes("�"));
 });

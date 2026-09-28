@@ -9,6 +9,11 @@ export const skillMetadataSchema = z.object({
 
 export type SkillMetadata = z.infer<typeof skillMetadataSchema>;
 
+// A skill as referenced (never inlined) in a headless prompt: catalog metadata plus the
+// resolved SKILL.md path the provider reads on demand. Built from already-validated
+// metadata, never passed through validateSkill, so `path` is not stripped.
+export type SkillIndexEntry = SkillMetadata & { path: string };
+
 export const skillSchema = skillMetadataSchema.extend({
   instructions: z.string().min(1),
 });

@@ -1,7 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   type Skill,
+  type SkillIndexEntry,
   type SkillMetadata,
   skillMetadataSchema,
 } from "../../domain/skills/skill.js";
@@ -15,38 +16,46 @@ export async function listSkills(): Promise<SkillMetadata[]> {
 }
 
 export async function loadSkill(name: string): Promise<Skill> {
-  return loadSkillFromRoots(name, [enginePath("skills")]);
+  const { metadata, file } = await resolveSkillFile(name, [
+    enginePath("skills"),
+  ]);
+  return validateSkill({
+    ...metadata,
+    instructions: await readFile(file, "utf8"),
+  });
 }
 
-export async function loadSkills(
+// Resolves profile skills to catalog metadata plus their SKILL.md path, in order and
+// deduplicated, without reading any body. The description comes from index.json.
+export async function loadSkillIndex(
   names: string[],
-  maxBytes = 32_000,
   cwd = atlasRoot(),
-): Promise<Skill[]> {
-  const loaded: Skill[] = [];
+): Promise<SkillIndexEntry[]> {
+  const roots = skillRoots(cwd);
+  const entries: SkillIndexEntry[] = [];
   const seen = new Set<string>();
-  let bytes = 0;
-  const roots = [
+  for (const name of names) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const { metadata, file } = await resolveSkillFile(name, roots);
+    entries.push({ ...metadata, path: file });
+  }
+  return entries;
+}
+
+function skillRoots(cwd: string): string[] {
+  return [
     enginePath("skills"),
     atlasPath("system", "integrations", "claude-code", "skills"),
     projectSkillRoot(cwd),
   ].filter(Boolean) as string[];
-  for (const name of names) {
-    if (seen.has(name) || bytes >= maxBytes) continue;
-    const skill = await loadSkillFromRoots(name, roots);
-    const instructions = skill.instructions.slice(0, maxBytes - bytes);
-    if (!instructions) break;
-    loaded.push({ ...skill, instructions });
-    seen.add(name);
-    bytes += Buffer.byteLength(instructions);
-  }
-  return loaded;
 }
 
-async function loadSkillFromRoots(
+// The first root whose index.json lists the skill and whose SKILL.md exists wins.
+async function resolveSkillFile(
   name: string,
   roots: string[],
-): Promise<Skill> {
+): Promise<{ metadata: SkillMetadata; file: string }> {
   for (const root of roots) {
     const catalog = path.join(root, "index.json");
     try {
@@ -54,11 +63,9 @@ async function loadSkillFromRoots(
         (skill) => skill.name === name,
       );
       if (!metadata) continue;
-      const instructions = await readFile(
-        path.join(root, metadata.category, name, "SKILL.md"),
-        "utf8",
-      );
-      return validateSkill({ ...metadata, instructions });
+      const file = path.join(root, metadata.category, name, "SKILL.md");
+      await stat(file);
+      return { metadata, file };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
       throw error;

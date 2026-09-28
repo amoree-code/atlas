@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { enginePath } from "../../paths.js";
 
-type Client =
+export type SkillClient =
   | "claude"
   | "codex"
   | "gemini"
@@ -13,14 +13,14 @@ type Client =
   | "antigravity";
 type CoreSkillStatus = "synchronized" | "drifted" | "missing" | "unavailable";
 export type CoreSkillReport = {
-  client: Client;
+  client: SkillClient;
   root: string;
   status: CoreSkillStatus;
   missing: string[];
   drifted: string[];
 };
 
-const roots: Record<Client, (home: string) => string> = {
+export const clientSkillRoots: Record<SkillClient, (home: string) => string> = {
   claude: (home) => path.join(home, ".claude", "skills"),
   codex: (home) => path.join(home, ".codex", "skills"),
   gemini: (home) => path.join(home, ".gemini", "skills"),
@@ -42,8 +42,8 @@ export async function coreSkillReports(
 ): Promise<CoreSkillReport[]> {
   const names = await coreSkillNames();
   return Promise.all(
-    (Object.keys(roots) as Client[]).map(async (client) => {
-      const root = roots[client](home);
+    (Object.keys(clientSkillRoots) as SkillClient[]).map(async (client) => {
+      const root = clientSkillRoots[client](home);
       try {
         await stat(root);
       } catch {
@@ -87,7 +87,7 @@ export async function coreSkillReports(
 export async function syncCoreSkills(home = os.homedir()) {
   const names = await coreSkillNames();
   const results: Array<{
-    client: Client;
+    client: SkillClient;
     root: string;
     copied: string[];
     status: CoreSkillStatus;
