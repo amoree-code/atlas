@@ -3,8 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const corePackageRoot = path.join(root, "packages", "core");
 const packageJson = JSON.parse(
-  await readFile(path.join(root, "package.json"), "utf8"),
+  await readFile(path.join(corePackageRoot, "package.json"), "utf8"),
 );
 const version = packageJson.version;
 const changelog = await readFile(path.join(root, "CHANGELOG.md"), "utf8");
@@ -25,7 +26,10 @@ if (
 
 async function walk(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const relative = path.relative(root, path.join(directory, entry.name));
+    const relative = path.relative(
+      corePackageRoot,
+      path.join(directory, entry.name),
+    );
     if (entry.isDirectory()) await walk(path.join(directory, entry.name));
     if (
       /(?:^|[/\\])runtime(?:[/\\]|$)|(?:^|[/\\])node_modules(?:[/\\]|$)|\/Users\/|\/home\//.test(
@@ -38,7 +42,7 @@ async function walk(directory) {
 }
 
 for (const directory of ["dist", "templates", "skills"])
-  await walk(path.join(root, directory));
+  await walk(path.join(corePackageRoot, directory));
 if (findings.length) {
   console.error(findings.join("\n"));
   process.exitCode = 1;

@@ -8,7 +8,7 @@ import test from "node:test";
 function scan(root) {
   const child = spawn(
     process.execPath,
-    [path.join(process.cwd(), "scripts", "scan-privacy.mjs"), root],
+    [path.join(process.cwd(), "..", "..", "scripts", "scan-privacy.mjs"), root],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
   return new Promise((resolve) => {

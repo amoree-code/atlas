@@ -16,7 +16,8 @@ pnpm check:style      # biome check .
 ## Hard rules
 
 - No credentials, no personal data — anywhere in source, config, logs, tests, docs.
-- Public code only under `src/`. Provider execution only under `src/infrastructure/providers/`.
+- Public code only under `packages/core/src/`. Provider execution only under
+  `packages/core/src/infrastructure/providers/`.
 - Private data (`personal/`, `projects/`, `profiles/`, `sessions/`, `config/`,
   `control-plane/`, `integrations/`, `archive/`) stays outside the engine, git-ignored.
 - `sessions/sessions.sqlite` holds session metadata/events/links only — nothing else.
@@ -35,7 +36,8 @@ pnpm check:style      # biome check .
 5. `session-handoff` when done — compact packet, not a transcript.
 
 Prompts are hard-capped at 32KB via `profile.contextSources`
-(`src/infrastructure/filesystem/context-manager.ts`) — don't paste more than a profile allows.
+(`packages/core/src/infrastructure/filesystem/context-manager.ts`) — don't paste more than a
+profile allows.
 
 <!-- graft:start -->
 ## Graft — repo context graph

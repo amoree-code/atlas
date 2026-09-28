@@ -3,11 +3,11 @@
   "files": {
     "includes": [
       "**",
-      "!!dist",
+      "!!**/dist",
       "!!node_modules",
       "!!graft",
       "!!graphify-out",
-      "!!tests/_tmp"
+      "!!packages/core/tests/_tmp"
     ]
   },
   "formatter": {

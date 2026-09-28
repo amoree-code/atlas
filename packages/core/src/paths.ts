@@ -9,8 +9,10 @@ const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const engineDirectory = path.resolve(moduleDirectory, "..");
 
 // The default runtime data root is the private workspace sibling of engine/, e.g.
-// ~/atlas/engine (this package) next to ~/atlas/personal, ~/atlas/projects, and ~/atlas/system.
-const defaultAtlasRoot = path.resolve(engineDirectory, "..");
+// ~/atlas/engine/packages/core (this package) sits three directories below ~/atlas
+// (engine, packages, core), which itself sits next to ~/atlas/personal, ~/atlas/projects,
+// and ~/atlas/system.
+const defaultAtlasRoot = path.resolve(engineDirectory, "..", "..", "..");
 
 export function engineRoot(): string {
   return engineDirectory;

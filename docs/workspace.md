@@ -44,15 +44,17 @@ isolated workspaces from one engine checkout.
   `personal/templates`, and `projects/atlas/tasks` under the workspace root.
 - Creates `system/config/startup`, `system/profiles`,
   `system/sessions`, `system/control-plane`, `system/integrations`, and `system/archive` under the workspace root.
-- Writes `system/profiles/default.json` from the template in `templates/`, without overwriting existing files.
-- Installs a per-OS startup entry that launches `engine/dist/main.js service` with the
-  workspace root as its working directory: a macOS `launchd` plist under
+- Writes `system/profiles/default.json` from the template in `packages/core/templates/`,
+  without overwriting existing files.
+- Installs a per-OS startup entry that launches `engine/packages/core/dist/main.js service`
+  with the workspace root as its working directory: a macOS `launchd` plist under
   `~/Library/LaunchAgents`, a Linux `systemd --user` unit under
   `~/.config/systemd/user`, or a Windows Startup-folder launcher script.
 - Restricts the private `system` tree to `0700` permissions.
 
-Startup always points at `engine/dist/main.js` (the built engine), never at `src/`, and
-always runs with the private workspace directory as its current working directory.
+Startup always points at `engine/packages/core/dist/main.js` (the built engine), never at
+`src/`, and always runs with the private workspace directory as its current working
+directory.
 
 ## Task completion and archive
 

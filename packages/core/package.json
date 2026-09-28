@@ -1,0 +1,38 @@
+{
+  "name": "atlas",
+  "version": "0.3.6",
+  "private": false,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "skills"
+  ],
+  "bin": {
+    "atlas": "./dist/main.js"
+  },
+  "scripts": {
+    "prebuild": "node scripts/prepare-node-pty.mjs && node scripts/clean-dist.mjs",
+    "build": "tsc",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "check:skills": "node scripts/validate-skills.mjs && node scripts/generate-skills-index.mjs --check",
+    "generate:skills": "node scripts/generate-skills-index.mjs",
+    "typecheck": "tsc --noEmit",
+    "typecheck:watch": "tsc --noEmit --watch",
+    "test": "pnpm build && node --test --test-concurrency=1 --test-timeout=30000 tests/*.test.mjs"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0",
+    "playwright-core": "^1.48.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^7.0.2"
+  }
+}
