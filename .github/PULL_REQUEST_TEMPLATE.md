@@ -4,7 +4,7 @@
 
 ## Changelog
 
-- [ ] `CHANGELOG.md` has an entry under `## Unreleased` for this change
+- [ ] A changeset is included (`pnpm changeset`) describing this change
 - [ ] Not applicable (docs-only, test-only, or internal tooling with no user-facing effect)
 
 ## Test plan

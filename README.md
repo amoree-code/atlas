@@ -210,7 +210,7 @@ flowchart LR
 - [Security](docs/security.md) — credentials, the workspace boundary, and access control
 - [Troubleshooting](docs/troubleshooting.md) — common errors and how to resolve them
 - [Migration](docs/migration.md) — what changes between versions and how to move a workspace
-- [Changelog](CHANGELOG.md) — versioned release notes
+- [Changelog](packages/core/CHANGELOG.md) — versioned release notes
 
 ## License
 
