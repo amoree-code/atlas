@@ -1,11 +1,10 @@
-import type { ContextManifest } from "../context/context.js";
 import type { HeadlessResult } from "../process/process-events.js";
 import type { Profile } from "../profiles/profile.js";
 import type {
   HeadlessProvider,
   ProviderRequest,
 } from "../providers/provider.js";
-import type { Skill } from "../skills/skill.js";
+import type { SkillIndexEntry } from "../skills/skill.js";
 import type { SessionStoreFactory } from "./session-store-port.js";
 
 // Function ports the application depends on. The composition root binds these to
@@ -18,19 +17,12 @@ export type ProviderExecutor = (
 
 export type ProfileLoader = (name: string) => Promise<Profile>;
 
-export type BuiltContext = { manifest: ContextManifest; content: string };
-export type ContextBuilder = (
-  profile: Profile,
-  root: string,
-  maxBytes?: number,
-  options?: { compression?: "none" | "atlas-bounded" },
-) => Promise<BuiltContext>;
-
-export type SkillLoader = (
+// Resolves profile skill names to their catalog metadata and SKILL.md path without reading
+// any body: headless prompts carry a skill index, and the provider loads a body on demand.
+export type SkillIndexLoader = (
   names: string[],
-  maxBytes?: number,
   cwd?: string,
-) => Promise<Skill[]>;
+) => Promise<SkillIndexEntry[]>;
 
 export type ClientHomeResolver = (profile: Profile) => string | undefined;
 
@@ -56,8 +48,7 @@ export type AgentRuntimeDeps = {
   openStore: SessionStoreFactory;
   executeProvider: ProviderExecutor;
   loadProfile: ProfileLoader;
-  buildContext: ContextBuilder;
-  loadSkills: SkillLoader;
+  loadSkillIndex: SkillIndexLoader;
   resolveClientHome: ClientHomeResolver;
   appendRuntimeLog: RuntimeLogger;
   assertProviderSupportsReadOnly: ReadOnlyAssertion;

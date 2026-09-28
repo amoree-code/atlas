@@ -10,9 +10,8 @@ import type {
 } from "../domain/ports/platform-ports.js";
 import type { AgentRuntimeDeps } from "../domain/ports/runtime-ports.js";
 import type { SessionStoreFactory } from "../domain/ports/session-store-port.js";
-import { buildContext } from "../infrastructure/filesystem/context-manager.js";
 import { loadProfile } from "../infrastructure/filesystem/profile-loader.js";
-import { loadSkills } from "../infrastructure/filesystem/skill-loader.js";
+import { loadSkillIndex } from "../infrastructure/filesystem/skill-loader.js";
 import { appendRuntimeLog } from "../infrastructure/observability/runtime-logger.js";
 import { openSessionStore } from "../infrastructure/persistence/session-store.js";
 import { runHeadless } from "../infrastructure/process/cli-process.js";
@@ -39,8 +38,7 @@ export const defaultAgentRuntime: AgentRuntimeDeps = {
   openStore: openSessionStore,
   executeProvider: runProvider,
   loadProfile,
-  buildContext,
-  loadSkills,
+  loadSkillIndex,
   resolveClientHome,
   appendRuntimeLog,
   assertProviderSupportsReadOnly,

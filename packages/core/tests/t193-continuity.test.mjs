@@ -96,6 +96,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
       seen.every(
         ({ prompt }) =>
           prompt.includes('"taskId":"T-193"') &&
+          prompt.includes("taskId: T-193") &&
           prompt.includes("Run the bounded verification") &&
           prompt.includes("handoff-read"),
       ),

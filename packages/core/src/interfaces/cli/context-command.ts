@@ -1,3 +1,10 @@
+import path from "node:path";
+import { z } from "zod";
+import {
+  type ClientContextCost,
+  DEFAULT_CONTEXT_BUDGET,
+  measureContextCost,
+} from "../../application/context/context-cost.js";
 import { resolveProject } from "../../application/context/project-resolution.js";
 import { atlasVersion } from "../../version.js";
 import { listTasks } from "./tasks-command.js";
@@ -37,4 +44,101 @@ export async function runContextCommand(json = false): Promise<void> {
   else
     for (const task of tasks)
       console.log(`${task.id} [${task.state}] ${task.title} — ${task.goal}`);
+}
+
+const costUsage =
+  "Usage: atlas context cost [--json] [--budget <bytes>] [--project <dir>]";
+const budgetSchema = z.coerce.number().int().positive();
+
+function parseCostArgs(
+  args: string[],
+): { json: boolean; budget: number; project: string } | null {
+  let json = false;
+  let budget = DEFAULT_CONTEXT_BUDGET;
+  let project = process.cwd();
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--json") json = true;
+    else if (arg === "--budget" || arg === "--project") {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("--")) return null;
+      index += 1;
+      if (arg === "--project") project = value;
+      else {
+        const parsed = budgetSchema.safeParse(value);
+        if (!parsed.success) return null;
+        budget = parsed.data;
+      }
+    } else return null;
+  }
+  return { json, budget, project: path.resolve(project) };
+}
+
+function costStatus(client: ClientContextCost): string {
+  if (
+    !client.skills.present &&
+    client.rules.every((file) => file.missing) &&
+    client.memory.every((file) => file.missing)
+  )
+    return "absent";
+  return client.overBudget ? "OVER" : "ok";
+}
+
+// `atlas context cost`: a read-only report of each client's always-on context bytes. Exits 0
+// even when a client is over budget — it is a report, not a gate.
+export async function runContextCostCommand(args: string[]): Promise<void> {
+  const options = parseCostArgs(args);
+  if (!options) {
+    console.error(costUsage);
+    process.exitCode = 1;
+    return;
+  }
+  const report = await measureContextCost({
+    projectDir: options.project,
+    budget: options.budget,
+  });
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+  const sum = (files: { bytes: number }[]) =>
+    files.reduce((total, file) => total + file.bytes, 0);
+  const header = [
+    "client",
+    "rules",
+    "memory",
+    "skills",
+    "skill-fm",
+    "skill-body",
+    "always-on",
+    "status",
+  ];
+  const rows = report.clients.map((client) => [
+    client.shared ? `${client.client} (shared)` : client.client,
+    String(sum(client.rules)),
+    String(sum(client.memory)),
+    String(client.skills.count),
+    String(client.skills.frontmatterBytes),
+    String(client.skills.bodyBytes),
+    String(client.alwaysOnBytes),
+    costStatus(client),
+  ]);
+  const widths = header.map((title, column) =>
+    Math.max(title.length, ...rows.map((row) => row[column].length)),
+  );
+  const format = (cells: string[]) =>
+    cells.map((cell, column) => cell.padEnd(widths[column])).join("  ");
+  console.log(`Always-on context by client (budget ${report.budget} bytes)`);
+  console.log(format(header));
+  report.clients.forEach((client, index) => {
+    console.log(format(rows[index]));
+    for (const file of [...client.rules, ...client.memory])
+      console.log(
+        `  ${file.path} ${file.bytes}${file.via ? ` (via ${file.via})` : ""}${file.missing ? " missing" : ""}${file.unreadable ? " unreadable" : ""}`,
+      );
+    console.log(
+      `  skills: ${client.skills.root}${client.skills.present ? "" : " absent"}`,
+    );
+    for (const note of client.notes) console.log(`  note: ${note}`);
+  });
 }

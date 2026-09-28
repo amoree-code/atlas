@@ -91,8 +91,10 @@ history.
 1. `main.ts` parses the command and calls `runAgent`.
 2. `runAgent` loads the named profile (`profile-loader.ts`), opens the session store, and
    creates a `Session` row with status `created`.
-3. `buildContext` reads the profile's `contextSources`, filtered by `allowedPaths`, into a
-   bounded prompt prefix.
+3. `runAgent` assembles a lean prompt: context references (the profile's `contextSources` and
+   an exact task-id packet record, both filtered by `allowedPaths`), a skill index with SKILL.md paths,
+   and a bounded profile facts digest — paths and pointers, not file bodies
+   (see [context.md](context.md)).
 4. `runProvider` builds the provider's CLI invocation and `runHeadless` spawns it, streaming
    stdout as JSON/text events back into the session's event log.
 5. The session status transitions to `running`, then `completed`/`failed` based on exit code.

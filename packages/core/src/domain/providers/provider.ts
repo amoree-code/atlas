@@ -24,6 +24,9 @@ export type ProviderRequest = {
   onEvent?: (event: RuntimeEvent) => void;
   onSpawn?: (pid: number) => void;
   readOnly?: boolean;
+  // Directories outside cwd that the prompt points the provider at (skill folders, context
+  // references). Workspace-restricted providers are granted read access to them.
+  readDirectories?: string[];
 };
 
 export type ProviderAdapter = {

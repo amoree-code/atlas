@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { ContextReference } from "../../domain/context/context.js";
+import { validateContextManifest } from "../../domain/context/context-validator.js";
 import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
 import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import type { RuntimeEvent } from "../../domain/process/process-events.js";
@@ -12,14 +14,28 @@ import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import type { RunContract } from "../../domain/runs/run-contract.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 import type { Session } from "../../domain/sessions/session.js";
+import type { SkillIndexEntry } from "../../domain/skills/skill.js";
+import {
+  buildContextReferences,
+  referenceReadDirectories,
+} from "../context/context-references.js";
 import { getHandoff } from "../handoff/handoff-service.js";
 import { emitHook } from "../hooks/lifecycle-hooks.js";
 import {
-  formatProfileFacts,
+  buildProfileFactsDigest,
+  profileFactsFile,
   readProfileFacts,
 } from "../memory/profile-facts.js";
 import { finalizeSession } from "../memory/session-closeout.js";
 import { loadPromotedSkills } from "../skills/skill-curation.js";
+import {
+  assemblePrompt,
+  formatProfileContract,
+  formatPromotedSkills,
+  formatSkillIndex,
+  PROMOTED_SKILL_MAX_BYTES,
+  readDirectoriesOutside,
+} from "./prompt-assembly.js";
 import { authorizeRun } from "./run-authorization.js";
 
 // Re-exported for existing importers (scheduler, task-loop, gateway).
@@ -59,7 +75,7 @@ export async function runAgent(
   deps.assertProviderSupportsReadOnly(profile.provider as HeadlessProvider);
   if (
     profile.writePolicy !== "none" &&
-    (!request.runContract || !request.runContract.approval.approved)
+    !request.runContract?.approval.approved
   ) {
     throw new Error("Writable profile runs require an approved run contract");
   }
@@ -120,21 +136,19 @@ export async function runAgent(
         }),
       ),
     );
-    const context = await deps.buildContext(profile, request.cwd, 32_000, {
-      compression: profile.contextCompression,
+    const context = await buildContextReferences({
+      profile,
+      prompt: request.prompt,
+      cwd: request.cwd,
     });
-    const profileFacts = await readProfileFacts(profile.name);
-    const skills = await deps.loadSkills(profile.skills, 32_000, request.cwd);
+    const factsDigest = buildProfileFactsDigest(
+      profile.name,
+      await readProfileFacts(profile.name),
+    );
+    const skillIndex = await deps.loadSkillIndex(profile.skills, request.cwd);
     const autoSkills = await loadPromotedSkills(
       request.prompt,
-      Math.max(
-        0,
-        32_000 -
-          skills.reduce(
-            (bytes, skill) => bytes + Buffer.byteLength(skill.instructions),
-            0,
-          ),
-      ),
+      PROMOTED_SKILL_MAX_BYTES,
     );
     for (const skill of autoSkills) {
       sessionStore.appendEvent(
@@ -165,58 +179,37 @@ export async function runAgent(
       profile: profile.name,
       provider: profile.provider,
     });
-    const skillContent = [...skills, ...autoSkills]
-      .map((skill) => `## Skill: ${skill.name}\n${skill.instructions}`)
-      .join("\n\n");
-    const profileContract = JSON.stringify({
-      profile: profile.name,
-      role: profile.role,
-      provider: profile.provider,
-      model: profile.model,
-      clientBinding: profile.clients[profile.provider] ?? {
-        enabled: true,
-        capabilities: [],
-        limitations: [],
-      },
-      allowedPaths: profile.allowedPaths,
-      allowedCommands: profile.allowedCommands,
-      writePolicy: profile.writePolicy,
-      approvalRequired: profile.governance?.approvalRequired ?? false,
-      verification: profile.verification.commands,
-      memoryScope: profile.memory.enabled ? profile.memory.scope : "disabled",
-      taskId: effectiveTaskId,
-      handoffId: request.handoffId ?? null,
-      contextCompression: profile.contextCompression,
-    });
     const handoffContent =
       typeof handoff?.compactContext === "string"
         ? `## Atlas handoff\n${handoff.compactContext}`
         : "";
-    const prompt = [
-      request.prompt,
-      `## Effective Atlas profile\n${profileContract}`,
-      profile.instructions,
-      skillContent,
-      formatProfileFacts(profileFacts),
-      handoffContent,
-      context.content,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    const { prompt, bytes, breakdown } = assemblePrompt({
+      request: request.prompt,
+      profile: formatProfileContract(profile, {
+        taskId: effectiveTaskId,
+        handoffId: request.handoffId ?? null,
+      }),
+      instructions: profile.instructions,
+      skills: [formatSkillIndex(skillIndex), formatPromotedSkills(autoSkills)]
+        .filter(Boolean)
+        .join("\n\n"),
+      facts: factsDigest.text,
+      handoff: handoffContent,
+      context: context.content,
+    });
     const contextHash = createHash("sha256").update(prompt).digest("hex");
-    sessionStore.updateContext(
-      sessionId,
-      contextHash,
-      Buffer.byteLength(prompt),
-    );
+    sessionStore.updateContext(sessionId, contextHash, bytes);
     sessionStore.appendEvent(
       sessionId,
       "context_cost",
       JSON.stringify({
-        bytes: Buffer.byteLength(prompt),
+        bytes,
         sources: context.manifest.files,
         handoffId: request.handoffId ?? null,
-        selectedSkills: [...skills, ...autoSkills].map((skill) => skill.name),
+        selectedSkills: [...skillIndex, ...autoSkills].map(
+          (skill) => skill.name,
+        ),
+        sections: breakdown,
       }),
     );
     const result = await execute({
@@ -227,6 +220,13 @@ export async function runAgent(
       timeoutMs: request.runContract?.budget.timeoutMs,
       maxOutputBytes: request.runContract?.budget.maxOutputBytes,
       readOnly: true,
+      readDirectories: headlessReadDirectories({
+        cwd: request.cwd,
+        profileName: profile.name,
+        skillIndex,
+        factsPartial: factsDigest.partial,
+        contextDirectories: context.readDirectories,
+      }),
       onSpawn: (pid) => sessionStore.setProviderPid(sessionId, pid),
       onEvent: (event) => {
         captureProviderSessionId(sessionStore, sessionId, event);
@@ -359,15 +359,47 @@ export async function resumeAgent(
       "user_input",
       redactRuntimeText(prompt),
     );
+    // The first turn's prompt points at skill folders, context references and possibly the
+    // facts store; --add-dir is per invocation, so the same grant is rebuilt for the resume.
+    // profileIdentity is unchanged (checked above), so the skill set is the same. The grant
+    // only adds read access: a skill or facts lookup that fails now narrows it, never the turn.
+    const cwd = existing.workingDirectory;
+    let skillIndex: SkillIndexEntry[] = [];
+    try {
+      skillIndex = await deps.loadSkillIndex(profile.skills, cwd);
+    } catch {
+      skillIndex = [];
+    }
+    let factsPartial = false;
+    try {
+      factsPartial = buildProfileFactsDigest(
+        profile.name,
+        await readProfileFacts(profile.name),
+      ).partial;
+    } catch {
+      factsPartial = false;
+    }
+    const readDirectories = headlessReadDirectories({
+      cwd,
+      profileName: profile.name,
+      skillIndex,
+      factsPartial,
+      contextDirectories: await referenceReadDirectories(
+        recordedReferences(sessionStore.listEvents(sessionId)),
+        profile.allowedPaths,
+        cwd,
+      ),
+    });
     const result = await execute({
       provider: "claude",
       prompt,
-      cwd: existing.workingDirectory,
+      cwd,
       resumeId: existing.providerSessionId,
       clientHome: deps.resolveClientHome(profile),
       timeoutMs: runContract?.budget.timeoutMs,
       maxOutputBytes: runContract?.budget.maxOutputBytes,
       readOnly: true,
+      readDirectories,
       onSpawn: (pid) => sessionStore.setProviderPid(sessionId, pid),
       onEvent: (event) => {
         captureProviderSessionId(sessionStore, sessionId, event);
@@ -409,6 +441,45 @@ export async function resumeAgent(
     throw error;
   } finally {
     sessionStore.close();
+  }
+}
+
+// Read access for everything the lean prompt points at outside cwd: skill folders, the
+// facts store when the digest left facts out, and the allowedPaths-bounded directories of
+// context references. Deduped in that order.
+function headlessReadDirectories(options: {
+  cwd: string;
+  profileName: string;
+  skillIndex: SkillIndexEntry[];
+  factsPartial: boolean;
+  contextDirectories: string[];
+}): string[] {
+  return [
+    ...new Set([
+      ...readDirectoriesOutside(options.cwd, [
+        ...options.skillIndex.map((skill) => skill.path),
+        ...(options.factsPartial
+          ? [profileFactsFile(options.profileName)]
+          : []),
+      ]),
+      ...options.contextDirectories,
+    ]),
+  ];
+}
+
+// The references the session's first turn recorded (its last context_manifest event).
+// Packet references depend on the original prompt, so they are read back, not recomputed.
+function recordedReferences(
+  events: { type: string; data: string }[],
+): ContextReference[] {
+  const manifest = [...events]
+    .reverse()
+    .find((event) => event.type === "context_manifest");
+  if (!manifest) return [];
+  try {
+    return validateContextManifest(JSON.parse(manifest.data)).references;
+  } catch {
+    return [];
   }
 }
 

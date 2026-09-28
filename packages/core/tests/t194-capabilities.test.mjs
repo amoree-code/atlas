@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -12,7 +12,6 @@ import {
 } from "../dist/application/skills/task-observer.js";
 import { defaultSessionStoreFactory } from "../dist/composition/runtime.js";
 import { defaultSkillNames } from "../dist/domain/skills/default-skills.js";
-import { buildContext } from "../dist/infrastructure/filesystem/context-manager.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 
 test("default skill policy stays small and verification-first", () => {
@@ -71,55 +70,6 @@ test("compression falls back to bounded original when required evidence cannot f
   assert.equal(result.method, "fallback-original-bounded");
   assert.equal(result.compressedBytes, Buffer.byteLength(result.content));
   assert.ok(result.compressedBytes <= 8);
-});
-
-test("profile-scoped compression keeps context within budget and records a benchmark", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-context-"));
-  const content = [
-    'tool json: {"items":[1,2,3]}',
-    "verification: passed",
-    ...Array.from({ length: 100 }, () => "repeated log output"),
-  ].join("\n");
-  await mkdir(path.join(root, "context"), { recursive: true });
-  await writeFile(path.join(root, "context", "output.txt"), content);
-  const result = await buildContext(
-    {
-      name: "benchmark",
-      description: "",
-      version: "1",
-      provider: "claude",
-      model: "managed",
-      role: "developer",
-      skills: [],
-      allowedPaths: ["context"],
-      allowedCommands: [],
-      writePolicy: "none",
-      contextSources: ["context/output.txt"],
-      clients: { claude: { enabled: true, capabilities: [], limitations: [] } },
-      defaultClient: "claude",
-      memory: { enabled: true, scope: "profile" },
-      verification: { commands: [] },
-      instructions: "",
-      contextCompression: "atlas-bounded",
-    },
-    root,
-    220,
-    { compression: "atlas-bounded" },
-  );
-  assert.equal(result.manifest.compression.method, "atlas-bounded-v1");
-  assert.ok(
-    result.manifest.compression.originalBytes >
-      result.manifest.compression.compressedBytes,
-  );
-  assert.ok(result.manifest.bytes <= 220);
-  assert.match(result.content, /verification/);
-  assert.equal(
-    await readFile(
-      path.join(root, result.manifest.compression.recoveryRef),
-      "utf8",
-    ),
-    content,
-  );
 });
 
 test("observer records proven repeated work without creating or promoting a skill", async () => {

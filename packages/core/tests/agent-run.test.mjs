@@ -161,8 +161,13 @@ test("connects profile, context, headless execution, and session storage", async
     async (request) => {
       assert.equal(request.provider, "claude");
       assert.match(request.prompt, /Inspect before reporting/);
-      assert.match(request.prompt, /project context/);
-      assert.match(request.prompt, /Skill: verification/);
+      assert.match(request.prompt, /## Context references[\s\S]*README\.md/);
+      assert.doesNotMatch(request.prompt, /project context/);
+      assert.match(
+        request.prompt,
+        /- verification: Turn implementation claims.*verification[\\/]SKILL\.md/,
+      );
+      assert.ok(!request.prompt.includes("smallest runnable check"));
       request.onEvent?.({ type: "json", data: { text: "done" } });
       return { exitCode: 0, events: [], stderr: "" };
     },

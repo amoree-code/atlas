@@ -35,9 +35,11 @@ pnpm check:style      # biome check .
 4. `verification` after — a claim isn't done until it's independently checked.
 5. `session-handoff` when done — compact packet, not a transcript.
 
-Prompts are hard-capped at 32KB via `profile.contextSources`
-(`packages/core/src/infrastructure/filesystem/context-manager.ts`) — don't paste more than a
-profile allows.
+Headless prompts carry references, not bodies: a skill index with SKILL.md paths, a compact
+profile contract, a facts digest (<= 2 KB, with a pointer) and context references (paths + why),
+assembled in `packages/core/src/application/runs/prompt-assembly.ts` and
+`packages/core/src/application/context/context-references.ts`. `atlas context cost` reports each
+client's always-on bytes (rules, memory index, skill frontmatter).
 
 <!-- graft:start -->
 ## Graft — repo context graph

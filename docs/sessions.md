@@ -101,7 +101,7 @@ node dist/main.js session resume <session-id> "<prompt>"
 ## Events
 
 Every provider event and lifecycle transition is appended to `session_events` via
-`appendEvent`, including `context_manifest` (the built context, see [context.md](context.md)),
+`appendEvent`, including `context_manifest` (the referenced context, paths + why, see [context.md](context.md)),
 each provider stdout event (bounded to 64,000 characters), `process_exit`, and `error` on
 failure. `listEvents(sessionId)` returns the full ordered log for a session.
 

@@ -14,6 +14,11 @@ export type {
   ProviderRequest,
 } from "../../domain/providers/provider.js";
 
+// One flag per directory; never variadic, so the next argument cannot be swallowed.
+function repeatFlag(flag: string, values: string[] | undefined): string[] {
+  return (values ?? []).flatMap((value) => [flag, value]);
+}
+
 export const providerAdapterRegistry: Readonly<
   Record<HeadlessProvider, ProviderAdapter>
 > = {
@@ -26,6 +31,7 @@ export const providerAdapterRegistry: Readonly<
       ...(request.readOnly
         ? ["--permission-mode", "plan", "--restricted"]
         : []),
+      ...repeatFlag("--add-dir", request.readDirectories),
       "-p",
       request.prompt,
       "--verbose",
@@ -51,6 +57,7 @@ export const providerAdapterRegistry: Readonly<
     readOnlyArgs: ["--approval-mode=plan"],
     build: (request) => [
       ...(request.readOnly ? ["--approval-mode=plan"] : []),
+      ...repeatFlag("--include-directories", request.readDirectories),
       "--prompt",
       request.prompt,
       "--output-format",
