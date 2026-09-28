@@ -5,4 +5,4 @@ implements mechanics only — capabilities and application code decide policy, n
 `persistence/` may write `system/sessions/sessions.sqlite` for session metadata, session
 events, and parent-child links only — nothing else.
 
-Full repository rules: [../../AGENTS.md](../../AGENTS.md).
+Full repository rules: [../../../../AGENTS.md](../../../../AGENTS.md).

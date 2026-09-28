@@ -1,38 +1,27 @@
 {
-  "name": "atlas",
-  "version": "0.3.6",
-  "private": false,
+  "name": "atlas-monorepo",
+  "private": true,
   "packageManager": "pnpm@12.4.2",
-  "type": "module",
   "engines": {
     "node": ">=22"
   },
-  "files": [
-    "dist",
-    "templates",
-    "skills"
-  ],
-  "bin": {
-    "atlas": "./dist/main.js"
-  },
   "scripts": {
-    "prebuild": "node scripts/prepare-node-pty.mjs && node scripts/clean-dist.mjs",
-    "build": "tsc",
-    "dev": "tsx src/main.ts",
-    "start": "node dist/main.js",
-    "check:skills": "node scripts/validate-skills.mjs && node scripts/generate-skills-index.mjs --check",
-    "generate:skills": "node scripts/generate-skills-index.mjs",
+    "build": "pnpm --filter atlas run build",
+    "dev": "pnpm --filter atlas run dev",
+    "start": "pnpm --filter atlas run start",
+    "typecheck": "pnpm --filter atlas run typecheck",
+    "typecheck:watch": "pnpm --filter atlas run typecheck:watch",
+    "check:skills": "pnpm --filter atlas run check:skills",
+    "generate:skills": "pnpm --filter atlas run generate:skills",
     "check:privacy": "node scripts/scan-privacy.mjs",
     "check:tasks": "node scripts/validate-tasks.mjs",
     "check:package": "node scripts/validate-package.mjs",
     "check:system": "sh scripts/health-check.sh",
     "check:providers": "node scripts/provider-smoke.mjs",
-    "typecheck": "tsc --noEmit",
-    "typecheck:watch": "tsc --noEmit --watch",
     "check:style": "biome check .",
     "check:unused": "knip --include files,dependencies,devDependencies,unlisted,binaries,unresolved",
     "check": "pnpm typecheck && pnpm check:style && pnpm check:unused && pnpm check:privacy && pnpm check:skills && pnpm check:tasks && pnpm check:package && pnpm check:system",
-    "test": "pnpm build && node --test --test-concurrency=1 --test-timeout=30000 tests/*.test.mjs",
+    "test": "pnpm --filter atlas run test",
     "prepare": "node scripts/prepare-hooks.mjs",
     "changeset": "changeset"
   },
@@ -40,15 +29,7 @@
     "@biomejs/biome": "^2.5.14",
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "^3.0.3",
-    "@types/node": "^22.0.0",
     "knip": "^6.37.0",
-    "lefthook": "^2.1.14",
-    "tsx": "^4.19.0",
-    "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "node-pty": "^1.1.0",
-    "playwright-core": "^1.48.0",
-    "zod": "^4.6.5"
+    "lefthook": "^2.1.14"
   }
 }

@@ -9,7 +9,10 @@ function validate(root) {
   return new Promise((resolve) => {
     const child = spawn(
       process.execPath,
-      [path.join(process.cwd(), "scripts", "validate-tasks.mjs"), root],
+      [
+        path.join(process.cwd(), "..", "..", "scripts", "validate-tasks.mjs"),
+        root,
+      ],
       { stdio: ["ignore", "pipe", "pipe"] },
     );
     let stderr = "";

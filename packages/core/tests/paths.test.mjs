@@ -17,7 +17,7 @@ test("engineRoot resolves to the engine package directory, one level above this 
 
 test("default atlasRoot resolves to the private workspace sibling of engine, not inside it", () => {
   delete process.env.ATLAS_ROOT;
-  assert.equal(atlasRoot(), path.resolve(engineRoot(), ".."));
+  assert.equal(atlasRoot(), path.resolve(engineRoot(), "..", "..", ".."));
   assert.notEqual(atlasRoot(), engineRoot());
 });
 

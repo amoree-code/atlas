@@ -24,7 +24,7 @@ git clone https://github.com/amoree-code/atlas.git atlas
 cd atlas
 pnpm install
 pnpm build
-node dist/main.js setup
+node packages/core/dist/main.js setup
 ```
 
 Connect an Obsidian vault during setup, or connect it later:
@@ -56,14 +56,15 @@ approval inside its policy boundary.
 
 By default, `setup` creates the Atlas workspace as a private sibling directory next to
 this repository (e.g. `atlas/` next to `atlas/engine/`), not inside it, and installs
-user-level startup integration pointed at this repository's `dist/main.js`. Later logins
+user-level startup integration pointed at this repository's `packages/core/dist/main.js`.
+Later logins
 start the local runtime automatically. Set `ATLAS_ROOT` to use a different workspace
 location instead.
 
 Run an agent:
 
 ```bash
-node dist/main.js run --profile default --prompt "Review this project"
+node packages/core/dist/main.js run --profile default --prompt "Review this project"
 ```
 
 Open a provider through Atlas's managed PTY boundary when interactive use is
@@ -82,10 +83,10 @@ control level. See [entry-point contract](docs/entry-points.md).
 Inspect or resume a saved session:
 
 ```bash
-node dist/main.js session list
-node dist/main.js session show <session-id>
-node dist/main.js session resume <session-id> "Continue the review"
-node dist/main.js session promote <session-id> knowledge/results --approve
+node packages/core/dist/main.js session list
+node packages/core/dist/main.js session show <session-id>
+node packages/core/dist/main.js session resume <session-id> "Continue the review"
+node packages/core/dist/main.js session promote <session-id> knowledge/results --approve
 ```
 
 Promotion is explicit: it copies a bounded, redacted provider result into private Atlas
@@ -128,11 +129,13 @@ credentials.
 
 ```text
 atlas/
-├── engine/                 public Atlas Runtime repository
-│   ├── src/                domain / application / infrastructure / interfaces
-│   ├── templates/
-│   ├── tests/
-│   └── package.json
+├── engine/                 public Atlas Runtime repository (pnpm workspace root)
+│   └── packages/
+│       └── core/           the `atlas` package
+│           ├── src/        domain / application / infrastructure / interfaces
+│           ├── templates/
+│           ├── tests/
+│           └── package.json
 ├── personal/               private user data
 ├── projects/               private project data
 ├── system/                 private profiles, sessions, config, governance, integrations, and runtime
@@ -142,8 +145,8 @@ atlas/
 `personal/`, `projects/`, `system/`, and `archive/` are private workspace data. They are ignored
 by Git and are never part of a public commit. By default they resolve to a private
 workspace directory next to this repository; set `ATLAS_ROOT` to choose another
-workspace root. Startup entries execute the engine from `engine/dist/main.js` while
-using the private workspace as their working directory.
+workspace root. Startup entries execute the engine from `engine/packages/core/dist/main.js`
+while using the private workspace as their working directory.
 
 ## Development
 
@@ -168,7 +171,8 @@ remain on the host and are not included in the image.
 
 ## Agent skills
 
-Atlas ships a small set of provider-neutral Agent Skills under `skills/core/`, invoked
+Atlas ships a small set of provider-neutral Agent Skills under `packages/core/skills/core/`,
+invoked
 by name from any registered client:
 
 - `catch-up` — reconstruct project state, completed work, blockers, and the next action.

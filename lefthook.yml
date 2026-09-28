@@ -2,12 +2,12 @@ pre-commit:
   parallel: true
   commands:
     typecheck:
-      glob: "*.ts"
-      run: pnpm exec tsc --noEmit
+      glob: "packages/**/*.ts"
+      run: pnpm typecheck
     privacy:
       run: pnpm check:privacy
     skills:
-      glob: "skills/**"
+      glob: "packages/core/skills/**"
       run: pnpm check:skills
 
 pre-push:

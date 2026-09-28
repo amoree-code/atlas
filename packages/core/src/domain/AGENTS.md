@@ -4,4 +4,4 @@ Types and Zod validators only — no I/O, no provider calls, no filesystem or ne
 See [docs/architecture.md](../../docs/architecture.md) for the `Profile`/`Session`/`ContextManifest`
 contracts this layer owns.
 
-Full repository rules: [../../AGENTS.md](../../AGENTS.md).
+Full repository rules: [../../../../AGENTS.md](../../../../AGENTS.md).
