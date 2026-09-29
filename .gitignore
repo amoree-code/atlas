@@ -13,8 +13,10 @@ projects/*
 !personal/.gitkeep
 !projects/.gitkeep
 
-# Private application state lives beside engine/ (system/) — never commit any of it.
-system/*
+# Private/machine-local application state now lives inside kernel/bridge/ (was system/,
+# a sibling of engine/, before the Ocean T-224 rename) — never commit any of it. The
+# publishable subset (bridge/policies/, bridge/profiles/) is carved out for T-231.
+bridge/*
 
 # --- credentials ---
 .env

@@ -8,10 +8,10 @@ const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 // runs compiled from dist/ or directly from src/ under tsx.
 const engineDirectory = path.resolve(moduleDirectory, "..");
 
-// The default runtime data root is the private workspace sibling of engine/, e.g.
-// ~/atlas/engine/packages/core (this package) sits three directories below ~/atlas
-// (engine, packages, core), which itself sits next to ~/atlas/personal, ~/atlas/projects,
-// and ~/atlas/system.
+// The default runtime data root is the private workspace root, e.g.
+// ~/ocean/kernel/packages/core (this package) sits three directories below ~/ocean
+// (kernel, packages, core), which itself sits next to ~/ocean/brain and
+// ~/ocean/kernel/bridge (see PERSONAL_DIR/PROJECTS_DIR/SYSTEM_DIR below).
 const defaultAtlasRoot = path.resolve(engineDirectory, "..", "..", "..");
 
 export function engineRoot(): string {
@@ -34,12 +34,12 @@ export function repoPath(...parts: string[]): string {
   return path.join(repoRoot(), ...parts);
 }
 
-// Single point of truth for the current top-level layout under atlasRoot(). A later
-// stage (T-224 stage B+) flips these three values to migrate the Ocean/PARA rename
-// everywhere at once; this stage only centralizes the literals, values unchanged.
-export const PERSONAL_DIR = "personal";
-export const PROJECTS_DIR = "projects";
-export const SYSTEM_DIR = "system";
+// Single point of truth for the top-level layout under atlasRoot(). Flipped in
+// T-224 stage B to the Ocean/PARA layout (~/ocean/brain/..., ~/ocean/kernel/bridge)
+// now that every call site (stage A) reads these constants instead of a literal.
+export const PERSONAL_DIR = "brain/02-personal";
+export const PROJECTS_DIR = "brain/04-projects";
+export const SYSTEM_DIR = "kernel/bridge";
 
 export function atlasRoot(): string {
   return process.env.ATLAS_ROOT
