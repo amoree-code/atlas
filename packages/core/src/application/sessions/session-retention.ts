@@ -34,7 +34,11 @@ function computeFingerprint(
   eventIds: number[],
 ): string {
   const sorted = [...sessionIds].sort();
-  const maxEventId = eventIds.length ? Math.max(...eventIds) : 0;
+  // Not Math.max(...eventIds): spreading tens of thousands of event ids as call arguments
+  // overflows the engine's argument-count limit (RangeError: Maximum call stack size
+  // exceeded) on a real corpus, even though small fixture-scale tests never hit it.
+  let maxEventId = 0;
+  for (const id of eventIds) if (id > maxEventId) maxEventId = id;
   return createHash("sha256")
     .update(
       JSON.stringify({
