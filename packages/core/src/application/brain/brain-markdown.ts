@@ -60,8 +60,12 @@ export type NormalizedRecord = {
 // relPath is the record's identity of last resort: `<store-relative path, no .md>`.
 export function normalizeRecord(
   relPath: string,
-  source: string,
+  rawSource: string,
 ): NormalizedRecord {
+  // Normalized up front (see fs-utils.ts parseFrontmatter): splitFrontmatter and chunkBody
+  // both match line regexes against `$`, which a CRLF trailing `\r` (e.g. a Windows git
+  // checkout) defeats since `.` excludes line terminators.
+  const source = rawSource.replace(/\r\n/g, "\n");
   const { block, body } = splitFrontmatter(source);
   const fields = parseFrontmatter(source);
   const fallbackId = relPath.replace(/\.md$/i, "");

@@ -269,6 +269,26 @@ test("brainSearch reports stale:true after a markdown file changes post-build", 
   });
 });
 
+test("CRLF frontmatter (e.g. a Windows git checkout) parses the same as LF", async () => {
+  await withFixtureRoot(async (root) => {
+    const target = path.join(root, "personal", "memory", "alpha.md");
+    const crlf = (await readFile(target, "utf8")).replace(/\n/g, "\r\n");
+    await writeFile(target, crlf);
+    const result = await reindexBrain({ root, embedder: null });
+    assert.ok(result.docs >= 8);
+    const found = await brainRead({ idOrPath: "alpha", root });
+    assert.equal(found.id, "alpha");
+    assert.equal(found.title, "Alpha Record");
+    const neighbors = await brainNeighbors({
+      idOrPath: "alpha",
+      root,
+      direction: "out",
+      depth: 1,
+    });
+    assert.ok(neighbors.neighbors.some((n) => n.id === "beta"));
+  });
+});
+
 test("brainSearch without an index built throws an explicit error, not a crash", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-noindex-"));
   try {

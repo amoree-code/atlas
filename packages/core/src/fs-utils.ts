@@ -52,9 +52,13 @@ export function safeJsonParse(value: string): Record<string, unknown> | null {
 // text too (for nested `metadata:` and block-list `tags:`), not just the flattened map this
 // function returns.
 export function parseFrontmatter(source: string): Record<string, string> {
-  if (!source.startsWith("---")) return {};
-  const end = source.indexOf("\n---", 3);
-  const block = end < 0 ? source.slice(3) : source.slice(3, end);
+  // Normalized up front: a per-line regex below anchors on `$` (end of string), which a
+  // trailing `\r` from CRLF-checked-out files (e.g. a Windows git checkout) defeats — `.`
+  // excludes line terminators, so the line never reaches `$` and silently fails to match.
+  const normalized = source.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---")) return {};
+  const end = normalized.indexOf("\n---", 3);
+  const block = end < 0 ? normalized.slice(3) : normalized.slice(3, end);
   const fields: Record<string, string> = {};
   for (const line of block.split("\n")) {
     const match = /^\s{0,2}([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
