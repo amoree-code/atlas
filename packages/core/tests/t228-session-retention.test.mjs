@@ -119,8 +119,19 @@ test("planRetention computes a fingerprint at real-corpus scale without a stack 
     // A single fixture-scale event never hit this; the real sessions.sqlite (500k+ events)
     // did. 80,000 events, well past the real corpus's ~64k-event/7-day retention window.
     makeSession(store, "s-scale");
-    for (let i = 0; i < 80_000; i += 1) {
-      store.appendEvent("s-scale", "provider_output", "x");
+    // One transaction for all 80,000 inserts: each appendEvent call is its own implicit
+    // commit, and 80,000 of those (each an fsync) is slow enough to blow past CI's per-test
+    // timeout on a slower runner (observed on windows-latest) even though it's well within
+    // a few seconds on a fast local disk.
+    store.database.exec("BEGIN");
+    try {
+      for (let i = 0; i < 80_000; i += 1) {
+        store.appendEvent("s-scale", "provider_output", "x");
+      }
+      store.database.exec("COMMIT");
+    } catch (error) {
+      store.database.exec("ROLLBACK");
+      throw error;
     }
     backdate(dbFile, "s-scale", OLD);
     const plan = planRetention(store, { keepDays: 1 });
