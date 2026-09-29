@@ -12,6 +12,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { reindexBrain as reindexBrainRaw } from "../dist/application/brain/brain-reindex.js";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
 import { bindProject } from "../dist/application/context/project-resolution.js";
 import {
@@ -24,7 +25,11 @@ import {
   createGrant,
   guardedRunOperation,
 } from "../dist/application/operations/write-guard.js";
+import { defaultBrainIndexPort } from "../dist/composition/runtime.js";
 import { atlasRoot, engineRoot } from "../dist/paths.js";
+
+const reindexBrain = (options) =>
+  reindexBrainRaw({ indexPort: defaultBrainIndexPort, ...options });
 
 const BUDGET = {
   maxFiles: 10,
@@ -558,7 +563,7 @@ test("memory.write creates a private record under personal/memory and reports th
     assert.equal(result.ok, true, result.reason);
     assert.equal(result.written.sourcePath, "personal/memory/new-note.md");
     const written = await readFile(target, "utf8");
-    assert.match(written, /name: new-note/);
+    assert.match(written, /id: new-note/);
     assert.match(written, /an explicit fact/);
   }));
 
@@ -1053,5 +1058,47 @@ test("Arabic and English requests reach the same operation and the same records"
     assert.equal(
       operationForIntent(classifyIntent("احفظ هذا كقرار")).operation,
       "knowledge.write",
+    );
+  }));
+
+// ---------------------------------------------------------------- brain-index ranked search (T-228)
+
+test("memory.search is ranked by the brain index when one has been built, and says so", () =>
+  withFixture(async (root) => {
+    await reindexBrain({ root, embedder: null });
+    const result = await runOperation(
+      "memory.search",
+      classifyIntent("what do you remember about goals"),
+      BUDGET,
+      { cwd: root, query: "goals", indexPort: defaultBrainIndexPort },
+    );
+    assert.equal(result.ok, true);
+    assert.ok(result.records.length >= 1);
+    assert.ok(
+      result.records.every((record) =>
+        record.selectionReason.includes("brain index"),
+      ),
+      JSON.stringify(result.records),
+    );
+    assert.ok(
+      result.records.every((record) =>
+        record.sourcePath.startsWith("personal/memory/"),
+      ),
+    );
+  }));
+
+test("memory.search without a built brain index falls back to substring matching, unaffected", () =>
+  withFixture(async (root) => {
+    const result = await runOperation(
+      "memory.search",
+      classifyIntent("what do you remember about goals"),
+      BUDGET,
+      { cwd: root, query: "goals" },
+    );
+    assert.equal(result.ok, true);
+    assert.ok(
+      result.records.every(
+        (record) => !record.selectionReason.includes("brain index"),
+      ),
     );
   }));

@@ -4,16 +4,24 @@
 // application → domain ports, never application → infrastructure.
 
 import type { AuthDeps } from "../application/auth/auth-orchestrator.js";
+import type { BrainIndexPort } from "../domain/ports/brain-index-port.js";
 import type {
   ProviderRegistryPort,
   WrapperManagerPort,
 } from "../domain/ports/platform-ports.js";
 import type { AgentRuntimeDeps } from "../domain/ports/runtime-ports.js";
-import type { SessionStoreFactory } from "../domain/ports/session-store-port.js";
+import type {
+  SessionStoreFactory,
+  SessionStoreOpener,
+} from "../domain/ports/session-store-port.js";
+import { brainIndexPort } from "../infrastructure/brain/brain-index.js";
 import { loadProfile } from "../infrastructure/filesystem/profile-loader.js";
 import { loadSkillIndex } from "../infrastructure/filesystem/skill-loader.js";
 import { appendRuntimeLog } from "../infrastructure/observability/runtime-logger.js";
-import { openSessionStore } from "../infrastructure/persistence/session-store.js";
+import {
+  openSessionStore,
+  SessionStore,
+} from "../infrastructure/persistence/session-store.js";
 import { runHeadless } from "../infrastructure/process/cli-process.js";
 import { runInteractive } from "../infrastructure/process/interactive-process.js";
 import { resolveClientHome } from "../infrastructure/providers/client-home.js";
@@ -32,6 +40,13 @@ import {
 
 /** The concrete session-store factory, as the SessionStoreFactory port. */
 export const defaultSessionStoreFactory: SessionStoreFactory = openSessionStore;
+
+/** Opens a session-store file at an arbitrary path, as the SessionStoreOpener port. */
+export const defaultSessionStoreOpener: SessionStoreOpener = (file: string) =>
+  new SessionStore(file);
+
+/** The concrete brain-index driver (T-228), as the BrainIndexPort. */
+export const defaultBrainIndexPort: BrainIndexPort = brainIndexPort;
 
 /** The concrete dependency set for `runAgent`/`resumeAgent`. */
 export const defaultAgentRuntime: AgentRuntimeDeps = {

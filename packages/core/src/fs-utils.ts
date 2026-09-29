@@ -47,8 +47,11 @@ export function safeJsonParse(value: string): Record<string, unknown> | null {
 }
 
 // Parses a `---\n...\n---` frontmatter block into a flat field map. First occurrence of a
-// key wins; values are trimmed and stripped of one layer of surrounding quotes.
-function parseFrontmatter(source: string): Record<string, string> {
+// key wins; values are trimmed and stripped of one layer of surrounding quotes. Exported for
+// the brain markdown layer (application/brain/brain-markdown.ts), which needs the raw block
+// text too (for nested `metadata:` and block-list `tags:`), not just the flattened map this
+// function returns.
+export function parseFrontmatter(source: string): Record<string, string> {
   if (!source.startsWith("---")) return {};
   const end = source.indexOf("\n---", 3);
   const block = end < 0 ? source.slice(3) : source.slice(3, end);

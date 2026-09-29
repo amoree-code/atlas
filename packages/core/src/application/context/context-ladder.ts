@@ -1,6 +1,8 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import { atlasRoot, resolveWithin } from "../../paths.js";
+import { brainSearch } from "../brain/brain-service.js";
 import type { IntentClassification } from "./intent-router.js";
 
 // Context ladder: startup identity only -> project metadata -> ranked references -> exact
@@ -278,10 +280,63 @@ function planProjectMetadata(budget: ContextBudget): BoundedReadResult {
   );
 }
 
+// When a query is supplied and the brain index has been built, ranking is delegated to it
+// (T-228) instead of returning the fixed authoritative-index files below. Each candidate
+// path is still stat'd here (never silently truncated) before it's allowed further down the
+// ladder. A query with no index built falls back to the authoritative files, with a reason
+// that says so rather than silently behaving as if no query had been given.
+async function planRankedReferencesViaIndex(
+  query: string,
+  budget: ContextBudget,
+  root: string,
+  indexPort: BrainIndexPort,
+): Promise<BoundedReadResult | null> {
+  const rung: LadderRung = "ranked-references";
+  let result: Awaited<ReturnType<typeof brainSearch>>;
+  try {
+    result = await brainSearch({
+      query,
+      root,
+      limit: budget.maxFiles,
+      indexPort,
+    });
+  } catch {
+    return null;
+  }
+  const files: string[] = [];
+  let bytes = 0;
+  for (const hit of result.results) {
+    if (files.length >= budget.maxFiles) break;
+    try {
+      const size = (await stat(resolveWithin(root, "personal", hit.path))).size;
+      if (bytes + size > budget.maxBytes) break;
+      files.push(path.posix.join("personal", hit.path));
+      bytes += size;
+    } catch {
+      // A hit whose file vanished since the index was built is skipped, not fatal.
+    }
+  }
+  return withinCharBudget(
+    {
+      rung,
+      files,
+      bytes,
+      truncated: false,
+      reason: files.length
+        ? `ranked by brain index (${result.mode})`
+        : `brain index returned no results for query '${query}'`,
+    },
+    budget,
+    rung,
+  );
+}
+
 async function planRankedReferences(
   intent: string,
   budget: ContextBudget,
   root: string,
+  query?: string,
+  indexPort?: BrainIndexPort,
 ): Promise<BoundedReadResult> {
   const rung: LadderRung = "ranked-references";
   const cost = READ_RUNG_COST[rung];
@@ -291,6 +346,16 @@ async function planRankedReferences(
       `ranked-references operation cost ${cost} exceeds budget.maxOperationCost ${budget.maxOperationCost}`,
       "max-operation-cost-exceeded",
     );
+  }
+  if (query && indexPort) {
+    const viaIndex = await planRankedReferencesViaIndex(
+      query,
+      budget,
+      root,
+      indexPort,
+    );
+    if (viaIndex) return viaIndex;
+    // No index built: fall through to the fixed authoritative files below, but say why.
   }
   const candidates: string[] = [];
   if (intent === "memory-lookup" || intent === "work-style-lookup")
@@ -324,6 +389,9 @@ async function planRankedReferences(
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
   }
+  const queryNote = query
+    ? " (brain index not built — falling back to authoritative files)"
+    : "";
   return withinCharBudget(
     {
       rung,
@@ -331,8 +399,8 @@ async function planRankedReferences(
       bytes,
       truncated: false,
       reason: files.length
-        ? `selected ${files.length} authoritative '${intent}' reference(s) within budget`
-        : `no authoritative '${intent}' references were available within budget`,
+        ? `selected ${files.length} authoritative '${intent}' reference(s) within budget${queryNote}`
+        : `no authoritative '${intent}' references were available within budget${queryNote}`,
     },
     budget,
     rung,
@@ -347,6 +415,7 @@ export async function planContextRead(
   budget: unknown,
   root = atlasRoot(),
   projectId = "atlas",
+  options?: { query?: string; indexPort?: BrainIndexPort },
 ): Promise<BoundedReadResult> {
   const { rung, reason } = resolveLadderRung(classification);
   const validation = validateBudget(budget);
@@ -372,5 +441,11 @@ export async function planContextRead(
       projectId,
     );
   if (rung === "project-metadata") return planProjectMetadata(bounded);
-  return planRankedReferences(classification.intent, bounded, root);
+  return planRankedReferences(
+    classification.intent,
+    bounded,
+    root,
+    options?.query,
+    options?.indexPort,
+  );
 }

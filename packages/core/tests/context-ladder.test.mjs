@@ -3,12 +3,17 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { reindexBrain as reindexBrainRaw } from "../dist/application/brain/brain-reindex.js";
 import {
   planContextRead,
   resolveLadderRung,
   validateBudget,
 } from "../dist/application/context/context-ladder.js";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
+import { defaultBrainIndexPort } from "../dist/composition/runtime.js";
+
+const reindexBrain = (options) =>
+  reindexBrainRaw({ indexPort: defaultBrainIndexPort, ...options });
 
 const GOOD_BUDGET = {
   maxFiles: 5,
@@ -353,6 +358,8 @@ test("context-ladder.ts imports only node:fs/promises, node:path, and the existi
     "node:path",
     "../../paths.js",
     "./intent-router.js",
+    "../brain/brain-service.js",
+    "../../domain/ports/brain-index-port.js",
   ]);
   for (const specifier of imports)
     assert.ok(allowed.has(specifier), `unexpected import: ${specifier}`);
@@ -364,3 +371,71 @@ test("context-ladder.ts imports only node:fs/promises, node:path, and the existi
     /node:https?|node:net\b|mcp-client|mcp-server|fetch\(/i,
   );
 });
+
+// --- ranked-references: query-driven brain-index path (T-228) ---
+
+async function withTempMemoryRoot(fn) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ladder-brain-"));
+  await mkdir(path.join(root, "personal", "memory"), { recursive: true });
+  await writeFile(
+    path.join(root, "personal", "memory", "goals.md"),
+    "---\nid: goals\ntitle: Goals\nsummary: long term objectives\ntags: []\ntype: fact\nconfidence: high\ncreated: 2026-01-01\nupdated: 2026-01-01\nlast_confirmed_at: 2026-01-01\n---\n\n# Goals\n\nLong term objectives fixture body.\n",
+  );
+  const previous = process.env.ATLAS_ROOT;
+  process.env.ATLAS_ROOT = root;
+  try {
+    return await fn(root);
+  } finally {
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
+  }
+}
+
+test("ranked-references with a query and a built brain index is ranked by the index, not the fixed authoritative list", () =>
+  withTempMemoryRoot(async (root) => {
+    await reindexBrain({ root, embedder: null });
+    const classification = classifyIntent("what do you remember about goals");
+    assert.equal(classification.intent, "memory-lookup");
+    const result = await planContextRead(
+      classification,
+      GOOD_BUDGET,
+      root,
+      "atlas",
+      { query: "goals", indexPort: defaultBrainIndexPort },
+    );
+    assert.equal(result.rung, "ranked-references");
+    assert.equal(result.allowed, true);
+    assert.match(result.reason, /ranked by brain index/);
+    assert.ok(result.files.some((file) => file.endsWith("goals.md")));
+  }));
+
+test("ranked-references with a query but no brain index built falls back to the fixed authoritative files, and says so", () =>
+  withTempMemoryRoot(async (root) => {
+    const classification = classifyIntent("what do you remember about goals");
+    const result = await planContextRead(
+      classification,
+      GOOD_BUDGET,
+      root,
+      "atlas",
+      { query: "goals", indexPort: defaultBrainIndexPort },
+    );
+    assert.equal(result.rung, "ranked-references");
+    assert.match(result.reason, /brain index not built/);
+    // Falls back to the same fixed authoritative-file behavior as no query at all.
+    const withoutQuery = await planContextRead(
+      classification,
+      GOOD_BUDGET,
+      root,
+      "atlas",
+    );
+    assert.deepEqual(result.files, withoutQuery.files);
+  }));
+
+test("ranked-references with no query is unaffected — still the fixed authoritative files", () =>
+  withTempMemoryRoot(async (root) => {
+    await reindexBrain({ root, embedder: null });
+    const classification = classifyIntent("what do you remember about goals");
+    const result = await planContextRead(classification, GOOD_BUDGET, root);
+    assert.equal(result.rung, "ranked-references");
+    assert.doesNotMatch(result.reason, /brain index/);
+  }));

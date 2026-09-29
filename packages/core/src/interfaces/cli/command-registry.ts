@@ -64,6 +64,12 @@ import {
   setScheduleEnabled,
 } from "../../application/scheduler/local-scheduler.js";
 import {
+  applyRetention,
+  DEFAULT_KEEP_DAYS,
+  planRetention,
+  simulateRetention,
+} from "../../application/sessions/session-retention.js";
+import {
   coreSkillReports,
   syncCoreSkills,
 } from "../../application/skills/core-skill-sync.js";
@@ -82,6 +88,7 @@ import {
   defaultAgentRuntime,
   defaultProviderRegistry,
   defaultSessionStoreFactory,
+  defaultSessionStoreOpener,
   defaultWrapperManager,
 } from "../../composition/runtime.js";
 import { runAtlasMcpServer } from "../../infrastructure/mcp/atlas-server.js";
@@ -96,7 +103,7 @@ import {
   wrapperDoctor,
   wrapperStatus,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
-import { atlasRoot } from "../../paths.js";
+import { atlasPath, atlasRoot } from "../../paths.js";
 import { runAuthCommand } from "./auth-command.js";
 import { runBrowserCommand } from "./browser-command.js";
 import { runCaptureCommand } from "./capture-command.js";
@@ -1095,10 +1102,70 @@ async function commandSession(): Promise<void> {
       );
       store.close();
     }
+  } else if (action === "compact") {
+    const keepDaysIndex = process.argv.indexOf("--keep-days");
+    const keepDays =
+      keepDaysIndex >= 0
+        ? Number(process.argv[keepDaysIndex + 1])
+        : DEFAULT_KEEP_DAYS;
+    const simulate = process.argv.includes("--simulate");
+    const apply = process.argv.includes("--apply");
+    const beforeIndex = process.argv.indexOf("--before");
+    const before = beforeIndex >= 0 ? process.argv[beforeIndex + 1] : undefined;
+    const planIndex = process.argv.indexOf("--plan");
+    const fingerprint =
+      planIndex >= 0 ? process.argv[planIndex + 1] : undefined;
+    if (!Number.isFinite(keepDays) || keepDays <= 0) {
+      store.close();
+      console.error(
+        "Usage: atlas session compact [--keep-days N] [--simulate|--apply --before <iso> --plan <fingerprint>] [--json]",
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const plan = planRetention(store, { keepDays, before });
+    if (apply) {
+      if (!before || !fingerprint) {
+        store.close();
+        console.error(
+          "atlas session compact --apply requires --before <iso> and --plan <fingerprint> from a prior plan/--simulate run",
+        );
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        const result = await applyRetention(
+          store,
+          atlasPath("system", "sessions", "sessions.sqlite"),
+          plan,
+          fingerprint,
+        );
+        console.log(JSON.stringify({ apply: true, plan, result }, null, 2));
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      } finally {
+        store.close();
+      }
+      return;
+    }
+    if (simulate) {
+      const result = await simulateRetention(
+        store,
+        atlasPath("system", "sessions", "sessions.sqlite"),
+        plan,
+        defaultSessionStoreOpener,
+      );
+      store.close();
+      console.log(JSON.stringify({ simulate: true, plan, result }, null, 2));
+      return;
+    }
+    store.close();
+    console.log(JSON.stringify({ dryRun: true, plan }, null, 2));
   } else {
     store.close();
     console.error(
-      "Usage: atlas session list|show <session-id>|summary <session-id>|events <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]",
+      "Usage: atlas session list|show <session-id>|summary <session-id>|events <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]|compact [--keep-days N] [--simulate]|compact --apply --before <iso> --plan <fingerprint>",
     );
     process.exitCode = 1;
   }

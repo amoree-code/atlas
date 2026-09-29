@@ -1,5 +1,5 @@
 import { access, mkdir } from "node:fs/promises";
-import { DatabaseSync } from "node:sqlite";
+import { backup, DatabaseSync } from "node:sqlite";
 import type {
   CaptureItem,
   CloseoutInput,
@@ -728,6 +728,170 @@ export class SessionStore implements SessionStorePort {
       .run(status, target ?? null, new Date().toISOString(), captureId);
     if (!result.changes)
       throw new Error(`Capture item not found: ${captureId}`);
+  }
+
+  // --- retention (T-228) --------------------------------------------------------------
+  // Every method below is read-only or scoped to raw provider_output/terminal_input events
+  // of already-finished sessions; nothing here deletes a session row, a handoff, an idea, or
+  // a capture-referenced event. session-retention.ts (application layer) is the only caller,
+  // and it never applies anything against the live database without an explicit
+  // fingerprint-gated --apply.
+
+  static readonly RETENTION_STATUSES = [
+    "completed",
+    "failed",
+    "cancelled",
+  ] as const;
+  static readonly RAW_EVENT_TYPES = [
+    "provider_output",
+    "terminal_input",
+  ] as const;
+
+  // Sessions eligible for retention: finished (completed/failed/cancelled) and closed (or
+  // last updated) before the cutoff.
+  retentionEligibleSessions(beforeIso: string): Session[] {
+    const placeholders = SessionStore.RETENTION_STATUSES.map(() => "?").join(
+      ",",
+    );
+    return (
+      this.database
+        .prepare(
+          `SELECT * FROM sessions WHERE status IN (${placeholders})
+           AND COALESCE(closed_at, updated_at) < ?
+           ORDER BY session_id`,
+        )
+        .all(...SessionStore.RETENTION_STATUSES, beforeIso) as SessionRow[]
+    ).map((row) => this.toSession(row));
+  }
+
+  // SQLite refuses a prepared statement with more than ~thousands of bound parameters
+  // (SQLITE_MAX_VARIABLE_NUMBER) — a real workspace can have tens of thousands of prunable
+  // events, so every IN (...) query here is chunked well under that ceiling rather than
+  // built as one unbounded placeholder list.
+  private static readonly SQL_CHUNK_SIZE = 500;
+
+  private static chunk<T>(
+    items: T[],
+    size = SessionStore.SQL_CHUNK_SIZE,
+  ): T[][] {
+    const chunks: T[][] = [];
+    for (let start = 0; start < items.length; start += size)
+      chunks.push(items.slice(start, start + size));
+    return chunks;
+  }
+
+  // Raw event ids for the given sessions that are safe to delete: provider_output/
+  // terminal_input only, and never one referenced by capture_items.source_event_id (the
+  // ON DELETE CASCADE hazard) — those survive retention regardless of age.
+  retentionPrunableEventIds(sessionIds: string[]): number[] {
+    if (sessionIds.length === 0) return [];
+    const typePlaceholders = SessionStore.RAW_EVENT_TYPES.map(() => "?").join(
+      ",",
+    );
+    const eventIds: number[] = [];
+    for (const batch of SessionStore.chunk(sessionIds)) {
+      const sessionPlaceholders = batch.map(() => "?").join(",");
+      const rows = this.database
+        .prepare(
+          `SELECT event_id FROM session_events
+           WHERE session_id IN (${sessionPlaceholders})
+           AND type IN (${typePlaceholders})
+           AND event_id NOT IN (SELECT source_event_id FROM capture_items)`,
+        )
+        .all(...batch, ...SessionStore.RAW_EVENT_TYPES) as Array<{
+        event_id: number;
+      }>;
+      for (const row of rows) eventIds.push(row.event_id);
+    }
+    return eventIds;
+  }
+
+  // Total bytes of the `data` column across the given event ids — a before/after size
+  // estimate without needing a VACUUMed copy.
+  eventsDataBytes(eventIds: number[]): number {
+    if (eventIds.length === 0) return 0;
+    let total = 0;
+    for (const batch of SessionStore.chunk(eventIds)) {
+      const placeholders = batch.map(() => "?").join(",");
+      const row = this.database
+        .prepare(
+          `SELECT COALESCE(SUM(LENGTH(data)), 0) AS bytes FROM session_events WHERE event_id IN (${placeholders})`,
+        )
+        .get(...batch) as { bytes: number };
+      total += row.bytes;
+    }
+    return total;
+  }
+
+  // Only ever touches summary_path/summary_hash/summary_bytes — never closeout_status or
+  // closed_at, which retention must not alter.
+  setSummary(
+    sessionId: string,
+    summary: { summaryPath: string; summaryHash: string; summaryBytes: number },
+  ): void {
+    this.database
+      .prepare(
+        "UPDATE sessions SET summary_path = ?, summary_hash = ?, summary_bytes = ? WHERE session_id = ?",
+      )
+      .run(
+        summary.summaryPath,
+        summary.summaryHash,
+        summary.summaryBytes,
+        sessionId,
+      );
+  }
+
+  // Deletes exactly the given session_events rows, in one transaction. Callers are
+  // responsible for having excluded capture-referenced ids (retentionPrunableEventIds does
+  // this) — this method itself does not re-check, so it must never be called with an
+  // arbitrary, unfiltered id list.
+  deleteEvents(eventIds: number[]): void {
+    if (eventIds.length === 0) return;
+    this.database.exec("BEGIN");
+    try {
+      for (const batch of SessionStore.chunk(eventIds)) {
+        const placeholders = batch.map(() => "?").join(",");
+        this.database
+          .prepare(
+            `DELETE FROM session_events WHERE event_id IN (${placeholders})`,
+          )
+          .run(...batch);
+      }
+      this.database.exec("COMMIT");
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  // Appends a small audit event per session so a future reader can see retention ran,
+  // without needing to diff row counts.
+  recordRetentionPrune(
+    sessionId: string,
+    prunedEventCount: number,
+    beforeIso: string,
+  ): void {
+    this.appendEvent(
+      sessionId,
+      "events_pruned",
+      JSON.stringify({
+        prunedEventCount,
+        before: beforeIso,
+        prunedAt: new Date().toISOString(),
+      }),
+    );
+  }
+
+  checkpointAndVacuum(): void {
+    this.database.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+    this.database.exec("VACUUM;");
+  }
+
+  // Delegates to node:sqlite's own backup() (a live, consistent copy), for applyRetention's
+  // pre-delete safety backup. Never used against a destination inside the same directory as
+  // sessions.sqlite by the caller's own convention (see session-retention.ts).
+  async backupTo(file: string): Promise<void> {
+    await backup(this.database, file);
   }
 
   close(): void {
