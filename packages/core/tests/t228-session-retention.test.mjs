@@ -112,6 +112,22 @@ test("planRetention only ever selects provider_output/terminal_input events, nev
     assert.ok(!plan.eventIds.includes(other2.eventId));
   }));
 
+test("planRetention computes a fingerprint at real-corpus scale without a stack overflow", () =>
+  withFixtureStore(async ({ store, dbFile }) => {
+    // Regression for computeFingerprint's former `Math.max(...eventIds)`: spreading tens of
+    // thousands of event ids as call arguments overflows the engine's argument-count limit.
+    // A single fixture-scale event never hit this; the real sessions.sqlite (500k+ events)
+    // did. 80,000 events, well past the real corpus's ~64k-event/7-day retention window.
+    makeSession(store, "s-scale");
+    for (let i = 0; i < 80_000; i += 1) {
+      store.appendEvent("s-scale", "provider_output", "x");
+    }
+    backdate(dbFile, "s-scale", OLD);
+    const plan = planRetention(store, { keepDays: 1 });
+    assert.equal(plan.eventIds.length, 80_000);
+    assert.match(plan.fingerprint, /^[0-9a-f]{64}$/);
+  }));
+
 test("applyRetention refuses on a fingerprint mismatch", () =>
   withFixtureStore(async ({ store, dbFile }) => {
     makeSession(store, "s-fp");
