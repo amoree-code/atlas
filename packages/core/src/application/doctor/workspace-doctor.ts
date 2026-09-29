@@ -12,7 +12,14 @@ import {
 import path from "node:path";
 import { promisify } from "node:util";
 import type { WrapperManagerPort } from "../../domain/ports/platform-ports.js";
-import { atlasPath, enginePath, repoPath } from "../../paths.js";
+import {
+  atlasPath,
+  enginePath,
+  PERSONAL_DIR,
+  PROJECTS_DIR,
+  repoPath,
+  SYSTEM_DIR,
+} from "../../paths.js";
 import {
   doctorMemoryIndexes,
   syncMemoryIndexes,
@@ -28,7 +35,7 @@ export type Finding = {
   fixable: boolean;
 };
 
-const roots = ["personal", "projects", "system"];
+const roots = [PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR];
 
 async function exists(file: string): Promise<boolean> {
   try {
@@ -231,7 +238,7 @@ async function checkWorkspaceContracts(): Promise<Finding[]> {
     [
       "TASK_RECORDS",
       "node",
-      ["scripts/validate-tasks.mjs", atlasPath("projects", "atlas", "tasks")],
+      ["scripts/validate-tasks.mjs", atlasPath(PROJECTS_DIR, "atlas", "tasks")],
       enginePath,
     ],
   ] as const;
@@ -281,7 +288,7 @@ async function checkPermissions(): Promise<Finding[]> {
       },
     ];
   const unsafe: string[] = [];
-  for (const directory of await activeDirectories(atlasPath("system"))) {
+  for (const directory of await activeDirectories(atlasPath(SYSTEM_DIR))) {
     const mode = (await stat(directory)).mode & 0o777;
     if ((mode & 0o077) !== 0)
       unsafe.push(path.relative(atlasPath(), directory));
@@ -308,7 +315,7 @@ async function checkPermissions(): Promise<Finding[]> {
 async function checkDuplicates(): Promise<Finding[]> {
   const seen = new Map<string, string>();
   const duplicates: string[] = [];
-  for (const root of ["personal", "projects"]) {
+  for (const root of [PERSONAL_DIR, PROJECTS_DIR]) {
     for (const file of await markdownFiles(atlasPath(root))) {
       const hash = createHash("sha256")
         .update(await readFile(file))
@@ -339,7 +346,7 @@ async function checkDuplicates(): Promise<Finding[]> {
 }
 
 async function checkProfileAuthority(): Promise<Finding[]> {
-  const root = atlasPath("system", "profiles");
+  const root = atlasPath(SYSTEM_DIR, "profiles");
   if (!(await exists(root)))
     return [
       {
@@ -401,7 +408,7 @@ async function checkVersion(): Promise<Finding[]> {
 }
 
 async function checkGovernance(): Promise<Finding[]> {
-  const root = atlasPath("system", "control-plane", "governance");
+  const root = atlasPath(SYSTEM_DIR, "control-plane", "governance");
   const core = path.join(root, "rules", "core.md");
   const policies = path.join(root, "policies");
   if (!(await exists(core)) || !(await exists(policies)))
@@ -483,14 +490,14 @@ export async function repairWorkspace(
       (finding) => finding.code === "PRIVATE_PERMISSIONS" && finding.fixable,
     )
   ) {
-    for (const directory of await activeDirectories(atlasPath("system")))
+    for (const directory of await activeDirectories(atlasPath(SYSTEM_DIR)))
       await chmod(directory, 0o700);
     changes.push("restricted active system directories to owner-only");
   }
   await wrapperManager.syncProviderWrappers();
   changes.push("synchronized provider wrappers");
   const after = await scanWorkspace(wrapperManager);
-  const reportDirectory = atlasPath("system", "runtime", "reports");
+  const reportDirectory = atlasPath(SYSTEM_DIR, "runtime", "reports");
   await mkdir(reportDirectory, { recursive: true });
   await writeFile(
     path.join(reportDirectory, "repair-report.json"),

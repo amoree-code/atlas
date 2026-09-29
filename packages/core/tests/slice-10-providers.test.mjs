@@ -16,6 +16,7 @@ import {
   providerHeadlessSupport,
 } from "../dist/infrastructure/providers/provider-invocation.js";
 import { resolveOriginalExecutable } from "../dist/infrastructure/providers/provider-registry.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 const BUDGET = {
   maxFiles: 10,
@@ -31,7 +32,7 @@ const SESSION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const LIVE = process.env.ATLAS_LIVE_PROVIDER_TESTS === "1";
 const live = LIVE ? test : test.skip;
 const installedEnvironment = existsSync(
-  path.join(os.homedir(), "atlas", "system", "runtime", "shims", "atlas"),
+  path.join(os.homedir(), "atlas", SYSTEM_DIR, "runtime", "shims", "atlas"),
 );
 const installed = installedEnvironment ? test : test.skip;
 const unixOnly = process.platform === "win32" ? test.skip : test;
@@ -404,7 +405,7 @@ installed(
     const shim = path.join(
       os.homedir(),
       "atlas",
-      "system",
+      SYSTEM_DIR,
       "runtime",
       "shims",
       "atlas",
@@ -428,7 +429,7 @@ installed(
     const hook = path.join(
       os.homedir(),
       "atlas",
-      "system",
+      SYSTEM_DIR,
       "integrations",
       "claude-code",
       "hooks",
@@ -477,7 +478,7 @@ installed(
     const shim = path.join(
       os.homedir(),
       "atlas",
-      "system",
+      SYSTEM_DIR,
       "runtime",
       "shims",
       "atlas",

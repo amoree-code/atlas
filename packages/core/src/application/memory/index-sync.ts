@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, PERSONAL_DIR } from "../../paths.js";
 
 type Store = "memory" | "knowledge";
 const generatedStart = "## Records (generated)";
@@ -64,7 +64,7 @@ function links(content: string): Set<string> {
 }
 
 async function syncStore(store: Store, apply: boolean) {
-  const root = atlasPath("personal", store);
+  const root = atlasPath(PERSONAL_DIR, store);
   const indexName = store === "memory" ? "MEMORY.md" : "KNOWLEDGE.md";
   const index = path.join(root, indexName);
   const current = await readFile(index, "utf8");

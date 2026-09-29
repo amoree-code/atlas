@@ -1,3 +1,4 @@
+import { PERSONAL_DIR } from "../../paths.js";
 import type { ContextBudget } from "../context/context-ladder.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import { searchRecords, writeRecord } from "./memory-knowledge-operations.js";
@@ -58,7 +59,7 @@ export async function runOperation(
       return searchRecords(
         "memory.search",
         "memory",
-        ["personal", "memory"],
+        [PERSONAL_DIR, "memory"],
         classification,
         bounded,
         options,
@@ -67,7 +68,7 @@ export async function runOperation(
       return searchRecords(
         "knowledge.search",
         "knowledge",
-        ["personal", "knowledge"],
+        [PERSONAL_DIR, "knowledge"],
         classification,
         bounded,
         options,

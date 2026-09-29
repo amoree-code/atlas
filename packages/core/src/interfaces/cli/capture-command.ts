@@ -6,7 +6,12 @@ import { syncMemoryIndexes } from "../../application/memory/index-sync.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
-import { atlasPath, atlasRoot } from "../../paths.js";
+import {
+  atlasPath,
+  atlasRoot,
+  PERSONAL_DIR,
+  PROJECTS_DIR,
+} from "../../paths.js";
 
 export async function runCaptureCommand(
   action: string,
@@ -111,8 +116,9 @@ async function promote(
     const relative = target.slice("memory/".length);
     if (!relative.endsWith(".md") || relative.includes(".."))
       throw new Error("Memory target must be an existing canonical .md file.");
-    const file = path.resolve(atlasPath("personal", "memory"), relative);
-    const memoryRoot = path.resolve(atlasPath("personal", "memory")) + path.sep;
+    const file = path.resolve(atlasPath(PERSONAL_DIR, "memory"), relative);
+    const memoryRoot =
+      path.resolve(atlasPath(PERSONAL_DIR, "memory")) + path.sep;
     if (!file.startsWith(memoryRoot))
       throw new Error("Memory target must stay inside personal/memory.");
     const header = `\n\n## Captured note — ${new Date().toISOString().slice(0, 10)}\n\n${item.content.trim()}\n\n_Source: session-capture-${item.captureId}; review status: unverified._\n`;
@@ -127,7 +133,7 @@ async function promote(
   }
   if (target === "backlog") {
     await appendFile(
-      atlasPath("projects", "backlog.md"),
+      atlasPath(PROJECTS_DIR, "backlog.md"),
       `\n- [TODO] (P2) atlas — ${item.content.replace(/\s+/g, " ").trim()}  {${new Date().toISOString().slice(0, 10)}}\n`,
     );
     return;
@@ -147,7 +153,7 @@ async function promote(
   const slug = safe || `capture-${item.captureId}`;
   const file = path.join(
     atlasPath(
-      "personal",
+      PERSONAL_DIR,
       "knowledge",
       match[1],
       `${slug}-${item.captureId}.md`,

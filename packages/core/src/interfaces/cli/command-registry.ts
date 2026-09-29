@@ -103,7 +103,7 @@ import {
   wrapperDoctor,
   wrapperStatus,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
-import { atlasPath, atlasRoot } from "../../paths.js";
+import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
 import { runAuthCommand } from "./auth-command.js";
 import { runBrowserCommand } from "./browser-command.js";
 import { runCaptureCommand } from "./capture-command.js";
@@ -1136,7 +1136,7 @@ async function commandSession(): Promise<void> {
       try {
         const result = await applyRetention(
           store,
-          atlasPath("system", "sessions", "sessions.sqlite"),
+          atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
           plan,
           fingerprint,
         );
@@ -1152,7 +1152,7 @@ async function commandSession(): Promise<void> {
     if (simulate) {
       const result = await simulateRetention(
         store,
-        atlasPath("system", "sessions", "sessions.sqlite"),
+        atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
         plan,
         defaultSessionStoreOpener,
       );

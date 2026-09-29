@@ -34,6 +34,13 @@ export function repoPath(...parts: string[]): string {
   return path.join(repoRoot(), ...parts);
 }
 
+// Single point of truth for the current top-level layout under atlasRoot(). A later
+// stage (T-224 stage B+) flips these three values to migrate the Ocean/PARA rename
+// everywhere at once; this stage only centralizes the literals, values unchanged.
+export const PERSONAL_DIR = "personal";
+export const PROJECTS_DIR = "projects";
+export const SYSTEM_DIR = "system";
+
 export function atlasRoot(): string {
   return process.env.ATLAS_ROOT
     ? path.resolve(process.env.ATLAS_ROOT)

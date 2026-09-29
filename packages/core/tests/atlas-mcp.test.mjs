@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { handleAtlasMcpRequest } from "../dist/infrastructure/mcp/atlas-server.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-no-obsidian-"));
@@ -63,7 +64,7 @@ test("read-only session tools do not initialize a missing session database", asy
     });
     assert.ok(response.error);
     await assert.rejects(
-      access(path.join(root, "system", "sessions", "sessions.sqlite")),
+      access(path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite")),
     );
   } finally {
     if (previous === undefined) delete process.env.ATLAS_ROOT;

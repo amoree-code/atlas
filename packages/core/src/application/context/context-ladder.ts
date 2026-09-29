@@ -1,7 +1,12 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
-import { atlasRoot, resolveWithin } from "../../paths.js";
+import {
+  atlasRoot,
+  PERSONAL_DIR,
+  PROJECTS_DIR,
+  resolveWithin,
+} from "../../paths.js";
 import { brainSearch } from "../brain/brain-service.js";
 import type { IntentClassification } from "./intent-router.js";
 
@@ -214,7 +219,7 @@ async function planExactTaskRecord(
   let resolvedPath: string;
   try {
     resolvedPath = resolveWithin(
-      resolveWithin(path.join(root, "projects"), projectId, "tasks"),
+      resolveWithin(path.join(root, PROJECTS_DIR), projectId, "tasks"),
       normalized,
       "task.md",
     );
@@ -308,9 +313,10 @@ async function planRankedReferencesViaIndex(
   for (const hit of result.results) {
     if (files.length >= budget.maxFiles) break;
     try {
-      const size = (await stat(resolveWithin(root, "personal", hit.path))).size;
+      const size = (await stat(resolveWithin(root, PERSONAL_DIR, hit.path)))
+        .size;
       if (bytes + size > budget.maxBytes) break;
-      files.push(path.posix.join("personal", hit.path));
+      files.push(path.posix.join(PERSONAL_DIR, hit.path));
       bytes += size;
     } catch {
       // A hit whose file vanished since the index was built is skipped, not fatal.
@@ -359,17 +365,17 @@ async function planRankedReferences(
   }
   const candidates: string[] = [];
   if (intent === "memory-lookup" || intent === "work-style-lookup")
-    candidates.push("personal/memory/MEMORY.md");
+    candidates.push(path.posix.join(PERSONAL_DIR, "memory", "MEMORY.md"));
   if (intent === "knowledge-lookup")
-    candidates.push("personal/knowledge/KNOWLEDGE.md");
+    candidates.push(path.posix.join(PERSONAL_DIR, "knowledge", "KNOWLEDGE.md"));
   if (intent === "decision-lookup") {
-    const directory = path.join(root, "personal", "knowledge", "decisions");
+    const directory = path.join(root, PERSONAL_DIR, "knowledge", "decisions");
     try {
       for (const entry of (await readdir(directory, { withFileTypes: true }))
         .filter((item) => item.isFile() && item.name.endsWith(".md"))
         .sort((a, b) => a.name.localeCompare(b.name))) {
         candidates.push(
-          path.posix.join("personal/knowledge/decisions", entry.name),
+          path.posix.join(PERSONAL_DIR, "knowledge", "decisions", entry.name),
         );
       }
     } catch (error) {

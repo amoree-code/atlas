@@ -1,5 +1,5 @@
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, PROJECTS_DIR } from "../../paths.js";
 import { resolveProject } from "../context/project-resolution.js";
 import type { OperationRecord, WriteApproval } from "./operation-contract.js";
 
@@ -36,7 +36,7 @@ async function activeProjectId(cwd: string): Promise<ProjectScope> {
 }
 
 export function taskRoot(projectId: string): string {
-  return atlasPath("projects", projectId, "tasks");
+  return atlasPath(PROJECTS_DIR, projectId, "tasks");
 }
 
 export async function crossProjectGuard(

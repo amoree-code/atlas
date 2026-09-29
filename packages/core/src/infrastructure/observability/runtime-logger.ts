@@ -4,7 +4,7 @@ import {
   redactRuntimeText,
   redactSecrets,
 } from "../../domain/redaction/redaction.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 
 // Redaction is a pure domain transform; re-exported here so existing infrastructure
 // callers keep importing it from the logger without reaching into domain directly.
@@ -26,9 +26,9 @@ export async function appendRuntimeLog(log: RuntimeLog): Promise<void> {
     payload:
       log.payload === undefined ? undefined : redactRuntimeText(log.payload),
   };
-  await mkdir(atlasPath("system", "runtime", "logs"), { recursive: true });
+  await mkdir(atlasPath(SYSTEM_DIR, "runtime", "logs"), { recursive: true });
   await appendFile(
-    path.join(atlasPath("system", "runtime", "logs"), "runtime.jsonl"),
+    path.join(atlasPath(SYSTEM_DIR, "runtime", "logs"), "runtime.jsonl"),
     `${JSON.stringify(safe)}\n`,
     "utf8",
   );

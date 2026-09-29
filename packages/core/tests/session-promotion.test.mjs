@@ -6,20 +6,21 @@ import test from "node:test";
 import { promoteSessionToKnowledge } from "../dist/application/memory/session-promotion.js";
 import { defaultSessionStoreFactory } from "../dist/composition/runtime.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { PERSONAL_DIR } from "../dist/paths.js";
 
 test("promotes an approved completed session into knowledge and rejects missing approval", async () => {
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-session-promotion-"),
   );
   process.env.ATLAS_ROOT = root;
-  await mkdir(path.join(root, "personal", "memory"), { recursive: true });
-  await mkdir(path.join(root, "personal", "knowledge"), { recursive: true });
+  await mkdir(path.join(root, PERSONAL_DIR, "memory"), { recursive: true });
+  await mkdir(path.join(root, PERSONAL_DIR, "knowledge"), { recursive: true });
   await writeFile(
-    path.join(root, "personal", "memory", "MEMORY.md"),
+    path.join(root, PERSONAL_DIR, "memory", "MEMORY.md"),
     "# Memory\n\n## Records (generated)\n",
   );
   await writeFile(
-    path.join(root, "personal", "knowledge", "KNOWLEDGE.md"),
+    path.join(root, PERSONAL_DIR, "knowledge", "KNOWLEDGE.md"),
     "# Knowledge\n\n## Records (generated)\n",
   );
   const store = await openSessionStore();

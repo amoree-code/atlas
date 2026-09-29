@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
-import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import type {
   BrowserHandle,
   BrowserLaunch,
 } from "../../domain/ports/browser-port.js";
-import { atlasPath, atlasRoot } from "../../paths.js";
+import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
+import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
+import type { Session, SessionEvent } from "../../domain/sessions/session.js";
+import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
 import type { BrowserService, ClickExpectation } from "./browser-service.js";
 
 type BrowserResumeData = BrowserLaunch & {
@@ -71,27 +71,29 @@ export class BrowserSessionManager {
 
   async open(profileKey = "default", port?: number): Promise<Session> {
     const key = safeProfileKey(profileKey);
-    const existing = this.store
-      .list()
-      .find((session) => {
-        if (session.provider !== "browser" || session.status !== "running")
-          return false;
-        try {
-          return parseResumeData(session).profileKey === key;
-        } catch {
-          return false;
-        }
-      });
+    const existing = this.store.list().find((session) => {
+      if (session.provider !== "browser" || session.status !== "running")
+        return false;
+      try {
+        return parseResumeData(session).profileKey === key;
+      } catch {
+        return false;
+      }
+    });
     if (existing) {
       this.store.appendEvent(
         existing.sessionId,
         "browser_reused",
-        JSON.stringify({ profileKey: key, reason: "running-session-for-profile" }),
+        JSON.stringify({
+          profileKey: key,
+          reason: "running-session-for-profile",
+        }),
       );
       return existing;
     }
     const recoverable = this.store.list().find((session) => {
-      if (session.provider !== "browser" || session.status !== "failed") return false;
+      if (session.provider !== "browser" || session.status !== "failed")
+        return false;
       try {
         return parseResumeData(session).profileKey === key;
       } catch {
@@ -115,7 +117,7 @@ export class BrowserSessionManager {
       }
     }
     const sessionId = randomUUID();
-    const profileDir = atlasPath("system", "browser", "profiles", key);
+    const profileDir = atlasPath(SYSTEM_DIR, "browser", "profiles", key);
     await mkdir(profileDir, { recursive: true });
     this.store.create({
       sessionId,
@@ -228,7 +230,10 @@ export class BrowserSessionManager {
   ) {
     const normalizedUrl = normalizeBrowserUrl(url);
     return this.withHandle(sessionId, "navigate", (handle) =>
-      this.service.navigate(handle, normalizedUrl, { approved: approved || this.isApproved(sessionId), timeoutMs }),
+      this.service.navigate(handle, normalizedUrl, {
+        approved: approved || this.isApproved(sessionId),
+        timeoutMs,
+      }),
     );
   }
 
@@ -297,7 +302,9 @@ export class BrowserSessionManager {
     approved: boolean,
   ) {
     return this.withHandle(sessionId, "upload", (handle) =>
-      this.service.upload(handle, selector, paths, { approved: approved || this.isApproved(sessionId) }),
+      this.service.upload(handle, selector, paths, {
+        approved: approved || this.isApproved(sessionId),
+      }),
     );
   }
   async download(
@@ -321,7 +328,10 @@ export class BrowserSessionManager {
     timeoutMs?: number,
   ) {
     return this.withHandle(sessionId, "submit", (handle) =>
-      this.service.submit(handle, selector, { approved: approved || this.isApproved(sessionId), timeoutMs }),
+      this.service.submit(handle, selector, {
+        approved: approved || this.isApproved(sessionId),
+        timeoutMs,
+      }),
     );
   }
 
@@ -412,5 +422,5 @@ function summarizeResult(value: unknown): unknown {
 }
 
 export function browserDownloadsPath(sessionId: string): string {
-  return atlasPath("system", "browser", "downloads", sessionId);
+  return atlasPath(SYSTEM_DIR, "browser", "downloads", sessionId);
 }

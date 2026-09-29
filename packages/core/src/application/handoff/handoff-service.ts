@@ -11,7 +11,12 @@ import {
   type Handoff,
   validateHandoff,
 } from "../../domain/sessions/handoff.js";
-import { atlasPath, engineRoot, resolveWithin } from "../../paths.js";
+import {
+  atlasPath,
+  engineRoot,
+  PROJECTS_DIR,
+  resolveWithin,
+} from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
 const maxContentBytes = 16_000;
@@ -154,7 +159,7 @@ export async function listHandoffs(
 }
 
 export async function getTask(id: string): Promise<Task> {
-  const tasksRoot = atlasPath("projects", "atlas", "tasks");
+  const tasksRoot = atlasPath(PROJECTS_DIR, "atlas", "tasks");
   const candidates = [
     resolveWithin(tasksRoot, id, "task.md"),
     resolveWithin(tasksRoot, "archive", "Atlas", id, "task.md"),

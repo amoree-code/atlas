@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { writeBrainDump } from "../dist/application/memory/brain-dump.js";
+import { PERSONAL_DIR } from "../dist/paths.js";
 
 function baseSession(overrides = {}) {
   return {
@@ -118,7 +119,7 @@ test("appends a numeric suffix instead of overwriting when two sessions land on 
     "2026-09-21-1552-fix-the-login-bug-2.md",
   );
 
-  const files = await readdir(path.join(root, "personal", "brain-dump"));
+  const files = await readdir(path.join(root, PERSONAL_DIR, "brain-dump"));
   assert.equal(files.length, 2);
 
   delete process.env.ATLAS_ROOT;

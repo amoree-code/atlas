@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 
 const MAX_FILES = 10_000;
 const MAX_BYTES = 50 * 1024 * 1024;
@@ -36,7 +36,7 @@ export type ObsidianDiscovery = {
 };
 
 const connectionPath = (): string =>
-  atlasPath("system", "integrations", "obsidian", "connection.json");
+  atlasPath(SYSTEM_DIR, "integrations", "obsidian", "connection.json");
 
 export async function connectObsidianVault(
   vaultPath: string,

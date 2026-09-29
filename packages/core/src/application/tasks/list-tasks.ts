@@ -1,7 +1,7 @@
 import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, resolveWithin } from "../../paths.js";
+import { atlasPath, PROJECTS_DIR, resolveWithin } from "../../paths.js";
 
 export type TaskSummary = {
   id: string;
@@ -20,7 +20,7 @@ export async function listTasks(
   state?: string,
   projectId = "atlas",
 ): Promise<TaskSummary[]> {
-  const root = resolveWithin(atlasPath("projects"), projectId, "tasks");
+  const root = resolveWithin(atlasPath(PROJECTS_DIR), projectId, "tasks");
   const records: TaskSummary[] = [];
   let entries: Dirent[];
   try {

@@ -9,6 +9,7 @@ import {
   claudeNativeHookStatus,
   claudeSessionStartHook,
 } from "../dist/application/hooks/session-start-hook.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutput shape", async () => {
   const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-outside-"));
@@ -99,7 +100,7 @@ test("claudeNativeHookStatus reports installed-but-not-registered when the scrip
     path.join(
       fakeHome,
       "atlas",
-      "system",
+      SYSTEM_DIR,
       "integrations",
       "claude-code",
       "hooks",
@@ -112,7 +113,7 @@ test("claudeNativeHookStatus reports installed-but-not-registered when the scrip
     path.join(
       fakeHome,
       "atlas",
-      "system",
+      SYSTEM_DIR,
       "integrations",
       "claude-code",
       "hooks",
@@ -136,7 +137,7 @@ test("claudeNativeHookStatus reports registered only when settings.json actually
     path.join(
       fakeHome,
       "atlas",
-      "system",
+      SYSTEM_DIR,
       "integrations",
       "claude-code",
       "hooks",
@@ -148,7 +149,7 @@ test("claudeNativeHookStatus reports registered only when settings.json actually
   const scriptPath = path.join(
     fakeHome,
     "atlas",
-    "system",
+    SYSTEM_DIR,
     "integrations",
     "claude-code",
     "hooks",

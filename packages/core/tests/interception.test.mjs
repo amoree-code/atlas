@@ -22,6 +22,7 @@ import {
   intercept,
   isUtilityInvocation,
 } from "../dist/interfaces/cli/intercept-command.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 const unixOnly = process.platform === "win32" ? test.skip : test;
 
@@ -52,7 +53,7 @@ async function withEnvironment(run) {
 
 test("resolves the real provider outside Atlas's shim directory", async () => {
   await withEnvironment(async (root) => {
-    const shim = path.join(root, "system", "runtime", "shims");
+    const shim = path.join(root, SYSTEM_DIR, "runtime", "shims");
     const real = path.join(root, "bin");
     await mkdir(shim, { recursive: true });
     await mkdir(real, { recursive: true });
@@ -491,7 +492,7 @@ unixOnly(
       await writeFile(executable, "#!/bin/sh\nexit 0\n");
       await chmod(executable, 0o755);
       await registerProvider("ordered", "ordered-ai");
-      process.env.PATH = `${bin}${path.delimiter}${path.join(root, "system", "runtime", "shims")}`;
+      process.env.PATH = `${bin}${path.delimiter}${path.join(root, SYSTEM_DIR, "runtime", "shims")}`;
       const findings = await wrapperDoctor();
       assert.ok(
         findings.some((finding) => finding.includes("after 1 PATH entries")),

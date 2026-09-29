@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 import type { ObsidianConnection } from "./vault-discovery.js";
 
 const MAX_CONTENT_BYTES = 1_000_000;
@@ -53,7 +53,7 @@ async function recordConflict(
   actualSha256: string | null,
   content: string,
   conflictsDirectory = atlasPath(
-    "system",
+    SYSTEM_DIR,
     "integrations",
     "obsidian",
     "conflicts",

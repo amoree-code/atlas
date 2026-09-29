@@ -20,6 +20,7 @@ import {
 } from "../dist/application/scheduler/local-scheduler.js";
 import { createAgentRuntime } from "../dist/composition/runtime.js";
 import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 // Test shims: scheduler/gateway now take an AgentRuntimeDeps bag; wrap a bare
 // provider executor into a runtime so the test bodies keep passing an executor.
@@ -71,9 +72,9 @@ test("service stays running until signaled, then exits cleanly", async () => {
 
 test("persists and runs a due local schedule once", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-schedule-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -107,9 +108,9 @@ test("persists and runs a due local schedule once", async () => {
 
 test("run-due uses a cross-process lease for concurrent callers", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-schedule-lease-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -143,9 +144,9 @@ test("run-due uses a cross-process lease for concurrent callers", async () => {
 
 test("scheduler completion merges with concurrent schedule edits", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-schedule-merge-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({ name: "default", provider: "claude", role: "assistant" }),
   );
   process.env.ATLAS_ROOT = root;
@@ -188,9 +189,9 @@ test("scheduler completion merges with concurrent schedule edits", async () => {
 
 test("gateway authenticates and triggers a bounded run request", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -243,9 +244,9 @@ test("normalizes Telegram-shaped messages without credentials or implicit approv
 
 test("gateway binds identities and profile scopes to the exact approved request", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-scope-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -289,7 +290,7 @@ test("gateway binds identities and profile scopes to the exact approved request"
 
 test("gateway rejects traversal profiles and hides profile loading errors", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-security-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, "outside.json"),
     JSON.stringify({
@@ -318,9 +319,9 @@ test("gateway rejects traversal profiles and hides profile loading errors", asyn
 
 test("HTTP gateway rate limiting persists across requests", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-rate-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({ name: "default", provider: "claude", role: "assistant" }),
   );
   process.env.ATLAS_ROOT = root;
@@ -366,9 +367,9 @@ test("HTTP gateway rate limiting persists across requests", async () => {
 
 test("scheduler worker records retry state and releases its lease", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-worker-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -394,9 +395,9 @@ test("scheduler worker records retry state and releases its lease", async () => 
 
 test("scheduler worker retries a provider non-zero exit", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-worker-exit-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({ name: "default", provider: "claude", role: "assistant" }),
   );
   process.env.ATLAS_ROOT = root;
@@ -427,10 +428,10 @@ test("scheduler worker reclaims a lease owned by a dead process", async () => {
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-worker-stale-lease-"),
   );
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
-  await mkdir(path.join(root, "system", "schedules"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "schedules"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({ name: "default", provider: "claude", role: "assistant" }),
   );
   process.env.ATLAS_ROOT = root;
@@ -444,7 +445,7 @@ test("scheduler worker reclaims a lease owned by a dead process", async () => {
       enabled: true,
     });
     await writeFile(
-      path.join(root, "system", "schedules", "stale.lease"),
+      path.join(root, SYSTEM_DIR, "schedules", "stale.lease"),
       "99999999\n",
     );
     assert.deepEqual(

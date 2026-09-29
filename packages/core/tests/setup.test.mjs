@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { setup } from "../dist/interfaces/cli/setup-command.js";
-import { enginePath } from "../dist/paths.js";
+import { enginePath, PERSONAL_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 function platformStartupFile(home) {
   if (process.platform === "darwin") {
@@ -48,22 +48,24 @@ test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, nev
   try {
     await setup();
 
-    for (const directory of ["personal/memory"]) {
+    for (const directory of [`${PERSONAL_DIR}/memory`]) {
       const info = await stat(path.join(privateRoot, directory));
       assert.ok(
         info.isDirectory(),
         `expected ${directory} under the private root`,
       );
     }
-    await stat(path.join(privateRoot, "personal", "memory", "MEMORY.md"));
-    await stat(path.join(privateRoot, "personal", "knowledge", "KNOWLEDGE.md"));
+    await stat(path.join(privateRoot, PERSONAL_DIR, "memory", "MEMORY.md"));
+    await stat(
+      path.join(privateRoot, PERSONAL_DIR, "knowledge", "KNOWLEDGE.md"),
+    );
     for (const directory of [
-      "system/profiles",
-      "system/sessions",
-      "system/config/startup",
-      "system/control-plane",
-      "system/integrations",
-      "system/archive",
+      `${SYSTEM_DIR}/profiles`,
+      `${SYSTEM_DIR}/sessions`,
+      `${SYSTEM_DIR}/config/startup`,
+      `${SYSTEM_DIR}/control-plane`,
+      `${SYSTEM_DIR}/integrations`,
+      `${SYSTEM_DIR}/archive`,
     ]) {
       const info = await stat(path.join(privateRoot, directory));
       assert.ok(
@@ -71,10 +73,16 @@ test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, nev
         `expected ${directory} under the private root`,
       );
     }
-    await stat(path.join(privateRoot, "system", "profiles", "default.json"));
+    await stat(path.join(privateRoot, SYSTEM_DIR, "profiles", "default.json"));
     await assert.rejects(
       stat(
-        path.join(privateRoot, "system", "profiles", "default", "profile.json"),
+        path.join(
+          privateRoot,
+          SYSTEM_DIR,
+          "profiles",
+          "default",
+          "profile.json",
+        ),
       ),
     );
 

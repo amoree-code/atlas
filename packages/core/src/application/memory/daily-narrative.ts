@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Session, SessionEvent } from "../../domain/sessions/session.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
-import { atlasPath } from "../../paths.js";
+import type { Session, SessionEvent } from "../../domain/sessions/session.js";
+import { atlasPath, PERSONAL_DIR } from "../../paths.js";
 import { findGitRoot } from "../context/project-resolution.js";
 import type { TaskObservation } from "../skills/task-observer.js";
 import type { ModelNarrative } from "./model-narrative.js";
@@ -52,7 +52,7 @@ export async function appendDailyNarrative(input: {
 }): Promise<void> {
   const { session, events, narrative } = input;
   const date = new Date().toISOString().slice(0, 10);
-  const directory = atlasPath("personal", "daily");
+  const directory = atlasPath(PERSONAL_DIR, "daily");
   const file = path.join(directory, `${date}.md`);
   await mkdir(directory, { recursive: true });
 
@@ -146,7 +146,7 @@ export async function appendObservations(
 ): Promise<void> {
   if (!observations.length) return;
   const date = new Date().toISOString().slice(0, 10);
-  const directory = atlasPath("personal", "daily");
+  const directory = atlasPath(PERSONAL_DIR, "daily");
   const file = path.join(directory, `${date}.md`);
   await mkdir(directory, { recursive: true });
 

@@ -16,6 +16,7 @@ import {
   guardedRunOperation,
   revokeGrant,
 } from "../dist/application/operations/write-guard.js";
+import { PERSONAL_DIR, PROJECTS_DIR } from "../dist/paths.js";
 
 const BUDGET = {
   maxFiles: 10,
@@ -26,12 +27,12 @@ const BUDGET = {
 
 async function withRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-slice9-"));
-  await mkdir(path.join(root, "personal", "memory"), { recursive: true });
-  await mkdir(path.join(root, "projects", "atlas", "tasks", "T-1"), {
+  await mkdir(path.join(root, PERSONAL_DIR, "memory"), { recursive: true });
+  await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "projects", "atlas", "tasks", "T-1", "task.md"),
+    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1", "task.md"),
     "---\nid: T-1\nstate: active\n---\n\nbody\n",
   );
   const previous = process.env.ATLAS_ROOT;
@@ -50,7 +51,7 @@ const remember = () => classifyIntent("remember this");
 function scopeFor(root, slug = "note") {
   return {
     action: "memory.write",
-    target: path.join(root, "personal", "memory", `${slug}.md`),
+    target: path.join(root, PERSONAL_DIR, "memory", `${slug}.md`),
     identifier: slug,
     projectId: "atlas",
   };
@@ -313,7 +314,7 @@ test("a null byte in the target is denied", () =>
   withRoot(async (root) => {
     const scope = {
       action: "memory.write",
-      target: `${path.join(root, "personal", "memory", "x.md")}\0`,
+      target: `${path.join(root, PERSONAL_DIR, "memory", "x.md")}\0`,
       identifier: "x",
       projectId: "atlas",
     };
@@ -452,7 +453,7 @@ test("direct-import bypass: calling the operation layer directly still refuses a
     assert.equal(result.ok, false);
     assert.match(result.reason, /no explicit approval/);
     assert.ok(
-      !(await readdir(path.join(root, "personal", "memory"))).includes(
+      !(await readdir(path.join(root, PERSONAL_DIR, "memory"))).includes(
         "sneaky.md",
       ),
     );
@@ -473,7 +474,7 @@ test("forged-approval bypass: an approval not produced by the guard still fails 
     });
     assert.equal(result.ok, false);
     assert.ok(
-      !(await readdir(path.join(root, "personal", "memory"))).includes(
+      !(await readdir(path.join(root, PERSONAL_DIR, "memory"))).includes(
         "forged.md",
       ),
     );
@@ -523,7 +524,7 @@ test("guardedRunOperation performs the write only with a matching grant", () =>
     assert.equal(result.ok, true, result.reason);
     assert.match(
       await readFile(
-        path.join(root, "personal", "memory", "guarded-ok.md"),
+        path.join(root, PERSONAL_DIR, "memory", "guarded-ok.md"),
         "utf8",
       ),
       /approved content/,
@@ -621,7 +622,7 @@ test("audit metadata carries decision facts only — no user content, no secrets
 test("guard evaluation persists nothing to disk", () =>
   withRoot(async (root) => {
     const before = (
-      await readdir(path.join(root, "personal", "memory"))
+      await readdir(path.join(root, PERSONAL_DIR, "memory"))
     ).sort();
     const scope = scopeFor(root);
     evaluateGuard({
@@ -637,7 +638,9 @@ test("guard evaluation persists nothing to disk", () =>
       budget: BUDGET,
       grant: createGrant(SESSION, scope),
     });
-    const after = (await readdir(path.join(root, "personal", "memory"))).sort();
+    const after = (
+      await readdir(path.join(root, PERSONAL_DIR, "memory"))
+    ).sort();
     assert.deepEqual(before, after);
   }));
 
@@ -668,7 +671,7 @@ test("Arabic and English requests are guarded identically", () =>
   withRoot(async (root) => {
     const scope = {
       action: "knowledge.write",
-      target: path.join(root, "personal", "knowledge", "decisions", "d.md"),
+      target: path.join(root, PERSONAL_DIR, "knowledge", "decisions", "d.md"),
       identifier: "d",
       projectId: "atlas",
     };

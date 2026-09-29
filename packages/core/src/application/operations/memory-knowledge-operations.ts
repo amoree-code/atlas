@@ -2,7 +2,7 @@ import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import { atomicWrite } from "../../fs-utils.js";
-import { atlasRoot, resolveWithin } from "../../paths.js";
+import { atlasRoot, PERSONAL_DIR, resolveWithin } from "../../paths.js";
 import { brainIndexPath } from "../brain/brain-reindex.js";
 import { brainSearch } from "../brain/brain-service.js";
 import type { ContextBudget } from "../context/context-ladder.js";
@@ -121,7 +121,7 @@ async function searchViaBrainIndex(
       identifier: hit.id,
       recordType,
       provenance: provenanceFor(recordType, { type: hit.type }),
-      sourcePath: `personal/${hit.path}`,
+      sourcePath: `${PERSONAL_DIR}/${hit.path}`,
       freshness: "unknown" as const,
       confidence: classification.confidence,
       selectionReason: `ranked by brain index (${result.mode})`,
@@ -274,7 +274,7 @@ export async function writeRecord(
   let segments: string[];
   let recordType: string;
   if (operation === "memory.write") {
-    segments = ["personal", "memory", `${slug.value}.md`];
+    segments = [PERSONAL_DIR, "memory", `${slug.value}.md`];
     recordType = "memory";
   } else {
     const kind = validateSlug(options.kind, "knowledge kind");
@@ -285,7 +285,7 @@ export async function writeRecord(
         operation,
         `write refused: '${kind.value}' is not an allowed knowledge kind`,
       );
-    segments = ["personal", "knowledge", kind.value, `${slug.value}.md`];
+    segments = [PERSONAL_DIR, "knowledge", kind.value, `${slug.value}.md`];
     recordType = kind.value === "decisions" ? "decision" : "knowledge";
   }
 

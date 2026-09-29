@@ -26,6 +26,7 @@ import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
 import { truncateUtf8 } from "../dist/fs-utils.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
 import { buildProviderInvocation } from "../dist/infrastructure/providers/providers.js";
+import { PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 const SKILLS = ["alpha-lean", "beta-lean", "gamma-lean"];
 
@@ -45,7 +46,7 @@ async function withAtlasRoot(fn) {
 async function writeFixture(root) {
   const skillsRoot = path.join(
     root,
-    "system",
+    SYSTEM_DIR,
     "integrations",
     "claude-code",
     "skills",
@@ -79,7 +80,7 @@ async function writeFixture(root) {
       })),
     ),
   );
-  const profileDir = path.join(root, "system", "profiles", "lean");
+  const profileDir = path.join(root, SYSTEM_DIR, "profiles", "lean");
   await mkdir(profileDir, { recursive: true });
   const profileJson = {
     name: "lean",
@@ -105,11 +106,11 @@ async function writeFixture(root) {
     value: `value ${index} ${"x".repeat(128)}`,
     updatedAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
   }));
-  await mkdir(path.join(root, "system", "memory", "profiles"), {
+  await mkdir(path.join(root, SYSTEM_DIR, "memory", "profiles"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "system", "memory", "profiles", "lean.json"),
+    path.join(root, SYSTEM_DIR, "memory", "profiles", "lean.json"),
     JSON.stringify(facts),
   );
   return { bodies, profileJson, instructions, readme, facts };
@@ -195,7 +196,7 @@ test("headless prompt carries a skill index, compact contract, facts digest and 
     assert.match(captured, /## Context references[\s\S]*- README\.md \(/);
 
     const store = new SessionStore(
-      path.join(root, "system", "sessions", "sessions.sqlite"),
+      path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite"),
     );
     try {
       const events = store.listEvents(session.sessionId);
@@ -382,7 +383,7 @@ test("formatPromotedSkills marks only truncated skills", () => {
 
 test("buildContextReferences references a single task record without reading it", () =>
   withAtlasRoot(async (root) => {
-    const taskDir = path.join(root, "projects", "atlas", "tasks", "T-9");
+    const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-9");
     await mkdir(taskDir, { recursive: true });
     await writeFile(path.join(taskDir, "task.md"), "TASK-BODY-SENTINEL");
     const profile = validateProfile({
@@ -400,7 +401,7 @@ test("buildContextReferences references a single task record without reading it"
     const [reference] = result.manifest.references;
     assert.equal(reference.base, "atlas-root");
     assert.equal(reference.recordType, "task");
-    assert.equal(reference.path, "projects/atlas/tasks/T-9/task.md");
+    assert.equal(reference.path, `${PROJECTS_DIR}/atlas/tasks/T-9/task.md`);
     assert.equal(reference.bytes, Buffer.byteLength("TASK-BODY-SENTINEL"));
     assert.match(reference.reason, /within budget/);
     assert.ok(result.content.includes(path.join("tasks", "T-9", "task.md")));
@@ -428,7 +429,7 @@ test("buildContextReferences references a single task record without reading it"
     });
     assert.deepEqual(unknown.manifest.references, []);
 
-    const registry = path.join(root, "system", "control-plane", "registry");
+    const registry = path.join(root, SYSTEM_DIR, "control-plane", "registry");
     await mkdir(registry, { recursive: true });
     await writeFile(path.join(registry, "project-bindings.json"), "{not json");
     const malformed = await buildContextReferences({
@@ -442,17 +443,22 @@ test("buildContextReferences references a single task record without reading it"
 
 test("packet references stay inside allowedPaths and skip keyword lookups", () =>
   withAtlasRoot(async (root) => {
-    const memoryDir = path.join(root, "personal", "memory");
-    const knowledgeDir = path.join(root, "personal", "knowledge", "decisions");
+    const memoryDir = path.join(root, PERSONAL_DIR, "memory");
+    const knowledgeDir = path.join(
+      root,
+      PERSONAL_DIR,
+      "knowledge",
+      "decisions",
+    );
     await mkdir(memoryDir, { recursive: true });
     await mkdir(knowledgeDir, { recursive: true });
     await writeFile(path.join(memoryDir, "MEMORY.md"), "MEMORY-SENTINEL");
     await writeFile(
-      path.join(root, "personal", "knowledge", "KNOWLEDGE.md"),
+      path.join(root, PERSONAL_DIR, "knowledge", "KNOWLEDGE.md"),
       "KNOWLEDGE-SENTINEL",
     );
     await writeFile(path.join(knowledgeDir, "d-1.md"), "DECISION-SENTINEL");
-    const taskDir = path.join(root, "projects", "atlas", "tasks", "T-9");
+    const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-9");
     await mkdir(taskDir, { recursive: true });
     await writeFile(path.join(taskDir, "task.md"), "TASK-BODY-SENTINEL");
     await mkdir(path.join(root, "src"), { recursive: true });
@@ -479,7 +485,7 @@ test("packet references stay inside allowedPaths and skip keyword lookups", () =
         const label = `${JSON.stringify(allowedPaths)} ${prompt}`;
         assert.deepEqual(result.manifest.references, [], label);
         assert.equal(result.content, "", label);
-        assert.ok(!result.content.includes("personal"), label);
+        assert.ok(!result.content.includes(PERSONAL_DIR), label);
       }
     }
 
@@ -496,7 +502,7 @@ test("packet references stay inside allowedPaths and skip keyword lookups", () =
     });
     assert.deepEqual(narrow.manifest.references, []);
     assert.deepEqual(narrow.manifest.omitted, [
-      "projects/atlas/tasks/T-9/task.md",
+      `${PROJECTS_DIR}/atlas/tasks/T-9/task.md`,
     ]);
     assert.equal(narrow.content, "");
   }));
@@ -519,7 +525,7 @@ test("skills outside cwd are granted to workspace-restricted providers", (t) =>
     assert.equal(session.status, "completed");
     const skillsRoot = path.join(
       root,
-      "system",
+      SYSTEM_DIR,
       "integrations",
       "claude-code",
       "skills",
@@ -529,7 +535,7 @@ test("skills outside cwd are granted to workspace-restricted providers", (t) =>
     assert.match(providerRequest.prompt, /\(\d+ of 40 facts/);
     const expected = [
       ...SKILLS.map((name) => path.join(skillsRoot, name)),
-      path.join(root, "system", "memory", "profiles"),
+      path.join(root, SYSTEM_DIR, "memory", "profiles"),
     ];
     assert.deepEqual(providerRequest.readDirectories, expected);
 
@@ -624,7 +630,7 @@ test("a resume whose skill or facts lookup fails narrows the grant, not the turn
     await rm(
       path.join(
         root,
-        "system",
+        SYSTEM_DIR,
         "integrations",
         "claude-code",
         "skills",
@@ -634,7 +640,7 @@ test("a resume whose skill or facts lookup fails narrows the grant, not the turn
       ),
     );
     await writeFile(
-      path.join(root, "system", "memory", "profiles", "lean.json"),
+      path.join(root, SYSTEM_DIR, "memory", "profiles", "lean.json"),
       "{ not json",
     );
     let resumed;
@@ -673,9 +679,9 @@ test("context reference grants stay inside allowedPaths", (t) =>
       );
       contextSources.push("../other/link.md");
     }
-    await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+    await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
     await writeFile(
-      path.join(root, "system", "profiles", "grant.json"),
+      path.join(root, SYSTEM_DIR, "profiles", "grant.json"),
       JSON.stringify({
         name: "grant",
         provider: "claude",

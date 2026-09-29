@@ -9,6 +9,7 @@ import {
   resolveContextSources,
 } from "../dist/application/context/context-references.js";
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
+import { PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 test("context returns a compact JSON packet without loading task bodies", async () => {
   const result = spawnSync(
@@ -23,7 +24,7 @@ test("context returns a compact JSON packet without loading task bodies", async 
   );
   assert.equal(packet.project, "atlas");
   assert.equal(packet.version, version);
-  assert.deepEqual(packet.roots, ["personal", "projects", "system"]);
+  assert.deepEqual(packet.roots, [PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR]);
   assert.ok(Array.isArray(packet.tasks));
 });
 

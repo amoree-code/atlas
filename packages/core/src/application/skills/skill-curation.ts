@@ -3,7 +3,7 @@ import path from "node:path";
 import type { SessionStoreFactory } from "../../domain/ports/session-store-port.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import { truncateUtf8 } from "../../fs-utils.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 
 export type SkillCandidate = {
   id: string;
@@ -17,7 +17,7 @@ export type SkillCandidate = {
 };
 // A promoted skill selected for a run; `truncated` marks one cut to the run's byte budget.
 export type PromotedSkill = SkillCandidate & { truncated: boolean };
-const file = () => atlasPath("system", "skills", "candidates.json");
+const file = () => atlasPath(SYSTEM_DIR, "skills", "candidates.json");
 async function load(): Promise<SkillCandidate[]> {
   try {
     return JSON.parse(await readFile(file(), "utf8"));

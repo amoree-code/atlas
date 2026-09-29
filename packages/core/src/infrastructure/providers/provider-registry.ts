@@ -2,7 +2,7 @@ import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ProviderRecord } from "../../domain/providers/provider.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 
 export type { ProviderRecord } from "../../domain/providers/provider.js";
 
@@ -15,7 +15,7 @@ const builtInProviders: ProviderRecord[] = [
 ];
 
 const providerRegistryPath = (): string =>
-  atlasPath("system", "control-plane", "registry", "providers.json");
+  atlasPath(SYSTEM_DIR, "control-plane", "registry", "providers.json");
 
 export function builtInProviderRecords(): ProviderRecord[] {
   return builtInProviders.map((provider) => ({ ...provider }));
@@ -60,7 +60,7 @@ export function resolveOriginalExecutable(
   env = process.env,
 ): string {
   const shimRoot = path.resolve(
-    env.ATLAS_SHIM_DIR ?? atlasPath("system", "runtime", "shims"),
+    env.ATLAS_SHIM_DIR ?? atlasPath(SYSTEM_DIR, "runtime", "shims"),
   );
   const pathEntries = (env.PATH ?? "").split(path.delimiter).filter(Boolean);
   const names =

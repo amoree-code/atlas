@@ -8,6 +8,7 @@ import {
   buildSelectedReferences,
 } from "../dist/application/context/context-packet.js";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
+import { PERSONAL_DIR, PROJECTS_DIR } from "../dist/paths.js";
 
 const GOOD_BUDGET = {
   maxFiles: 5,
@@ -18,7 +19,7 @@ const GOOD_BUDGET = {
 
 async function withTempTask(bytes, fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-"));
-  const taskDir = path.join(root, "projects", "atlas", "tasks", "T-1");
+  const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1");
   await mkdir(taskDir, { recursive: true });
   const file = path.join(taskDir, "task.md");
   await writeFile(file, "x".repeat(bytes));
@@ -34,7 +35,7 @@ async function withTempTask(bytes, fn) {
 
 async function withTempDecision(bytes, fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-"));
-  const decisionsDir = path.join(root, "personal", "knowledge", "decisions");
+  const decisionsDir = path.join(root, PERSONAL_DIR, "knowledge", "decisions");
   await mkdir(decisionsDir, { recursive: true });
   const file = path.join(decisionsDir, "decision-001.md");
   await writeFile(file, "x".repeat(bytes));
@@ -105,7 +106,7 @@ test("decision lookup selects bounded authoritative decision references", () =>
     );
     assert.ok(
       packet.sourcePaths.every((sourcePath) =>
-        sourcePath.startsWith("personal/knowledge/decisions/"),
+        sourcePath.startsWith(`${PERSONAL_DIR}/knowledge/decisions/`),
       ),
     );
   }));
@@ -132,7 +133,7 @@ test("buildSelectedReferences drops an exact duplicate (same identifier + source
   const candidate = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: "projects/atlas/tasks/T-1/task.md",
+    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "test",
@@ -151,7 +152,7 @@ test("buildSelectedReferences keeps multiple distinct references", () => {
   const a = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: "projects/atlas/tasks/T-1/task.md",
+    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "a",
@@ -159,7 +160,7 @@ test("buildSelectedReferences keeps multiple distinct references", () => {
   const b = {
     identifier: "T-2",
     recordType: "task",
-    sourcePath: "projects/atlas/tasks/T-2/task.md",
+    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-2/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "b",
@@ -358,7 +359,7 @@ test("buildSelectedReferences rejects a traversal sourcePath even if identifier 
   const candidate = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: "projects/atlas/tasks/../../../etc/passwd",
+    sourcePath: `${PROJECTS_DIR}/atlas/tasks/../../../etc/passwd`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -390,7 +391,7 @@ test("buildSelectedReferences rejects a null byte in the sourcePath or identifie
   const a = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: "projects/atlas/tasks/T-1/task.md\0.png",
+    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md\0.png`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -398,7 +399,7 @@ test("buildSelectedReferences rejects a null byte in the sourcePath or identifie
   const b = {
     identifier: "T-1\0",
     recordType: "task",
-    sourcePath: "projects/atlas/tasks/T-1/task.md",
+    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -411,7 +412,7 @@ test("buildSelectedReferences rejects shell metacharacters in the sourcePath", (
   const candidate = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: "projects/atlas/tasks/T-1/task.md; rm -rf /",
+    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md; rm -rf /`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -462,7 +463,7 @@ test("identical classification + budget + cwd produces identical packets across 
 test("buildContextPacket never writes any file", () =>
   withTempTask(300, async (root) => {
     const { readdir } = await import("node:fs/promises");
-    const taskDir = path.join(root, "projects", "atlas", "tasks", "T-1");
+    const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1");
     const before = (await readdir(taskDir)).sort();
     await buildContextPacket(classifyIntent("show T-1"), GOOD_BUDGET, root);
     await buildContextPacket(

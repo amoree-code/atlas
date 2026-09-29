@@ -4,7 +4,7 @@ import path from "node:path";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
 import { safeJsonParse } from "../../fs-utils.js";
-import { atlasPath, atlasRoot } from "../../paths.js";
+import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
 
 const maxSummaryBytes = 12_000;
 
@@ -136,7 +136,7 @@ export async function writeSessionSummary(input: {
   const date =
     input.session.createdAt.slice(0, 10) ||
     new Date().toISOString().slice(0, 10);
-  const directory = atlasPath("system", "sessions", "summaries");
+  const directory = atlasPath(SYSTEM_DIR, "sessions", "summaries");
   const file = path.join(directory, `${date}-${input.session.sessionId}.md`);
   await mkdir(directory, { recursive: true });
   const content = renderSessionSummary(input);

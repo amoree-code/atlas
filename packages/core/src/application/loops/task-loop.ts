@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
-import { atlasPath, resolveWithin } from "../../paths.js";
+import {
+  atlasPath,
+  PROJECTS_DIR,
+  resolveWithin,
+  SYSTEM_DIR,
+} from "../../paths.js";
 import { runAgent } from "../runs/run-agent.js";
 import { checkpointTask } from "../tasks/checkpoint-task.js";
 import { type CommandRunner, verifyTask } from "../tasks/verify-task.js";
@@ -28,7 +33,7 @@ export type TaskLoop = {
   resultPath: string | null;
 };
 
-const loopsFile = () => atlasPath("system", "loops.json");
+const loopsFile = () => atlasPath(SYSTEM_DIR, "loops.json");
 
 export async function listTaskLoops(): Promise<TaskLoop[]> {
   try {
@@ -205,7 +210,7 @@ async function persistWorkerResult(
     null,
     2,
   );
-  const dir = atlasPath("system", "runs");
+  const dir = atlasPath(SYSTEM_DIR, "runs");
   await mkdir(dir, { recursive: true });
   const target = resolveWithin(dir, `${sessionId}.json`);
   const temp = `${target}.${process.pid}.tmp`;
@@ -238,7 +243,7 @@ export async function runTaskLoopWorker(
 
 async function taskClaimsDone(id: string): Promise<boolean> {
   const file = resolveWithin(
-    atlasPath("projects", "atlas", "tasks"),
+    atlasPath(PROJECTS_DIR, "atlas", "tasks"),
     id,
     "task.md",
   );

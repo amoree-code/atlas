@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, PROJECTS_DIR } from "../../paths.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import {
   bindProject,
@@ -31,7 +31,7 @@ export async function projectDetect(
     provenance: "project",
     sourcePath:
       resolution.status === "bound"
-        ? relativeToAtlas(atlasPath("projects", resolution.projectId))
+        ? relativeToAtlas(atlasPath(PROJECTS_DIR, resolution.projectId))
         : "",
     freshness: "unknown",
     confidence: classification.confidence,
@@ -70,7 +70,7 @@ export async function projectCreate(
       "write refused: project path contains a null byte",
     );
 
-  const target = validateWriteTarget("projects", name.value);
+  const target = validateWriteTarget(PROJECTS_DIR, name.value);
   if (!target.valid)
     return operationResult("project.create", `write refused: ${target.reason}`);
   const approvalCheck = approvalMatchesTarget(
@@ -115,7 +115,7 @@ export async function projectUpdate(
       "write refused: an explicit absolute project path is required",
     );
   }
-  const target = validateWriteTarget("projects", project.projectId);
+  const target = validateWriteTarget(PROJECTS_DIR, project.projectId);
   if (!target.valid)
     return operationResult("project.update", `write refused: ${target.reason}`);
   const approvalCheck = approvalMatchesTarget(

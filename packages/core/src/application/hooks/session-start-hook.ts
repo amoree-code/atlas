@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { SYSTEM_DIR } from "../../paths.js";
 import { resolveProject } from "../context/project-resolution.js";
 import { buildAtlasBootstrap } from "../context/resource-injection.js";
 
@@ -74,7 +75,7 @@ export async function claudeNativeHookStatus(
   const scriptPath = path.join(
     homeDir,
     "atlas",
-    "system",
+    SYSTEM_DIR,
     "integrations",
     "claude-code",
     "hooks",

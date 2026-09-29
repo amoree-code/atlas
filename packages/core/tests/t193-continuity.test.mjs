@@ -13,6 +13,7 @@ import {
   defaultSessionStoreFactory,
 } from "../dist/composition/runtime.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 const runAgent = (request, execute) =>
   runAgentRaw(
@@ -22,12 +23,12 @@ const runAgent = (request, execute) =>
 
 test("one bounded handoff keeps semantic context equivalent across read-only clients", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t193-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
-  await mkdir(path.join(root, "projects", "atlas", "tasks", "T-193"), {
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
+  await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-193"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "system", "profiles", "universal.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "universal.json"),
     JSON.stringify({
       name: "universal",
       role: "bounded verifier",
@@ -57,7 +58,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     }),
   );
   await writeFile(
-    path.join(root, "projects", "atlas", "tasks", "T-193", "task.md"),
+    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-193", "task.md"),
     `---\nid: T-193\ntitle: Continuity test\nstate: in_progress\nrequirement: Share one bounded task context\n---\n\n## Objective\nKeep context small and provider-neutral.\n`,
   );
   process.env.ATLAS_ROOT = root;
@@ -125,7 +126,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     );
     assert.ok(Buffer.byteLength(stored.compactContext) <= 2_000);
     const store = new SessionStore(
-      path.join(root, "system", "sessions", "sessions.sqlite"),
+      path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite"),
     );
     const ideaId = "idea-t193";
     store.saveIdea({
@@ -137,7 +138,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     assert.equal(store.listIdeas("raw").length, 1);
     store.close();
     await assert.rejects(() =>
-      access(path.join(root, "personal", "inbox", "INBOX.md")),
+      access(path.join(root, PERSONAL_DIR, "inbox", "INBOX.md")),
     );
   } finally {
     delete process.env.ATLAS_ROOT;

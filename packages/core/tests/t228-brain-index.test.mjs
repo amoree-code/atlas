@@ -18,6 +18,7 @@ import {
   createOllamaEmbedder,
   RemoteEmbedderRefusedError,
 } from "../dist/infrastructure/providers/ollama-embedder.js";
+import { PERSONAL_DIR } from "../dist/paths.js";
 import { createFakeEmbedder } from "./fixtures/fake-embedder.mjs";
 
 // Every call below injects the concrete brain-index port from the composition root — the
@@ -37,17 +38,17 @@ const fixturesRoot = path.join(here, "fixtures", "brain");
 
 async function withFixtureRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-"));
-  await mkdir(path.join(root, "personal"), { recursive: true });
+  await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
   await cp(
     path.join(fixturesRoot, "memory"),
-    path.join(root, "personal", "memory"),
+    path.join(root, PERSONAL_DIR, "memory"),
     {
       recursive: true,
     },
   );
   await cp(
     path.join(fixturesRoot, "knowledge"),
-    path.join(root, "personal", "knowledge"),
+    path.join(root, PERSONAL_DIR, "knowledge"),
     { recursive: true },
   );
   try {
@@ -84,7 +85,7 @@ async function snapshot(root, embedder) {
     depth: 2,
   });
   const reader = openIndexReadOnly(
-    path.join(root, "personal", ".index", "brain.sqlite"),
+    path.join(root, PERSONAL_DIR, ".index", "brain.sqlite"),
   );
   const dump = reader.dump();
   reader.close();
@@ -101,7 +102,7 @@ test("brain index round-trip: rebuilding from markdown reproduces identical sear
 
     const snapshotA = await snapshot(root, embedder);
 
-    await rm(path.join(root, "personal", ".index"), {
+    await rm(path.join(root, PERSONAL_DIR, ".index"), {
       recursive: true,
       force: true,
     });
@@ -141,7 +142,7 @@ test("reindex reports dangling and ambiguous wikilinks instead of guessing", asy
 test("duplicate declared id across two files fails loudly", async () => {
   await withFixtureRoot(async (root) => {
     await writeFile(
-      path.join(root, "personal", "memory", "duplicate-of-alpha.md"),
+      path.join(root, PERSONAL_DIR, "memory", "duplicate-of-alpha.md"),
       "---\nid: alpha\ntitle: Duplicate\nsummary: dup\ntags: []\ntype: fact\nconfidence: low\ncreated: 2026-01-01\nupdated: 2026-01-01\nlast_confirmed_at: 2026-01-01\n---\n\n# Duplicate\n",
     );
     await assert.rejects(
@@ -155,12 +156,12 @@ test("every docs.path in the index resolves to an existing file with a matching 
   await withFixtureRoot(async (root) => {
     await reindexBrain({ root, embedder: null });
     const reader = openIndexReadOnly(
-      path.join(root, "personal", ".index", "brain.sqlite"),
+      path.join(root, PERSONAL_DIR, ".index", "brain.sqlite"),
     );
     const dump = reader.dump();
     reader.close();
     for (const doc of dump.docs) {
-      const bytes = await readFile(path.join(root, "personal", doc.path));
+      const bytes = await readFile(path.join(root, PERSONAL_DIR, doc.path));
       const hash = createHash("sha256").update(bytes).digest("hex");
       assert.equal(
         hash,
@@ -178,7 +179,7 @@ test("brain_read reads the file from disk even if the index row is tampered", as
     // Tamper with the index's title column directly — brain_read must ignore it.
     const { DatabaseSync } = await import("node:sqlite");
     const db = new DatabaseSync(
-      path.join(root, "personal", ".index", "brain.sqlite"),
+      path.join(root, PERSONAL_DIR, ".index", "brain.sqlite"),
     );
     db.exec("UPDATE docs SET title = 'TAMPERED' WHERE id = 'alpha'");
     db.close();
@@ -248,7 +249,7 @@ test(".index/.gitignore ignores everything", async () => {
   await withFixtureRoot(async (root) => {
     await reindexBrain({ root, embedder: null });
     const gitignore = await readFile(
-      path.join(root, "personal", ".index", ".gitignore"),
+      path.join(root, PERSONAL_DIR, ".index", ".gitignore"),
       "utf8",
     );
     assert.equal(gitignore.trim(), "*");
@@ -261,8 +262,8 @@ test("brainSearch reports stale:true after a markdown file changes post-build", 
     const before = await brainSearch({ query: "alpha", root });
     assert.equal(before.stale, false);
     await writeFile(
-      path.join(root, "personal", "memory", "alpha.md"),
-      `${await readFile(path.join(root, "personal", "memory", "alpha.md"), "utf8")}\nedited\n`,
+      path.join(root, PERSONAL_DIR, "memory", "alpha.md"),
+      `${await readFile(path.join(root, PERSONAL_DIR, "memory", "alpha.md"), "utf8")}\nedited\n`,
     );
     const after = await brainSearch({ query: "alpha", root });
     assert.equal(after.stale, true);
@@ -271,7 +272,7 @@ test("brainSearch reports stale:true after a markdown file changes post-build", 
 
 test("CRLF frontmatter (e.g. a Windows git checkout) parses the same as LF", async () => {
   await withFixtureRoot(async (root) => {
-    const target = path.join(root, "personal", "memory", "alpha.md");
+    const target = path.join(root, PERSONAL_DIR, "memory", "alpha.md");
     const crlf = (await readFile(target, "utf8")).replace(/\n/g, "\r\n");
     await writeFile(target, crlf);
     const result = await reindexBrain({ root, embedder: null });

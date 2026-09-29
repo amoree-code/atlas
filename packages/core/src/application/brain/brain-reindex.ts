@@ -8,7 +8,7 @@ import type {
   IndexLinkInput,
 } from "../../domain/ports/brain-index-port.js";
 import type { EmbedderPort } from "../../domain/ports/embedder-port.js";
-import { atlasRoot, resolveWithin } from "../../paths.js";
+import { atlasRoot, PERSONAL_DIR, resolveWithin } from "../../paths.js";
 import {
   basenameStem,
   chunkBody,
@@ -53,7 +53,7 @@ async function walk(root: string, depth = 0): Promise<string[]> {
 // report `stale: true` when the index is older than the files it was built from, without
 // paying for a full reindex on every search.
 export async function computeCorpusHash(root = atlasRoot()): Promise<string> {
-  const personalRoot = resolveWithin(root, "personal");
+  const personalRoot = resolveWithin(root, PERSONAL_DIR);
   const entries: Array<{ storePath: string; contentHash: string }> = [];
   for (const store of STORES) {
     const storeRoot = resolveWithin(personalRoot, store);
@@ -141,7 +141,7 @@ export async function reindexBrain(
 ): Promise<ReindexResult> {
   const root = options.root ?? atlasRoot();
   const embedder = options.embedder ?? null;
-  const personalRoot = resolveWithin(root, "personal");
+  const personalRoot = resolveWithin(root, PERSONAL_DIR);
 
   const walked: WalkedDoc[] = [];
   let totalSeen = 0;
@@ -300,5 +300,5 @@ export async function reindexBrain(
 }
 
 export function brainIndexPath(root = atlasRoot()): string {
-  return path.join(root, "personal", ".index", "brain.sqlite");
+  return path.join(root, PERSONAL_DIR, ".index", "brain.sqlite");
 }

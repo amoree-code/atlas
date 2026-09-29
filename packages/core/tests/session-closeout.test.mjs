@@ -5,24 +5,28 @@ import path from "node:path";
 import test from "node:test";
 import { finalizeSession } from "../dist/application/memory/session-closeout.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { PERSONAL_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 // Each test uses a fresh temp ATLAS_ROOT, so at most one brain-dump file
 // exists at a time — no need to match by session id, which (deliberately)
 // no longer appears in the filename.
 async function readBrainDump(root) {
-  const files = await readdir(path.join(root, "personal", "brain-dump")).catch(
-    () => [],
-  );
+  const files = await readdir(
+    path.join(root, PERSONAL_DIR, "brain-dump"),
+  ).catch(() => []);
   if (!files.length) return null;
-  return readFile(path.join(root, "personal", "brain-dump", files[0]), "utf8");
+  return readFile(
+    path.join(root, PERSONAL_DIR, "brain-dump", files[0]),
+    "utf8",
+  );
 }
 
 test("finalizes a session with a bounded human summary, metadata, and handoff", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
   process.env.ATLAS_ROOT = root;
-  await mkdir(path.join(root, "system", "sessions"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const store = new SessionStore(
-    path.join(root, "system", "sessions", "sessions.sqlite"),
+    path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite"),
   );
   const sessionId = "closeout-session-1";
   store.create({
@@ -67,7 +71,7 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
 
   const today = new Date().toISOString().slice(0, 10);
   const daily = await readFile(
-    path.join(root, "personal", "daily", `${today}.md`),
+    path.join(root, PERSONAL_DIR, "daily", `${today}.md`),
     "utf8",
   );
   assert.match(daily, /^# Daily/);
@@ -112,7 +116,7 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
   // against: a caller's success path closes out, then a later step in the
   // same caller throws and its catch block calls finalizeSession again).
   const dailyAfterSecond = await readFile(
-    path.join(root, "personal", "daily", `${today}.md`),
+    path.join(root, PERSONAL_DIR, "daily", `${today}.md`),
     "utf8",
   );
   assert.equal(
@@ -127,9 +131,9 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
 test("skips the daily Work log line and the brain-dump for a generic, no-project session", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
   process.env.ATLAS_ROOT = root;
-  await mkdir(path.join(root, "system", "sessions"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const store = new SessionStore(
-    path.join(root, "system", "sessions", "sessions.sqlite"),
+    path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite"),
   );
   const sessionId = "closeout-session-generic";
   store.create({
@@ -152,7 +156,7 @@ test("skips the daily Work log line and the brain-dump for a generic, no-project
   await finalizeSession(store, sessionId, { exitCode: 0 });
 
   const today = new Date().toISOString().slice(0, 10);
-  const dailyPath = path.join(root, "personal", "daily", `${today}.md`);
+  const dailyPath = path.join(root, PERSONAL_DIR, "daily", `${today}.md`);
   let daily = "";
   try {
     daily = await readFile(dailyPath, "utf8");
@@ -172,11 +176,11 @@ test("skips the daily Work log line and the brain-dump for a generic, no-project
 test("still logs a generic-title session and its brain-dump when it has a real git project", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
   process.env.ATLAS_ROOT = root;
-  await mkdir(path.join(root, "system", "sessions"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const projectDir = path.join(root, "project");
   await mkdir(path.join(projectDir, ".git"), { recursive: true });
   const store = new SessionStore(
-    path.join(root, "system", "sessions", "sessions.sqlite"),
+    path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite"),
   );
   const sessionId = "closeout-session-real-project";
   store.create({
@@ -200,7 +204,7 @@ test("still logs a generic-title session and its brain-dump when it has a real g
 
   const today = new Date().toISOString().slice(0, 10);
   const daily = await readFile(
-    path.join(root, "personal", "daily", `${today}.md`),
+    path.join(root, PERSONAL_DIR, "daily", `${today}.md`),
     "utf8",
   );
   assert.match(daily, /## Work log\n- .*claude session — completed/);

@@ -6,12 +6,13 @@ import test from "node:test";
 import { loadProfileDistribution } from "../dist/application/profiles/profile-distribution.js";
 import { loadProfile } from "../dist/infrastructure/filesystem/profile-loader.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("loadProfile reads profiles from private ATLAS_ROOT/system/profiles, not the engine tree", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "reviewer.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "reviewer.json"),
     JSON.stringify({
       name: "reviewer",
       provider: "claude",
@@ -46,7 +47,7 @@ test("loadProfile rejects traversal names before reading outside the profiles ro
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-profile-loader-traversal-"),
   );
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, "outside.json"),
     JSON.stringify({
@@ -68,7 +69,7 @@ test("loadProfile keeps legacy profile directories compatible during migration",
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-profile-directory-"),
   );
-  const directory = path.join(root, "system", "profiles", "developer");
+  const directory = path.join(root, SYSTEM_DIR, "profiles", "developer");
   await mkdir(directory, { recursive: true });
   await writeFile(
     path.join(directory, "profile.json"),
@@ -100,7 +101,7 @@ test("all practical role profiles use the universal client contract", async () =
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-profile-loader-universal-"),
   );
-  const profilesDirectory = path.join(root, "system", "profiles");
+  const profilesDirectory = path.join(root, SYSTEM_DIR, "profiles");
   await mkdir(profilesDirectory, { recursive: true });
   const template = JSON.parse(
     await readFile(
