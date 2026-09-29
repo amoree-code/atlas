@@ -247,6 +247,7 @@ export async function buildContextPacket(
   classification: IntentClassification,
   budget: unknown,
   cwd: string = process.cwd(),
+  options?: { query?: string },
 ): Promise<ContextPacket> {
   const budgetSummary = sanitizeBudget(budget);
   const violations: string[] = [];
@@ -271,6 +272,7 @@ export async function buildContextPacket(
         budget,
         atlasRoot(),
         activeProject.projectId ?? "atlas",
+        options,
       )
     : null;
   if (readPlan && !readPlan.allowed)

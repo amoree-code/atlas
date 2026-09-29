@@ -1,7 +1,10 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
+import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import { atomicWrite } from "../../fs-utils.js";
 import { atlasRoot, resolveWithin } from "../../paths.js";
+import { brainIndexPath } from "../brain/brain-reindex.js";
+import { brainSearch } from "../brain/brain-service.js";
 import type { ContextBudget } from "../context/context-ladder.js";
 import type { RecordType } from "../context/context-packet.js";
 import type { IntentClassification } from "../context/intent-router.js";
@@ -40,6 +43,9 @@ const KNOWLEDGE_KINDS = [
 const RECORD_FIELDS = [
   "name",
   "description",
+  "id",
+  "title",
+  "summary",
   "type",
   "status",
   "confidence",
@@ -78,9 +84,62 @@ function matchesQuery(
   query: string,
 ): boolean {
   if (!query) return true;
-  const haystack =
-    `${path.basename(file)} ${fields.name ?? ""} ${fields.description ?? ""}`.toLowerCase();
+  const haystack = `${path.basename(file)} ${fields.name ?? fields.id ?? ""} ${
+    fields.description ?? fields.summary ?? ""
+  } ${fields.title ?? ""}`.toLowerCase();
   return haystack.includes(query.toLowerCase());
+}
+
+// Best-effort: the brain index is disposable and may not exist (a fresh checkout, a fixture
+// root in tests, or a corpus that has never been reindexed). Any failure here — missing
+// index, corrupt file — falls back to the substring path below rather than surfacing an
+// error a caller of memory.search/knowledge.search never asked for.
+async function searchViaBrainIndex(
+  recordType: RecordType,
+  rootSegments: string[],
+  classification: IntentClassification,
+  budget: ContextBudget,
+  query: string,
+  indexPort: BrainIndexPort,
+): Promise<OperationRecord[] | null> {
+  const root = atlasRoot();
+  try {
+    await stat(brainIndexPath(root));
+  } catch {
+    return null;
+  }
+  const pathPrefix = rootSegments.slice(1).join("/"); // drop the leading "personal" segment
+  try {
+    const result = await brainSearch({
+      query,
+      root,
+      pathPrefix: pathPrefix ? `${pathPrefix}/` : undefined,
+      limit: Math.min(20, budget.maxFiles),
+      indexPort,
+    });
+    return result.results.map((hit) => ({
+      identifier: hit.id,
+      recordType,
+      provenance: provenanceFor(recordType, { type: hit.type }),
+      sourcePath: `personal/${hit.path}`,
+      freshness: "unknown" as const,
+      confidence: classification.confidence,
+      selectionReason: `ranked by brain index (${result.mode})`,
+      fields: selectFields(
+        {
+          id: hit.id,
+          title: hit.title,
+          summary: hit.summary,
+          type: hit.type,
+          confidence: hit.confidence,
+          updated: hit.lastConfirmedAt ?? "",
+        },
+        RECORD_FIELDS,
+      ),
+    }));
+  } catch {
+    return null;
+  }
 }
 
 export async function searchRecords(
@@ -96,6 +155,29 @@ export async function searchRecords(
     root = resolveWithin(atlasRoot(), ...rootSegments);
   } catch {
     return operationResult(operation, "record root escapes the Atlas root");
+  }
+
+  if (options.query && options.indexPort) {
+    const viaIndex = await searchViaBrainIndex(
+      recordType,
+      rootSegments,
+      classification,
+      budget,
+      options.query,
+      options.indexPort,
+    );
+    if (viaIndex) {
+      const shaped = shapeRecords(viaIndex, budget.maxFiles);
+      return {
+        operation,
+        ok: true,
+        reason: `${shaped.records.length} ${recordType} reference(s) selected`,
+        records: shaped.records,
+        violations: shaped.violations,
+        written: null,
+        packet: null,
+      };
+    }
   }
 
   const files = await listRecordFiles(root);
@@ -114,7 +196,8 @@ export async function searchRecords(
       break;
     }
     records.push({
-      identifier: record.fields.name ?? path.basename(file, ".md"),
+      identifier:
+        record.fields.name ?? record.fields.id ?? path.basename(file, ".md"),
       recordType,
       provenance: provenanceFor(recordType, record.fields),
       sourcePath: relativeToAtlas(file),
@@ -138,6 +221,12 @@ export async function searchRecords(
   };
 }
 
+// Canonical brain-record frontmatter (T-228): every new write emits this flat shape
+// directly — id/title/summary/tags/type/confidence/created/updated/last_confirmed_at — plus
+// provenance/status/correction_of, which are Atlas operation metadata, not part of the
+// brain-record schema itself, but useful alongside it. Existing files with the legacy
+// name/description/metadata:{...} shape are read through aliases (brain-markdown.ts) and are
+// never rewritten by this function.
 function recordDocument(
   slug: string,
   recordType: string,
@@ -146,8 +235,8 @@ function recordDocument(
   correctionOf?: string,
 ): string {
   const today = new Date().toISOString().slice(0, 10);
-  const correction = correctionOf ? `\n  correction_of: ${correctionOf}` : "";
-  return `---\nname: ${slug}\ndescription: ""\nmetadata:\n  type: ${recordType}\n  provenance: ${provenance}\n  status: current\n  created: ${today}\n  updated: ${today}${correction}\n---\n\n${content.trim()}\n`;
+  const correction = correctionOf ? `\ncorrection_of: ${correctionOf}` : "";
+  return `---\nid: ${slug}\ntitle: ${slug}\nsummary: ""\ntags: []\ntype: ${recordType}\nconfidence: unknown\ncreated: ${today}\nupdated: ${today}\nlast_confirmed_at: ${today}\nprovenance: ${provenance}\nstatus: current${correction}\n---\n\n${content.trim()}\n`;
 }
 
 export async function writeRecord(

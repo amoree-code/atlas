@@ -1,3 +1,4 @@
+import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import { atlasPath } from "../../paths.js";
 import { resolveProject } from "../context/project-resolution.js";
 import type { OperationRecord, WriteApproval } from "./operation-contract.js";
@@ -14,6 +15,10 @@ export type OperationOptions = {
   projectPath?: string;
   provenance?: OperationRecord["provenance"];
   correctionOf?: string;
+  // When supplied, memory.search/knowledge.search rank results through the brain index
+  // (T-228) instead of a plain substring match. Optional and additive: every existing
+  // caller that omits it keeps today's substring-search behavior unchanged.
+  indexPort?: BrainIndexPort;
 };
 
 export type ProjectScope =

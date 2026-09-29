@@ -1,6 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  brainNeighbors,
+  brainRead,
+  brainSearch,
+} from "../../application/brain/brain-service.js";
+import {
   hasFailures,
   workspaceReport,
 } from "../../application/doctor/workspace-doctor.js";
@@ -12,6 +17,7 @@ import {
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
 import { listTasks } from "../../application/tasks/list-tasks.js";
 import {
+  defaultBrainIndexPort,
   defaultSessionStoreFactory,
   defaultWrapperManager,
 } from "../../composition/runtime.js";
@@ -164,6 +170,52 @@ const tools = [
         approval: { type: "object" },
       },
       required: ["sessionId", "approval"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "brain_search",
+    description:
+      "Search the markdown memory/knowledge index (hybrid FTS + vector when available).",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        limit: { type: "number" },
+        types: { type: "array", items: { type: "string" } },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "brain_read",
+    description: "Read one markdown memory/knowledge record by id or path.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        path: { type: "string" },
+        maxBytes: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "brain_neighbors",
+    description: "Walk the wikilink graph around one memory/knowledge record.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        depth: { type: "number" },
+        direction: { type: "string", enum: ["out", "in", "both"] },
+        limit: { type: "number" },
+      },
+      required: ["id"],
       additionalProperties: false,
     },
   },
@@ -341,6 +393,49 @@ async function callTool(
       true,
     );
   }
+  if (name === "brain_search")
+    return brainSearch({
+      query: requiredArgument(args, "query"),
+      limit:
+        typeof args.limit === "number"
+          ? Math.min(20, Math.max(1, args.limit))
+          : undefined,
+      types: Array.isArray(args.types)
+        ? args.types.filter((item): item is string => typeof item === "string")
+        : undefined,
+      indexPort: defaultBrainIndexPort,
+    });
+  if (name === "brain_read") {
+    const idOrPath =
+      typeof args.id === "string" && args.id
+        ? args.id
+        : typeof args.path === "string" && args.path
+          ? args.path
+          : null;
+    if (!idOrPath) throw new Error("brain_read requires id or path");
+    return brainRead({
+      idOrPath,
+      maxBytes:
+        typeof args.maxBytes === "number"
+          ? Math.min(16_000, Math.max(512, args.maxBytes))
+          : undefined,
+      indexPort: defaultBrainIndexPort,
+    });
+  }
+  if (name === "brain_neighbors")
+    return brainNeighbors({
+      idOrPath: requiredArgument(args, "id"),
+      depth: args.depth === 2 ? 2 : 1,
+      direction:
+        args.direction === "out" || args.direction === "in"
+          ? args.direction
+          : "both",
+      limit:
+        typeof args.limit === "number"
+          ? Math.min(50, Math.max(1, args.limit))
+          : undefined,
+      indexPort: defaultBrainIndexPort,
+    });
   throw new Error(`Unknown MCP tool: ${name}`);
 }
 

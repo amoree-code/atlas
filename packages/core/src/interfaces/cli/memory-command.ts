@@ -1,3 +1,9 @@
+import { reindexBrain } from "../../application/brain/brain-reindex.js";
+import {
+  brainNeighbors,
+  brainRead,
+  brainSearch,
+} from "../../application/brain/brain-service.js";
 import {
   doctorMemoryIndexes,
   syncMemoryIndexes,
@@ -7,11 +13,108 @@ import {
   readProfileFacts,
   writeProfileFact,
 } from "../../application/memory/profile-facts.js";
+import { defaultBrainIndexPort } from "../../composition/runtime.js";
+import { createOllamaEmbedder } from "../../infrastructure/providers/ollama-embedder.js";
+
+async function runReindex(args: string[]): Promise<void> {
+  const noVectors = args.includes("--no-vectors");
+  let embedder = null;
+  if (!noVectors) {
+    try {
+      embedder = await createOllamaEmbedder();
+    } catch (error) {
+      console.error(
+        `reindex refused: embedder unavailable (${error instanceof Error ? error.message : String(error)}). Pass --no-vectors to index without vectors.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+  }
+  const result = await reindexBrain({
+    embedder,
+    indexPort: defaultBrainIndexPort,
+  });
+  console.log(JSON.stringify(result, null, 2));
+}
+
+async function runSearch(args: string[]): Promise<void> {
+  const json = args.includes("--json");
+  const query = args.filter((arg) => !arg.startsWith("--")).join(" ");
+  if (!query) {
+    console.error("Usage: atlas memory search <query> [--json]");
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    const result = await brainSearch({
+      query,
+      indexPort: defaultBrainIndexPort,
+    });
+    console.log(
+      json ? JSON.stringify(result) : JSON.stringify(result, null, 2),
+    );
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function runRead(args: string[]): Promise<void> {
+  const idOrPath = args[0];
+  if (!idOrPath) {
+    console.error("Usage: atlas memory read <id|path>");
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    console.log(
+      JSON.stringify(
+        await brainRead({ idOrPath, indexPort: defaultBrainIndexPort }),
+        null,
+        2,
+      ),
+    );
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function runNeighbors(args: string[]): Promise<void> {
+  const idOrPath = args[0];
+  const depthIndex = args.indexOf("--depth");
+  const depth = depthIndex >= 0 ? Number(args[depthIndex + 1]) : 1;
+  if (!idOrPath) {
+    console.error("Usage: atlas memory neighbors <id|path> [--depth N]");
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    console.log(
+      JSON.stringify(
+        await brainNeighbors({
+          idOrPath,
+          depth: depth === 2 ? 2 : 1,
+          indexPort: defaultBrainIndexPort,
+        }),
+        null,
+        2,
+      ),
+    );
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
 
 export async function runMemoryCommand(
   action: string,
   args: string[],
 ): Promise<void> {
+  if (action === "reindex") return runReindex(args);
+  if (action === "search") return runSearch(args);
+  if (action === "read") return runRead(args);
+  if (action === "neighbors") return runNeighbors(args);
   if (action === "facts") {
     const profile = args[0];
     if (!profile) {
@@ -66,7 +169,7 @@ export async function runMemoryCommand(
     return;
   }
   console.error(
-    "Usage: atlas memory doctor|sync [--apply]|facts <profile> [key] [value]|facts <profile> delete <key>",
+    "Usage: atlas memory doctor|sync [--apply]|facts <profile> [key] [value]|facts <profile> delete <key>|reindex [--no-vectors]|search <q> [--json]|read <id|path>|neighbors <id|path> [--depth N]",
   );
   process.exitCode = 1;
 }

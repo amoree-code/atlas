@@ -29,6 +29,9 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
         "atlas_session_summary",
         "atlas_session_events",
         "atlas_session_promote",
+        "brain_search",
+        "brain_read",
+        "brain_neighbors",
       ],
     );
     const status = await handleAtlasMcpRequest({

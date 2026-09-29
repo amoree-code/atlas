@@ -8,6 +8,7 @@ import {
   type GuardScope,
   guardedRunOperation,
 } from "../../application/operations/write-guard.js";
+import { defaultBrainIndexPort } from "../../composition/runtime.js";
 import { atlasRoot } from "../../paths.js";
 
 const OPERATION_BUDGET = {
@@ -51,6 +52,7 @@ export async function runOperateCommand(text: string): Promise<void> {
         cwd: process.cwd(),
         query: text,
         approval: approval ?? undefined,
+        indexPort: defaultBrainIndexPort,
       }),
   );
 
