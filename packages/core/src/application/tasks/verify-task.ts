@@ -1,7 +1,7 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { atlasPath, resolveWithin } from "../../paths.js";
+import { atlasPath, PROJECTS_DIR, resolveWithin } from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -99,7 +99,7 @@ function isAllowedCommand(command: string): boolean {
  */
 export async function verifyTask(
   id: string,
-  root = atlasPath("projects", "atlas", "tasks"),
+  root = atlasPath(PROJECTS_DIR, "atlas", "tasks"),
   options: { cwd?: string; run?: CommandRunner } = {},
 ): Promise<VerificationOutcome> {
   const taskFile = resolveWithin(root, id, "task.md");

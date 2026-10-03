@@ -11,13 +11,14 @@ import {
   simulateRetention,
 } from "../dist/application/sessions/session-retention.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 const openStore = (file) => new SessionStore(file);
 
 async function withFixtureStore(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-retention-"));
-  await mkdir(path.join(root, "system", "sessions"), { recursive: true });
-  const dbFile = path.join(root, "system", "sessions", "sessions.sqlite");
+  await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
+  const dbFile = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = root;
   const store = new SessionStore(dbFile);

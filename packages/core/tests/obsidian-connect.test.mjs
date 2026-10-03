@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { connectObsidianVault } from "../dist/application/obsidian/vault-discovery.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("connects an Obsidian vault with read-only default", async () => {
   const vaultPath = await mkdtemp(
@@ -14,7 +15,7 @@ test("connects an Obsidian vault with read-only default", async () => {
   );
   const configFile = path.join(
     atlasRoot,
-    "system",
+    SYSTEM_DIR,
     "integrations",
     "obsidian",
     "connection.json",

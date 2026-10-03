@@ -6,6 +6,7 @@ import {
   measureContextCost,
 } from "../../application/context/context-cost.js";
 import { resolveProject } from "../../application/context/project-resolution.js";
+import { PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR } from "../../paths.js";
 import { atlasVersion } from "../../version.js";
 import { listTasks } from "./tasks-command.js";
 
@@ -22,7 +23,7 @@ export async function runContextCommand(json = false): Promise<void> {
     project,
     projectResolution: resolution,
     version,
-    roots: ["personal", "projects", "system"],
+    roots: [PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR],
     tasks,
   };
   if (json) {

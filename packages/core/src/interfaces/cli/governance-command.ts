@@ -1,10 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
-import { atlasPath, resolveWithin } from "../../paths.js";
+import { atlasPath, resolveWithin, SYSTEM_DIR } from "../../paths.js";
 
 const policyRoot = () =>
-  atlasPath("system", "control-plane", "governance", "policies");
+  atlasPath(SYSTEM_DIR, "control-plane", "governance", "policies");
 const rulesFile = () =>
-  atlasPath("system", "control-plane", "governance", "rules", "core.md");
+  atlasPath(SYSTEM_DIR, "control-plane", "governance", "rules", "core.md");
 
 async function policyNames(): Promise<string[]> {
   return (await readdir(policyRoot(), { withFileTypes: true }))

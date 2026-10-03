@@ -9,7 +9,12 @@ import {
 import { checkpointTask } from "../../application/tasks/checkpoint-task.js";
 import { listTasks } from "../../application/tasks/list-tasks.js";
 import { verifyTask } from "../../application/tasks/verify-task.js";
-import { atlasPath, enginePath, resolveWithin } from "../../paths.js";
+import {
+  atlasPath,
+  enginePath,
+  PROJECTS_DIR,
+  resolveWithin,
+} from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -35,7 +40,7 @@ export async function runTasksCommand(
     try {
       const result = await execFile(process.execPath, [
         enginePath("scripts", "validate-tasks.mjs"),
-        resolveWithin(atlasPath("projects"), projectId, "tasks"),
+        resolveWithin(atlasPath(PROJECTS_DIR), projectId, "tasks"),
       ]);
       process.stdout.write(result.stdout);
     } catch (error) {
@@ -61,7 +66,11 @@ export async function runTasksCommand(
       ),
       "",
     ].join("\n");
-    const target = resolveWithin(atlasPath("projects"), projectId, "index.md");
+    const target = resolveWithin(
+      atlasPath(PROJECTS_DIR),
+      projectId,
+      "index.md",
+    );
     if (args.includes("--write")) {
       await writeFile(target, body, "utf8");
       console.log(`wrote ${path.relative(atlasPath(), target)}`);
@@ -78,7 +87,7 @@ export async function runTasksCommand(
       );
     const result = await checkpointTask(
       id,
-      resolveWithin(atlasPath("projects"), projectId, "tasks"),
+      resolveWithin(atlasPath(PROJECTS_DIR), projectId, "tasks"),
       {
         note: args[noteIndex + 1],
         next: nextIndex >= 0 ? args[nextIndex + 1] : undefined,
@@ -96,7 +105,7 @@ export async function runTasksCommand(
     }
     const outcome = await verifyTask(
       id,
-      resolveWithin(atlasPath("projects"), projectId, "tasks"),
+      resolveWithin(atlasPath(PROJECTS_DIR), projectId, "tasks"),
     );
     console.log(JSON.stringify(outcome, null, 2));
     if (!outcome.passed) process.exitCode = 1;
@@ -114,7 +123,7 @@ export async function runTasksCommand(
         JSON.stringify(
           await completeTask(
             id,
-            resolveWithin(atlasPath("projects"), projectId, "tasks"),
+            resolveWithin(atlasPath(PROJECTS_DIR), projectId, "tasks"),
             { verify: !args.includes("--no-verify") },
           ),
           null,
@@ -136,7 +145,7 @@ export async function runTasksCommand(
   }
   const apply = args.includes("--apply") || args.includes("--auto");
   const result = await archiveDoneTasks(
-    resolveWithin(atlasPath("projects"), projectId, "tasks"),
+    resolveWithin(atlasPath(PROJECTS_DIR), projectId, "tasks"),
     apply,
   );
   console.log(JSON.stringify({ dryRun: !apply, ...result }, null, 2));

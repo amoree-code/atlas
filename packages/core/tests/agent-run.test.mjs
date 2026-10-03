@@ -14,6 +14,7 @@ import {
 } from "../dist/application/runs/run-agent.js";
 import { createAgentRuntime } from "../dist/composition/runtime.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 // Test shim: the real runAgent/resumeAgent take an AgentRuntimeDeps bag; these
 // wrap a bare provider-executor into a runtime with the real deps otherwise, so
@@ -39,9 +40,9 @@ test("bounds provider session identifiers before persistence", () => {
 
 test("rejects writable profiles without an approved run contract", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-policy-boundary-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "writer.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "writer.json"),
     JSON.stringify({
       name: "writer",
       provider: "claude",
@@ -64,9 +65,9 @@ test("rejects writable profiles without an approved run contract", async () => {
 
 test("allows an explicitly approved writable run contract", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-approved-write-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "writer.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "writer.json"),
     JSON.stringify({
       name: "writer",
       provider: "claude",
@@ -108,9 +109,9 @@ test("approval-required profiles fail closed without an approved run contract", 
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-approval-boundary-"),
   );
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "reviewed.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "reviewed.json"),
     JSON.stringify({
       name: "reviewed",
       provider: "claude",
@@ -135,7 +136,7 @@ test("approval-required profiles fail closed without an approved run contract", 
 
 test("connects profile, context, headless execution, and session storage", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-"));
-  const profileDirectory = path.join(root, "system", "profiles", "reviewer");
+  const profileDirectory = path.join(root, SYSTEM_DIR, "profiles", "reviewer");
   await mkdir(profileDirectory, { recursive: true });
   await writeFile(
     path.join(profileDirectory, "profile.json"),
@@ -154,7 +155,7 @@ test("connects profile, context, headless execution, and session storage", async
     "Inspect before reporting.",
   );
   await writeFile(path.join(root, "README.md"), "project context");
-  const database = path.join(root, "system", "sessions", "sessions.sqlite");
+  const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
   const session = await runAgent(
     { profileName: "reviewer", prompt: "Review", cwd: root },
@@ -196,9 +197,9 @@ test("connects profile, context, headless execution, and session storage", async
 
 test("redacts provider output, stderr, errors, and secrets near the payload bound", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-redaction-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -206,7 +207,7 @@ test("redacts provider output, stderr, errors, and secrets near the payload boun
       role: "assistant",
     }),
   );
-  const database = path.join(root, "system", "sessions", "sessions.sqlite");
+  const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
   const secret = `api_key=${"s".repeat(20)}`;
   process.env.ATLAS_ROOT = root;
   const session = await runAgent(
@@ -258,7 +259,7 @@ test("applies one universal policy through every registered client adapter", asy
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-universal-profile-"),
   );
-  const profileDirectory = path.join(root, "system", "profiles", "universal");
+  const profileDirectory = path.join(root, SYSTEM_DIR, "profiles", "universal");
   await mkdir(profileDirectory, { recursive: true });
   await writeFile(
     path.join(profileDirectory, "profile.json"),
@@ -313,7 +314,7 @@ test("applies one universal policy through every registered client adapter", asy
   assert.ok(
     seen.every((request) =>
       request.clientHome.endsWith(
-        path.join("system", "clients", "homes", request.provider),
+        path.join(SYSTEM_DIR, "clients", "homes", request.provider),
       ),
     ),
   );
@@ -321,9 +322,9 @@ test("applies one universal policy through every registered client adapter", asy
 
 test("injects bounded profile facts into a run", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-facts-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -332,7 +333,7 @@ test("injects bounded profile facts into a run", async () => {
     }),
   );
   process.env.ATLAS_ROOT = root;
-  const facts = path.join(root, "system", "memory", "profiles");
+  const facts = path.join(root, SYSTEM_DIR, "memory", "profiles");
   await mkdir(facts, { recursive: true });
   await writeFile(
     path.join(facts, "default.json"),
@@ -352,9 +353,9 @@ test("injects bounded profile facts into a run", async () => {
 
 test("runs registered lifecycle hooks around a session", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-hooks-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -377,9 +378,9 @@ test("runs registered lifecycle hooks around a session", async () => {
 
 test("a throwing lifecycle hook blocks the run", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-block-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -405,9 +406,9 @@ test("a throwing lifecycle hook blocks the run", async () => {
 
 test("transitions status from created to running to completed, visible to a concurrent reader", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-status-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -415,7 +416,7 @@ test("transitions status from created to running to completed, visible to a conc
       role: "assistant",
     }),
   );
-  const database = path.join(root, "system", "sessions", "sessions.sqlite");
+  const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
   const sessionId = "status-check-session";
   const session = await runAgent(
@@ -434,9 +435,9 @@ test("transitions status from created to running to completed, visible to a conc
 
 test("resumes a Claude session using its provider session id", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-resume-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -466,9 +467,9 @@ test("resumes a Claude session using its provider session id", async () => {
 
 test("marks the session failed and records the error event when the provider throws", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-fail-throw-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -476,7 +477,7 @@ test("marks the session failed and records the error event when the provider thr
       role: "assistant",
     }),
   );
-  const database = path.join(root, "system", "sessions", "sessions.sqlite");
+  const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
 
   await assert.rejects(
@@ -509,9 +510,9 @@ test("marks the session failed and records the error event when the provider thr
 
 test("marks the session failed when the provider exits non-zero without throwing", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-fail-exit-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",
@@ -519,7 +520,7 @@ test("marks the session failed when the provider exits non-zero without throwing
       role: "assistant",
     }),
   );
-  const database = path.join(root, "system", "sessions", "sessions.sqlite");
+  const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
   process.env.ATLAS_ROOT = root;
 
   const session = await runAgent(
@@ -541,9 +542,9 @@ test("marks the session failed when the provider exits non-zero without throwing
 
 test("closes its session store exactly once, on both the success and failure paths", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-shutdown-"));
-  await mkdir(path.join(root, "system", "profiles"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
-    path.join(root, "system", "profiles", "default.json"),
+    path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({
       name: "default",
       provider: "claude",

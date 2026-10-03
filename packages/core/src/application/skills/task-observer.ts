@@ -6,7 +6,7 @@ import type {
   SessionStorePort,
 } from "../../domain/ports/session-store-port.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 import { addSkillCandidate } from "./skill-curation.js";
 
 export type ObservationStatus =
@@ -35,7 +35,7 @@ export type TaskObservation = {
 };
 
 const observationsFile = () =>
-  atlasPath("system", "skills", "observations.json");
+  atlasPath(SYSTEM_DIR, "skills", "observations.json");
 
 async function load(): Promise<TaskObservation[]> {
   try {

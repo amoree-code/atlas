@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, atlasRoot } from "../../paths.js";
+import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
 
 // Deterministic, local, metadata-first project resolution: no model call, no network round
 // trip. Bindings are a flat JSON registry (same pattern as system/control-plane/registry/
@@ -47,7 +47,7 @@ export function projectConfirmationQuestion(
 
 function bindingsFile(): string {
   return atlasPath(
-    "system",
+    SYSTEM_DIR,
     "control-plane",
     "registry",
     "project-bindings.json",

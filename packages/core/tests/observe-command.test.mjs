@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { runObserveCommand } from "../dist/interfaces/cli/observe-command.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 async function withAtlasRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-observe-"));
@@ -26,7 +27,7 @@ test("atlas observe redacts secrets in captured output before writing to disk", 
       "-e",
       `console.log(${JSON.stringify(secretToken)})`,
     ]);
-    const observationsDir = path.join(root, "system", "observations");
+    const observationsDir = path.join(root, SYSTEM_DIR, "observations");
     const [file] = await readdir(observationsDir);
     const observation = JSON.parse(
       await readFile(path.join(observationsDir, file), "utf8"),

@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, resolveWithin } from "../../paths.js";
+import { atlasPath, PROJECTS_DIR, resolveWithin } from "../../paths.js";
 import { type CommandRunner, verifyTask } from "./verify-task.js";
 
 export type ArchiveResult = {
@@ -36,7 +36,7 @@ function setState(source: string, state: string): string {
 
 export async function completeTask(
   id: string,
-  root = atlasPath("projects", "atlas", "tasks"),
+  root = atlasPath(PROJECTS_DIR, "atlas", "tasks"),
   options: { verify?: boolean; cwd?: string; run?: CommandRunner } = {},
 ): Promise<CompletionResult> {
   const taskFile = resolveWithin(root, id, "task.md");
@@ -69,7 +69,7 @@ export async function completeTask(
 }
 
 export async function archiveDoneTasks(
-  root = atlasPath("projects", "atlas", "tasks"),
+  root = atlasPath(PROJECTS_DIR, "atlas", "tasks"),
   apply = false,
 ): Promise<ArchiveResult> {
   const result: ArchiveResult = {

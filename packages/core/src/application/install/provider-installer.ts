@@ -7,7 +7,7 @@ import type {
   WrapperManagerPort,
 } from "../../domain/ports/platform-ports.js";
 import type { ProviderRecord } from "../../domain/providers/provider.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -100,7 +100,7 @@ const catalog: InstallSpec[] = [
 ];
 
 const installationReceiptPath = (): string =>
-  atlasPath("system", "control-plane", "registry", "installations.json");
+  atlasPath(SYSTEM_DIR, "control-plane", "registry", "installations.json");
 
 export function listInstallSpecs(): InstallSpec[] {
   return catalog.map((spec) => ({

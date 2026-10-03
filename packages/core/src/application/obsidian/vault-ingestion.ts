@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, PROJECTS_DIR } from "../../paths.js";
 import { appendConflict, contentHash } from "./conflict-log.js";
 import type { ObsidianConnection } from "./vault-discovery.js";
 import type { ObsidianSyncResult } from "./vault-sync.js";
@@ -71,7 +71,7 @@ export async function ingestVaultChanges(
       relative === "01-Projects/Atlas.md"
         ? "README.md"
         : relative.slice("01-Projects/Atlas/".length);
-    const atlasFile = atlasPath("projects", "atlas", atlasRelative);
+    const atlasFile = atlasPath(PROJECTS_DIR, "atlas", atlasRelative);
     const atlasContent = await readOptional(atlasFile);
     const record = await appendConflict({
       path: relative,

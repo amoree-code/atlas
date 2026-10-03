@@ -10,6 +10,7 @@ import {
   providerAdapterRegistry,
   runProvider,
 } from "../dist/infrastructure/providers/providers.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 const unixOnly = process.platform === "win32" ? test.skip : test;
 
@@ -258,12 +259,15 @@ test("resolves a configured client home only inside Atlas system/clients", () =>
       name: "developer",
       role: "developer",
       clients: {
-        hermes: { enabled: true, home: "system/clients/hermes/developer" },
+        hermes: {
+          enabled: true,
+          home: `${SYSTEM_DIR}/clients/hermes/developer`,
+        },
       },
     });
     assert.equal(
       resolveClientHome(profile),
-      path.join(root, "system/clients/hermes/developer"),
+      path.join(root, `${SYSTEM_DIR}/clients/hermes/developer`),
     );
     const unsafe = validateProfile({
       name: "bad",

@@ -7,6 +7,7 @@ import {
   appendRuntimeLog,
   redactRuntimeText,
 } from "../dist/infrastructure/observability/runtime-logger.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("redacts secrets and private paths while bounding payloads", () => {
   const safe = redactRuntimeText(
@@ -45,7 +46,7 @@ test("writes structured runtime logs outside engine", async () => {
     payload: "ok",
   });
   const line = await readFile(
-    path.join(root, "system", "runtime", "logs", "runtime.jsonl"),
+    path.join(root, SYSTEM_DIR, "runtime", "logs", "runtime.jsonl"),
     "utf8",
   );
   assert.deepEqual(JSON.parse(line), {

@@ -12,6 +12,7 @@ import {
   validateSessionIdentifier,
 } from "../dist/application/sessions/session-pointer.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 const BUDGET = {
   maxFiles: 10,
@@ -22,7 +23,7 @@ const BUDGET = {
 
 async function withStore(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-slice8-"));
-  await mkdir(path.join(root, "system", "sessions"), { recursive: true });
+  await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = root;
   const store = await openSessionStore();

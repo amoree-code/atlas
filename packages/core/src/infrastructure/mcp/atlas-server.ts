@@ -25,7 +25,7 @@ import {
   actionFingerprint,
   mcpApprovalSchema,
 } from "../../domain/mcp/mcp-contract.js";
-import { atlasPath, atlasRoot } from "../../paths.js";
+import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
 import { openSessionStoreReadOnly } from "../persistence/session-store.js";
 
 type Request = {
@@ -273,7 +273,7 @@ function textResult(value: unknown): {
 async function profiles(): Promise<string[]> {
   try {
     return (
-      await readdir(atlasPath("system", "profiles"), { withFileTypes: true })
+      await readdir(atlasPath(SYSTEM_DIR, "profiles"), { withFileTypes: true })
     )
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
       .map((entry) => entry.name.slice(0, -5))
@@ -344,7 +344,7 @@ async function callTool(
       if (!session.summaryPath)
         throw new Error("Session summary not available");
       const summaryPath = path.resolve(atlasRoot(), session.summaryPath);
-      const root = `${path.resolve(atlasPath("system", "sessions", "summaries"))}${path.sep}`;
+      const root = `${path.resolve(atlasPath(SYSTEM_DIR, "sessions", "summaries"))}${path.sep}`;
       if (!summaryPath.startsWith(root))
         throw new Error(
           "Session summary path is outside the Atlas summary directory",

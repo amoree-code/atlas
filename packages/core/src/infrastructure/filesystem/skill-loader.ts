@@ -7,7 +7,13 @@ import {
   skillMetadataSchema,
 } from "../../domain/skills/skill.js";
 import { validateSkill } from "../../domain/skills/skill-validator.js";
-import { atlasPath, atlasRoot, enginePath } from "../../paths.js";
+import {
+  atlasPath,
+  atlasRoot,
+  enginePath,
+  PROJECTS_DIR,
+  SYSTEM_DIR,
+} from "../../paths.js";
 
 const catalogPath = enginePath("skills", "index.json");
 
@@ -46,7 +52,7 @@ export async function loadSkillIndex(
 function skillRoots(cwd: string): string[] {
   return [
     enginePath("skills"),
-    atlasPath("system", "integrations", "claude-code", "skills"),
+    atlasPath(SYSTEM_DIR, "integrations", "claude-code", "skills"),
     projectSkillRoot(cwd),
   ].filter(Boolean) as string[];
 }
@@ -86,7 +92,7 @@ async function readCatalog(file: string): Promise<SkillMetadata[]> {
 }
 
 function projectSkillRoot(cwd: string): string | null {
-  const projectsRoot = path.resolve(atlasPath("projects"));
+  const projectsRoot = path.resolve(atlasPath(PROJECTS_DIR));
   const relative = path.relative(projectsRoot, path.resolve(cwd));
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
     return null;

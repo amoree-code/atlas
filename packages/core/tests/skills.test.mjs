@@ -18,6 +18,7 @@ import {
   loadSkillIndex,
 } from "../dist/infrastructure/filesystem/skill-loader.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { PROJECTS_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 test("lists the public core skill catalog without loading full instructions", async () => {
   const skills = await listSkills();
@@ -88,7 +89,7 @@ test("promoted skills are truncated by bytes with a marker naming the candidate"
     assert.match(skill.instructions, /`atlas skill list`/);
     assert.ok(
       skill.instructions.includes(
-        path.join(root, "system", "skills", "candidates.json"),
+        path.join(root, SYSTEM_DIR, "skills", "candidates.json"),
       ),
     );
     assert.equal(
@@ -139,7 +140,7 @@ test("auto-activates only owner-reviewed promoted skills matching the prompt", a
 
 test("resolves private and project skills without reading them from engine", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-private-skills-"));
-  const projectSkills = path.join(root, "projects", "demo", "skills");
+  const projectSkills = path.join(root, PROJECTS_DIR, "demo", "skills");
   await mkdir(path.join(projectSkills, "project", "project-only"), {
     recursive: true,
   });
@@ -161,7 +162,7 @@ test("resolves private and project skills without reading them from engine", asy
   process.env.ATLAS_ROOT = root;
   const entries = await loadSkillIndex(
     ["project-only"],
-    path.join(root, "projects", "demo"),
+    path.join(root, PROJECTS_DIR, "demo"),
   );
   assert.equal(
     entries[0].path,

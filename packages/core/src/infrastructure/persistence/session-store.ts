@@ -13,7 +13,7 @@ import {
   type SessionEvent,
   type SessionStatus,
 } from "../../domain/sessions/session.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 import { validateSession } from "./session-validator.js";
 
 export type {
@@ -61,7 +61,7 @@ export class SessionStore implements SessionStorePort {
   private readonly database: DatabaseSync;
 
   constructor(
-    databaseFile = atlasPath("system", "sessions", "sessions.sqlite"),
+    databaseFile = atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
     options: { readOnly?: boolean } = {},
   ) {
     this.database = new DatabaseSync(
@@ -929,12 +929,12 @@ export class SessionStore implements SessionStorePort {
 }
 
 export async function openSessionStore(): Promise<SessionStore> {
-  await mkdir(atlasPath("system", "sessions"), { recursive: true });
+  await mkdir(atlasPath(SYSTEM_DIR, "sessions"), { recursive: true });
   return new SessionStore();
 }
 
 export async function openSessionStoreReadOnly(): Promise<SessionStore> {
-  const databaseFile = atlasPath("system", "sessions", "sessions.sqlite");
+  const databaseFile = atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite");
   await access(databaseFile);
   return new SessionStore(databaseFile, { readOnly: true });
 }

@@ -11,6 +11,7 @@ import {
 } from "../dist/application/context/context-ladder.js";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
 import { defaultBrainIndexPort } from "../dist/composition/runtime.js";
+import { PERSONAL_DIR, PROJECTS_DIR } from "../dist/paths.js";
 
 const reindexBrain = (options) =>
   reindexBrainRaw({ indexPort: defaultBrainIndexPort, ...options });
@@ -24,7 +25,7 @@ const GOOD_BUDGET = {
 
 async function withTempTask(bytes, fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ladder-"));
-  const taskDir = path.join(root, "projects", "atlas", "tasks", "T-1");
+  const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1");
   await mkdir(taskDir, { recursive: true });
   await writeFile(path.join(taskDir, "task.md"), "x".repeat(bytes));
   const previous = process.env.ATLAS_ROOT;
@@ -327,7 +328,7 @@ test("planContextRead never writes any file (no persistence of user content or r
   withTempTask(500, async (root) => {
     const before = JSON.stringify(
       await import("node:fs/promises").then((fs) =>
-        fs.readdir(path.join(root, "projects", "atlas", "tasks", "T-1")),
+        fs.readdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1")),
       ),
     );
     await planContextRead(classifyIntent("show T-1"), GOOD_BUDGET);
@@ -337,7 +338,7 @@ test("planContextRead never writes any file (no persistence of user content or r
     );
     const after = JSON.stringify(
       await import("node:fs/promises").then((fs) =>
-        fs.readdir(path.join(root, "projects", "atlas", "tasks", "T-1")),
+        fs.readdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1")),
       ),
     );
     assert.equal(before, after);
@@ -376,9 +377,9 @@ test("context-ladder.ts imports only node:fs/promises, node:path, and the existi
 
 async function withTempMemoryRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ladder-brain-"));
-  await mkdir(path.join(root, "personal", "memory"), { recursive: true });
+  await mkdir(path.join(root, PERSONAL_DIR, "memory"), { recursive: true });
   await writeFile(
-    path.join(root, "personal", "memory", "goals.md"),
+    path.join(root, PERSONAL_DIR, "memory", "goals.md"),
     "---\nid: goals\ntitle: Goals\nsummary: long term objectives\ntags: []\ntype: fact\nconfidence: high\ncreated: 2026-01-01\nupdated: 2026-01-01\nlast_confirmed_at: 2026-01-01\n---\n\n# Goals\n\nLong term objectives fixture body.\n",
   );
   const previous = process.env.ATLAS_ROOT;

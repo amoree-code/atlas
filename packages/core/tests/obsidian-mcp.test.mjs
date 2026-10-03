@@ -6,6 +6,7 @@ import test from "node:test";
 import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
 import { McpClient } from "../dist/infrastructure/mcp/mcp-client.js";
 import { handleObsidianMcpRequest } from "../dist/infrastructure/mcp/obsidian-server.js";
+import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("Obsidian MCP exposes bounded tools and requires approval for writes", async () => {
   const vaultPath = await mkdtemp(
@@ -47,13 +48,13 @@ test("Obsidian MCP exposes bounded tools and requires approval for writes", asyn
 test("MCP client completes a real Atlas-to-Obsidian round trip", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-obsidian-mcp-e2e-"));
   const vaultPath = path.join(root, "vault");
-  await mkdir(path.join(root, "system", "integrations", "obsidian"), {
+  await mkdir(path.join(root, SYSTEM_DIR, "integrations", "obsidian"), {
     recursive: true,
   });
   await mkdir(vaultPath);
   await mkdir(path.join(vaultPath, ".obsidian"));
   await writeFile(
-    path.join(root, "system", "integrations", "obsidian", "connection.json"),
+    path.join(root, SYSTEM_DIR, "integrations", "obsidian", "connection.json"),
     JSON.stringify({ enabled: true, mode: "read-write", vaultPath }),
   );
   const client = new McpClient({

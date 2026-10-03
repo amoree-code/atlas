@@ -2,7 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import type { EmbedderPort } from "../../domain/ports/embedder-port.js";
-import { atlasRoot, resolveWithin } from "../../paths.js";
+import { atlasRoot, PERSONAL_DIR, resolveWithin } from "../../paths.js";
 import { normalizeForSearch, normalizeRecord } from "./brain-markdown.js";
 import {
   brainIndexPath,
@@ -220,7 +220,7 @@ export async function brainRead(
   // field returned below is re-derived from the file's own bytes on disk (normalizeRecord),
   // never from the (possibly stale or tampered) index row — this is what makes brain_read
   // safe to trust even when the index itself cannot be.
-  const personalRoot = resolveWithin(root, "personal");
+  const personalRoot = resolveWithin(root, PERSONAL_DIR);
   const relativePath = String(docRow.path);
   const filePath = resolveWithin(personalRoot, relativePath);
   const raw = await readFile(filePath, "utf8");
@@ -331,7 +331,7 @@ export async function ensureIndexBuilt(root = atlasRoot()): Promise<boolean> {
 export { reindexBrain };
 export function relativeStorePath(file: string, root = atlasRoot()): string {
   return path
-    .relative(resolveWithin(root, "personal"), file)
+    .relative(resolveWithin(root, PERSONAL_DIR), file)
     .split(path.sep)
     .join("/");
 }

@@ -8,6 +8,7 @@ import {
   atlasRoot,
   enginePath,
   engineRoot,
+  PERSONAL_DIR,
   resolveWithin,
 } from "../dist/paths.js";
 
@@ -27,8 +28,8 @@ test("ATLAS_ROOT explicitly overrides the default private root", () => {
   try {
     assert.equal(atlasRoot(), path.resolve(override));
     assert.equal(
-      atlasPath("personal"),
-      path.join(path.resolve(override), "personal"),
+      atlasPath(PERSONAL_DIR),
+      path.join(path.resolve(override), PERSONAL_DIR),
     );
     assert.equal(
       atlasPath("sessions", "sessions.sqlite"),

@@ -14,7 +14,7 @@ import {
   providerWrapperPath,
   shimDirectory,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
-import { atlasPath, enginePath } from "../../paths.js";
+import { atlasPath, enginePath, SYSTEM_DIR } from "../../paths.js";
 
 export async function runClientTestCommand(
   providerName: string,
@@ -82,9 +82,9 @@ async function buildReport(
       root: atlasPath(),
       bootstrapBytes: bootstrap.manifest.bytes,
       bootstrapTransport: bootstrap.manifest.transport,
-      sessionStore: atlasPath("system", "sessions", "sessions.sqlite"),
-      runtimeLogs: atlasPath("system", "runtime", "logs", "runtime.jsonl"),
-      sessionSummaries: atlasPath("system", "sessions", "summaries"),
+      sessionStore: atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
+      runtimeLogs: atlasPath(SYSTEM_DIR, "runtime", "logs", "runtime.jsonl"),
+      sessionSummaries: atlasPath(SYSTEM_DIR, "sessions", "summaries"),
     },
     entryBoundary,
     // The bootstrap is always delivered as an environment variable when launched through the

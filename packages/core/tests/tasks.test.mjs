@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { PROJECTS_DIR } from "../dist/paths.js";
 
 function validate(root) {
   return new Promise((resolve) => {
@@ -48,11 +49,11 @@ test("task validator rejects inconsistent done tasks", async () => {
 
 test("tasks list returns live task summaries and filters by state", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-tasks-list-"));
-  await mkdir(path.join(root, "projects", "atlas", "tasks", "T-001"), {
+  await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-001"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "projects", "atlas", "tasks", "T-001", "task.md"),
+    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-001", "task.md"),
     "---\nid: T-001\ntitle: First\nstate: active\ngoal: Test goal\nupdated_at: 2026-09-13\n---\n",
   );
   const result = spawnSync(
@@ -74,11 +75,11 @@ test("tasks list returns live task summaries and filters by state", async () => 
 
 test("tasks list reads the selected project instead of Atlas only", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-project-tasks-"));
-  await mkdir(path.join(root, "projects", "frontend", "tasks", "T-101"), {
+  await mkdir(path.join(root, PROJECTS_DIR, "frontend", "tasks", "T-101"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "projects", "frontend", "tasks", "T-101", "task.md"),
+    path.join(root, PROJECTS_DIR, "frontend", "tasks", "T-101", "task.md"),
     "---\nid: T-101\ntitle: Frontend\nstate: active\ngoal: Ship UI\n---\n",
   );
   const previous = process.env.ATLAS_ROOT;

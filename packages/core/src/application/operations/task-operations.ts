@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { atomicWrite } from "../../fs-utils.js";
-import { resolveWithin } from "../../paths.js";
+import { PROJECTS_DIR, resolveWithin } from "../../paths.js";
 import type { ContextBudget } from "../context/context-ladder.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import { completeTask } from "../tasks/archive-tasks.js";
@@ -195,7 +195,7 @@ export async function taskCreate(
   const root = taskRoot(project.projectId);
   const id = await nextTaskId(root);
   const target = validateWriteTarget(
-    "projects",
+    PROJECTS_DIR,
     project.projectId,
     "tasks",
     id,
@@ -261,7 +261,7 @@ export async function taskUpdate(
     );
 
   const target = validateWriteTarget(
-    "projects",
+    PROJECTS_DIR,
     project.projectId,
     "tasks",
     identifier.value,
@@ -335,7 +335,7 @@ export async function taskCompleteOperation(
   if (!project.ok) return operationResult("task.complete", project.reason);
 
   const target = validateWriteTarget(
-    "projects",
+    PROJECTS_DIR,
     project.projectId,
     "tasks",
     identifier.value,

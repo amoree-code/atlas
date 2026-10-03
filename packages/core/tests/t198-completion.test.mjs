@@ -13,6 +13,7 @@ import {
   createGrant,
   guardedRunOperation,
 } from "../dist/application/operations/write-guard.js";
+import { PERSONAL_DIR, PROJECTS_DIR } from "../dist/paths.js";
 
 const BUDGET = {
   maxFiles: 10,
@@ -57,11 +58,11 @@ test("atlas operate routes deterministic natural-language reads through the Atla
   const root = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "atlas-t198-cli-")),
   );
-  fs.mkdirSync(path.join(root, "projects", "atlas", "tasks", "T-198"), {
+  fs.mkdirSync(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-198"), {
     recursive: true,
   });
   fs.writeFileSync(
-    path.join(root, "projects", "atlas", "tasks", "T-198", "task.md"),
+    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-198", "task.md"),
     "---\nid: T-198\ntitle: Test task\nstate: active\nproject: atlas\ngoal: test\npriority: level_2\nupdated_at: 2026-09-16\n---\n",
   );
   const result = spawnSync(
@@ -123,10 +124,10 @@ test("metadata-first task linking ranks explicit relationships before project, s
 
 test("corrections are additive evidence and never overwrite the original record", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-correction-"));
-  await mkdir(path.join(root, "personal", "memory"), { recursive: true });
-  const original = path.join(root, "personal", "memory", "original.md");
+  await mkdir(path.join(root, PERSONAL_DIR, "memory"), { recursive: true });
+  const original = path.join(root, PERSONAL_DIR, "memory", "original.md");
   await writeFile(original, "---\nname: original\n---\noriginal evidence\n");
-  const target = path.join(root, "personal", "memory", "correction.md");
+  const target = path.join(root, PERSONAL_DIR, "memory", "correction.md");
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = root;
   try {

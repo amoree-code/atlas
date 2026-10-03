@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { truncateUtf8 } from "../../fs-utils.js";
-import { atlasPath } from "../../paths.js";
+import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 
 const maxFacts = 100;
 const maxFactBytes = 2_000;
@@ -9,7 +9,7 @@ const maxFactBytes = 2_000;
 export type ProfileFact = { key: string; value: string; updatedAt: string };
 
 export function profileFactsFile(profile: string): string {
-  return atlasPath("system", "memory", "profiles", `${profile}.json`);
+  return atlasPath(SYSTEM_DIR, "memory", "profiles", `${profile}.json`);
 }
 
 export async function readProfileFacts(

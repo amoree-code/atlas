@@ -8,6 +8,7 @@ import {
   archiveDoneTasks,
   completeTask,
 } from "../dist/application/tasks/archive-tasks.js";
+import { PROJECTS_DIR } from "../dist/paths.js";
 
 const task = (id, state = "done", checklist = "[x]") =>
   `---\nid: ${id}\nproject: atlas\nstate: ${state}\n---\n\nchecklist:\n  - "${checklist} work"\n`;
@@ -148,7 +149,7 @@ test("completion refuses an unchecked task without changing it", async () => {
 
 test("rejects traversal in task reads and archive metadata", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-task-traversal-"));
-  const tasksRoot = path.join(root, "projects", "atlas", "tasks");
+  const tasksRoot = path.join(root, PROJECTS_DIR, "atlas", "tasks");
   await mkdir(tasksRoot, { recursive: true });
   await writeFile(path.join(root, "outside.md"), task("outside"));
   process.env.ATLAS_ROOT = root;
