@@ -29,6 +29,7 @@ import { defaultBrainIndexPort } from "../dist/composition/runtime.js";
 import {
   atlasRoot,
   engineRoot,
+  KNOWLEDGE_DIR,
   PERSONAL_DIR,
   PROJECTS_DIR,
 } from "../dist/paths.js";
@@ -68,20 +69,20 @@ async function withFixture(fn) {
     path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-2", "task.md"),
     taskDoc("T-2"),
   );
-  await mkdir(path.join(root, PERSONAL_DIR, "memory"), { recursive: true });
+  await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
   await writeFile(
-    path.join(root, PERSONAL_DIR, "memory", "work-style.md"),
+    path.join(root, PERSONAL_DIR, "work-style.md"),
     recordDoc("development", "Technical defaults and tooling"),
   );
   await writeFile(
-    path.join(root, PERSONAL_DIR, "memory", "goals.md"),
+    path.join(root, PERSONAL_DIR, "goals.md"),
     recordDoc("goals", "Long term objectives"),
   );
-  await mkdir(path.join(root, PERSONAL_DIR, "knowledge", "decisions"), {
+  await mkdir(path.join(root, KNOWLEDGE_DIR, "decisions"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, PERSONAL_DIR, "knowledge", "decisions", "adopt-atlas.md"),
+    path.join(root, KNOWLEDGE_DIR, "decisions", "adopt-atlas.md"),
     recordDoc("adopt-atlas", "Decision to adopt Atlas"),
   );
   const previous = process.env.ATLAS_ROOT;
@@ -373,7 +374,7 @@ test("memory.search returns only personal/memory records — no tasks, no engine
     assert.ok(result.records.length >= 1);
     assert.ok(
       result.records.every((record) =>
-        record.sourcePath.startsWith(`${PERSONAL_DIR}/memory/`),
+        record.sourcePath.startsWith(`${PERSONAL_DIR}/`),
       ),
       JSON.stringify(result.records),
     );
@@ -391,7 +392,7 @@ test("knowledge.search returns only personal/knowledge records", () =>
     assert.equal(result.ok, true);
     assert.ok(
       result.records.every((record) =>
-        record.sourcePath.startsWith(`${PERSONAL_DIR}/knowledge/`),
+        record.sourcePath.startsWith(`${KNOWLEDGE_DIR}/`),
       ),
     );
   }));
@@ -415,7 +416,7 @@ test("search is deduplicated and capped by budget.maxFiles with an explicit trun
   withFixture(async (root) => {
     for (let index = 0; index < 8; index += 1) {
       await writeFile(
-        path.join(root, PERSONAL_DIR, "memory", `note-${index}.md`),
+        path.join(root, PERSONAL_DIR, `note-${index}.md`),
         recordDoc(`note-${index}`, "bulk note"),
       );
     }
@@ -449,7 +450,7 @@ test("a write is refused without an explicit approval", () =>
 
 test("a write is refused when the approval names a different operation", () =>
   withFixture(async (root) => {
-    const target = path.join(root, PERSONAL_DIR, "memory", "new-note.md");
+    const target = path.join(root, PERSONAL_DIR, "new-note.md");
     const result = await runOperation(
       "memory.write",
       classifyIntent("remember this"),
@@ -467,7 +468,7 @@ test("a write is refused when the approval names a different operation", () =>
 
 test("a write is refused when the approval names a different target path", () =>
   withFixture(async (root) => {
-    const wrong = path.join(root, PERSONAL_DIR, "memory", "other.md");
+    const wrong = path.join(root, PERSONAL_DIR, "other.md");
     const result = await runOperation(
       "memory.write",
       classifyIntent("remember this"),
@@ -485,7 +486,7 @@ test("a write is refused when the approval names a different target path", () =>
 
 test("medium-confidence and low-confidence intents never execute a write", () =>
   withFixture(async (root) => {
-    const target = path.join(root, PERSONAL_DIR, "memory", "new-note.md");
+    const target = path.join(root, PERSONAL_DIR, "new-note.md");
     for (const confidence of ["medium", "low"]) {
       const classification = {
         intent: "remember",
@@ -553,7 +554,7 @@ test("an invalid budget blocks every operation, read or write", () =>
 
 test("memory.write creates a private record under personal/memory and reports the written path", () =>
   withFixture(async (root) => {
-    const target = path.join(root, PERSONAL_DIR, "memory", "new-note.md");
+    const target = path.join(root, PERSONAL_DIR, "new-note.md");
     const result = await runOperation(
       "memory.write",
       classifyIntent("remember this"),
@@ -566,10 +567,7 @@ test("memory.write creates a private record under personal/memory and reports th
       },
     );
     assert.equal(result.ok, true, result.reason);
-    assert.equal(
-      result.written.sourcePath,
-      `${PERSONAL_DIR}/memory/new-note.md`,
-    );
+    assert.equal(result.written.sourcePath, `${PERSONAL_DIR}/new-note.md`);
     const written = await readFile(target, "utf8");
     assert.match(written, /id: new-note/);
     assert.match(written, /an explicit fact/);
@@ -577,13 +575,7 @@ test("memory.write creates a private record under personal/memory and reports th
 
 test("knowledge.write stores a decision under the requested knowledge kind", () =>
   withFixture(async (root) => {
-    const target = path.join(
-      root,
-      PERSONAL_DIR,
-      "knowledge",
-      "decisions",
-      "use-sqlite.md",
-    );
+    const target = path.join(root, KNOWLEDGE_DIR, "decisions", "use-sqlite.md");
     const result = await runOperation(
       "knowledge.write",
       classifyIntent("save this as a decision"),
@@ -599,20 +591,14 @@ test("knowledge.write stores a decision under the requested knowledge kind", () 
     assert.equal(result.ok, true, result.reason);
     assert.equal(
       result.written.sourcePath,
-      `${PERSONAL_DIR}/knowledge/decisions/use-sqlite.md`,
+      `${KNOWLEDGE_DIR}/decisions/use-sqlite.md`,
     );
     assert.match(await readFile(target, "utf8"), /type: decision/);
   }));
 
 test("knowledge.write refuses a knowledge kind outside the allow-list", () =>
   withFixture(async (root) => {
-    const target = path.join(
-      root,
-      PERSONAL_DIR,
-      "knowledge",
-      "secrets",
-      "x.md",
-    );
+    const target = path.join(root, KNOWLEDGE_DIR, "secrets", "x.md");
     const result = await runOperation(
       "knowledge.write",
       classifyIntent("save this as a decision"),
@@ -631,7 +617,7 @@ test("knowledge.write refuses a knowledge kind outside the allow-list", () =>
 
 test("a record write never overwrites an existing record", () =>
   withFixture(async (root) => {
-    const target = path.join(root, PERSONAL_DIR, "memory", "goals.md");
+    const target = path.join(root, PERSONAL_DIR, "goals.md");
     const result = await runOperation(
       "memory.write",
       classifyIntent("remember this"),
@@ -859,7 +845,7 @@ test("write targets that escape the Atlas root are refused", async () => {
 
 test("path traversal, absolute paths, null bytes, and shell syntax are all refused in write slugs", () =>
   withFixture(async (root) => {
-    const target = path.join(root, PERSONAL_DIR, "memory", "x.md");
+    const target = path.join(root, PERSONAL_DIR, "x.md");
     for (const slug of [
       "../../etc/passwd",
       "/etc/passwd",
@@ -947,7 +933,7 @@ test("one-over-limit failure: a task one byte over budget.maxBytes is refused, n
 
 test("oversized content is refused for a write rather than clipped", () =>
   withFixture(async (root) => {
-    const target = path.join(root, PERSONAL_DIR, "memory", "big.md");
+    const target = path.join(root, PERSONAL_DIR, "big.md");
     const result = await runOperation(
       "memory.write",
       classifyIntent("remember this"),
@@ -980,7 +966,7 @@ test("an oversized query does not produce an unbounded result", () =>
 
 test("a failed write leaves no partial content and no temp file behind", () =>
   withFixture(async (root) => {
-    const directory = path.join(root, PERSONAL_DIR, "memory");
+    const directory = path.join(root, PERSONAL_DIR);
     const target = path.join(directory, "locked.md");
     await rm(directory, { recursive: true, force: true });
     await writeFile(directory, "not-a-directory");
@@ -1006,7 +992,7 @@ test("a failed write leaves no partial content and no temp file behind", () =>
 
 test("read operations never write anything to the record directories", () =>
   withFixture(async (root) => {
-    const memoryDir = path.join(root, PERSONAL_DIR, "memory");
+    const memoryDir = path.join(root, PERSONAL_DIR);
     const before = (await readdir(memoryDir)).sort();
     await runOperation(
       "memory.search",
@@ -1096,7 +1082,7 @@ test("memory.search is ranked by the brain index when one has been built, and sa
     );
     assert.ok(
       result.records.every((record) =>
-        record.sourcePath.startsWith(`${PERSONAL_DIR}/memory/`),
+        record.sourcePath.startsWith(`${PERSONAL_DIR}/`),
       ),
     );
   }));

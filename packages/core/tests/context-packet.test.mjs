@@ -8,7 +8,7 @@ import {
   buildSelectedReferences,
 } from "../dist/application/context/context-packet.js";
 import { classifyIntent } from "../dist/application/context/intent-router.js";
-import { PERSONAL_DIR, PROJECTS_DIR } from "../dist/paths.js";
+import { KNOWLEDGE_DIR, PROJECTS_DIR } from "../dist/paths.js";
 
 const GOOD_BUDGET = {
   maxFiles: 5,
@@ -35,7 +35,7 @@ async function withTempTask(bytes, fn) {
 
 async function withTempDecision(bytes, fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-"));
-  const decisionsDir = path.join(root, PERSONAL_DIR, "knowledge", "decisions");
+  const decisionsDir = path.join(root, KNOWLEDGE_DIR, "decisions");
   await mkdir(decisionsDir, { recursive: true });
   const file = path.join(decisionsDir, "decision-001.md");
   await writeFile(file, "x".repeat(bytes));
@@ -106,7 +106,7 @@ test("decision lookup selects bounded authoritative decision references", () =>
     );
     assert.ok(
       packet.sourcePaths.every((sourcePath) =>
-        sourcePath.startsWith(`${PERSONAL_DIR}/knowledge/decisions/`),
+        sourcePath.startsWith(`${KNOWLEDGE_DIR}/decisions/`),
       ),
     );
   }));

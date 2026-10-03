@@ -3,9 +3,12 @@ import path from "node:path";
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import {
   atlasRoot,
+  KNOWLEDGE_DIR,
   PERSONAL_DIR,
   PROJECTS_DIR,
+  resolveStorePath,
   resolveWithin,
+  storeRelativeToRoot,
 } from "../../paths.js";
 import { brainSearch } from "../brain/brain-service.js";
 import type { IntentClassification } from "./intent-router.js";
@@ -313,10 +316,9 @@ async function planRankedReferencesViaIndex(
   for (const hit of result.results) {
     if (files.length >= budget.maxFiles) break;
     try {
-      const size = (await stat(resolveWithin(root, PERSONAL_DIR, hit.path)))
-        .size;
+      const size = (await stat(resolveStorePath(root, hit.path))).size;
       if (bytes + size > budget.maxBytes) break;
-      files.push(path.posix.join(PERSONAL_DIR, hit.path));
+      files.push(storeRelativeToRoot(hit.path));
       bytes += size;
     } catch {
       // A hit whose file vanished since the index was built is skipped, not fatal.
@@ -365,17 +367,17 @@ async function planRankedReferences(
   }
   const candidates: string[] = [];
   if (intent === "memory-lookup" || intent === "work-style-lookup")
-    candidates.push(path.posix.join(PERSONAL_DIR, "memory", "MEMORY.md"));
+    candidates.push(path.posix.join(PERSONAL_DIR, "MEMORY.md"));
   if (intent === "knowledge-lookup")
-    candidates.push(path.posix.join(PERSONAL_DIR, "knowledge", "KNOWLEDGE.md"));
+    candidates.push(path.posix.join(KNOWLEDGE_DIR, "KNOWLEDGE.md"));
   if (intent === "decision-lookup") {
-    const directory = path.join(root, PERSONAL_DIR, "knowledge", "decisions");
+    const directory = path.join(root, KNOWLEDGE_DIR, "decisions");
     try {
       for (const entry of (await readdir(directory, { withFileTypes: true }))
         .filter((item) => item.isFile() && item.name.endsWith(".md"))
         .sort((a, b) => a.name.localeCompare(b.name))) {
         candidates.push(
-          path.posix.join(PERSONAL_DIR, "knowledge", "decisions", entry.name),
+          path.posix.join(KNOWLEDGE_DIR, "decisions", entry.name),
         );
       }
     } catch (error) {

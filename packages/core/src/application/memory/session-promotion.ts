@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { SessionStoreFactory } from "../../domain/ports/session-store-port.js";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
-import { atlasPath, PERSONAL_DIR } from "../../paths.js";
+import { atlasPath, KNOWLEDGE_DIR } from "../../paths.js";
 import { syncMemoryIndexes } from "./index-sync.js";
 
 const kinds = new Set([
@@ -65,9 +65,7 @@ export async function promoteSessionToKnowledge(
       /[^a-zA-Z0-9-]+/g,
       "-",
     );
-    const file = path.join(
-      atlasPath(PERSONAL_DIR, "knowledge", match[1], `${slug}.md`),
-    );
+    const file = path.join(atlasPath(KNOWLEDGE_DIR, match[1], `${slug}.md`));
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(
       file,
@@ -77,7 +75,7 @@ export async function promoteSessionToKnowledge(
       sessionId,
       "knowledge_promoted",
       JSON.stringify({
-        file: path.relative(atlasPath(PERSONAL_DIR, "knowledge"), file),
+        file: path.relative(atlasPath(KNOWLEDGE_DIR), file),
         target,
         approved: true,
       }),

@@ -26,7 +26,12 @@ import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
 import { truncateUtf8 } from "../dist/fs-utils.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
 import { buildProviderInvocation } from "../dist/infrastructure/providers/providers.js";
-import { PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR } from "../dist/paths.js";
+import {
+  KNOWLEDGE_DIR,
+  PERSONAL_DIR,
+  PROJECTS_DIR,
+  SYSTEM_DIR,
+} from "../dist/paths.js";
 
 const SKILLS = ["alpha-lean", "beta-lean", "gamma-lean"];
 
@@ -443,18 +448,13 @@ test("buildContextReferences references a single task record without reading it"
 
 test("packet references stay inside allowedPaths and skip keyword lookups", () =>
   withAtlasRoot(async (root) => {
-    const memoryDir = path.join(root, PERSONAL_DIR, "memory");
-    const knowledgeDir = path.join(
-      root,
-      PERSONAL_DIR,
-      "knowledge",
-      "decisions",
-    );
+    const memoryDir = path.join(root, PERSONAL_DIR);
+    const knowledgeDir = path.join(root, KNOWLEDGE_DIR, "decisions");
     await mkdir(memoryDir, { recursive: true });
     await mkdir(knowledgeDir, { recursive: true });
     await writeFile(path.join(memoryDir, "MEMORY.md"), "MEMORY-SENTINEL");
     await writeFile(
-      path.join(root, PERSONAL_DIR, "knowledge", "KNOWLEDGE.md"),
+      path.join(root, KNOWLEDGE_DIR, "KNOWLEDGE.md"),
       "KNOWLEDGE-SENTINEL",
     );
     await writeFile(path.join(knowledgeDir, "d-1.md"), "DECISION-SENTINEL");

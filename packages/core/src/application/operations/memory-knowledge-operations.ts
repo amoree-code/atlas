@@ -2,7 +2,13 @@ import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import { atomicWrite } from "../../fs-utils.js";
-import { atlasRoot, PERSONAL_DIR, resolveWithin } from "../../paths.js";
+import {
+  atlasRoot,
+  KNOWLEDGE_DIR,
+  PERSONAL_DIR,
+  resolveWithin,
+  STORE_DIR,
+} from "../../paths.js";
 import { brainIndexPath } from "../brain/brain-reindex.js";
 import { brainSearch } from "../brain/brain-service.js";
 import type { ContextBudget } from "../context/context-ladder.js";
@@ -108,7 +114,9 @@ async function searchViaBrainIndex(
   } catch {
     return null;
   }
-  const pathPrefix = rootSegments.slice(1).join("/"); // drop the leading "personal" segment
+  // The index stores "<store>/<relative path>"; the store is the record type here.
+  const store = recordType === "knowledge" ? "knowledge" : "memory";
+  const pathPrefix = store;
   try {
     const result = await brainSearch({
       query,
@@ -121,7 +129,7 @@ async function searchViaBrainIndex(
       identifier: hit.id,
       recordType,
       provenance: provenanceFor(recordType, { type: hit.type }),
-      sourcePath: `${PERSONAL_DIR}/${hit.path}`,
+      sourcePath: `${STORE_DIR[store]}/${hit.path.slice(store.length + 1)}`,
       freshness: "unknown" as const,
       confidence: classification.confidence,
       selectionReason: `ranked by brain index (${result.mode})`,
@@ -274,7 +282,7 @@ export async function writeRecord(
   let segments: string[];
   let recordType: string;
   if (operation === "memory.write") {
-    segments = [PERSONAL_DIR, "memory", `${slug.value}.md`];
+    segments = [PERSONAL_DIR, `${slug.value}.md`];
     recordType = "memory";
   } else {
     const kind = validateSlug(options.kind, "knowledge kind");
@@ -285,7 +293,7 @@ export async function writeRecord(
         operation,
         `write refused: '${kind.value}' is not an allowed knowledge kind`,
       );
-    segments = [PERSONAL_DIR, "knowledge", kind.value, `${slug.value}.md`];
+    segments = [KNOWLEDGE_DIR, kind.value, `${slug.value}.md`];
     recordType = kind.value === "decisions" ? "decision" : "knowledge";
   }
 

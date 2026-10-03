@@ -8,7 +8,13 @@ import type {
   IndexLinkInput,
 } from "../../domain/ports/brain-index-port.js";
 import type { EmbedderPort } from "../../domain/ports/embedder-port.js";
-import { atlasRoot, PERSONAL_DIR, resolveWithin } from "../../paths.js";
+import {
+  atlasRoot,
+  INDEX_DIR,
+  KNOWLEDGE_DIR,
+  resolveWithin,
+  STORE_DIR,
+} from "../../paths.js";
 import {
   basenameStem,
   chunkBody,
@@ -53,15 +59,11 @@ async function walk(root: string, depth = 0): Promise<string[]> {
 // report `stale: true` when the index is older than the files it was built from, without
 // paying for a full reindex on every search.
 export async function computeCorpusHash(root = atlasRoot()): Promise<string> {
-  const personalRoot = resolveWithin(root, PERSONAL_DIR);
   const entries: Array<{ storePath: string; contentHash: string }> = [];
   for (const store of STORES) {
-    const storeRoot = resolveWithin(personalRoot, store);
+    const storeRoot = resolveWithin(root, STORE_DIR[store]);
     for (const file of await walk(storeRoot)) {
-      const relative = path
-        .relative(personalRoot, file)
-        .split(path.sep)
-        .join("/");
+      const relative = `${store}/${path.relative(storeRoot, file).split(path.sep).join("/")}`;
       const source = await readFile(file, "utf8");
       entries.push({
         storePath: relative,
@@ -141,23 +143,19 @@ export async function reindexBrain(
 ): Promise<ReindexResult> {
   const root = options.root ?? atlasRoot();
   const embedder = options.embedder ?? null;
-  const personalRoot = resolveWithin(root, PERSONAL_DIR);
 
   const walked: WalkedDoc[] = [];
   let totalSeen = 0;
   for (const store of STORES) {
-    const storeRoot = resolveWithin(personalRoot, store);
+    const storeRoot = resolveWithin(root, STORE_DIR[store]);
     const files = await walk(storeRoot);
     for (const file of files) {
       totalSeen += 1;
       if (totalSeen > MAX_FILES)
         throw new Error(
-          `brain reindex found more than ${MAX_FILES} markdown files under personal/${store} — refusing to index an unbounded corpus`,
+          `brain reindex found more than ${MAX_FILES} markdown files under ${STORE_DIR[store]} — refusing to index an unbounded corpus`,
         );
-      const relative = path
-        .relative(personalRoot, file)
-        .split(path.sep)
-        .join("/");
+      const relative = `${store}/${path.relative(storeRoot, file).split(path.sep).join("/")}`;
       const source = await readFile(file, "utf8");
       const { record, conformance, body } = normalizeRecord(relative, source);
       const links = extractWikilinks(body).map((link) => ({
@@ -268,7 +266,7 @@ export async function reindexBrain(
     )
     .digest("hex");
 
-  const outDir = path.join(personalRoot, ".index");
+  const outDir = resolveWithin(root, INDEX_DIR);
   const outFile = path.join(outDir, "brain.sqlite");
   await mkdir(outDir, { recursive: true });
   await writeFile(path.join(outDir, ".gitignore"), "*\n");
@@ -280,7 +278,7 @@ export async function reindexBrain(
 
   let legacyIndexPresent = false;
   try {
-    await stat(resolveWithin(personalRoot, "knowledge", "index.sqlite3"));
+    await stat(resolveWithin(root, KNOWLEDGE_DIR, "index.sqlite3"));
     legacyIndexPresent = true;
   } catch {
     legacyIndexPresent = false;
@@ -300,5 +298,5 @@ export async function reindexBrain(
 }
 
 export function brainIndexPath(root = atlasRoot()): string {
-  return path.join(root, PERSONAL_DIR, ".index", "brain.sqlite");
+  return path.join(root, INDEX_DIR, "brain.sqlite");
 }

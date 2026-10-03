@@ -15,7 +15,7 @@ import type { WrapperManagerPort } from "../../domain/ports/platform-ports.js";
 import {
   atlasPath,
   enginePath,
-  PERSONAL_DIR,
+  BRAIN_RECORD_DIRS,
   PROJECTS_DIR,
   repoPath,
   SYSTEM_DIR,
@@ -35,7 +35,7 @@ export type Finding = {
   fixable: boolean;
 };
 
-const roots = [PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR];
+const roots = [...BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR];
 
 async function exists(file: string): Promise<boolean> {
   try {
@@ -315,7 +315,7 @@ async function checkPermissions(): Promise<Finding[]> {
 async function checkDuplicates(): Promise<Finding[]> {
   const seen = new Map<string, string>();
   const duplicates: string[] = [];
-  for (const root of [PERSONAL_DIR, PROJECTS_DIR]) {
+  for (const root of [...BRAIN_RECORD_DIRS, PROJECTS_DIR]) {
     for (const file of await markdownFiles(atlasPath(root))) {
       const hash = createHash("sha256")
         .update(await readFile(file))
