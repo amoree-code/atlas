@@ -56,13 +56,13 @@ async function uniqueFilename(
 }
 
 /**
- * One human-readable Markdown file per session under personal/brain-dump/,
- * separate from the machine-oriented system/sessions/summaries/ dump. Prefers
+ * One human-readable Markdown file per session under brain/00-inbox/brain-dump/,
+ * separate from the machine-oriented kernel/bridge/sessions/summaries/ dump. Prefers
  * the cheap model narrative (see model-narrative.ts) and falls back to the
  * same deterministic heuristics as daily-narrative.ts when it is unavailable.
  * When task-observer.ts already found signals for this session (corrections,
  * repeated procedures, explicit decisions), they're mirrored under
- * "## Signals" — the same events already surfaced in personal/daily/, so a
+ * "## Signals" — the same events already surfaced in brain/01-daily/, so a
  * later cross-session sweep has one place to look instead of two.
  *
  * Skipped for the same low-value case daily-narrative.ts skips: a generic

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Canonical brain-record schema (T-228): the frontmatter shape every markdown record under
-// personal/memory and personal/knowledge normalizes into. Types + zod only, no I/O — the
+// brain/02-personal and brain/05-knowledge normalizes into. Types + zod only, no I/O — the
 // markdown layer (application/brain/brain-markdown.ts) is what actually reads legacy
 // frontmatter and maps it onto this shape.
 

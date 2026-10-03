@@ -53,8 +53,8 @@ async function walk(root: string, depth = 0): Promise<string[]> {
   return files;
 }
 
-// Cheap staleness probe: hashes every markdown file's bytes under personal/memory and
-// personal/knowledge, in the same (sorted path, sha256) shape reindexBrain folds into
+// Cheap staleness probe: hashes every markdown file's bytes under brain/02-personal and
+// brain/05-knowledge, in the same (sorted path, sha256) shape reindexBrain folds into
 // meta.corpus_hash, without parsing frontmatter or building chunks. Used by brainSearch to
 // report `stale: true` when the index is older than the files it was built from, without
 // paying for a full reindex on every search.

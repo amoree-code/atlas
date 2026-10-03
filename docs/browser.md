@@ -15,7 +15,7 @@ atlas browser close <session-id>
 ```
 
 `open` launches a headless browser on loopback CDP, persists the browser metadata in
-the private `system/sessions/sessions.sqlite`, and returns an Atlas session id. Every
+the private `kernel/bridge/sessions/sessions.sqlite`, and returns an Atlas session id. Every
 later operation reconnects to that session. Browser profiles and downloads stay under
 the private workspace `system/browser/` directory.
 

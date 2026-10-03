@@ -37,7 +37,7 @@ function insertUnderHeading(
 
 /**
  * Human-readable narrative entry appended to today's
- * personal/daily/YYYY-MM-DD.md at session closeout. A field from `narrative`
+ * brain/01-daily/YYYY-MM-DD.md at session closeout. A field from `narrative`
  * (produced by a cheap model call — see model-narrative.ts) is used verbatim
  * when present; any field it omits (including when the model call was
  * skipped or failed entirely) falls back to the deterministic heuristic
@@ -137,7 +137,7 @@ export async function appendDailyNarrative(input: {
 /**
  * Appends newly detected observations (corrections, repeated procedures,
  * explicit decisions, proven verifications — see task-observer.ts) to
- * today's personal/daily/YYYY-MM-DD.md, so they surface next to the
+ * today's brain/01-daily/YYYY-MM-DD.md, so they surface next to the
  * session narrative instead of sitting only in system/skills/observations.json.
  */
 export async function appendObservations(

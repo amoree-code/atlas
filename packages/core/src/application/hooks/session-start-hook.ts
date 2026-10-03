@@ -67,7 +67,7 @@ export type ClaudeNativeHookStatus = {
 
 // Read-only status check: does the hook script exist on disk, and is it actually registered
 // under hooks.SessionStart in the live Claude Code settings? Registration is never done
-// automatically here (see ../../../../system/integrations/claude-code/hooks/atlas-session-bootstrap
+// automatically here (see ../../../../kernel/bridge/integrations/claude-code/hooks/atlas-session-bootstrap
 // for the manual-copy convention) — this only reports the truth, it never assumes it.
 export async function claudeNativeHookStatus(
   homeDir = os.homedir(),
