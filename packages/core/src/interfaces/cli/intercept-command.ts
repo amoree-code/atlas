@@ -47,7 +47,7 @@ export async function intercept(
   options: InterceptOptions = {},
 ): Promise<number> {
   const provider = findProvider(command);
-  if (isUtilityInvocation(provider.id, args)) {
+  if (provider.enabled === false || isUtilityInvocation(provider.id, args)) {
     const executable = options.originalExecutable
       ? validateExplicitExecutable(options.originalExecutable)
       : resolveOriginalExecutable(provider.command);

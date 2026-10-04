@@ -41,4 +41,6 @@ export type ProviderRecord = {
   command: string;
   interactive: boolean;
   headless: boolean;
+  // Absent means enabled. A disabled provider's shim execs the real binary untouched.
+  enabled?: boolean;
 };

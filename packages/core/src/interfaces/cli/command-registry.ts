@@ -99,6 +99,7 @@ import { loadProviderRegistry } from "../../infrastructure/providers/provider-re
 import {
   installShellPath,
   registerProvider,
+  setProviderEnabled,
   syncProviderWrappers,
   wrapperDoctor,
   wrapperStatus,
@@ -228,6 +229,15 @@ async function commandClient(): Promise<void> {
       process.argv[5] ?? id ?? "",
     );
     console.log(JSON.stringify(provider, null, 2));
+  } else if (action === "enable" || action === "disable") {
+    const id = process.argv[4];
+    if (!id) {
+      console.error(`Usage: atlas client ${action} <provider>`);
+      process.exitCode = 1;
+    } else {
+      const provider = await setProviderEnabled(id, action === "enable");
+      console.log(JSON.stringify(provider, null, 2));
+    }
   } else if (action === "doctor") {
     const findings = await wrapperDoctor(process.argv[4]);
     if (findings.length) {
@@ -263,7 +273,7 @@ async function commandClient(): Promise<void> {
     await runClientTestCommand(provider, process.argv.includes("--json"));
   } else {
     console.error(
-      "Usage: atlas client list|status|test [provider] [--json]|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|doctor [absolute-provider-path]",
+      "Usage: atlas client list|status|test [provider] [--json]|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|enable <id>|disable <id>|doctor [absolute-provider-path]",
     );
     process.exitCode = 1;
   }

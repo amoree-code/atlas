@@ -14,9 +14,11 @@ import {
   installShellIntegration,
   providerWrapperPath,
   registerProvider,
+  setProviderEnabled,
   shellKind,
   syncProviderWrappers,
   wrapperDoctor,
+  wrapperStatus,
 } from "../dist/infrastructure/wrappers/wrapper-manager.js";
 import {
   intercept,
@@ -516,3 +518,31 @@ unixOnly("doctor reports an absolute-path provider bypass", async () => {
     );
   });
 });
+
+unixOnly(
+  "disabled client execs the real binary and the flag round-trips",
+  async () => {
+    await withEnvironment(async (root) => {
+      const real = path.join(root, "bin");
+      await mkdir(real, { recursive: true });
+      const executable = path.join(real, "demo-ai");
+      await writeFile(executable, "#!/bin/sh\nexit 7\n");
+      await chmod(executable, 0o755);
+      process.env.PATH = `${real}${path.delimiter}${process.env.PATH}`;
+      await registerProvider("demo-ai");
+
+      const disabled = await setProviderEnabled("demo-ai", false);
+      assert.equal(disabled.enabled, false);
+      assert.equal(await intercept("demo-ai", []), 7);
+      const status = (await wrapperStatus()).find((p) => p.id === "demo-ai");
+      assert.equal(status.enabled, false);
+
+      const enabled = await setProviderEnabled("demo-ai", true);
+      assert.equal(enabled.enabled, true);
+      await assert.rejects(
+        setProviderEnabled("missing-ai", false),
+        /not registered/,
+      );
+    });
+  },
+);
