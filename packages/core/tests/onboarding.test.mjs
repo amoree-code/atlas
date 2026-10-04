@@ -4,7 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { onboardingStatePath } from "../dist/application/onboarding/state.js";
-import { onboard } from "../dist/interfaces/cli/onboard-command.js";
+import {
+  onboard,
+  onboardStatus,
+} from "../dist/interfaces/cli/onboard-command.js";
 
 function fakeIO(interactive, answers = []) {
   const lines = [];
@@ -111,5 +114,19 @@ test("a new step id runs alone; --reset redoes one step", async () => {
       onboard({ io: fakeIO(true).io, steps: extended, reset: "nope" }),
       /Unknown onboarding step/,
     );
+  });
+});
+
+test("status lists every step without running any", async () => {
+  await withTempRoot(async () => {
+    const calls = [];
+    const steps = fakeSteps(calls);
+    await onboard({ io: fakeIO(false).io, steps });
+    calls.length = 0;
+    const lines = [];
+    await onboardStatus(steps, (line) => lines.push(line));
+    assert.deepEqual(calls, []);
+    assert.match(lines[0], /^done\s+a/);
+    assert.match(lines[1], /^skipped\s+b/);
   });
 });

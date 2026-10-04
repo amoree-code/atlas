@@ -80,11 +80,27 @@ export async function onboard(options: OnboardOptions = {}): Promise<void> {
   }
 }
 
+// Read-only: shows each step as done, skipped or pending, without running anything.
+export async function onboardStatus(
+  steps: OnboardingStep[],
+  say: (line: string) => void = console.log,
+): Promise<void> {
+  const state = await loadOnboardingState();
+  for (const step of steps)
+    say(
+      `${(state.steps[step.id] ?? "pending").padEnd(8)} ${step.id.padEnd(10)} ${step.title}`,
+    );
+}
+
 export async function runOnboardCommand(argv: string[]): Promise<void> {
+  if (argv.includes("--status")) {
+    await onboardStatus(buildSteps({ setup: () => setup() }));
+    return;
+  }
   const resetIndex = argv.indexOf("--reset");
   const reset = resetIndex >= 0 ? argv[resetIndex + 1] : undefined;
   if (resetIndex >= 0 && !reset) {
-    console.error("Usage: atlas onboard [--yes] [--reset <step>]");
+    console.error("Usage: atlas onboard [--yes] [--status] [--reset <step>]");
     process.exitCode = 1;
     return;
   }
