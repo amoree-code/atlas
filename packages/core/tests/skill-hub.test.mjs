@@ -49,7 +49,7 @@ test("hub is additive and link is a dry run until --apply", async () => {
   assert.ok(applied.backup);
   const link = path.join(client, "mine");
   assert.equal((await lstat(link)).isSymbolicLink(), true);
-  assert.match(await readlink(link), /skills\/mine$/);
+  assert.match(await readlink(link), /skills[\\/]mine$/);
   assert.deepEqual(await readdir(path.join(applied.backup, "codex")), ["mine"]);
 
   const rerun = await linkClientSkills({ home, apply: true });
