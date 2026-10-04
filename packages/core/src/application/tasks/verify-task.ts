@@ -1,7 +1,12 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { atlasPath, PROJECTS_DIR, resolveWithin } from "../../paths.js";
+import {
+  atlasPath,
+  PROJECTS_DIR,
+  repoRoot,
+  resolveWithin,
+} from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -114,7 +119,7 @@ export async function verifyTask(
       checks: [],
     };
   const run = options.run ?? defaultRunner;
-  const cwd = options.cwd ?? atlasPath("engine");
+  const cwd = options.cwd ?? repoRoot();
   const checks: VerificationCheck[] = [];
   for (const command of commands) {
     const { exitCode } = await run(command, cwd);

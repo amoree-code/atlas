@@ -107,6 +107,12 @@ for (const record of records) {
     if (!knownIds.has(ref))
       errors.push(`${record.file}: broken reference ${ref}`);
 }
+// Nothing closes tasks on its own (no watcher): a `done` task left in the live tree needs
+// `atlas tasks archive --apply`. A warning, not an error, so a hand-edit never blocks a build.
+for (const record of live.filter((entry) => entry.fields.state === "done"))
+  console.warn(
+    `${record.file}: done but not archived (run: atlas tasks archive --apply)`,
+  );
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
