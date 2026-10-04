@@ -152,14 +152,27 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
       optional: false,
       async run(io) {
         const findings = await wrapperDoctor();
-        if (findings.length === 0) {
+        // PATH is read from this process, which predates the profile edit made in the
+        // shell step, so that one finding only means "open a new terminal".
+        const pathNote = findings.filter((finding) =>
+          finding.includes("not on PATH"),
+        );
+        const blocking = findings.filter(
+          (finding) => !pathNote.includes(finding),
+        );
+        pathNote.forEach(() => {
+          io.say("  Open a new terminal so the shim directory is on PATH.");
+        });
+        blocking.forEach((finding) => {
+          io.say(`  NOT READY: ${finding}`);
+        });
+        if (findings.length === 0)
           io.say(
             "  PROVEN: wrappers configured, binaries resolve outside the shim directory.",
           );
-        } else {
-          findings.forEach((finding) => {
-            io.say(`  NOT READY: ${finding}`);
-          });
+        if (blocking.length > 0) {
+          io.say("  Fix the above, then run: atlas onboard --reset verify");
+          return "skipped";
         }
         io.say("  Also run: atlas doctor");
         return "done";

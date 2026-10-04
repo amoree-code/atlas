@@ -1,7 +1,6 @@
 import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createInterface } from "node:readline/promises";
 import { connectObsidianVault } from "../../application/obsidian/vault-discovery.js";
 import {
   installShellIntegration,
@@ -110,48 +109,6 @@ export type SetupOptions = {
   obsidianPath?: string;
   obsidianMode?: "read-only" | "read-write";
 };
-
-async function setupComplete(): Promise<boolean> {
-  try {
-    await readFile(atlasPath(SYSTEM_DIR, "profiles", "default.json"));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function runFirstRunWizard(skipPrompt = false): Promise<void> {
-  if (await setupComplete()) {
-    console.log(
-      "Atlas is ready. Run `atlas doctor` for health or `atlas mcp config` for client setup.",
-    );
-    return;
-  }
-  if (!skipPrompt && process.stdin.isTTY && process.stdout.isTTY) {
-    const prompt = createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    try {
-      console.log(
-        "Welcome to Atlas. This will create your private workspace and prepare MCP.",
-      );
-      const answer = await prompt.question(
-        "Continue with the recommended setup? [Y/n] ",
-      );
-      if (answer.trim().toLowerCase() === "n") {
-        console.log("Setup cancelled.");
-        return;
-      }
-    } finally {
-      prompt.close();
-    }
-  }
-  await setup();
-  console.log(
-    'Atlas is ready. Run `atlas run --profile default --prompt "your task"` to start.',
-  );
-}
 
 export async function setup(options: SetupOptions = {}): Promise<void> {
   await Promise.all(

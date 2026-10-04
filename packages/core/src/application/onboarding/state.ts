@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atlasPath, SYSTEM_DIR } from "../../paths.js";
 
-export type StepStatus = "done" | "skipped";
+type StepStatus = "done" | "skipped";
 
 export type OnboardingState = {
   version: number;
