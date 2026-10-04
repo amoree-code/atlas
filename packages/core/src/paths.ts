@@ -63,6 +63,10 @@ export const BRAIN_RECORD_DIRS = [
   TEMPLATES_DIR,
 ] as const;
 export const SYSTEM_DIR = "kernel/bridge";
+// Governance: identity-bearing rules live in the brain charter; the generic policy
+// templates ship with the kernel bridge.
+export const CHARTER_DIR = "brain/charter";
+export const POLICIES_DIR = "kernel/bridge/policies";
 
 // The brain index (brain-reindex.ts, brain-service.ts, context-ladder.ts) stores and
 // resolves records as "<store>/<relative path>" (e.g. "memory/foo.md",

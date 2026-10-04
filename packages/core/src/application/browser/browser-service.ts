@@ -222,8 +222,15 @@ export class BrowserService {
     oldText: string,
     newText: string,
     occurrence = 1,
-  ): Promise<BrowserOperationResult<Awaited<ReturnType<BrowserHandle["replaceText"]>>>> {
-    const result = await handle.replaceText(selector, oldText, newText, occurrence);
+  ): Promise<
+    BrowserOperationResult<Awaited<ReturnType<BrowserHandle["replaceText"]>>>
+  > {
+    const result = await handle.replaceText(
+      selector,
+      oldText,
+      newText,
+      occurrence,
+    );
     return {
       operation: "replace-text",
       approved: true,

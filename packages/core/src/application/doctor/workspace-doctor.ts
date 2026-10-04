@@ -16,6 +16,8 @@ import {
   atlasPath,
   enginePath,
   BRAIN_RECORD_DIRS,
+  CHARTER_DIR,
+  POLICIES_DIR,
   PROJECTS_DIR,
   repoPath,
   SYSTEM_DIR,
@@ -408,9 +410,8 @@ async function checkVersion(): Promise<Finding[]> {
 }
 
 async function checkGovernance(): Promise<Finding[]> {
-  const root = atlasPath(SYSTEM_DIR, "control-plane", "governance");
-  const core = path.join(root, "rules", "core.md");
-  const policies = path.join(root, "policies");
+  const core = atlasPath(CHARTER_DIR, "core.md");
+  const policies = atlasPath(POLICIES_DIR);
   if (!(await exists(core)) || !(await exists(policies)))
     return [
       {
