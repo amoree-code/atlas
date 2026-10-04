@@ -85,3 +85,13 @@ atlas tasks archive --auto
 
 There is no background filesystem watcher; this keeps completion deterministic and avoids
 making a read-only inspection command silently move user data.
+
+## Skills
+
+There is one live skills store: `bridge/skills` (machine-local, git-ignored). AI clients hold symlinks
+into it instead of their own copies. `packages/core/skills` is only the set of core skills shipped with
+the engine; `atlas skill hub` copies it, plus any extra folders you name, into the store (additive,
+never overwrites). `atlas skill link` shows the plan and `atlas skill link --apply` makes the links,
+backing up each replaced copy under `bridge/archive/`. Skills a client does not already have are only
+linked with `--all`, because every skill adds always-on context. `atlas onboard` runs this as the
+`skills` step.
