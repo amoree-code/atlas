@@ -7,10 +7,11 @@ import {
   wrapperStatus,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
 import { atlasPath, PERSONAL_DIR } from "../../paths.js";
+import { linkClientSkills, populateSkillHub } from "../skills/skill-hub.js";
 import { connectObsidianVault } from "../obsidian/vault-discovery.js";
 
 // Bump when a step is added; completed steps stay completed, only new ids run.
-export const ONBOARDING_VERSION = 1;
+export const ONBOARDING_VERSION = 2;
 
 export type OnboardingIO = {
   interactive: boolean;
@@ -102,6 +103,34 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
             await setProviderEnabled(client.id, enable);
         }
         await syncProviderWrappers();
+        return "done";
+      },
+    },
+    {
+      id: "skills",
+      title: "Skills (one store in Ocean, clients link to it)",
+      optional: false,
+      async run(io) {
+        const hub = await populateSkillHub();
+        io.say(
+          `  Hub: ${hub.added.length} added, ${hub.kept.length} already there.`,
+        );
+        const plan = await linkClientSkills({});
+        const replace = plan.actions.filter((a) => a.action === "replace");
+        if (replace.length === 0) {
+          io.say("  Clients already link to the hub.");
+          return "done";
+        }
+        io.say(
+          `  ${replace.length} client copies would become links (originals are backed up).`,
+        );
+        if (!io.interactive) {
+          io.say("  Run: atlas skill link --apply");
+          return "skipped";
+        }
+        if (!(await yes(io, "  Apply now?"))) return "skipped";
+        const applied = await linkClientSkills({ apply: true });
+        io.say(`  Linked. Backup: ${applied.backup ?? "none needed"}`);
         return "done";
       },
     },
