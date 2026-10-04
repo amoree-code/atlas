@@ -118,6 +118,7 @@ import { intercept } from "./intercept-command.js";
 import { runMemoryCommand } from "./memory-command.js";
 import { runMigrateCommand } from "./migrate-command.js";
 import { runObserveCommand } from "./observe-command.js";
+import { runOnboardCommand } from "./onboard-command.js";
 import { runOperateCommand } from "./operate-command.js";
 import { setup } from "./setup-command.js";
 import { runTasksCommand } from "./tasks-command.js";
@@ -1183,6 +1184,7 @@ async function commandSession(): Promise<void> {
 
 export const commandRegistry: Record<string, CommandHandler> = {
   setup: commandSetup,
+  onboard: () => runOnboardCommand(process.argv.slice(3)),
   service: commandService,
   intercept: commandIntercept,
   client: commandClient,
