@@ -9,6 +9,7 @@ import { openSessionStore } from "../../infrastructure/persistence/session-store
 import {
   atlasPath,
   atlasRoot,
+  KNOWLEDGE_DIR,
   PERSONAL_DIR,
   PROJECTS_DIR,
 } from "../../paths.js";
@@ -116,11 +117,10 @@ async function promote(
     const relative = target.slice("memory/".length);
     if (!relative.endsWith(".md") || relative.includes(".."))
       throw new Error("Memory target must be an existing canonical .md file.");
-    const file = path.resolve(atlasPath(PERSONAL_DIR, "memory"), relative);
-    const memoryRoot =
-      path.resolve(atlasPath(PERSONAL_DIR, "memory")) + path.sep;
+    const file = path.resolve(atlasPath(PERSONAL_DIR), relative);
+    const memoryRoot = path.resolve(atlasPath(PERSONAL_DIR)) + path.sep;
     if (!file.startsWith(memoryRoot))
-      throw new Error("Memory target must stay inside personal/memory.");
+      throw new Error("Memory target must stay inside brain/02-personal.");
     const header = `\n\n## Captured note — ${new Date().toISOString().slice(0, 10)}\n\n${item.content.trim()}\n\n_Source: session-capture-${item.captureId}; review status: unverified._\n`;
     await appendFile(file, header);
     await syncMemoryIndexes(true);
@@ -152,12 +152,7 @@ async function promote(
     .slice(0, 60);
   const slug = safe || `capture-${item.captureId}`;
   const file = path.join(
-    atlasPath(
-      PERSONAL_DIR,
-      "knowledge",
-      match[1],
-      `${slug}-${item.captureId}.md`,
-    ),
+    atlasPath(KNOWLEDGE_DIR, match[1], `${slug}-${item.captureId}.md`),
   );
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(

@@ -2,8 +2,8 @@ import type { EmbedderPort } from "../../domain/ports/embedder-port.js";
 
 // Local-only embedder for the brain index (T-228). Talks to a local Ollama daemon over
 // loopback only — never a remote host, never a `:cloud` model (Ollama's proxy to
-// ollama.com). This is a hard privacy boundary, not a convenience default: personal/memory
-// and personal/knowledge content must never leave the machine to be embedded.
+// ollama.com). This is a hard privacy boundary, not a convenience default: brain/02-personal
+// and brain/05-knowledge content must never leave the machine to be embedded.
 
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 

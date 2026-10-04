@@ -86,11 +86,17 @@ class FakeHandle implements BrowserHandle {
     return { selector, typed: text.length, value };
   }
 
-  async replaceText(selector: string, oldText: string, newText: string, occurrence = 1) {
+  async replaceText(
+    selector: string,
+    oldText: string,
+    newText: string,
+    occurrence = 1,
+  ) {
     const value = this.page.inputs.get(selector) ?? "";
     const index = nthIndex(value, oldText, occurrence);
     if (index < 0) throw new Error(`Text occurrence not found: ${occurrence}`);
-    const next = value.slice(0, index) + newText + value.slice(index + oldText.length);
+    const next =
+      value.slice(0, index) + newText + value.slice(index + oldText.length);
     this.page.inputs.set(selector, next);
     return { selector, oldText, newText, occurrence, value: next };
   }
@@ -123,8 +129,15 @@ class FakeHandle implements BrowserHandle {
 
   async submit(_selector: string) {
     const urlBefore = this.page.url;
-    const bodyBefore = this.page.elements.map((element) => element.text).join(" ");
-    return { ...(await this.state()), urlBefore, bodyBefore, bodyAfter: bodyBefore };
+    const bodyBefore = this.page.elements
+      .map((element) => element.text)
+      .join(" ");
+    return {
+      ...(await this.state()),
+      urlBefore,
+      bodyBefore,
+      bodyAfter: bodyBefore,
+    };
   }
 
   async release() {}

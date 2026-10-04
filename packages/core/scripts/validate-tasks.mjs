@@ -3,7 +3,7 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const explicitRoot = process.argv[2];
-const root = path.resolve(explicitRoot ?? "../projects/atlas/tasks");
+const root = path.resolve(explicitRoot ?? "../brain/04-projects/atlas/tasks");
 const records = [];
 const errors = [];
 

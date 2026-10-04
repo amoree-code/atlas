@@ -7,7 +7,8 @@
       "!!node_modules",
       "!!graft",
       "!!graphify-out",
-      "!!packages/core/tests/_tmp"
+      "!!packages/core/tests/_tmp",
+      "!!bridge"
     ]
   },
   "formatter": {

@@ -124,10 +124,10 @@ test("metadata-first task linking ranks explicit relationships before project, s
 
 test("corrections are additive evidence and never overwrite the original record", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-correction-"));
-  await mkdir(path.join(root, PERSONAL_DIR, "memory"), { recursive: true });
-  const original = path.join(root, PERSONAL_DIR, "memory", "original.md");
+  await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
+  const original = path.join(root, PERSONAL_DIR, "original.md");
   await writeFile(original, "---\nname: original\n---\noriginal evidence\n");
-  const target = path.join(root, PERSONAL_DIR, "memory", "correction.md");
+  const target = path.join(root, PERSONAL_DIR, "correction.md");
   const previous = process.env.ATLAS_ROOT;
   process.env.ATLAS_ROOT = root;
   try {

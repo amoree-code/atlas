@@ -9,9 +9,20 @@ const DEFAULT_SKILLS = [
 export function defaultSkillNames(_role: string): string[] {
   const role = _role.toLowerCase();
   if (role.includes("research"))
-    return ["design-thinking", "business-logic", "core-thinking", "verification"];
+    return [
+      "design-thinking",
+      "business-logic",
+      "core-thinking",
+      "verification",
+    ];
   if (role.includes("test"))
-    return ["design-thinking", "business-logic", "verification", "use-browser", "loop"];
+    return [
+      "design-thinking",
+      "business-logic",
+      "verification",
+      "use-browser",
+      "loop",
+    ];
   if (role.includes("developer") || role.includes("engineer"))
     return [...DEFAULT_SKILLS, "use-browser"];
   return [...DEFAULT_SKILLS, "use-browser"];

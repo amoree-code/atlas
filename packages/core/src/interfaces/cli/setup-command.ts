@@ -9,18 +9,22 @@ import {
 import {
   atlasPath,
   atlasRoot,
+  DAILY_DIR,
   enginePath,
+  INBOX_DIR,
+  KNOWLEDGE_DIR,
   PERSONAL_DIR,
   PROJECTS_DIR,
   SYSTEM_DIR,
+  TEMPLATES_DIR,
 } from "../../paths.js";
 
 const personalDirectories = [
-  `${PERSONAL_DIR}/memory`,
-  `${PERSONAL_DIR}/knowledge`,
-  `${PERSONAL_DIR}/daily`,
-  `${PERSONAL_DIR}/inbox`,
-  `${PERSONAL_DIR}/templates`,
+  PERSONAL_DIR,
+  KNOWLEDGE_DIR,
+  DAILY_DIR,
+  INBOX_DIR,
+  TEMPLATES_DIR,
   `${PROJECTS_DIR}/atlas/tasks`,
 ];
 
@@ -122,11 +126,11 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
     ),
   );
   await ensureFile(
-    atlasPath(PERSONAL_DIR, "memory", "MEMORY.md"),
+    atlasPath(PERSONAL_DIR, "MEMORY.md"),
     "# Memory\n\n## Records (generated)\n",
   );
   await ensureFile(
-    atlasPath(PERSONAL_DIR, "knowledge", "KNOWLEDGE.md"),
+    atlasPath(KNOWLEDGE_DIR, "KNOWLEDGE.md"),
     "# Knowledge\n\n## Records (generated)\n",
   );
   await ensureFile(

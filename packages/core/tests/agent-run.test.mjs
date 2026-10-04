@@ -270,7 +270,7 @@ test("applies one universal policy through every registered client adapter", asy
       clients: Object.fromEntries(
         ["claude", "codex", "gemini", "antigravity", "kimi"].map((client) => [
           client,
-          { enabled: true, home: `system/clients/homes/${client}` },
+          { enabled: true, home: `${SYSTEM_DIR}/clients/homes/${client}` },
         ]),
       ),
       defaultClient: "claude",

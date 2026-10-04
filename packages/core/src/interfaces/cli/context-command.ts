@@ -6,7 +6,7 @@ import {
   measureContextCost,
 } from "../../application/context/context-cost.js";
 import { resolveProject } from "../../application/context/project-resolution.js";
-import { PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR } from "../../paths.js";
+import { BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR } from "../../paths.js";
 import { atlasVersion } from "../../version.js";
 import { listTasks } from "./tasks-command.js";
 
@@ -23,7 +23,7 @@ export async function runContextCommand(json = false): Promise<void> {
     project,
     projectResolution: resolution,
     version,
-    roots: [PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR],
+    roots: [...BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR],
     tasks,
   };
   if (json) {
@@ -31,7 +31,7 @@ export async function runContextCommand(json = false): Promise<void> {
     return;
   }
   console.log(
-    `Atlas context\nversion: ${version}\nroots: personal, projects, system`,
+    `Atlas context\nversion: ${version}\nroots: ${[...BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR].join(", ")}`,
   );
   if (resolution.status !== "bound")
     console.log(

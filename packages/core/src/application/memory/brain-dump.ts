@@ -2,7 +2,7 @@ import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import { atlasPath, atlasRoot, PERSONAL_DIR } from "../../paths.js";
+import { atlasPath, atlasRoot, INBOX_DIR } from "../../paths.js";
 import { findGitRoot } from "../context/project-resolution.js";
 import type { TaskObservation } from "../skills/task-observer.js";
 import type { ModelNarrative } from "./model-narrative.js";
@@ -56,13 +56,13 @@ async function uniqueFilename(
 }
 
 /**
- * One human-readable Markdown file per session under personal/brain-dump/,
- * separate from the machine-oriented system/sessions/summaries/ dump. Prefers
+ * One human-readable Markdown file per session under brain/00-inbox/brain-dump/,
+ * separate from the machine-oriented kernel/bridge/sessions/summaries/ dump. Prefers
  * the cheap model narrative (see model-narrative.ts) and falls back to the
  * same deterministic heuristics as daily-narrative.ts when it is unavailable.
  * When task-observer.ts already found signals for this session (corrections,
  * repeated procedures, explicit decisions), they're mirrored under
- * "## Signals" — the same events already surfaced in personal/daily/, so a
+ * "## Signals" — the same events already surfaced in brain/01-daily/, so a
  * later cross-session sweep has one place to look instead of two.
  *
  * Skipped for the same low-value case daily-narrative.ts skips: a generic
@@ -171,7 +171,7 @@ export async function writeBrainDump(input: {
     `Session id: ${session.sessionId} · Raw events: \`atlas session events ${session.sessionId}\``,
   ];
 
-  const directory = atlasPath(PERSONAL_DIR, "brain-dump");
+  const directory = atlasPath(INBOX_DIR, "brain-dump");
   await mkdir(directory, { recursive: true });
 
   const titleSlug = slugify(title);

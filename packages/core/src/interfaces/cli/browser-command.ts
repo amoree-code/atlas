@@ -155,7 +155,9 @@ export async function runBrowserCommand(
     if (action === "run") {
       const taskPath = required(args, 1, "task-file");
       const task = await BrowserTaskRunner.fromFile(taskPath);
-      return print(await runner.run(sessionId, task, args.includes("--approve")));
+      return print(
+        await runner.run(sessionId, task, args.includes("--approve")),
+      );
     }
 
     usage();

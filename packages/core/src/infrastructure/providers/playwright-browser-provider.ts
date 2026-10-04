@@ -252,7 +252,10 @@ class PlaywrightHandle implements BrowserHandle {
       value: "value" in node ? String((node as HTMLInputElement).value) : null,
     }));
 
-    if (kind.contentEditable || (kind.tag !== "input" && kind.tag !== "textarea")) {
+    if (
+      kind.contentEditable ||
+      (kind.tag !== "input" && kind.tag !== "textarea")
+    ) {
       await locator.click();
       if (clear) {
         await this.page.keyboard.press("ControlOrMeta+A");
@@ -283,8 +286,12 @@ class PlaywrightHandle implements BrowserHandle {
     const locator = this.editorLocator(selector);
     await locator.waitFor({ state: "visible", timeout: 15_000 });
     const editorKind = await locator.evaluate((node) => ({
-      monaco: node.classList.contains("monaco-editor") || Boolean(node.querySelector(".monaco-editor")),
-      codeMirror: node.classList.contains("CodeMirror") || Boolean(node.querySelector(".CodeMirror")),
+      monaco:
+        node.classList.contains("monaco-editor") ||
+        Boolean(node.querySelector(".monaco-editor")),
+      codeMirror:
+        node.classList.contains("CodeMirror") ||
+        Boolean(node.querySelector(".CodeMirror")),
     }));
     if (editorKind.monaco) {
       const input = locator.locator("textarea.inputarea").first();
@@ -303,7 +310,11 @@ class PlaywrightHandle implements BrowserHandle {
     const result = await locator.evaluate(
       (node, input) => {
         const root = node as HTMLElement;
-        const nthIndexInPage = (value: string, needle: string, occurrence: number): number => {
+        const nthIndexInPage = (
+          value: string,
+          needle: string,
+          occurrence: number,
+        ): number => {
           let from = 0;
           for (let current = 1; current <= occurrence; current += 1) {
             const index = value.indexOf(needle, from);
@@ -318,35 +329,81 @@ class PlaywrightHandle implements BrowserHandle {
             editor?: {
               getEditors?: () => Array<{
                 getDomNode?: () => HTMLElement | null;
-                getModel?: () => { getValue(): string; findMatches(text: string): Array<{ range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number } }>; pushEditOperations(_: unknown, edits: unknown[], __: unknown): void } | null;
+                getModel?: () => {
+                  getValue(): string;
+                  findMatches(
+                    text: string,
+                  ): Array<{
+                    range: {
+                      startLineNumber: number;
+                      startColumn: number;
+                      endLineNumber: number;
+                      endColumn: number;
+                    };
+                  }>;
+                  pushEditOperations(
+                    _: unknown,
+                    edits: unknown[],
+                    __: unknown,
+                  ): void;
+                } | null;
               }>;
               getModels?: () => Array<{
                 getValue(): string;
-                findMatches(text: string): Array<{ range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number } }>;
-                pushEditOperations(_: unknown, edits: unknown[], __: unknown): void;
+                findMatches(
+                  text: string,
+                ): Array<{
+                  range: {
+                    startLineNumber: number;
+                    startColumn: number;
+                    endLineNumber: number;
+                    endColumn: number;
+                  };
+                }>;
+                pushEditOperations(
+                  _: unknown,
+                  edits: unknown[],
+                  __: unknown,
+                ): void;
               }>;
             };
           };
         };
         const editors = global.monaco?.editor?.getEditors?.() ?? [];
-        const editor = editors.find((candidate) => candidate.getDomNode?.() === root);
+        const editor = editors.find(
+          (candidate) => candidate.getDomNode?.() === root,
+        );
         const model =
           editor?.getModel?.() ??
-          global.monaco?.editor?.getModels?.().find((candidate) =>
-            candidate.getValue().includes(input.oldText),
-          );
+          global.monaco?.editor
+            ?.getModels?.()
+            .find((candidate) => candidate.getValue().includes(input.oldText));
         if (model) {
           const matches = model.findMatches(input.oldText);
           const match = matches[input.occurrence - 1];
-          if (!match) throw new Error(`Text occurrence not found: ${input.occurrence}`);
-          model.pushEditOperations([], [{ range: match.range, text: input.newText }], null);
+          if (!match)
+            throw new Error(`Text occurrence not found: ${input.occurrence}`);
+          model.pushEditOperations(
+            [],
+            [{ range: match.range, text: input.newText }],
+            null,
+          );
           return { value: model.getValue(), occurrence: input.occurrence };
         }
-        const target = root.matches("textarea,input") ? root as HTMLInputElement : root.querySelector("textarea,input") as HTMLInputElement | null;
-        const value = target && "value" in target ? String(target.value) : root.textContent ?? "";
+        const target = root.matches("textarea,input")
+          ? (root as HTMLInputElement)
+          : (root.querySelector("textarea,input") as HTMLInputElement | null);
+        const value =
+          target && "value" in target
+            ? String(target.value)
+            : (root.textContent ?? "");
         const index = nthIndexInPage(value, input.oldText, input.occurrence);
-        if (index < 0) throw new Error(`Text occurrence not found: ${input.occurrence}`);
-        const next = value.slice(0, index) + input.newText + value.slice(index + input.oldText.length);
+        if (index < 0)
+          throw new Error(`Text occurrence not found: ${input.occurrence}`);
+        const next =
+          value.slice(0, index) +
+          input.newText +
+          value.slice(index + input.oldText.length);
         if (target) {
           target.value = next;
           target.dispatchEvent(new Event("input", { bubbles: true }));
@@ -355,7 +412,13 @@ class PlaywrightHandle implements BrowserHandle {
       },
       { oldText, newText, occurrence },
     );
-    return { selector, oldText, newText, occurrence: result.occurrence, value: result.value };
+    return {
+      selector,
+      oldText,
+      newText,
+      occurrence: result.occurrence,
+      value: result.value,
+    };
   }
 
   private editorLocator(selector: string) {
@@ -366,7 +429,10 @@ class PlaywrightHandle implements BrowserHandle {
       const editorSelector = selector.slice(frameIndex + separator.length);
       if (!frameSelector || !editorSelector)
         throw new Error("Editor frame selector must use 'frame >>> editor'.");
-      return this.page.frameLocator(frameSelector).locator(editorSelector).first();
+      return this.page
+        .frameLocator(frameSelector)
+        .locator(editorSelector)
+        .first();
     }
     return this.page.locator(selector).first();
   }

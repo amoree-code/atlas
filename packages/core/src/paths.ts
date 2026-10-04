@@ -8,10 +8,10 @@ const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 // runs compiled from dist/ or directly from src/ under tsx.
 const engineDirectory = path.resolve(moduleDirectory, "..");
 
-// The default runtime data root is the private workspace sibling of engine/, e.g.
-// ~/atlas/engine/packages/core (this package) sits three directories below ~/atlas
-// (engine, packages, core), which itself sits next to ~/atlas/personal, ~/atlas/projects,
-// and ~/atlas/system.
+// The default runtime data root is the private workspace root, e.g.
+// ~/ocean/kernel/packages/core (this package) sits three directories below ~/ocean
+// (kernel, packages, core), which itself sits next to ~/ocean/brain and
+// ~/ocean/kernel/bridge (see PERSONAL_DIR/PROJECTS_DIR/SYSTEM_DIR below).
 const defaultAtlasRoot = path.resolve(engineDirectory, "..", "..", "..");
 
 export function engineRoot(): string {
@@ -34,12 +34,66 @@ export function repoPath(...parts: string[]): string {
   return path.join(repoRoot(), ...parts);
 }
 
-// Single point of truth for the current top-level layout under atlasRoot(). A later
-// stage (T-224 stage B+) flips these three values to migrate the Ocean/PARA rename
-// everywhere at once; this stage only centralizes the literals, values unchanged.
-export const PERSONAL_DIR = "personal";
-export const PROJECTS_DIR = "projects";
-export const SYSTEM_DIR = "system";
+// Single point of truth for the top-level layout under atlasRoot(). Flipped in
+// T-224 stage B to the Ocean/PARA layout (~/ocean/brain/..., ~/ocean/kernel/bridge)
+// now that every call site (stage A) reads these constants instead of a literal.
+//
+// The old flat `personal/` directory had five children (memory, knowledge, daily,
+// inbox[+brain-dump], templates) that PARA scatters to five independent, sibling
+// top-level folders under brain/ — not one renamed parent with the same children
+// underneath. PERSONAL_DIR alone can't stand in for all five the way SYSTEM_DIR
+// and PROJECTS_DIR still can for their own (uniform) subtrees, so each gets its
+// own constant. PERSONAL_DIR keeps meaning what `personal/memory` meant: it is
+// brain/02-personal itself, not a parent with a further "memory" segment under it.
+export const PERSONAL_DIR = "brain/02-personal";
+export const KNOWLEDGE_DIR = "brain/05-knowledge";
+export const DAILY_DIR = "brain/01-daily";
+export const INBOX_DIR = "brain/00-inbox";
+export const TEMPLATES_DIR = "brain/06-templates";
+export const INDEX_DIR = "brain/.index";
+export const PROJECTS_DIR = "brain/04-projects";
+// Every top-level brain area that holds markdown records (used by the doctor and the
+// context command to scan the private store).
+export const BRAIN_RECORD_DIRS = [
+  INBOX_DIR,
+  DAILY_DIR,
+  PERSONAL_DIR,
+  "brain/03-professional",
+  KNOWLEDGE_DIR,
+  TEMPLATES_DIR,
+] as const;
+export const SYSTEM_DIR = "kernel/bridge";
+// Governance: identity-bearing rules live in the brain charter; the generic policy
+// templates ship with the kernel bridge.
+export const CHARTER_DIR = "brain/charter";
+export const POLICIES_DIR = "kernel/bridge/policies";
+
+// The brain index (brain-reindex.ts, brain-service.ts, context-ladder.ts) stores and
+// resolves records as "<store>/<relative path>" (e.g. "memory/foo.md",
+// "knowledge/decisions/bar.md") — a format that predates the PARA split and is kept as
+// the on-disk/index convention. This is the one place that maps a store name back to its
+// real root, now that "memory" and "knowledge" are no longer subfolders of one shared
+// parent.
+export const STORE_DIR = {
+  memory: PERSONAL_DIR,
+  knowledge: KNOWLEDGE_DIR,
+} as const;
+
+// Brain-index records are "<store>/<path inside store>" ("memory/x.md", "knowledge/decisions/y.md").
+// These map that convention back to the real PARA location.
+export function resolveStorePath(root: string, storePath: string): string {
+  const [store, ...rest] = storePath.split("/");
+  const dir = STORE_DIR[store as keyof typeof STORE_DIR];
+  if (!dir) throw new Error(`unknown brain store '${store}'`);
+  return resolveWithin(root, dir, ...rest);
+}
+
+export function storeRelativeToRoot(storePath: string): string {
+  const [store, ...rest] = storePath.split("/");
+  const dir = STORE_DIR[store as keyof typeof STORE_DIR];
+  if (!dir) throw new Error(`unknown brain store '${store}'`);
+  return [dir, ...rest].join("/");
+}
 
 export function atlasRoot(): string {
   return process.env.ATLAS_ROOT

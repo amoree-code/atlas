@@ -9,7 +9,7 @@ import {
 } from "../dist/application/hooks/session-end-hook.js";
 import { defaultSessionStoreFactory } from "../dist/composition/runtime.js";
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
-import { PERSONAL_DIR, SYSTEM_DIR } from "../dist/paths.js";
+import { INBOX_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 test("readTranscriptEvents extracts bounded user/assistant text turns and skips everything else", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "atlas-transcript-"));
@@ -106,11 +106,11 @@ test("claudeSessionEndHook registers a desktop session from its transcript and r
   assert.match(summary, /Wired it up\./);
 
   const brainDumpFiles = await readdir(
-    path.join(root, PERSONAL_DIR, "brain-dump"),
+    path.join(root, INBOX_DIR, "brain-dump"),
   );
   assert.equal(brainDumpFiles.length, 1);
   const brainDump = await readFile(
-    path.join(root, PERSONAL_DIR, "brain-dump", brainDumpFiles[0]),
+    path.join(root, INBOX_DIR, "brain-dump", brainDumpFiles[0]),
     "utf8",
   );
   assert.match(brainDump, /wire the brain-dump hook/);

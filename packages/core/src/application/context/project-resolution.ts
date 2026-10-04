@@ -4,7 +4,7 @@ import path from "node:path";
 import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
 
 // Deterministic, local, metadata-first project resolution: no model call, no network round
-// trip. Bindings are a flat JSON registry (same pattern as system/control-plane/registry/
+// trip. Bindings are a flat JSON registry (same pattern as kernel/bridge/control-plane/registry/
 // providers.json), not a new workspace root.
 export type ProjectBinding = {
   id: string;

@@ -4,7 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { setup } from "../dist/interfaces/cli/setup-command.js";
-import { enginePath, PERSONAL_DIR, SYSTEM_DIR } from "../dist/paths.js";
+import {
+  enginePath,
+  KNOWLEDGE_DIR,
+  PERSONAL_DIR,
+  SYSTEM_DIR,
+} from "../dist/paths.js";
 
 function platformStartupFile(home) {
   if (process.platform === "darwin") {
@@ -48,17 +53,15 @@ test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, nev
   try {
     await setup();
 
-    for (const directory of [`${PERSONAL_DIR}/memory`]) {
+    for (const directory of [PERSONAL_DIR]) {
       const info = await stat(path.join(privateRoot, directory));
       assert.ok(
         info.isDirectory(),
         `expected ${directory} under the private root`,
       );
     }
-    await stat(path.join(privateRoot, PERSONAL_DIR, "memory", "MEMORY.md"));
-    await stat(
-      path.join(privateRoot, PERSONAL_DIR, "knowledge", "KNOWLEDGE.md"),
-    );
+    await stat(path.join(privateRoot, PERSONAL_DIR, "MEMORY.md"));
+    await stat(path.join(privateRoot, KNOWLEDGE_DIR, "KNOWLEDGE.md"));
     for (const directory of [
       `${SYSTEM_DIR}/profiles`,
       `${SYSTEM_DIR}/sessions`,

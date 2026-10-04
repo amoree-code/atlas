@@ -13,7 +13,7 @@ import {
   defaultSessionStoreFactory,
 } from "../dist/composition/runtime.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
-import { PERSONAL_DIR, PROJECTS_DIR, SYSTEM_DIR } from "../dist/paths.js";
+import { INBOX_DIR, PROJECTS_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 const runAgent = (request, execute) =>
   runAgentRaw(
@@ -137,9 +137,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     assert.equal(store.listIdeas("raw")[0].ideaId, ideaId);
     assert.equal(store.listIdeas("raw").length, 1);
     store.close();
-    await assert.rejects(() =>
-      access(path.join(root, PERSONAL_DIR, "inbox", "INBOX.md")),
-    );
+    await assert.rejects(() => access(path.join(root, INBOX_DIR, "INBOX.md")));
   } finally {
     delete process.env.ATLAS_ROOT;
   }

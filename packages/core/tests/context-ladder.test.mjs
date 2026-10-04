@@ -377,9 +377,9 @@ test("context-ladder.ts imports only node:fs/promises, node:path, and the existi
 
 async function withTempMemoryRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ladder-brain-"));
-  await mkdir(path.join(root, PERSONAL_DIR, "memory"), { recursive: true });
+  await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
   await writeFile(
-    path.join(root, PERSONAL_DIR, "memory", "goals.md"),
+    path.join(root, PERSONAL_DIR, "goals.md"),
     "---\nid: goals\ntitle: Goals\nsummary: long term objectives\ntags: []\ntype: fact\nconfidence: high\ncreated: 2026-01-01\nupdated: 2026-01-01\nlast_confirmed_at: 2026-01-01\n---\n\n# Goals\n\nLong term objectives fixture body.\n",
   );
   const previous = process.env.ATLAS_ROOT;

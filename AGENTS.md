@@ -18,8 +18,10 @@ pnpm check:style      # biome check .
 - No credentials, no personal data — anywhere in source, config, logs, tests, docs.
 - Public code only under `packages/core/src/`. Provider execution only under
   `packages/core/src/infrastructure/providers/`.
-- Private data (`personal/`, `projects/`, `profiles/`, `sessions/`, `config/`,
-  `control-plane/`, `integrations/`, `archive/`) stays outside the engine, git-ignored.
+- Private personal/project data (`brain/`) lives as a sibling of this repo, outside it
+  entirely. Machine-local state (`bridge/` — profiles, sessions, config, control-plane,
+  integrations, archive) is physically nested inside this repo but git-ignored; never
+  commit any of it.
 - `sessions/sessions.sqlite` holds session metadata/events/links only — nothing else.
 - Never add: `Adapters`, `Handoff`, `Mission`, `Coordinator`, the legacy Python/Bash
   runtime, hosted services, Postgres, Redis, dashboards.

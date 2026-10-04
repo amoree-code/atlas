@@ -55,7 +55,7 @@ Local `stdio` clients provide the connection consent; Atlas keeps write and exec
 approval inside its policy boundary.
 
 By default, `setup` creates the Atlas workspace as a private sibling directory next to
-this repository (e.g. `atlas/` next to `atlas/engine/`), not inside it, and installs
+this repository (e.g. `ocean/` next to `ocean/kernel/`), not inside it, and installs
 user-level startup integration pointed at this repository's `packages/core/dist/main.js`.
 Later logins
 start the local runtime automatically. Set `ATLAS_ROOT` to use a different workspace

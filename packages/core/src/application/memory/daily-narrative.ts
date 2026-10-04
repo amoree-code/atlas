@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import { atlasPath, PERSONAL_DIR } from "../../paths.js";
+import { atlasPath, DAILY_DIR } from "../../paths.js";
 import { findGitRoot } from "../context/project-resolution.js";
 import type { TaskObservation } from "../skills/task-observer.js";
 import type { ModelNarrative } from "./model-narrative.js";
@@ -37,7 +37,7 @@ function insertUnderHeading(
 
 /**
  * Human-readable narrative entry appended to today's
- * personal/daily/YYYY-MM-DD.md at session closeout. A field from `narrative`
+ * brain/01-daily/YYYY-MM-DD.md at session closeout. A field from `narrative`
  * (produced by a cheap model call — see model-narrative.ts) is used verbatim
  * when present; any field it omits (including when the model call was
  * skipped or failed entirely) falls back to the deterministic heuristic
@@ -52,7 +52,7 @@ export async function appendDailyNarrative(input: {
 }): Promise<void> {
   const { session, events, narrative } = input;
   const date = new Date().toISOString().slice(0, 10);
-  const directory = atlasPath(PERSONAL_DIR, "daily");
+  const directory = atlasPath(DAILY_DIR);
   const file = path.join(directory, `${date}.md`);
   await mkdir(directory, { recursive: true });
 
@@ -137,7 +137,7 @@ export async function appendDailyNarrative(input: {
 /**
  * Appends newly detected observations (corrections, repeated procedures,
  * explicit decisions, proven verifications — see task-observer.ts) to
- * today's personal/daily/YYYY-MM-DD.md, so they surface next to the
+ * today's brain/01-daily/YYYY-MM-DD.md, so they surface next to the
  * session narrative instead of sitting only in system/skills/observations.json.
  */
 export async function appendObservations(
@@ -146,7 +146,7 @@ export async function appendObservations(
 ): Promise<void> {
   if (!observations.length) return;
   const date = new Date().toISOString().slice(0, 10);
-  const directory = atlasPath(PERSONAL_DIR, "daily");
+  const directory = atlasPath(DAILY_DIR);
   const file = path.join(directory, `${date}.md`);
   await mkdir(directory, { recursive: true });
 

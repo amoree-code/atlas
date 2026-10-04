@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import test from "node:test";
+import { SYSTEM_DIR } from "../dist/paths.js";
+
+// SYSTEM_DIR may itself contain a path separator (e.g. "kernel/bridge"), so each of
+// its own segments needs the same [\\/] class as the literal segments around it.
+const sep = "[\\\\/]";
+const systemPattern = SYSTEM_DIR.split("/").join(sep);
 
 test("client test reports Atlas sources and Claude transport", () => {
   const result = spawnSync(
@@ -19,11 +25,11 @@ test("client test reports Atlas sources and Claude transport", () => {
   assert.equal(report.routing.command, "claude");
   assert.match(
     report.routing.shim,
-    /[\\/]system[\\/]runtime[\\/]shims[\\/]claude(?:\.cmd)?$/,
+    new RegExp(`${sep}${systemPattern}${sep}runtime${sep}shims${sep}claude(?:\\.cmd)?$`),
   );
   assert.match(
     report.atlas.sessionStore,
-    /[\\/]system[\\/]sessions[\\/]sessions\.sqlite$/,
+    new RegExp(`${sep}${systemPattern}${sep}sessions${sep}sessions\\.sqlite$`),
   );
 });
 
@@ -40,7 +46,9 @@ test("client test without a provider reports every registered client", () => {
   assert.ok(reports.some((report) => report.provider === "codex"));
   assert.ok(
     reports.every((report) =>
-      /[\\/]system[\\/]runtime[\\/]shims[\\/]/.test(report.routing.shim),
+      new RegExp(`${sep}${systemPattern}${sep}runtime${sep}shims${sep}`).test(
+        report.routing.shim,
+      ),
     ),
   );
 });
