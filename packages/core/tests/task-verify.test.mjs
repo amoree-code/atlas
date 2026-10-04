@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,7 @@ import {
   extractVerificationCommands,
   verifyTask,
 } from "../dist/application/tasks/verify-task.js";
+import { repoRoot } from "../dist/paths.js";
 
 async function writeTask(root, id, body) {
   const dir = path.join(root, id);
@@ -101,6 +103,24 @@ test("completeTask with verify succeeds when the independent check passes", asyn
       run: async () => ({ exitCode: 0 }),
     });
     assert.equal(result.state, "done");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("verifyTask defaults its working directory to the engine repo root", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-verify-"));
+  try {
+    await writeTask(root, "T-900", taskBody("active"));
+    let seen = "";
+    await verifyTask("T-900", root, {
+      run: async (_command, cwd) => {
+        seen = cwd;
+        return { exitCode: 0 };
+      },
+    });
+    assert.equal(seen, repoRoot());
+    assert.ok(existsSync(seen));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
