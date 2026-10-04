@@ -119,6 +119,24 @@ export async function registerProvider(
   return provider;
 }
 
+export async function setProviderEnabled(
+  id: string,
+  enabled: boolean,
+): Promise<ProviderRecord> {
+  const providers = loadProviderRegistry();
+  const provider = providers.find(
+    (candidate) => candidate.id === id || candidate.command === id,
+  );
+  if (!provider) throw new Error(`Provider is not registered: ${id}`);
+  const updated: ProviderRecord = { ...provider, enabled };
+  await saveProviderRegistry(
+    providers.map((candidate) =>
+      candidate.id === provider.id ? updated : candidate,
+    ),
+  );
+  return updated;
+}
+
 export async function removeProvider(id: string): Promise<ProviderRecord> {
   const providers = loadProviderRegistry();
   const provider = providers.find(
@@ -314,6 +332,7 @@ export async function wrapperStatus(): Promise<
       }
       return {
         ...provider,
+        enabled: provider.enabled !== false,
         wrapper: wrapperPath(provider.command),
         installed,
         realExecutable,
