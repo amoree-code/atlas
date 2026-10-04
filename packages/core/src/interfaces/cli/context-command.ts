@@ -31,7 +31,7 @@ export async function runContextCommand(json = false): Promise<void> {
     return;
   }
   console.log(
-    `Atlas context\nversion: ${version}\nroots: personal, projects, system`,
+    `Atlas context\nversion: ${version}\nroots: ${[...BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR].join(", ")}`,
   );
   if (resolution.status !== "bound")
     console.log(
