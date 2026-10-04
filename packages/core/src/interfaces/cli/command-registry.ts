@@ -118,7 +118,7 @@ import { intercept } from "./intercept-command.js";
 import { runMemoryCommand } from "./memory-command.js";
 import { runMigrateCommand } from "./migrate-command.js";
 import { runObserveCommand } from "./observe-command.js";
-import { runOnboardCommand } from "./onboard-command.js";
+import { manageClients, runOnboardCommand } from "./onboard-command.js";
 import { runOperateCommand } from "./operate-command.js";
 import { setup } from "./setup-command.js";
 import { runTasksCommand } from "./tasks-command.js";
@@ -239,6 +239,8 @@ async function commandClient(): Promise<void> {
       const provider = await setProviderEnabled(id, action === "enable");
       console.log(JSON.stringify(provider, null, 2));
     }
+  } else if (action === "manage") {
+    await manageClients();
   } else if (action === "doctor") {
     const findings = await wrapperDoctor(process.argv[4]);
     if (findings.length) {
@@ -274,7 +276,7 @@ async function commandClient(): Promise<void> {
     await runClientTestCommand(provider, process.argv.includes("--json"));
   } else {
     console.error(
-      "Usage: atlas client list|status|test [provider] [--json]|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|enable <id>|disable <id>|doctor [absolute-provider-path]",
+      "Usage: atlas client list|status|test [provider] [--json]|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|enable <id>|disable <id>|manage|doctor [absolute-provider-path]",
     );
     process.exitCode = 1;
   }

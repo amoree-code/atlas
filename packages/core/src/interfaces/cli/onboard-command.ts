@@ -69,6 +69,7 @@ export async function onboard(options: OnboardOptions = {}): Promise<void> {
       state.version = ONBOARDING_VERSION;
       await saveOnboardingState(state);
     }
+    await onboardStatus(steps, io.say);
     const skipped = Object.entries(state.steps)
       .filter(([, status]) => status === "skipped")
       .map(([id]) => id);
@@ -90,6 +91,21 @@ export async function onboardStatus(
     say(
       `${(state.steps[step.id] ?? "pending").padEnd(8)} ${step.id.padEnd(10)} ${step.title}`,
     );
+}
+
+// Re-runs just the clients step (enable/disable + sync), independent of onboarding state.
+export async function manageClients(): Promise<void> {
+  const step = buildSteps({ setup: () => setup() }).find(
+    (candidate) => candidate.id === "clients",
+  );
+  const terminal = terminalIO(
+    Boolean(process.stdin.isTTY && process.stdout.isTTY),
+  );
+  try {
+    await step?.run(terminal.io);
+  } finally {
+    terminal.close();
+  }
 }
 
 export async function runOnboardCommand(argv: string[]): Promise<void> {
