@@ -18,6 +18,15 @@ projects/*
 # publishable subset (bridge/policies/, bridge/profiles/) is carved out for T-231.
 bridge/*
 
+# T-240: house-authored skills carved out ahead of T-231 so they are version-controlled
+# and reviewable. Opt-in per skill, not a blanket un-ignore: the machine-written state
+# beside them must stay private (observations.json holds real session ids and work
+# summaries), and the imported third-party skills trip scan-privacy.mjs on placeholder
+# data. Widening this to the whole hub is T-231/T-238 work.
+!bridge/skills/
+bridge/skills/*
+!bridge/skills/ship/
+
 # --- credentials ---
 .env
 .env.*
