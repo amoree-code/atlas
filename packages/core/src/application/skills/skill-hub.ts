@@ -132,7 +132,8 @@ export async function linkClientSkills(options: {
 export type CopyAction = {
   client: SkillClient;
   skill: string;
-  action: "synchronized" | "create" | "replace" | "unlink";
+  action: "synchronized" | "create" | "replace" | "unlink" | "failed";
+  error?: string;
 };
 
 // Clients that get the hub's skills as copies. Hermes manages its own bundle and curator,
@@ -141,6 +142,8 @@ export const COPY_CLIENTS: SkillClient[] = ["claude", "codex", "gemini"];
 
 // Content hash of a whole skill directory: paths and bytes, so a changed script or reference
 // counts as drift, not only SKILL.md.
+// A symlink inside a skill is refused: copying it would either dereference into data outside
+// the hub or leave a dangling link in the client, and a loop would never finish.
 async function directoryHash(directory: string): Promise<string> {
   const hash = createHash("sha256");
   async function walk(current: string, prefix: string): Promise<void> {
@@ -150,7 +153,10 @@ async function directoryHash(directory: string): Promise<string> {
     for (const entry of entries) {
       const full = path.join(current, entry.name);
       const relative = path.posix.join(prefix, entry.name);
-      if ((await stat(full)).isDirectory()) await walk(full, relative);
+      const info = await lstat(full);
+      if (info.isSymbolicLink())
+        throw new Error(`${relative} is a symlink inside a skill`);
+      if (info.isDirectory()) await walk(full, relative);
       else hash.update(relative).update(await readFile(full));
     }
   }
@@ -188,29 +194,56 @@ export async function copyClientSkills(options: {
     for (const skill of names) {
       const target = path.join(root, skill);
       const source = path.join(hub, skill);
-      let action: CopyAction["action"] = "create";
-      let info: Awaited<ReturnType<typeof lstat>> | null = null;
       try {
-        info = await lstat(target);
-      } catch {
-        /* absent */
+        let action: CopyAction["action"] = "create";
+        let info: Awaited<ReturnType<typeof lstat>> | null = null;
+        try {
+          info = await lstat(target);
+        } catch {
+          /* absent */
+        }
+        const wanted = await directoryHash(source);
+        let ours = false;
+        if (info?.isSymbolicLink()) {
+          action = "unlink";
+          // A link into the hub holds nothing of its own. Any other link is moved into the
+          // backup (the link itself, intact) so what it pointed at stays reachable.
+          ours = path
+            .resolve(root, await readlink(target))
+            .startsWith(hub + path.sep);
+        } else if (info) {
+          action =
+            info.isDirectory() && (await directoryHash(target)) === wanted
+              ? "synchronized"
+              : "replace";
+        }
+        actions.push({ client, skill, action });
+        if (!options.apply || action === "synchronized") continue;
+        if (action === "replace" || (action === "unlink" && !ours)) {
+          const saved = path.join(backup, client);
+          await mkdir(saved, { recursive: true });
+          await rename(target, path.join(saved, skill));
+          backedUp = true;
+        } else if (action === "unlink") await rm(target);
+        // Copy beside the target and rename, so a failed copy never leaves a half skill.
+        const staging = path.join(root, `.${skill}.copying`);
+        await rm(staging, { recursive: true, force: true });
+        try {
+          await cp(source, staging, { recursive: true });
+          await rename(staging, target);
+        } catch (error) {
+          await rm(staging, { recursive: true, force: true });
+          throw error;
+        }
+      } catch (error) {
+        // One bad skill must not abort the run halfway through every client.
+        actions.push({
+          client,
+          skill,
+          action: "failed",
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
-      if (info?.isSymbolicLink()) action = "unlink";
-      else if (info)
-        action =
-          (await directoryHash(target)) === (await directoryHash(source))
-            ? "synchronized"
-            : "replace";
-      actions.push({ client, skill, action });
-      if (!options.apply || action === "synchronized") continue;
-      if (action === "unlink") await rm(target);
-      if (action === "replace") {
-        const saved = path.join(backup, client);
-        await mkdir(saved, { recursive: true });
-        await rename(target, path.join(saved, skill));
-        backedUp = true;
-      }
-      await cp(source, target, { recursive: true, dereference: true });
     }
   }
   return { actions, backup: backedUp ? backup : null };

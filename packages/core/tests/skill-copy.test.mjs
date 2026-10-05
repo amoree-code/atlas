@@ -165,3 +165,80 @@ test("is idempotent and leaves foreign skills alone", async () => {
     await rm(base, { recursive: true, force: true });
   }
 });
+
+test("a plain file where a skill belongs is backed up, not fatal", async () => {
+  const { base, hub, home, archive } = await fixture();
+  try {
+    await writeFile(path.join(home, ".claude", "skills", "beta"), "stray");
+    const { actions, backup } = await copyClientSkills({
+      hub,
+      home,
+      archive,
+      apply: true,
+    });
+    assert.equal(
+      actions.find((a) => a.client === "claude" && a.skill === "beta")?.action,
+      "replace",
+    );
+    assert.equal(
+      await readFile(path.join(backup, "claude", "beta"), "utf8"),
+      "stray",
+    );
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("a link outside the hub is kept in the backup, not lost", async () => {
+  const { base, hub, home, archive } = await fixture();
+  try {
+    const other = path.join(base, "other", "beta");
+    await skill(path.join(base, "other"), "beta", { "SKILL.md": "other" });
+    await symlink(other, path.join(home, ".codex", "skills", "beta"), "dir");
+    const { backup } = await copyClientSkills({
+      hub,
+      home,
+      archive,
+      apply: true,
+    });
+    assert.ok(
+      (await lstat(path.join(backup, "codex", "beta"))).isSymbolicLink(),
+    );
+    assert.equal(await readFile(path.join(other, "SKILL.md"), "utf8"), "other");
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
+test("a skill containing a symlink fails alone; the rest still copy", async () => {
+  const { base, hub, home, archive } = await fixture();
+  try {
+    await symlink(
+      path.join(base, "home"),
+      path.join(hub, "alpha", "leak"),
+      "dir",
+    );
+    const { actions } = await copyClientSkills({
+      hub,
+      home,
+      archive,
+      apply: true,
+    });
+    const failed = actions.find((a) => a.skill === "alpha");
+    assert.equal(failed?.action, "failed");
+    assert.match(failed?.error ?? "", /symlink/);
+    assert.equal(
+      await readFile(
+        path.join(home, ".claude", "skills", "beta", "SKILL.md"),
+        "utf8",
+      ),
+      "beta",
+    );
+    assert.deepEqual(
+      (await readdir(path.join(home, ".claude", "skills"))).sort(),
+      ["beta"],
+    );
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
