@@ -2,7 +2,6 @@ import { loadObsidianConnection } from "../../application/obsidian/vault-discove
 import { watchObsidianVault } from "../../application/obsidian/vault-sync.js";
 
 export async function runService(shutdownAfterMs?: number): Promise<void> {
-  console.log("Atlas runtime is running.");
   const controller = new AbortController();
   let watcher: Promise<void> | undefined;
   try {
@@ -43,6 +42,9 @@ export async function runService(shutdownAfterMs?: number): Promise<void> {
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
     process.on("message", onMessage);
+    // Only now is a SIGTERM handled gracefully; announcing earlier lets a signal that
+    // arrives during startup kill the process before it can shut down cleanly.
+    console.log("Atlas runtime is running.");
     if (shutdownAfterMs !== undefined)
       testShutdown = setTimeout(() => shutdown("timer"), shutdownAfterMs);
   });

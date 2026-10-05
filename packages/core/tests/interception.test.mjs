@@ -273,7 +273,10 @@ unixOnly(
       );
       const store = await openSessionStore();
       let session;
-      for (let attempt = 0; attempt < 50; attempt += 1) {
+      // Poll to a deadline, not a fixed attempt count: under load the child needs far
+      // longer than 1 s to start, and a SIGTERM sent earlier would kill it unhandled.
+      const deadline = Date.now() + 20_000;
+      while (Date.now() < deadline) {
         session = store.list()[0];
         const started =
           session &&
