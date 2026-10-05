@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Every absolute path a skill names must exist.
+// Home-relative paths a skill names must exist: in every .md under a skill (SKILL.md and
+// references/), as a whole backticked path, a backticked command, or a command line. Not
+// covered: repo-relative paths, brace/placeholder templates, symlinked skill directories.
 //
 // T-244: five of the running skills pointed at ~/atlas/engine/scripts/ and
 // ~/.ai-os/user/... for weeks after the T-224 rename moved those trees. Nothing caught it,
@@ -41,12 +43,26 @@ const PLACEHOLDER = /[<>*?{}$]|\byyyy\b|\bmm\b|\bdd\b|\.\.\./i;
 // Repo-relative mentions (`brain/…`, `kernel/…`) stay out of scope: relative to which
 // checkout is genuinely ambiguous.
 const HOME_PREFIX = /^(?:~|\$HOME)\//;
-const PATH_IN_BACKTICKS = /`((?:~|\$HOME)\/[^`\s]+)`/g;
-const PATH_IN_COMMAND = /^\s*(?:[a-z-]+\s+)*((?:~|\$HOME)\/[^\s`"';|&)]+)/gm;
+// A backticked span may carry arguments after the path (`~/venv/bin/tool install x`);
+// only the path itself is the claim.
+const PATH_IN_BACKTICKS = /`((?:~|\$HOME)\/[^`\s]+)(?:\s[^`]*)?`/g;
+// `\\` is excluded so a continued shell line (`~/x/run.sh \`) does not capture the backslash.
+const PATH_IN_COMMAND = /^\s*(?:[a-z-]+\s+)*((?:~|\$HOME)\/[^\s`"';|&)\\]+)/gm;
 
 // A script that is invoked must itself exist; the parent-only rule below is too lenient
 // for these.
-const EXECUTABLE = /\.(?:sh|ps1|mjs|cjs|js|ts|py)$/;
+// Anything under a `bin/` directory is invoked too, extension or not.
+const EXECUTABLE = /(?:\.(?:sh|ps1|mjs|cjs|js|ts|py)|\/bin\/[^/]+)$/;
+
+// Optional installs a skill *describes* without requiring them here: a podcast transcriber
+// it only works with once set up, a browser binary it tells the reader to install, the place
+// a skill-only install would land. Each is a prerequisite, not rot. Listed by name so the
+// exception is visible and every new miss still fails; delete an entry once it is installed.
+const OPTIONAL_INSTALLS = new Set([
+  ".agent-reach/tools/xiaoyuzhou/transcribe.sh",
+  ".browser-use-env/bin/playwright",
+  ".claude/skills/planning-with-files/",
+]);
 
 const errors = [];
 let scanned = 0;
@@ -75,13 +91,16 @@ async function validate(file) {
     const relative = cleaned.replace(HOME_PREFIX, "");
     if (PLACEHOLDER.test(relative)) continue;
     if (SELF_MANAGED.some((prefix) => relative.startsWith(prefix))) continue;
+    if (OPTIONAL_INSTALLS.has(relative)) continue;
 
     const absolute = path.join(HOME, relative);
     // An invoked script must exist outright; anything else only needs a real parent,
     // because skills legitimately name files they create on first use.
-    const target = EXECUTABLE.test(absolute)
-      ? absolute
-      : path.dirname(absolute);
+    // A trailing slash names a directory: it must exist itself, not just its parent.
+    const target =
+      EXECUTABLE.test(absolute) || cleaned.endsWith("/")
+        ? absolute
+        : path.dirname(absolute);
     if (target === HOME) continue; // ~/<thing> — nothing above it to verify.
     checked += 1;
     try {
@@ -98,7 +117,7 @@ async function walk(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const target = path.join(directory, entry.name);
     if (entry.isDirectory()) await walk(target);
-    else if (entry.name === "SKILL.md") await validate(target);
+    else if (entry.name.endsWith(".md")) await validate(target);
   }
 }
 
