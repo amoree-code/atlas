@@ -95,3 +95,9 @@ never overwrites). `atlas skill link` shows the plan and `atlas skill link --app
 backing up each replaced copy under `bridge/archive/`. Skills a client does not already have are only
 linked with `--all`, because every skill adds always-on context. `atlas onboard` runs this as the
 `skills` step.
+
+`atlas skill copy` is the copy-based alternative (T-244: one home, clients get copies, not symlinks): it
+gives `claude`, `codex` and `gemini` a real copy of every hub skill, whole directories included. It is a
+dry run until `--apply`; a link into the hub is just unlinked, any other link or a differing real
+directory is moved into a timestamped backup under `bridge/archive/`, and a skill that contains a
+symlink is reported as `failed` instead of copied. Entries the hub does not name are left alone.
