@@ -80,6 +80,7 @@ import {
   reviewSkillCandidate,
 } from "../../application/skills/skill-curation.js";
 import {
+  copyClientSkills,
   linkClientSkills,
   populateSkillHub,
 } from "../../application/skills/skill-hub.js";
@@ -788,6 +789,14 @@ async function commandSkill(): Promise<void> {
       .slice(4)
       .filter((arg) => !arg.startsWith("--"));
     console.log(JSON.stringify(await populateSkillHub(sources), null, 2));
+  } else if (action === "copy") {
+    console.log(
+      JSON.stringify(
+        await copyClientSkills({ apply: process.argv.includes("--apply") }),
+        null,
+        2,
+      ),
+    );
   } else if (action === "link") {
     console.log(
       JSON.stringify(
