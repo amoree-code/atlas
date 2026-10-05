@@ -3,7 +3,7 @@
 # Prints the file path. Format: one flat file per date (see brain/README.md).
 set -eu
 
-ROOT="${ATLAS_ROOT:-$HOME/atlas}"
+ROOT="${OCEAN_ROOT:-${ATLAS_ROOT:-$HOME/ocean}}"
 D=$(date +%Y-%m-%d)
 FILE="$ROOT/brain/01-daily/$D.md"
 
