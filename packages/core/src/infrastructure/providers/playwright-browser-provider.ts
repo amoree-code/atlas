@@ -77,7 +77,7 @@ async function fetchWebSocketDebuggerUrl(port: number): Promise<string | null> {
   }
 }
 
-function nthIndex(value: string, needle: string, occurrence: number): number {
+function _nthIndex(value: string, needle: string, occurrence: number): number {
   let from = 0;
   for (let current = 1; current <= occurrence; current += 1) {
     const index = value.indexOf(needle, from);
@@ -331,9 +331,7 @@ class PlaywrightHandle implements BrowserHandle {
                 getDomNode?: () => HTMLElement | null;
                 getModel?: () => {
                   getValue(): string;
-                  findMatches(
-                    text: string,
-                  ): Array<{
+                  findMatches(text: string): Array<{
                     range: {
                       startLineNumber: number;
                       startColumn: number;
@@ -350,9 +348,7 @@ class PlaywrightHandle implements BrowserHandle {
               }>;
               getModels?: () => Array<{
                 getValue(): string;
-                findMatches(
-                  text: string,
-                ): Array<{
+                findMatches(text: string): Array<{
                   range: {
                     startLineNumber: number;
                     startColumn: number;

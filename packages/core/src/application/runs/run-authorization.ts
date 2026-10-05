@@ -1,8 +1,8 @@
+import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import {
   assertRunCanStart,
   type RunContract,
 } from "../../domain/runs/run-contract.js";
-import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 
 export function authorizeRun(
   store: SessionStorePort,

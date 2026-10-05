@@ -74,15 +74,15 @@ import {
   syncCoreSkills,
 } from "../../application/skills/core-skill-sync.js";
 import {
-  linkClientSkills,
-  populateSkillHub,
-} from "../../application/skills/skill-hub.js";
-import {
   addSkillCandidate,
   learnSkillFromSession,
   listSkillCandidates,
   reviewSkillCandidate,
 } from "../../application/skills/skill-curation.js";
+import {
+  linkClientSkills,
+  populateSkillHub,
+} from "../../application/skills/skill-hub.js";
 import {
   listObservations,
   observeSession,
@@ -784,7 +784,9 @@ async function commandSkill(): Promise<void> {
   if (action === "sync")
     console.log(JSON.stringify(await syncCoreSkills(), null, 2));
   else if (action === "hub") {
-    const sources = process.argv.slice(4).filter((arg) => !arg.startsWith("--"));
+    const sources = process.argv
+      .slice(4)
+      .filter((arg) => !arg.startsWith("--"));
     console.log(JSON.stringify(await populateSkillHub(sources), null, 2));
   } else if (action === "link") {
     console.log(
@@ -797,8 +799,7 @@ async function commandSkill(): Promise<void> {
         2,
       ),
     );
-  }
-  else if (action === "doctor")
+  } else if (action === "doctor")
     console.log(JSON.stringify(await coreSkillReports(), null, 2));
   else if (action === "list")
     console.log(JSON.stringify(await listSkillCandidates(), null, 2));

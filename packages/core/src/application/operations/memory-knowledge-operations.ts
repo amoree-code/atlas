@@ -102,7 +102,7 @@ function matchesQuery(
 // error a caller of memory.search/knowledge.search never asked for.
 async function searchViaBrainIndex(
   recordType: RecordType,
-  rootSegments: string[],
+  _rootSegments: string[],
   classification: IntentClassification,
   budget: ContextBudget,
   query: string,

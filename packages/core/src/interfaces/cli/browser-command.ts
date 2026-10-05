@@ -6,9 +6,9 @@ import {
   BrowserSessionManager,
   browserDownloadsPath,
 } from "../../application/browser/browser-session.js";
+import { BrowserTaskRunner } from "../../application/browser/browser-task-runner.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { PlaywrightBrowserProvider } from "../../infrastructure/providers/playwright-browser-provider.js";
-import { BrowserTaskRunner } from "../../application/browser/browser-task-runner.js";
 
 export async function runBrowserCommand(
   action: string,
