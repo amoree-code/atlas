@@ -128,25 +128,29 @@ credentials.
 ## Repository layout
 
 ```text
-atlas/
-├── engine/                 public Atlas Runtime repository (pnpm workspace root)
-│   └── packages/
-│       └── core/           the `atlas` package
-│           ├── src/        domain / application / infrastructure / interfaces
-│           ├── templates/
-│           ├── tests/
-│           └── package.json
-├── personal/               private user data
-├── projects/               private project data
-├── system/                 private profiles, sessions, config, governance, integrations, and runtime
-└── archive/                private retained legacy history
+ocean/                      private workspace root (local-only repo, no remote)
+├── kernel/                 THIS repository — public Atlas Runtime (pnpm workspace root)
+│   ├── packages/
+│   │   └── core/           the `atlas` package
+│   │       ├── src/        domain / application / infrastructure / interfaces
+│   │       ├── templates/
+│   │       ├── tests/
+│   │       └── package.json
+│   ├── scripts/
+│   └── bridge/             machine-local state — git-ignored, never published
+│                           profiles, sessions, config, control-plane, integrations
+├── brain/                  private user, project and knowledge records
+└── sessions/               narrative session records
 ```
 
-`personal/`, `projects/`, `system/`, and `archive/` are private workspace data. They are ignored
-by Git and are never part of a public commit. By default they resolve to a private
-workspace directory next to this repository; set `ATLAS_ROOT` to choose another
-workspace root. Startup entries execute the engine from `engine/packages/core/dist/main.js`
-while using the private workspace as their working directory.
+Only `kernel/` is this repository. `brain/` and `sessions/` are siblings in the private
+workspace and are not part of it. `bridge/` sits physically inside this repo but is
+git-ignored in full and is never part of a public commit.
+
+The workspace root resolves to the parent directory by default; set `OCEAN_ROOT` (or the
+older `ATLAS_ROOT`) to choose another. Startup entries execute the engine from
+`kernel/packages/core/dist/main.js` while using the private workspace as their working
+directory.
 
 ## Development
 
