@@ -8,7 +8,7 @@ import {
 } from "../../infrastructure/wrappers/wrapper-manager.js";
 import { atlasPath, PERSONAL_DIR } from "../../paths.js";
 import { connectObsidianVault } from "../obsidian/vault-discovery.js";
-import { linkClientSkills, populateSkillHub } from "../skills/skill-hub.js";
+import { copyClientSkills, populateSkillHub } from "../skills/skill-hub.js";
 
 // Bump when a step is added; completed steps stay completed, only new ids run.
 export const ONBOARDING_VERSION = 2;
@@ -108,29 +108,29 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
     },
     {
       id: "skills",
-      title: "Skills (one store in Ocean, clients link to it)",
+      title: "Skills (one store in Ocean, clients hold copies)",
       optional: false,
       async run(io) {
         const hub = await populateSkillHub();
         io.say(
           `  Hub: ${hub.added.length} added, ${hub.kept.length} already there.`,
         );
-        const plan = await linkClientSkills({});
-        const replace = plan.actions.filter((a) => a.action === "replace");
-        if (replace.length === 0) {
-          io.say("  Clients already link to the hub.");
+        const plan = await copyClientSkills({});
+        const pending = plan.actions.filter((a) => a.action !== "synchronized");
+        if (pending.length === 0) {
+          io.say("  Clients already hold a copy of every hub skill.");
           return "done";
         }
         io.say(
-          `  ${replace.length} client copies would become links (originals are backed up).`,
+          `  ${pending.length} client skill copies are out of date (originals are backed up).`,
         );
         if (!io.interactive) {
-          io.say("  Run: atlas skill link --apply");
+          io.say("  Run: atlas skill copy --apply");
           return "skipped";
         }
         if (!(await yes(io, "  Apply now?"))) return "skipped";
-        const applied = await linkClientSkills({ apply: true });
-        io.say(`  Linked. Backup: ${applied.backup ?? "none needed"}`);
+        const applied = await copyClientSkills({ apply: true });
+        io.say(`  Copied. Backup: ${applied.backup ?? "none needed"}`);
         return "done";
       },
     },

@@ -88,16 +88,18 @@ making a read-only inspection command silently move user data.
 
 ## Skills
 
-There is one live skills store: `bridge/skills` (machine-local, git-ignored). AI clients hold symlinks
-into it instead of their own copies. `packages/core/skills` is only the set of core skills shipped with
-the engine; `atlas skill hub` copies it, plus any extra folders you name, into the store (additive,
-never overwrites). `atlas skill link` shows the plan and `atlas skill link --apply` makes the links,
-backing up each replaced copy under `bridge/archive/`. Skills a client does not already have are only
-linked with `--all`, because every skill adds always-on context. `atlas onboard` runs this as the
-`skills` step.
+There is one live skills store: `bridge/skills` (machine-local, git-ignored). `packages/core/skills` is
+only the set of core skills shipped with the engine; `atlas skill hub` copies it, plus any extra folders
+you name, into the store (additive, never overwrites).
 
-`atlas skill copy` is the copy-based alternative (T-244: one home, clients get copies, not symlinks): it
+`atlas skill copy` is how clients get skills (T-244: one home, clients get copies, not symlinks): it
 gives `claude`, `codex` and `gemini` a real copy of every hub skill, whole directories included. It is a
 dry run until `--apply`; a link into the hub is just unlinked, any other link or a differing real
 directory is moved into a timestamped backup under `bridge/archive/`, and a skill that contains a
 symlink is reported as `failed` instead of copied. Entries the hub does not name are left alone.
+`atlas onboard` runs this as the `skills` step.
+
+`atlas skill link` is the older symlink-based alternative it replaced: it shows the plan and
+`atlas skill link --apply` makes the links, backing up each replaced copy under `bridge/archive/`.
+Skills a client does not already have are only linked with `--all`, because every skill adds always-on
+context. Onboarding no longer runs this.

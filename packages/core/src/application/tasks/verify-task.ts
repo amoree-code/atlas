@@ -11,9 +11,13 @@ import {
 const execFile = promisify(execFileCallback);
 
 // Only commands whose first token is on this list are ever executed by the
-// verifier. A task's `## Verification` section is prose with inline-backtick
-// spans, so the allowlist keeps the verifier from running an arbitrary span
-// that merely looks like a command.
+// verifier — including every link of a `&&`/`||`/`;`/`|` chain, since each
+// link runs as its own command. A task's `## Verification` section is prose
+// with inline-backtick spans and fenced code blocks, so the allowlist keeps
+// the verifier from running an arbitrary span that merely looks like a
+// command. Command substitution and redirection (`` ` ``, `$(`, `>`, `<`) are
+// rejected outright: they let an allowlisted first token smuggle an
+// unrelated command in (e.g. `` bash -c "rm -rf $HOME" ``).
 const COMMAND_ALLOWLIST = new Set([
   "pnpm",
   "npm",
@@ -66,8 +70,9 @@ const defaultRunner: CommandRunner = async (command, cwd) => {
 /**
  * Pull runnable commands out of a task's verification declaration. A `verify:`
  * frontmatter field (string or comma-separated list) wins; otherwise the
- * inline-backtick spans of the `## Verification` section are used, filtered to
- * the command allowlist so prose spans are ignored.
+ * `## Verification` section is used — each non-empty line inside a fenced code
+ * block, plus any inline-backtick spans outside of fences — filtered to the
+ * command allowlist so prose spans are ignored.
  */
 export function extractVerificationCommands(source: string): string[] {
   const frontmatter = source
@@ -85,15 +90,37 @@ export function extractVerificationCommands(source: string): string[] {
     .match(/\n## Verification\n\n([\s\S]*?)(?=\n## |$)/)?.[1]
     ?.trim();
   if (!section) return [];
-  const spans = [...section.matchAll(/`([^`]+)`/g)].map((match) =>
+
+  const fenced: string[] = [];
+  let outsideFences = "";
+  let lastIndex = 0;
+  for (const match of section.matchAll(/```[^\n]*\n([\s\S]*?)```/g)) {
+    outsideFences += section.slice(lastIndex, match.index);
+    lastIndex = match.index! + match[0].length;
+    for (const line of match[1].split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed) fenced.push(trimmed);
+    }
+  }
+  outsideFences += section.slice(lastIndex);
+
+  const spans = [...outsideFences.matchAll(/`([^`]+)`/g)].map((match) =>
     match[1].trim(),
   );
-  return spans.filter(isAllowedCommand);
+  return [...fenced, ...spans].filter(isAllowedCommand);
 }
 
+const UNSAFE_METACHARACTERS = /[`$><]/;
+const CHAIN_SEPARATOR = /\s*(?:&&|\|\||;|\|)\s*/;
+
 function isAllowedCommand(command: string): boolean {
-  const first = command.trim().split(/\s+/)[0];
-  return COMMAND_ALLOWLIST.has(first);
+  if (UNSAFE_METACHARACTERS.test(command)) return false;
+  const links = command
+    .split(CHAIN_SEPARATOR)
+    .map((link) => link.trim())
+    .filter(Boolean);
+  if (links.length === 0) return false;
+  return links.every((link) => COMMAND_ALLOWLIST.has(link.split(/\s+/)[0]));
 }
 
 /**
