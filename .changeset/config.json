@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
   "changelog": [
     "@changesets/changelog-github",
-    { "repo": "amoree-code/atlas" }
+    { "repo": "amoree-code/ocean" }
   ],
   "commit": false,
   "fixed": [],
