@@ -19,7 +19,7 @@
     "build": "tsc",
     "dev": "tsx src/main.ts",
     "start": "node dist/main.js",
-    "check:skills": "node scripts/validate-skills.mjs && node scripts/generate-skills-index.mjs --check",
+    "check:skills": "node scripts/validate-skills.mjs && node scripts/validate-skill-paths.mjs && node scripts/generate-skills-index.mjs --check",
     "generate:skills": "node scripts/generate-skills-index.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --noEmit --watch",
