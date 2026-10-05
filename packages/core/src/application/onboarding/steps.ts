@@ -7,8 +7,8 @@ import {
   wrapperStatus,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
 import { atlasPath, PERSONAL_DIR } from "../../paths.js";
-import { linkClientSkills, populateSkillHub } from "../skills/skill-hub.js";
 import { connectObsidianVault } from "../obsidian/vault-discovery.js";
+import { linkClientSkills, populateSkillHub } from "../skills/skill-hub.js";
 
 // Bump when a step is added; completed steps stay completed, only new ids run.
 export const ONBOARDING_VERSION = 2;

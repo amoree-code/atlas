@@ -25,7 +25,9 @@ test("client test reports Atlas sources and Claude transport", () => {
   assert.equal(report.routing.command, "claude");
   assert.match(
     report.routing.shim,
-    new RegExp(`${sep}${systemPattern}${sep}runtime${sep}shims${sep}claude(?:\\.cmd)?$`),
+    new RegExp(
+      `${sep}${systemPattern}${sep}runtime${sep}shims${sep}claude(?:\\.cmd)?$`,
+    ),
   );
   assert.match(
     report.atlas.sessionStore,

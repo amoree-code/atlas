@@ -7,8 +7,8 @@ import {
   BrowserApprovalRequiredError,
   BrowserService,
 } from "../dist/application/browser/browser-service.js";
-import { BrowserTaskRunner } from "../dist/application/browser/browser-task-runner.js";
 import { BrowserSessionManager } from "../dist/application/browser/browser-session.js";
+import { BrowserTaskRunner } from "../dist/application/browser/browser-task-runner.js";
 import { browserContracts } from "../dist/domain/capabilities/browser-contract.js";
 import { SessionStore } from "../dist/infrastructure/persistence/session-store.js";
 import { FakeBrowserProvider } from "../dist/infrastructure/providers/fake-browser-provider.js";
@@ -118,11 +118,19 @@ test("click, type, and select report verification against live state, not the re
 test("replace-text changes only the requested occurrence and verifies the live value", async () => {
   const provider = new FakeBrowserProvider();
   const service = new BrowserService(provider);
-  const launch = await service.launch("/tmp/atlas-browser-test-profile-replace");
+  const launch = await service.launch(
+    "/tmp/atlas-browser-test-profile-replace",
+  );
   const handle = await service.connect(launch);
 
   await service.type(handle, "#editor", "goTown, goTown, goTown");
-  const replaced = await service.replaceText(handle, "#editor", "goTown", "easterEgg", 3);
+  const replaced = await service.replaceText(
+    handle,
+    "#editor",
+    "goTown",
+    "easterEgg",
+    3,
+  );
 
   assert.equal(replaced.verified, true);
   assert.equal(replaced.result.value, "goTown, goTown, easterEgg");
@@ -266,10 +274,7 @@ test("browser task runner stops at an unverified step", async () => {
   await assert.rejects(
     () =>
       runner.run("session", {
-        steps: [
-          { action: "click", selector: "#run" },
-          { action: "read" },
-        ],
+        steps: [{ action: "click", selector: "#run" }, { action: "read" }],
       }),
     /not verified/,
   );

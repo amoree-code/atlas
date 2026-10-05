@@ -14,9 +14,9 @@ import { promisify } from "node:util";
 import type { WrapperManagerPort } from "../../domain/ports/platform-ports.js";
 import {
   atlasPath,
-  enginePath,
   BRAIN_RECORD_DIRS,
   CHARTER_DIR,
+  enginePath,
   POLICIES_DIR,
   PROJECTS_DIR,
   repoPath,

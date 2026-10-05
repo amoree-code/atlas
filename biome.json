@@ -8,7 +8,14 @@
       "!!graft",
       "!!graphify-out",
       "!!packages/core/tests/_tmp",
-      "!!bridge"
+      "!!bridge",
+      "!!.claude/helpers",
+      "!!.cursor/hooks",
+      "!!.claude/settings.json",
+      "!!.cursor/mcp.json",
+      "!!.gemini/settings.json",
+      "!!.mcp.json",
+      "!!opencode.json"
     ]
   },
   "formatter": {
