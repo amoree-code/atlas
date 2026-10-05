@@ -20,8 +20,8 @@ workspace does not exist. Use `atlas --yes` for the recommended non-interactive 
 For a local checkout, use the development commands below instead.
 
 ```bash
-git clone https://github.com/amoree-code/atlas.git atlas
-cd atlas
+git clone https://github.com/amoree-code/ocean.git ocean
+cd ocean
 pnpm install
 pnpm build
 node packages/core/dist/main.js setup
