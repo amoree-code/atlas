@@ -2,7 +2,7 @@
 # Read-only. Prints the state Claude needs to resume work cold.
 set -u
 
-ROOT="${ATLAS_ROOT:-$HOME/atlas}"
+ROOT="${OCEAN_ROOT:-${ATLAS_ROOT:-$HOME/ocean}}"
 D=$(date +%Y-%m-%d)
 FILE="$ROOT/brain/01-daily/$D.md"
 

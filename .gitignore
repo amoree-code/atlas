@@ -26,6 +26,7 @@ bridge/*
 !bridge/skills/
 bridge/skills/*
 !bridge/skills/ship/
+!bridge/skills/session-end/
 
 # --- credentials ---
 .env
