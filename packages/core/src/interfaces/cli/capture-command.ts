@@ -39,7 +39,7 @@ export async function runCaptureCommand(
         "session_entry_contract",
         JSON.stringify(
           validateSessionEntryContract({
-            entryPoint: "atlas-run",
+            entryPoint: "ocean-run",
             controlLevel: "full-head",
             inputCapture: "semantic",
             contextTransport: "manual-capture",

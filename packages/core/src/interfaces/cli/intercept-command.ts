@@ -148,7 +148,7 @@ export async function intercept(
   );
   store.appendEvent(
     sessionId,
-    "atlas_bootstrap",
+    "ocean_bootstrap",
     JSON.stringify({
       provider: provider.id,
       ...bootstrap.manifest,

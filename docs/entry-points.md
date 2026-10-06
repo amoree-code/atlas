@@ -81,7 +81,7 @@ explicitly; it does not rewrite client configuration or credentials.
 
 Each governed provider session records a `session_entry_contract` event containing:
 
-- `entryPoint`: `atlas-run`, `terminal-shim`, `interactive-managed`, or `desktop-wrapper`.
+- `entryPoint`: `ocean-run` (stored `atlas-run` is still accepted for one release), `terminal-shim`, `interactive-managed`, or `desktop-wrapper`.
 - `controlLevel`: `full-head`, `managed-partial`, `observed`, or `bypass`.
 - `inputCapture`: `semantic`, `bounded-terminal`, or `none`.
 - `contextTransport`: the provider-native or environment transport actually used.

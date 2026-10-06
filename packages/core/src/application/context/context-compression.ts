@@ -6,7 +6,7 @@ export type CompressionResult = {
   sourceHash: string;
   originalBytes: number;
   compressedBytes: number;
-  method: "none" | "atlas-bounded-v1" | "fallback-original-bounded";
+  method: "none" | "ocean-bounded-v1" | "fallback-original-bounded";
   budget: number;
   omittedSections: string[];
   recoveryRef: string;
@@ -66,7 +66,7 @@ export function compressContext(input: {
       sourceHash,
       originalBytes,
       compressedBytes,
-      method: "atlas-bounded-v1",
+      method: "ocean-bounded-v1",
       budget: input.budget,
       omittedSections,
       recoveryRef: input.sourceId,

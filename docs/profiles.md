@@ -24,7 +24,7 @@ canonical JSON file; legacy profile directories are read only for compatibility 
   allowedCommands: string[],                             // default []
   writePolicy: "none" | "workspace" | "allowed-paths",  // default "none"
   contextSources: string[],                              // default []
-  contextCompression: "none" | "atlas-bounded",        // default "none"
+  contextCompression: "none" | "ocean-bounded",        // default "none"
   clients: { [client: string]: { enabled: boolean, model?: string, profile?: string,
     home?: string, mode?: string, capabilities: string[], limitations: string[] } },
 }
@@ -57,7 +57,8 @@ When `skills` is empty, Ocean selects only `core-thinking` and `verification`. T
 small default set; expensive or promoted skills remain prompt-matched and owner-reviewed.
 `contextCompression` is kept in the schema and the profile identity, but has no effect on
 headless prompts (and is not written into the profile contract): context sources are
-referenced, not inlined, so there is nothing to compress.
+referenced, not inlined, so there is nothing to compress. A profile that still says
+`"atlas-bounded"` is accepted and read as `"ocean-bounded"` for one release.
 
 Writable profiles fail closed because direct provider execution cannot enforce file writes.
 `writePolicy` is therefore not treated as advisory; an enforcing sandbox must be added before

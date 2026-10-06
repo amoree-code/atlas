@@ -52,7 +52,11 @@ const rawProfileSchema = z.object({
   verification: z
     .object({ commands: z.array(z.string()).default([]) })
     .default({ commands: [] }),
-  contextCompression: z.enum(["none", "atlas-bounded"]).default("none"),
+  // "atlas-bounded" is the pre-rename value; still accepted on read for one release.
+  contextCompression: z
+    .enum(["none", "ocean-bounded", "atlas-bounded"])
+    .transform((mode) => (mode === "atlas-bounded" ? "ocean-bounded" : mode))
+    .default("none"),
   instructions: z.string().default(""),
 });
 
