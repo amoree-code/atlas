@@ -55,12 +55,12 @@ export async function onboard(options: OnboardOptions = {}): Promise<void> {
     const pending = steps.filter((step) => !state.steps[step.id]);
     if (pending.length === 0) {
       io.say(
-        "Atlas onboarding is complete. Use `atlas onboard --reset <step>` to redo a step, or `atlas doctor` for health.",
+        "Ocean onboarding is complete. Use `ocean onboard --reset <step>` to redo a step, or `ocean doctor` for health.",
       );
       return;
     }
     io.say(
-      `Atlas onboarding: ${pending.length} of ${steps.length} steps to go.`,
+      `Ocean onboarding: ${pending.length} of ${steps.length} steps to go.`,
     );
     for (const [index, step] of pending.entries()) {
       io.say(`\n[${index + 1}/${pending.length}] ${step.title}`);
@@ -74,7 +74,7 @@ export async function onboard(options: OnboardOptions = {}): Promise<void> {
       .filter(([, status]) => status === "skipped")
       .map(([id]) => id);
     io.say(
-      `\nOnboarding finished.${skipped.length ? ` Skipped: ${skipped.join(", ")} (redo with atlas onboard --reset <step>).` : ""}`,
+      `\nOnboarding finished.${skipped.length ? ` Skipped: ${skipped.join(", ")} (redo with ocean onboard --reset <step>).` : ""}`,
     );
   } finally {
     terminal?.close();
@@ -116,7 +116,7 @@ export async function runOnboardCommand(argv: string[]): Promise<void> {
   const resetIndex = argv.indexOf("--reset");
   const reset = resetIndex >= 0 ? argv[resetIndex + 1] : undefined;
   if (resetIndex >= 0 && !reset) {
-    console.error("Usage: atlas onboard [--yes] [--status] [--reset <step>]");
+    console.error("Usage: ocean onboard [--yes] [--status] [--reset <step>]");
     process.exitCode = 1;
     return;
   }

@@ -79,7 +79,7 @@ async function installLinuxStartup(): Promise<void> {
   const systemdUser = path.join(os.homedir(), ".config", "systemd", "user");
   const unit = path.join(systemdUser, "atlas.service");
   const contents = `[Unit]
-Description=Atlas local runtime
+Description=Ocean local runtime
 
 [Service]
 Type=simple
@@ -142,7 +142,7 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   );
   await ensureFile(
     atlasPath(SYSTEM_DIR, "config", "startup", "STARTUP.md"),
-    "# Atlas startup\n\nManaged by `atlas setup`.\n",
+    "# Ocean startup\n\nManaged by `ocean setup`.\n",
   );
   await syncProviderWrappers();
   const shellProfile = await installShellIntegration();
@@ -161,6 +161,6 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
     );
   }
   console.log(
-    `Atlas setup complete: ${atlasRoot()} (AI CLI interception enabled in ${shellProfile})`,
+    `Ocean setup complete: ${atlasRoot()} (AI CLI interception enabled in ${shellProfile})`,
   );
 }

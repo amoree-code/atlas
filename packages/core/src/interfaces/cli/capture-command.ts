@@ -22,7 +22,7 @@ export async function runCaptureCommand(
   try {
     if (action === "add") {
       const content = redactRuntimeText(args.join(" ").trim());
-      if (!content) throw new Error("Usage: atlas capture add <idea>");
+      if (!content) throw new Error("Usage: ocean capture add <idea>");
       const sessionId = randomUUID();
       store.create({
         sessionId,
@@ -79,7 +79,7 @@ export async function runCaptureCommand(
     if (action === "promote" || action === "discard") {
       const captureId = Number(args[0]);
       if (!Number.isInteger(captureId))
-        throw new Error(`Usage: atlas capture ${action} <capture-id> [target]`);
+        throw new Error(`Usage: ocean capture ${action} <capture-id> [target]`);
       if (action === "promote") {
         const item = store.getCaptureItem(captureId);
         if (!item) throw new Error(`Capture item not found: ${captureId}`);
@@ -101,7 +101,7 @@ export async function runCaptureCommand(
       return;
     }
     console.error(
-      "Usage: atlas capture add <idea>|scan [session-id]|list [status]|promote <id> <target>|discard <id>",
+      "Usage: ocean capture add <idea>|scan [session-id]|list [status]|promote <id> <target>|discard <id>",
     );
     process.exitCode = 1;
   } finally {

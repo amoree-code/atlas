@@ -29,7 +29,7 @@ export async function runHandoffCommand(
   }
   if (action === "show" || action === "context") {
     const id = args[0];
-    if (!id) throw new Error(`Usage: atlas handoff ${action} <handoff-id>`);
+    if (!id) throw new Error(`Usage: ocean handoff ${action} <handoff-id>`);
     const handoff = await getHandoff(
       id,
       defaultSessionStoreFactory,
@@ -53,7 +53,7 @@ export async function runHandoffCommand(
     return;
   }
   console.error(
-    "Usage: atlas handoff create [--task <id>] [--session <id>] [--next <action>]|show <id>|context <id>|list [--task <id>]",
+    "Usage: ocean handoff create [--task <id>] [--session <id>] [--next <action>]|show <id>|context <id>|list [--task <id>]",
   );
   process.exitCode = 1;
 }

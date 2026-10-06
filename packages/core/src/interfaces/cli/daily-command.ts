@@ -13,7 +13,7 @@ import { listTasks } from "./tasks-command.js";
 /**
  * Interactive human-in-the-loop gate for observations sitting in "observed"
  * status (see task-observer.ts). Only runs on a real TTY, so headless and
- * scheduled invocations of `atlas daily start` never block on input.
+ * scheduled invocations of `ocean daily start` never block on input.
  */
 const observationGateLimit = 5;
 
@@ -31,8 +31,8 @@ async function runObservationGate(): Promise<void> {
   try {
     console.log(
       allPending.length > pending.length
-        ? `\n🤖 Atlas: ${pending.length} most recent of ${allPending.length} observation(s) awaiting review.`
-        : `\n🤖 Atlas: ${pending.length} observation(s) awaiting review.`,
+        ? `\n🤖 Ocean: ${pending.length} most recent of ${allPending.length} observation(s) awaiting review.`
+        : `\n🤖 Ocean: ${pending.length} observation(s) awaiting review.`,
     );
     for (const observation of pending) {
       console.log(`\n[${observation.signalType}] ${observation.summary}`);
@@ -62,7 +62,7 @@ export async function runDailyCommand(
 ): Promise<void> {
   if (action !== "start") {
     console.error(
-      "Usage: atlas daily start [--apply] [--news <bounded-news-summary>]",
+      "Usage: ocean daily start [--apply] [--news <bounded-news-summary>]",
     );
     process.exitCode = 1;
     return;

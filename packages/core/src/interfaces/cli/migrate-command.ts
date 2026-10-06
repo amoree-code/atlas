@@ -14,7 +14,7 @@ export async function runMigrateCommand(apply: boolean): Promise<void> {
         {
           applyRequired: true,
           databaseExists: exists,
-          action: "atlas migrate --apply",
+          action: "ocean migrate --apply",
           note: "Applying opens the session database and runs idempotent schema migrations.",
         },
         null,

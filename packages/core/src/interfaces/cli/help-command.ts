@@ -16,5 +16,5 @@ export function renderHelp(): string {
   const groups = commandGroups
     .map(([label, commands]) => `  ${label.padEnd(12)} ${commands}`)
     .join("\n");
-  return `Usage: atlas <command> [options]\n\nCommands:\n${groups}\n\nGlobal options:\n  -h, --help     Show this help\n  -v, --version  Show the installed version`;
+  return `Usage: ocean <command> [options]\n\nCommands:\n${groups}\n\nGlobal options:\n  -h, --help     Show this help\n  -v, --version  Show the installed version`;
 }

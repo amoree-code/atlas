@@ -411,7 +411,7 @@ function classifyProviderResult(
 function interceptedProfile(provider: string): Profile {
   return {
     name: `intercepted:${provider}`,
-    description: "Atlas transparent CLI interception profile",
+    description: "Ocean transparent CLI interception profile",
     version: "1.0.0",
     provider: provider as Profile["provider"],
     model: "provider-managed",
