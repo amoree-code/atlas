@@ -31,6 +31,7 @@ import {
   resolveOriginalExecutable,
   validateExplicitExecutable,
 } from "../../infrastructure/providers/provider-registry.js";
+import { oceanEnvPair } from "../../paths.js";
 
 export type InterceptOptions = {
   entryPoint?: "terminal-shim" | "interactive-managed" | "desktop-wrapper";
@@ -55,7 +56,7 @@ export async function intercept(
       command: executable,
       args,
       cwd: path.resolve(process.cwd()),
-      env: { ATLAS_INTERCEPTED: "1" },
+      env: oceanEnvPair("INTERCEPTED", "1"),
     });
     return result.exitCode;
   }
@@ -147,7 +148,7 @@ export async function intercept(
   );
   store.appendEvent(
     sessionId,
-    "atlas_bootstrap",
+    "ocean_bootstrap",
     JSON.stringify({
       provider: provider.id,
       ...bootstrap.manifest,
@@ -205,7 +206,7 @@ export async function intercept(
       args,
       cwd: workingDirectory,
       environment: {
-        ATLAS_INTERCEPTED: "1",
+        ...oceanEnvPair("INTERCEPTED", "1"),
         ...bootstrapEnvironment(bootstrap),
       },
     };
@@ -411,7 +412,7 @@ function classifyProviderResult(
 function interceptedProfile(provider: string): Profile {
   return {
     name: `intercepted:${provider}`,
-    description: "Atlas transparent CLI interception profile",
+    description: "Ocean transparent CLI interception profile",
     version: "1.0.0",
     provider: provider as Profile["provider"],
     model: "provider-managed",

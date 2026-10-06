@@ -4,10 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  atlasPath,
-  atlasRoot,
   enginePath,
   engineRoot,
+  oceanPath,
+  oceanRoot,
   PERSONAL_DIR,
   resolveWithin,
 } from "../dist/paths.js";
@@ -16,26 +16,40 @@ test("engineRoot resolves to the engine package directory, one level above this 
   assert.equal(engineRoot(), path.resolve(import.meta.dirname, ".."));
 });
 
-test("default atlasRoot resolves to the private workspace sibling of engine, not inside it", () => {
+test("default oceanRoot resolves to the private workspace sibling of engine, not inside it", () => {
   delete process.env.ATLAS_ROOT;
-  assert.equal(atlasRoot(), path.resolve(engineRoot(), "..", "..", ".."));
-  assert.notEqual(atlasRoot(), engineRoot());
+  assert.equal(oceanRoot(), path.resolve(engineRoot(), "..", "..", ".."));
+  assert.notEqual(oceanRoot(), engineRoot());
 });
 
 test("ATLAS_ROOT explicitly overrides the default private root", () => {
   const override = path.join(os.tmpdir(), "atlas-root-override");
   process.env.ATLAS_ROOT = override;
   try {
-    assert.equal(atlasRoot(), path.resolve(override));
+    assert.equal(oceanRoot(), path.resolve(override));
     assert.equal(
-      atlasPath(PERSONAL_DIR),
+      oceanPath(PERSONAL_DIR),
       path.join(path.resolve(override), PERSONAL_DIR),
     );
     assert.equal(
-      atlasPath("sessions", "sessions.sqlite"),
+      oceanPath("sessions", "sessions.sqlite"),
       path.join(path.resolve(override), "sessions", "sessions.sqlite"),
     );
   } finally {
+    delete process.env.ATLAS_ROOT;
+  }
+});
+
+test("OCEAN_ROOT wins over the older ATLAS_ROOT, and ATLAS_ROOT alone still works", () => {
+  const ocean = path.join(os.tmpdir(), "ocean-root-new");
+  const atlas = path.join(os.tmpdir(), "atlas-root-old");
+  try {
+    process.env.ATLAS_ROOT = atlas;
+    assert.equal(oceanRoot(), path.resolve(atlas));
+    process.env.OCEAN_ROOT = ocean;
+    assert.equal(oceanRoot(), path.resolve(ocean));
+  } finally {
+    delete process.env.OCEAN_ROOT;
     delete process.env.ATLAS_ROOT;
   }
 });

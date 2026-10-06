@@ -8,7 +8,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
-import { atlasPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 import { runAgent } from "../runs/run-agent.js";
 
 export type Schedule = {
@@ -21,7 +21,7 @@ export type Schedule = {
   attempts?: number;
   retryAt?: string;
 };
-const file = () => atlasPath(SYSTEM_DIR, "schedules.json");
+const file = () => oceanPath(SYSTEM_DIR, "schedules.json");
 const running = new Set<string>();
 
 export async function listSchedules(): Promise<Schedule[]> {
@@ -206,7 +206,7 @@ export async function runSchedulerWorker(
 }
 
 function leaseFile(id: string): string {
-  return atlasPath(SYSTEM_DIR, "schedules", `${id}.lease`);
+  return oceanPath(SYSTEM_DIR, "schedules", `${id}.lease`);
 }
 
 async function acquireLease(

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { renameSync, writeFileSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 import {
   discoverObsidianVault,
   type ObsidianConnection,
@@ -24,7 +24,7 @@ export type ObsidianSyncResult = ObsidianDiscovery & {
 };
 
 const defaultStatePath = (): string =>
-  atlasPath(SYSTEM_DIR, "integrations", "obsidian", "sync-state.json");
+  oceanPath(SYSTEM_DIR, "integrations", "obsidian", "sync-state.json");
 
 async function readState(file: string): Promise<SyncState> {
   try {

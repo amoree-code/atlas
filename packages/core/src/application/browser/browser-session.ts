@@ -7,7 +7,7 @@ import type {
 import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import { validateSessionEntryContract } from "../../domain/sessions/entry-contract.js";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
 import type { BrowserService, ClickExpectation } from "./browser-service.js";
 
 type BrowserResumeData = BrowserLaunch & {
@@ -117,7 +117,7 @@ export class BrowserSessionManager {
       }
     }
     const sessionId = randomUUID();
-    const profileDir = atlasPath(SYSTEM_DIR, "browser", "profiles", key);
+    const profileDir = oceanPath(SYSTEM_DIR, "browser", "profiles", key);
     await mkdir(profileDir, { recursive: true });
     this.store.create({
       sessionId,
@@ -126,7 +126,7 @@ export class BrowserSessionManager {
       parentSessionId: null,
       profile: "browser",
       profileIdentity: "browser-v1",
-      workingDirectory: atlasRoot(),
+      workingDirectory: oceanRoot(),
       resumeData: null,
     });
     this.store.appendEvent(
@@ -134,7 +134,7 @@ export class BrowserSessionManager {
       "session_entry_contract",
       JSON.stringify(
         validateSessionEntryContract({
-          entryPoint: "atlas-run",
+          entryPoint: "ocean-run",
           controlLevel: "full-head",
           inputCapture: "semantic",
           contextTransport: "browser-capability-contract",
@@ -422,5 +422,5 @@ function summarizeResult(value: unknown): unknown {
 }
 
 export function browserDownloadsPath(sessionId: string): string {
-  return atlasPath(SYSTEM_DIR, "browser", "downloads", sessionId);
+  return oceanPath(SYSTEM_DIR, "browser", "downloads", sessionId);
 }

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { validateSessionEntryContract } from "../dist/domain/sessions/entry-contract.js";
+import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
+import { runClientTestCommand } from "../dist/interfaces/cli/client-test-command.js";
 
 test("validates the full-head entry contract", () => {
   assert.deepEqual(
@@ -16,6 +21,71 @@ test("validates the full-head entry contract", () => {
     "full-head",
   );
 });
+
+test("the pre-rename atlas-run entry point is read as ocean-run", () => {
+  const contract = {
+    entryPoint: "atlas-run",
+    controlLevel: "full-head",
+    inputCapture: "semantic",
+    contextTransport: "t",
+    policyEnforcement: "p",
+    promotion: "explicit-review",
+    resume: "r",
+  };
+  assert.equal(validateSessionEntryContract(contract).entryPoint, "ocean-run");
+  assert.equal(
+    validateSessionEntryContract({ ...contract, entryPoint: "ocean-run" })
+      .entryPoint,
+    "ocean-run",
+  );
+});
+
+for (const [label, entryPoint, eventType] of [
+  ["stored", "atlas-run", "atlas_bootstrap"],
+  ["new", "ocean-run", "ocean_bootstrap"],
+]) {
+  test(`client-test reads ${label} entry contract and bootstrap events`, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ocean-client-test-"));
+    const previous = process.env.ATLAS_ROOT;
+    process.env.ATLAS_ROOT = root;
+    const logs = [];
+    const log = console.log;
+    try {
+      const store = await openSessionStore();
+      store.create({
+        sessionId: "s-1",
+        provider: "claude",
+        providerSessionId: null,
+        parentSessionId: null,
+        profile: "developer",
+        profileIdentity: "h",
+        workingDirectory: root,
+        resumeData: null,
+        taskId: null,
+      });
+      store.appendEvent(
+        "s-1",
+        "session_entry_contract",
+        JSON.stringify({ entryPoint }),
+      );
+      store.appendEvent(
+        "s-1",
+        eventType,
+        JSON.stringify({ provider: "claude", bytes: 7 }),
+      );
+      store.close();
+      console.log = (line) => logs.push(line);
+      await runClientTestCommand("claude", true);
+    } finally {
+      console.log = log;
+      if (previous === undefined) delete process.env.ATLAS_ROOT;
+      else process.env.ATLAS_ROOT = previous;
+    }
+    const report = JSON.parse(logs.join("\n"));
+    assert.equal(report.latestSession.entryContract.entryPoint, entryPoint);
+    assert.equal(report.latestSession.bootstrapManifest.bytes, 7);
+  });
+}
 
 test("rejects an entry contract that promises an unknown control level", () => {
   assert.throws(

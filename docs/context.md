@@ -1,6 +1,6 @@
 # Context
 
-A headless run (`atlas run`, the scheduler, the task loop, the gateway) sends the provider one
+A headless run (`ocean run`, the scheduler, the task loop, the gateway) sends the provider one
 prompt assembled by `runAgent` (`src/application/runs/run-agent.ts`). Every supported provider
 is an agentic CLI with file access, so the prompt carries **references, not bodies**: the
 provider reads a file only when the request needs it. Formatting lives in
@@ -14,11 +14,11 @@ Non-empty sections are joined with a blank line, in this order:
 | Section | Content | Bound |
 |---|---|---|
 | `request` | the request text | — |
-| `profile` | `## Effective Atlas profile` as compact `key: value` lines; empty and default fields are omitted, `writePolicy` is always shown | — |
+| `profile` | `## Effective Ocean profile` as compact `key: value` lines; empty and default fields are omitted, `writePolicy` is always shown | — |
 | `instructions` | `profile.instructions` | — |
-| `skills` | `## Atlas skills`: one line per profile skill, `- name: description (path to SKILL.md)`; bodies are not inlined. Owner-reviewed promoted skills matched by the request follow inline, since they have no SKILL.md | description 300 B; promoted skills 4 KB total, a truncated one ends with a marker naming its entry id, `atlas skill list` and the candidate store file (not granted: it also holds unreviewed candidates) |
-| `facts` | `## Durable profile facts`: newest first, then a pointer to the full set (`atlas memory facts <profile>` and the store file) | 2 KB including the pointer |
-| `handoff` | `## Atlas handoff` with the compact handoff context, verbatim | handoff budget |
+| `skills` | `## Ocean skills`: one line per profile skill, `- name: description (path to SKILL.md)`; bodies are not inlined. Owner-reviewed promoted skills matched by the request follow inline, since they have no SKILL.md | description 300 B; promoted skills 4 KB total, a truncated one ends with a marker naming its entry id, `ocean skill list` and the candidate store file (not granted: it also holds unreviewed candidates) |
+| `facts` | `## Durable profile facts`: newest first, then a pointer to the full set (`ocean memory facts <profile>` and the store file) | 2 KB including the pointer |
+| `handoff` | `## Ocean handoff` with the compact handoff context, verbatim | handoff budget |
 | `context` | `## Context references`: `- path (recordType, bytes B): reason` per reference | 4 KB; overflow is listed in the manifest |
 
 ## How references are chosen
@@ -39,7 +39,7 @@ Non-empty sections are joined with a blank line, in this order:
    example) also fails closed to no references, so a run never fails on a file it would not
    have read.
 
-Paths recorded in events are always relative: to the run cwd for `contextSources`, to the Atlas
+Paths recorded in events are always relative: to the run cwd for `contextSources`, to the Ocean
 root for packet records. Only the prompt, which is persisted as a hash, carries the absolute form.
 
 ## Context manifest (`src/domain/context/context.ts`)
@@ -54,7 +54,7 @@ root for packet records. Only the prompt, which is persisted as a hash, carries 
   compression: object | null,       // null: nothing is inlined, so nothing is compressed
   lastContextCheckpoint: string,    // ISO timestamp of this build
   references: {                     // what the prompt points at (defaults to [])
-    path: string, base: "cwd" | "atlas-root", recordType: string,
+    path: string, base: "cwd" | "ocean-root", recordType: string,
     reason: string, bytes: number | null,
   }[],
 }
@@ -69,7 +69,7 @@ sum exactly to `bytes`.
 
 ## Loading phases
 
-Atlas does not scan all sessions, tasks, personal files, daily files, or transcripts at startup:
+Ocean does not scan all sessions, tasks, personal files, daily files, or transcripts at startup:
 
 1. Bootstrap session metadata and the selected profile.
 2. Load the requested task or compact handoff, when supplied.
@@ -81,7 +81,8 @@ Atlas does not scan all sessions, tasks, personal files, daily files, or transcr
 `contextCompression` stays in the profile schema and in the profile identity hash, but it has no
 effect on headless prompts now that no context body is inlined, and the profile contract does
 not mention it. `application/context/context-compression.ts` has no production caller; only its
-unit tests exercise it.
+unit tests exercise it. A stored context reference with `base: "atlas-root"` is accepted and
+read as `"ocean-root"` for one release.
 
 Read access: the prompt points the provider at files it must be able to open. `runAgent` passes
 these directories outside the run cwd as `readDirectories` on the provider request:
@@ -105,16 +106,16 @@ Kilo read outside the cwd without a grant.
 Antigravity (`--sandbox`) and Kimi have no such flag wired and may be unable to open a skill
 outside the cwd; the index line still carries the skill's name and description.
 
-## `atlas context cost`
+## `ocean context cost`
 
 A read-only report of what each interactive client loads on every request before the user types
 anything:
 
 ```bash
-atlas context cost [--json] [--budget <bytes>] [--project <dir>]
+ocean context cost [--json] [--budget <bytes>] [--project <dir>]
 ```
 
-- Clients: claude, codex, gemini, hermes, cursor, antigravity (the skill roots `atlas skill sync`
+- Clients: claude, codex, gemini, hermes, cursor, antigravity (the skill roots `ocean skill sync`
   uses) plus a shared `~/.agents` row.
 - Always-on bytes = global rules file(s) (Claude and Gemini `@path` imports resolved one level,
   ignoring code) + Claude's per-project `MEMORY.md` for `--project` (default: cwd; keyed by the enclosing git

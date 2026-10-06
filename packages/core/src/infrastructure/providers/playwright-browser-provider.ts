@@ -17,6 +17,7 @@ import { mkdir } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import type { Browser, BrowserContext, Page } from "playwright-core";
+import { oceanEnv } from "../../paths.js";
 import type {
   BrowserElement,
   BrowserHandle,
@@ -90,7 +91,7 @@ function _nthIndex(value: string, needle: string, occurrence: number): number {
 
 function resolveChromiumExecutable(): string | null {
   const candidates = [
-    process.env.ATLAS_BROWSER_EXECUTABLE,
+    oceanEnv("BROWSER_EXECUTABLE"),
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/usr/bin/google-chrome",
     "/usr/bin/chromium-browser",
@@ -106,7 +107,7 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
       return {
         ok: false,
         detail:
-          "no Chromium-family browser binary found; set ATLAS_BROWSER_EXECUTABLE",
+          "no Chromium-family browser binary found; set OCEAN_BROWSER_EXECUTABLE",
       };
     return { ok: true, detail: executable };
   }

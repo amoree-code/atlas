@@ -16,7 +16,7 @@ export async function runIdeaCommand(
         .trim();
       if (!title || !content)
         throw new Error(
-          "Usage: atlas idea save <title> <content> [--session <session-id>]",
+          "Usage: ocean idea save <title> <content> [--session <session-id>]",
         );
       store.saveIdea({
         ideaId: `idea-${randomUUID()}`,
@@ -36,7 +36,7 @@ export async function runIdeaCommand(
     if (action === "classify" || action === "discard") {
       const id = args[0];
       if (!id)
-        throw new Error(`Usage: atlas idea ${action} <idea-id> [target]`);
+        throw new Error(`Usage: ocean idea ${action} <idea-id> [target]`);
       store.updateIdea(
         id,
         action === "discard" ? "discarded" : "classified",
@@ -56,7 +56,7 @@ export async function runIdeaCommand(
       return;
     }
     console.error(
-      "Usage: atlas idea save <title> <content> [--session <id>]|list [status]|classify <id> <target>|discard <id>",
+      "Usage: ocean idea save <title> <content> [--session <id>]|list [status]|classify <id> <target>|discard <id>",
     );
     process.exitCode = 1;
   } finally {

@@ -8,9 +8,9 @@ import {
 } from "../../domain/skills/skill.js";
 import { validateSkill } from "../../domain/skills/skill-validator.js";
 import {
-  atlasPath,
-  atlasRoot,
   enginePath,
+  oceanPath,
+  oceanRoot,
   PROJECTS_DIR,
   SYSTEM_DIR,
 } from "../../paths.js";
@@ -35,7 +35,7 @@ export async function loadSkill(name: string): Promise<Skill> {
 // deduplicated, without reading any body. The description comes from index.json.
 export async function loadSkillIndex(
   names: string[],
-  cwd = atlasRoot(),
+  cwd = oceanRoot(),
 ): Promise<SkillIndexEntry[]> {
   const roots = skillRoots(cwd);
   const entries: SkillIndexEntry[] = [];
@@ -52,7 +52,7 @@ export async function loadSkillIndex(
 function skillRoots(cwd: string): string[] {
   return [
     enginePath("skills"),
-    atlasPath(SYSTEM_DIR, "integrations", "claude-code", "skills"),
+    oceanPath(SYSTEM_DIR, "integrations", "claude-code", "skills"),
     projectSkillRoot(cwd),
   ].filter(Boolean) as string[];
 }
@@ -92,7 +92,7 @@ async function readCatalog(file: string): Promise<SkillMetadata[]> {
 }
 
 function projectSkillRoot(cwd: string): string | null {
-  const projectsRoot = path.resolve(atlasPath(PROJECTS_DIR));
+  const projectsRoot = path.resolve(oceanPath(PROJECTS_DIR));
   const relative = path.relative(projectsRoot, path.resolve(cwd));
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative))
     return null;

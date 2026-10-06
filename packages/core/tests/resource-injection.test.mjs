@@ -8,9 +8,9 @@ import {
   resolveProject,
 } from "../dist/application/context/project-resolution.js";
 import {
-  ATLAS_BOOTSTRAP_MAX_BYTES,
   bootstrapEnvironment,
   buildAtlasBootstrap,
+  OCEAN_BOOTSTRAP_MAX_BYTES,
 } from "../dist/application/context/resource-injection.js";
 
 async function withTempAtlasRoot(fn) {
@@ -31,12 +31,12 @@ test("bound project bootstrap stays within the 256-byte budget and carries no At
     projectId: "atlas",
     name: "Atlas",
     path: "/x",
-    matchedOn: "atlas-root",
+    matchedOn: "ocean-root",
     confidence: "high",
   });
   assert.ok(
-    bootstrap.manifest.bytes <= ATLAS_BOOTSTRAP_MAX_BYTES,
-    `${bootstrap.manifest.bytes} exceeds ${ATLAS_BOOTSTRAP_MAX_BYTES}`,
+    bootstrap.manifest.bytes <= OCEAN_BOOTSTRAP_MAX_BYTES,
+    `${bootstrap.manifest.bytes} exceeds ${OCEAN_BOOTSTRAP_MAX_BYTES}`,
   );
   assert.equal(bootstrap.manifest.transport, "bootstrap-env");
   assert.match(bootstrap.content, /project=atlas/);
@@ -62,10 +62,12 @@ test("bootstrap is delivered only as environment variables, never as file conten
     confidence: "none",
   });
   const env = bootstrapEnvironment(bootstrap);
+  assert.equal(env.OCEAN_BOOTSTRAP, bootstrap.content);
   assert.equal(env.ATLAS_BOOTSTRAP, bootstrap.content);
-  assert.equal(Object.keys(env).length, 2);
+  assert.equal(env.OCEAN_BOOTSTRAP_BYTES, env.ATLAS_BOOTSTRAP_BYTES);
+  assert.equal(Object.keys(env).length, 4);
   assert.ok(
-    Buffer.byteLength(env.ATLAS_BOOTSTRAP) <= ATLAS_BOOTSTRAP_MAX_BYTES,
+    Buffer.byteLength(env.ATLAS_BOOTSTRAP) <= OCEAN_BOOTSTRAP_MAX_BYTES,
   );
 });
 

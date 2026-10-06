@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
 import {
-  atlasPath,
+  oceanPath,
   PROJECTS_DIR,
   resolveWithin,
   SYSTEM_DIR,
@@ -33,7 +33,7 @@ export type TaskLoop = {
   resultPath: string | null;
 };
 
-const loopsFile = () => atlasPath(SYSTEM_DIR, "loops.json");
+const loopsFile = () => oceanPath(SYSTEM_DIR, "loops.json");
 
 export async function listTaskLoops(): Promise<TaskLoop[]> {
   try {
@@ -210,7 +210,7 @@ async function persistWorkerResult(
     null,
     2,
   );
-  const dir = atlasPath(SYSTEM_DIR, "runs");
+  const dir = oceanPath(SYSTEM_DIR, "runs");
   await mkdir(dir, { recursive: true });
   const target = resolveWithin(dir, `${sessionId}.json`);
   const temp = `${target}.${process.pid}.tmp`;
@@ -243,7 +243,7 @@ export async function runTaskLoopWorker(
 
 async function taskClaimsDone(id: string): Promise<boolean> {
   const file = resolveWithin(
-    atlasPath(PROJECTS_DIR, "atlas", "tasks"),
+    oceanPath(PROJECTS_DIR, "atlas", "tasks"),
     id,
     "task.md",
   );

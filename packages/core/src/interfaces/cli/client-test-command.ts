@@ -14,7 +14,7 @@ import {
   providerWrapperPath,
   shimDirectory,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
-import { atlasPath, enginePath, SYSTEM_DIR } from "../../paths.js";
+import { enginePath, oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 export async function runClientTestCommand(
   providerName: string,
@@ -58,14 +58,17 @@ async function buildReport(
     store.list().find((session) => session.provider === provider.id) ?? null;
   const events = latest ? store.listEvents(latest.sessionId) : [];
   const entry = events.find((event) => event.type === "session_entry_contract");
-  const manifest = events.find((event) => event.type === "atlas_bootstrap");
+  const manifest = events.find(
+    (event) =>
+      event.type === "ocean_bootstrap" || event.type === "atlas_bootstrap",
+  );
   const entryBoundary =
     provider.id === "claude"
       ? await claudeEntryBoundaryStatus()
       : {
           kind: "shim-fallback",
           detail:
-            "Routed through the Atlas intercept shim (atlas intercept --client). No provider-specific native hook is wired for this provider yet.",
+            "Routed through the Ocean intercept shim (ocean intercept --client). No provider-specific native hook is wired for this provider yet.",
         };
   return {
     provider: provider.id,
@@ -79,19 +82,19 @@ async function buildReport(
     },
     project,
     atlas: {
-      root: atlasPath(),
+      root: oceanPath(),
       bootstrapBytes: bootstrap.manifest.bytes,
       bootstrapTransport: bootstrap.manifest.transport,
-      sessionStore: atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
-      runtimeLogs: atlasPath(SYSTEM_DIR, "runtime", "logs", "runtime.jsonl"),
-      sessionSummaries: atlasPath(SYSTEM_DIR, "sessions", "summaries"),
+      sessionStore: oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
+      runtimeLogs: oceanPath(SYSTEM_DIR, "runtime", "logs", "runtime.jsonl"),
+      sessionSummaries: oceanPath(SYSTEM_DIR, "sessions", "summaries"),
     },
     entryBoundary,
     // The bootstrap is always delivered as an environment variable when launched through the
-    // Atlas shim; whether the provider itself reads it natively (a hook, a config convention)
+    // Ocean shim; whether the provider itself reads it natively (a hook, a config convention)
     // is unverified until that provider's own consumption is tested — never claimed PROVEN here.
     transport:
-      "NOT PROVEN: bootstrap-env (delivered as ATLAS_BOOTSTRAP; native provider consumption unverified)",
+      "NOT PROVEN: bootstrap-env (delivered as OCEAN_BOOTSTRAP; native provider consumption unverified)",
     providerOwnedPaths:
       provider.id === "claude"
         ? [
@@ -102,7 +105,7 @@ async function buildReport(
           ].map((file) => ({ path: file, exists: existsSync(file) }))
         : [
             {
-              path: "provider-managed (not controlled by Atlas)",
+              path: "provider-managed (not controlled by Ocean)",
               exists: null,
             },
           ],
@@ -131,34 +134,34 @@ async function claudeEntryBoundaryStatus(): Promise<{
   if (hook.scriptInstalled) {
     return {
       kind: "native-hook-available-not-registered",
-      detail: `Hook script exists at ${hook.scriptPath} but hooks.SessionStart in ${hook.settingsPath} does not reference it. Falling back to the Atlas intercept shim for this provider.`,
+      detail: `Hook script exists at ${hook.scriptPath} but hooks.SessionStart in ${hook.settingsPath} does not reference it. Falling back to the Ocean intercept shim for this provider.`,
     };
   }
   return {
     kind: "shim-fallback",
     detail:
-      "No native SessionStart hook script found. Routed through the Atlas intercept shim (atlas intercept --client claude).",
+      "No native SessionStart hook script found. Routed through the Ocean intercept shim (ocean intercept --client claude).",
   };
 }
 
 function printReport(report: Awaited<ReturnType<typeof buildReport>>): void {
-  console.log(`Atlas client test: ${report.provider}`);
+  console.log(`Ocean client test: ${report.provider}`);
   console.log(`cwd: ${report.routing.cwd}`);
   console.log(`shim: ${report.routing.shim}`);
   console.log(
-    `native executable: ${report.routing.nativeExecutable ?? "NOT FOUND outside Atlas shims"}`,
+    `native executable: ${report.routing.nativeExecutable ?? "NOT FOUND outside Ocean shims"}`,
   );
-  console.log(`Atlas engine: ${report.routing.atlasEngine}`);
+  console.log(`Ocean engine: ${report.routing.atlasEngine}`);
   console.log(
     `project: ${report.project.status}${report.project.status === "bound" ? ` (${report.project.projectId}, confidence: ${report.project.confidence})` : ""}`,
   );
   console.log(
     `entry boundary: ${report.entryBoundary.kind} — ${report.entryBoundary.detail}`,
   );
-  console.log(`Atlas bootstrap bytes: ${report.atlas.bootstrapBytes}`);
-  console.log(`Atlas saves sessions: ${report.atlas.sessionStore}`);
-  console.log(`Atlas saves runtime logs: ${report.atlas.runtimeLogs}`);
-  console.log(`Atlas saves summaries: ${report.atlas.sessionSummaries}`);
+  console.log(`Ocean bootstrap bytes: ${report.atlas.bootstrapBytes}`);
+  console.log(`Ocean saves sessions: ${report.atlas.sessionStore}`);
+  console.log(`Ocean saves runtime logs: ${report.atlas.runtimeLogs}`);
+  console.log(`Ocean saves summaries: ${report.atlas.sessionSummaries}`);
   console.log(`transport: ${report.transport}`);
   console.log("Provider-owned paths:");
   for (const file of report.providerOwnedPaths)
@@ -167,7 +170,7 @@ function printReport(report: Awaited<ReturnType<typeof buildReport>>): void {
     );
   if (report.latestSession)
     console.log(
-      `latest session: ${report.latestSession.sessionId} [${report.latestSession.status}] — inspect with: atlas session events ${report.latestSession.sessionId}`,
+      `latest session: ${report.latestSession.sessionId} [${report.latestSession.status}] — inspect with: ocean session events ${report.latestSession.sessionId}`,
     );
   else console.log("latest session: none");
 }

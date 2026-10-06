@@ -2,8 +2,8 @@
 
 ## Credentials
 
-Atlas never stores, reads, or manages provider credentials. Authentication is delegated
-entirely to each provider's own CLI (`claude`, `codex`, `gemini`, `agy`, `hermes`) — Atlas only spawns
+Ocean never stores, reads, or manages provider credentials. Authentication is delegated
+entirely to each provider's own CLI (`claude`, `codex`, `gemini`, `agy`, `hermes`) — Ocean only spawns
 that binary and streams its stdout/stderr (see [providers.md](providers.md)). Before any of
 that stdout/stderr is persisted, `redactSecrets()`
 (`src/infrastructure/observability/runtime-logger.ts`) strips known credential shapes
@@ -20,14 +20,14 @@ workspace outside of `engine/` (see [workspace.md](workspace.md)), which:
 - Is not part of this repository's git history.
 - Is git-ignored by this repository's `.gitignore` as a safety net (`personal/*`,
   `projects/*`, and `system/*`) even if a workspace is ever accidentally nested inside a clone.
-- Is created by `atlas setup` with `config` restricted to `0700` permissions.
+- Is created by `ocean setup` with `config` restricted to `0700` permissions.
 
 ## Filesystem access
 
 Profiles declare `allowedPaths`, and a headless prompt only references a `contextSources`
 entry or a context-packet record if its realpath resolves inside one of those paths; a symlink
 escaping them is omitted. The context packet is used only for an exact task-id lookup, never
-for keyword-triggered memory, knowledge or decision lookups. Atlas reads no context body into
+for keyword-triggered memory, knowledge or decision lookups. Ocean reads no context body into
 the prompt (see [context.md](context.md)). Skill folders, the facts store directory (only when the
 facts digest is partial) and reference directories that themselves lie inside `allowedPaths` are
 granted to Claude (`--add-dir`) and Gemini (`--include-directories`) for reading only, on the
@@ -35,8 +35,8 @@ first turn and again on a resumed Claude turn; a single-file `allowedPaths` entr
 siblings. The schema also
 carries `allowedCommands` and `writePolicy` per profile (see [profiles.md](profiles.md));
 the run boundary rejects an unauthorized provider command and an empty `allowed-paths`
-policy. Direct interception keeps provider-owned execution behavior. Atlas does not currently
-provide an enforcing filesystem sandbox, so writable profiles fail closed. Atlas does not copy
+policy. Direct interception keeps provider-owned execution behavior. Ocean does not currently
+provide an enforcing filesystem sandbox, so writable profiles fail closed. Ocean does not copy
 or invent credentials; authentication remains owned by each provider CLI.
 
 ## Data validation
@@ -59,13 +59,13 @@ lifecycle (see [sessions.md](sessions.md#status-lifecycle)); `cancelled` is term
 
 ## Installation and bypass boundaries
 
-`atlas install` uses only cataloged package-manager recipes and requires `--yes`. Unknown
-clients and arbitrary URLs are rejected. `atlas update` repeats the approved recipe; `atlas
-remove` removes only Atlas registration, wrappers, and receipts. Provider binaries, user data,
-and provider-owned credentials remain outside Atlas ownership.
+`ocean install` uses only cataloged package-manager recipes and requires `--yes`. Unknown
+clients and arbitrary URLs are rejected. `ocean update` repeats the approved recipe; `ocean
+remove` removes only Ocean registration, wrappers, and receipts. Provider binaries, user data,
+and provider-owned credentials remain outside Ocean ownership.
 
 Native desktop clients, absolute-path launches, unconfigured shells, and operating-system
-processes outside the managed shim remain explicit bypass boundaries. Atlas reports these when
+processes outside the managed shim remain explicit bypass boundaries. Ocean reports these when
 detectable; it does not claim universal interception.
 
 Gateway credentials support an identity and optional profile scope using the environment-only

@@ -1,9 +1,9 @@
 import { access } from "node:fs/promises";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
-import { atlasPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 export async function runMigrateCommand(apply: boolean): Promise<void> {
-  const database = atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite");
+  const database = oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite");
   const exists = await access(database).then(
     () => true,
     () => false,
@@ -14,7 +14,7 @@ export async function runMigrateCommand(apply: boolean): Promise<void> {
         {
           applyRequired: true,
           databaseExists: exists,
-          action: "atlas migrate --apply",
+          action: "ocean migrate --apply",
           note: "Applying opens the session database and runs idempotent schema migrations.",
         },
         null,

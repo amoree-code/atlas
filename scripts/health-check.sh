@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-ROOT="${ATLAS_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)}"
+ROOT="${OCEAN_ROOT:-${ATLAS_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)}}"
 failures=0
 check_dir() { if [ -d "$ROOT/$1" ]; then printf 'OK: %s\n' "$1"; else printf 'FAIL: missing directory %s\n' "$1"; failures=$((failures + 1)); fi; }
 check_file() { if [ -f "$ROOT/$1" ]; then printf 'OK: %s\n' "$1"; else printf 'FAIL: missing file %s\n' "$1"; failures=$((failures + 1)); fi; }

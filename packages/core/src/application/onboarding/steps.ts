@@ -6,7 +6,7 @@ import {
   wrapperDoctor,
   wrapperStatus,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
-import { atlasPath, PERSONAL_DIR } from "../../paths.js";
+import { oceanPath, PERSONAL_DIR } from "../../paths.js";
 import { connectObsidianVault } from "../obsidian/vault-discovery.js";
 import { copyClientSkills, populateSkillHub } from "../skills/skill-hub.js";
 
@@ -79,7 +79,7 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
         const language = (await io.ask("  Preferred language: ", "")).trim();
         if (!name && !role && !language) return "skipped";
         await writeFile(
-          atlasPath(PERSONAL_DIR, "identity.md"),
+          oceanPath(PERSONAL_DIR, "identity.md"),
           `# Identity\n\n- Name: ${name}\n- Role: ${role}\n- Language: ${language}\n`,
           { flag: "wx" },
         ).catch((error: NodeJS.ErrnoException) => {

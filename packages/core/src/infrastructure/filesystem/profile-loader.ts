@@ -2,11 +2,11 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { Profile } from "../../domain/profiles/profile.js";
 import { validateProfile } from "../../domain/profiles/profile-validator.js";
-import { atlasPath, resolveWithin, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, resolveWithin, SYSTEM_DIR } from "../../paths.js";
 
 export async function loadProfile(name: string): Promise<Profile> {
   if (!/^[A-Za-z0-9_-]+$/.test(name)) throw new Error("Invalid profile name");
-  const root = atlasPath(SYSTEM_DIR, "profiles");
+  const root = oceanPath(SYSTEM_DIR, "profiles");
   const file = resolveWithin(root, `${name}.json`);
   try {
     return validateProfile(JSON.parse(await readFile(file, "utf8")));

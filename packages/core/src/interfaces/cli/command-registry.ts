@@ -34,7 +34,7 @@ import {
   stopTaskLoop,
 } from "../../application/loops/task-loop.js";
 import {
-  atlasMcpConfig,
+  oceanMcpConfig,
   playwrightMcpConfig,
 } from "../../application/mcp/mcp-connection.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
@@ -109,7 +109,7 @@ import {
   wrapperDoctor,
   wrapperStatus,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
-import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
+import { oceanEnv, oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
 import { runAuthCommand } from "./auth-command.js";
 import { runBrowserCommand } from "./browser-command.js";
 import { runCaptureCommand } from "./capture-command.js";
@@ -136,7 +136,7 @@ async function commandSetup(): Promise<void> {
     obsidianIndex >= 0 ? process.argv[obsidianIndex + 1] : undefined;
   if (obsidianIndex >= 0 && !obsidianPath) {
     console.error(
-      "Usage: atlas setup [--obsidian <vault-path>] [--read-write]",
+      "Usage: ocean setup [--obsidian <vault-path>] [--read-write]",
     );
     process.exitCode = 1;
   } else {
@@ -150,7 +150,7 @@ async function commandSetup(): Promise<void> {
 }
 
 async function commandService(): Promise<void> {
-  const shutdownAfterMs = Number(process.env.ATLAS_SERVICE_TEST_SHUTDOWN_MS);
+  const shutdownAfterMs = Number(oceanEnv("SERVICE_TEST_SHUTDOWN_MS"));
   await runService(
     Number.isFinite(shutdownAfterMs) && shutdownAfterMs > 0
       ? shutdownAfterMs
@@ -166,7 +166,7 @@ async function commandIntercept(): Promise<void> {
   const args =
     separatorIndex >= 0 ? process.argv.slice(separatorIndex + 1) : [];
   if (!client) {
-    console.error("Usage: atlas intercept --client <provider> -- [args]");
+    console.error("Usage: ocean intercept --client <provider> -- [args]");
     process.exitCode = 1;
   } else {
     process.exitCode = await intercept(
@@ -190,7 +190,7 @@ async function commandClient(): Promise<void> {
   } else if (action === "open") {
     const provider = process.argv[4];
     if (!provider) {
-      console.error("Usage: atlas client open <provider> [provider-args]");
+      console.error("Usage: ocean client open <provider> [provider-args]");
       process.exitCode = 1;
     } else {
       const providerArgs = process.argv.slice(5);
@@ -238,7 +238,7 @@ async function commandClient(): Promise<void> {
   } else if (action === "enable" || action === "disable") {
     const id = process.argv[4];
     if (!id) {
-      console.error(`Usage: atlas client ${action} <provider>`);
+      console.error(`Usage: ocean client ${action} <provider>`);
       process.exitCode = 1;
     } else {
       const provider = await setProviderEnabled(id, action === "enable");
@@ -255,7 +255,7 @@ async function commandClient(): Promise<void> {
       process.exitCode = 1;
     } else {
       console.log(
-        "PROVEN: Atlas wrappers are configured and provider binaries resolve outside the shim directory.",
+        "PROVEN: Ocean wrappers are configured and provider binaries resolve outside the shim directory.",
       );
     }
   } else if (action === "status") {
@@ -281,7 +281,7 @@ async function commandClient(): Promise<void> {
     await runClientTestCommand(provider, process.argv.includes("--json"));
   } else {
     console.error(
-      "Usage: atlas client list|status|test [provider] [--json]|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|enable <id>|disable <id>|manage|doctor [absolute-provider-path]",
+      "Usage: ocean client list|status|test [provider] [--json]|open <provider> [provider-args]|vscode-wrapper [--settings <path>] [--apply]|sync|register <id> [command]|enable <id>|disable <id>|manage|doctor [absolute-provider-path]",
     );
     process.exitCode = 1;
   }
@@ -290,7 +290,7 @@ async function commandClient(): Promise<void> {
 async function commandInstall(): Promise<void> {
   const id = process.argv[3];
   if (!id) {
-    console.error("Usage: atlas install <client> [--yes]");
+    console.error("Usage: ocean install <client> [--yes]");
     process.exitCode = 1;
   } else {
     try {
@@ -371,12 +371,12 @@ async function commandMemory(): Promise<void> {
 async function commandMcp(): Promise<void> {
   const action = process.argv[3] ?? "config";
   if (action === "config")
-    console.log(JSON.stringify(atlasMcpConfig(), null, 2));
+    console.log(JSON.stringify(oceanMcpConfig(), null, 2));
   else if (action === "playwright-config")
     console.log(JSON.stringify(playwrightMcpConfig(), null, 2));
   else if (action === "serve") await runAtlasMcpServer();
   else {
-    console.error("Usage: atlas mcp config|playwright-config|serve");
+    console.error("Usage: ocean mcp config|playwright-config|serve");
     process.exitCode = 1;
   }
 }
@@ -396,7 +396,7 @@ async function commandObsidian(): Promise<void> {
     ].includes(action)
   ) {
     console.error(
-      "Usage: atlas obsidian connect <vault-path> [--read-write]|discover|sync|watch|inbox|write|conflicts resolve <id> --keep=vault|atlas",
+      "Usage: ocean obsidian connect <vault-path> [--read-write]|discover|sync|watch|inbox|write|conflicts resolve <id> --keep=vault|atlas",
     );
     process.exitCode = 1;
   } else {
@@ -405,7 +405,7 @@ async function commandObsidian(): Promise<void> {
         const vaultPath = process.argv[4];
         if (!vaultPath)
           throw new Error(
-            "Usage: atlas obsidian connect <vault-path> [--read-write]",
+            "Usage: ocean obsidian connect <vault-path> [--read-write]",
           );
         const readWrite = process.argv.includes("--read-write");
         const mode = readWrite
@@ -434,14 +434,14 @@ async function commandObsidian(): Promise<void> {
         if (action === "conflicts") {
           if (process.argv[4] !== "resolve")
             throw new Error(
-              "Usage: atlas obsidian conflicts resolve <id> --keep=vault|atlas",
+              "Usage: ocean obsidian conflicts resolve <id> --keep=vault|atlas",
             );
           const id = process.argv[5];
           const keepArg = process.argv.find((arg) => arg.startsWith("--keep="));
           const keep = keepArg?.slice("--keep=".length);
           if (!id || (keep !== "vault" && keep !== "atlas"))
             throw new Error(
-              "Usage: atlas obsidian conflicts resolve <id> --keep=vault|atlas",
+              "Usage: ocean obsidian conflicts resolve <id> --keep=vault|atlas",
             );
           console.log(JSON.stringify(await resolveConflict(id, keep), null, 2));
         } else if (action === "write") {
@@ -450,7 +450,7 @@ async function commandObsidian(): Promise<void> {
           const expectedSha256 = process.argv[6] ?? null;
           if (!relative || content === undefined)
             throw new Error(
-              "Usage: atlas obsidian write <relative.md> <content> [expected-sha256] [--apply]",
+              "Usage: ocean obsidian write <relative.md> <content> [expected-sha256] [--apply]",
             );
           console.log(
             JSON.stringify(
@@ -476,7 +476,7 @@ async function commandObsidian(): Promise<void> {
             const target = process.argv[6];
             if (!source || !target)
               throw new Error(
-                "Usage: atlas obsidian inbox promote <source.md> <target-directory> [--apply]",
+                "Usage: ocean obsidian inbox promote <source.md> <target-directory> [--apply]",
               );
             console.log(
               JSON.stringify(
@@ -492,7 +492,7 @@ async function commandObsidian(): Promise<void> {
             );
           } else
             throw new Error(
-              "Usage: atlas obsidian inbox list|promote <source.md> <target-directory> [--apply]",
+              "Usage: ocean obsidian inbox list|promote <source.md> <target-directory> [--apply]",
             );
         } else if (action === "discover")
           console.log(
@@ -550,7 +550,7 @@ async function commandProject(): Promise<void> {
   } else if (action === "bind") {
     const [name, targetPath] = process.argv.slice(4);
     if (!name || !targetPath) {
-      console.error("Usage: atlas project bind <name> <path>");
+      console.error("Usage: ocean project bind <name> <path>");
       process.exitCode = 1;
     } else {
       const result = await bindProject(name, targetPath);
@@ -561,7 +561,7 @@ async function commandProject(): Promise<void> {
     console.log(JSON.stringify(await listProjectBindings(), null, 2));
   } else {
     console.error(
-      "Usage: atlas project resolve [path]|bind <name> <path>|list",
+      "Usage: ocean project resolve [path]|bind <name> <path>|list",
     );
     process.exitCode = 1;
   }
@@ -589,7 +589,7 @@ async function commandHook(): Promise<void> {
     }
   } else {
     console.error(
-      "Usage: atlas hook session-start|session-end (reads a Claude Code hook payload from stdin)",
+      "Usage: ocean hook session-start|session-end (reads a Claude Code hook payload from stdin)",
     );
     process.exitCode = 1;
   }
@@ -598,7 +598,7 @@ async function commandHook(): Promise<void> {
 async function commandIntent(): Promise<void> {
   const action = process.argv[3] ?? "classify";
   if (action !== "classify") {
-    console.error("Usage: atlas intent classify <text>");
+    console.error("Usage: ocean intent classify <text>");
     process.exitCode = 1;
   } else {
     const text = process.argv.slice(4).join(" ");
@@ -637,7 +637,7 @@ async function commandSchedule(): Promise<void> {
     const [id, profile, intervalMs, ...prompt] = process.argv.slice(4);
     if (!id || !profile || !intervalMs || !prompt.length) {
       console.error(
-        "Usage: atlas schedule add <id> <profile> <interval-ms> <prompt>",
+        "Usage: ocean schedule add <id> <profile> <interval-ms> <prompt>",
       );
       process.exitCode = 1;
     } else
@@ -652,7 +652,7 @@ async function commandSchedule(): Promise<void> {
   } else if (action === "run-due")
     console.log(
       JSON.stringify(
-        { ran: await runDueSchedules(atlasRoot(), defaultAgentRuntime) },
+        { ran: await runDueSchedules(oceanRoot(), defaultAgentRuntime) },
         null,
         2,
       ),
@@ -660,7 +660,7 @@ async function commandSchedule(): Promise<void> {
   else if (action === "worker-once")
     console.log(
       JSON.stringify(
-        { ran: await runSchedulerWorkerOnce(atlasRoot(), defaultAgentRuntime) },
+        { ran: await runSchedulerWorkerOnce(oceanRoot(), defaultAgentRuntime) },
         null,
         2,
       ),
@@ -670,9 +670,9 @@ async function commandSchedule(): Promise<void> {
     const stop = () => controller.abort();
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
-    await runSchedulerWorker(atlasRoot(), defaultAgentRuntime, {
+    await runSchedulerWorker(oceanRoot(), defaultAgentRuntime, {
       signal: controller.signal,
-      pollMs: Number(process.env.ATLAS_SCHEDULER_POLL_MS ?? 30_000),
+      pollMs: Number(oceanEnv("SCHEDULER_POLL_MS") ?? 30_000),
     });
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
@@ -685,10 +685,10 @@ async function commandSchedule(): Promise<void> {
       ),
     );
   else if (action === "run-now")
-    await runSchedule(process.argv[4] ?? "", atlasRoot(), defaultAgentRuntime);
+    await runSchedule(process.argv[4] ?? "", oceanRoot(), defaultAgentRuntime);
   else {
     console.error(
-      "Usage: atlas schedule list|add|enable|disable|run-due|run-now|worker-once|worker",
+      "Usage: ocean schedule list|add|enable|disable|run-due|run-now|worker-once|worker",
     );
     process.exitCode = 1;
   }
@@ -706,7 +706,7 @@ async function commandLoop(): Promise<void> {
       promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
     if (!taskId || !prompt || !process.argv.includes("--approve")) {
       console.error(
-        "Usage: atlas loop start <task-id> <profile> --prompt <text> --approve [--max-iterations N] [--interval-ms N] [--max-attempts N]",
+        "Usage: ocean loop start <task-id> <profile> --prompt <text> --approve [--max-iterations N] [--interval-ms N] [--max-attempts N]",
       );
       process.exitCode = 1;
     } else {
@@ -720,7 +720,7 @@ async function commandLoop(): Promise<void> {
             taskId,
             profile,
             prompt,
-            cwd: atlasRoot(),
+            cwd: oceanRoot(),
             approved: true,
             maxIterations: value("--max-iterations", 10),
             intervalMs: value("--interval-ms", 60_000),
@@ -734,7 +734,7 @@ async function commandLoop(): Promise<void> {
   } else if (action === "worker-once") {
     console.log(
       JSON.stringify(
-        { ran: await runTaskLoopsOnce(atlasRoot(), defaultAgentRuntime) },
+        { ran: await runTaskLoopsOnce(oceanRoot(), defaultAgentRuntime) },
         null,
         2,
       ),
@@ -744,38 +744,38 @@ async function commandLoop(): Promise<void> {
     const stop = () => controller.abort();
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
-    await runTaskLoopWorker(atlasRoot(), defaultAgentRuntime, {
+    await runTaskLoopWorker(oceanRoot(), defaultAgentRuntime, {
       signal: controller.signal,
-      pollMs: Number(process.env.ATLAS_LOOP_POLL_MS ?? 30_000),
+      pollMs: Number(oceanEnv("LOOP_POLL_MS") ?? 30_000),
     });
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
   } else if (action === "stop") {
     const id = process.argv[4];
     if (!id) {
-      console.error("Usage: atlas loop stop <loop-id>");
+      console.error("Usage: ocean loop stop <loop-id>");
       process.exitCode = 1;
     } else console.log(JSON.stringify(await stopTaskLoop(id), null, 2));
   } else {
-    console.error("Usage: atlas loop start|status|stop|worker-once|worker");
+    console.error("Usage: ocean loop start|status|stop|worker-once|worker");
     process.exitCode = 1;
   }
 }
 
 async function commandGateway(): Promise<void> {
-  const port = Number(process.env.ATLAS_GATEWAY_PORT ?? 8787);
-  const token = process.env.ATLAS_GATEWAY_TOKEN;
+  const port = Number(oceanEnv("GATEWAY_PORT") ?? 8787);
+  const token = oceanEnv("GATEWAY_TOKEN");
   if (!token) {
-    console.error("ATLAS_GATEWAY_TOKEN is required");
+    console.error("OCEAN_GATEWAY_TOKEN is required");
     process.exitCode = 1;
   } else {
     const server = createWebhookGateway(
-      atlasRoot(),
+      oceanRoot(),
       token,
       defaultAgentRuntime,
     );
     server.listen(port, "127.0.0.1", () =>
-      console.log(`Atlas webhook gateway listening on 127.0.0.1:${port}`),
+      console.log(`Ocean webhook gateway listening on 127.0.0.1:${port}`),
     );
   }
 }
@@ -830,7 +830,7 @@ async function commandSkill(): Promise<void> {
       !["approved", "promoted", "discarded", "rejected"].includes(status)
     ) {
       console.error(
-        "Usage: atlas skill observation-review <id> approved|promoted|discarded|rejected",
+        "Usage: ocean skill observation-review <id> approved|promoted|discarded|rejected",
       );
       process.exitCode = 1;
     } else
@@ -847,7 +847,7 @@ async function commandSkill(): Promise<void> {
   } else if (action === "add") {
     const [id, name, ...instructions] = process.argv.slice(4);
     if (!id || !name || !instructions.length) {
-      console.error("Usage: atlas skill add <id> <name> <instructions>");
+      console.error("Usage: ocean skill add <id> <name> <instructions>");
       process.exitCode = 1;
     } else
       console.log(
@@ -864,7 +864,7 @@ async function commandSkill(): Promise<void> {
   } else if (action === "review") {
     const [id, status] = process.argv.slice(4);
     if (!id || (status !== "promoted" && status !== "rejected")) {
-      console.error("Usage: atlas skill review <id> promoted|rejected");
+      console.error("Usage: ocean skill review <id> promoted|rejected");
       process.exitCode = 1;
     } else
       console.log(
@@ -873,7 +873,7 @@ async function commandSkill(): Promise<void> {
   } else if (action === "learn") {
     const sessionId = process.argv[4];
     if (!sessionId) {
-      console.error("Usage: atlas skill learn <completed-session-id>");
+      console.error("Usage: ocean skill learn <completed-session-id>");
       process.exitCode = 1;
     } else
       console.log(
@@ -885,7 +885,7 @@ async function commandSkill(): Promise<void> {
       );
   } else {
     console.error(
-      "Usage: atlas skill sync|doctor|list|observe [session-id]|observation-review <id> approved|promoted|discarded|rejected|add|learn|review",
+      "Usage: ocean skill sync|doctor|list|observe [session-id]|observation-review <id> approved|promoted|discarded|rejected|add|learn|review",
     );
     process.exitCode = 1;
   }
@@ -914,7 +914,7 @@ async function commandUpdateOrRemove(
 ): Promise<void> {
   const id = process.argv[3];
   if (!id || !process.argv.includes("--yes")) {
-    console.error(`Usage: atlas ${command} <client> --yes`);
+    console.error(`Usage: ocean ${command} <client> --yes`);
     process.exitCode = 2;
   } else {
     try {
@@ -1003,12 +1003,12 @@ async function commandRun(): Promise<void> {
     promptIndex >= 0 ? process.argv.slice(promptIndex + 1).join(" ") : "";
   if (!profileName || !prompt) {
     console.error(
-      "Usage: atlas run --profile <name> [--client <client>] [--task <id>] [--handoff <id>] --prompt <text>",
+      "Usage: ocean run --profile <name> [--client <client>] [--task <id>] [--handoff <id>] --prompt <text>",
     );
     process.exitCode = 1;
   } else {
     const session = await runAgent(
-      { profileName, client, taskId, handoffId, prompt, cwd: atlasRoot() },
+      { profileName, client, taskId, handoffId, prompt, cwd: oceanRoot() },
       defaultAgentRuntime,
     );
     console.log(
@@ -1056,7 +1056,7 @@ async function commandSession(): Promise<void> {
       try {
         console.log(
           await readFile(
-            path.resolve(atlasRoot(), session.summaryPath),
+            path.resolve(oceanRoot(), session.summaryPath),
             "utf8",
           ),
         );
@@ -1079,7 +1079,7 @@ async function commandSession(): Promise<void> {
     const prompt = process.argv.slice(5).join(" ");
     store.close();
     if (!sessionId || !prompt) {
-      console.error("Usage: atlas session resume <session-id> <prompt>");
+      console.error("Usage: ocean session resume <session-id> <prompt>");
       process.exitCode = 1;
     } else {
       const session = await resumeAgent(sessionId, prompt, defaultAgentRuntime);
@@ -1096,7 +1096,7 @@ async function commandSession(): Promise<void> {
     store.close();
     if (!sessionId) {
       console.error(
-        "Usage: atlas session promote <session-id> [knowledge/<kind>] --approve",
+        "Usage: ocean session promote <session-id> [knowledge/<kind>] --approve",
       );
       process.exitCode = 1;
     } else {
@@ -1123,7 +1123,7 @@ async function commandSession(): Promise<void> {
     const apply = process.argv.includes("--apply");
     if (!Number.isFinite(thresholdHours) || thresholdHours <= 0) {
       store.close();
-      console.error("Usage: atlas session doctor [hours] [--apply]");
+      console.error("Usage: ocean session doctor [hours] [--apply]");
       process.exitCode = 1;
     } else {
       const thresholdMs = thresholdHours * 60 * 60 * 1000;
@@ -1160,7 +1160,7 @@ async function commandSession(): Promise<void> {
     if (!Number.isFinite(keepDays) || keepDays <= 0) {
       store.close();
       console.error(
-        "Usage: atlas session compact [--keep-days N] [--simulate|--apply --before <iso> --plan <fingerprint>] [--json]",
+        "Usage: ocean session compact [--keep-days N] [--simulate|--apply --before <iso> --plan <fingerprint>] [--json]",
       );
       process.exitCode = 1;
       return;
@@ -1170,7 +1170,7 @@ async function commandSession(): Promise<void> {
       if (!before || !fingerprint) {
         store.close();
         console.error(
-          "atlas session compact --apply requires --before <iso> and --plan <fingerprint> from a prior plan/--simulate run",
+          "ocean session compact --apply requires --before <iso> and --plan <fingerprint> from a prior plan/--simulate run",
         );
         process.exitCode = 1;
         return;
@@ -1178,7 +1178,7 @@ async function commandSession(): Promise<void> {
       try {
         const result = await applyRetention(
           store,
-          atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
+          oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
           plan,
           fingerprint,
         );
@@ -1194,7 +1194,7 @@ async function commandSession(): Promise<void> {
     if (simulate) {
       const result = await simulateRetention(
         store,
-        atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
+        oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
         plan,
         defaultSessionStoreOpener,
       );
@@ -1207,7 +1207,7 @@ async function commandSession(): Promise<void> {
   } else {
     store.close();
     console.error(
-      "Usage: atlas session list|show <session-id>|summary <session-id>|events <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]|compact [--keep-days N] [--simulate]|compact --apply --before <iso> --plan <fingerprint>",
+      "Usage: ocean session list|show <session-id>|summary <session-id>|events <session-id>|resume <session-id> <prompt>|promote <session-id> [knowledge/<kind>] --approve|doctor [hours] [--apply]|compact [--keep-days N] [--simulate]|compact --apply --before <iso> --plan <fingerprint>",
     );
     process.exitCode = 1;
   }
