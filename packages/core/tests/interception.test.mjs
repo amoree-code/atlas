@@ -80,7 +80,7 @@ test("sync creates Atlas wrappers and shell activation", async () => {
     assert.equal(oceanWrapper, atlasWrapper);
     if (process.platform !== "win32") {
       assert.match(wrapper, /export OCEAN_SHIM_DIR=/);
-      assert.match(wrapper, /export OCEAN_SHIM_DIR=/);
+      assert.match(wrapper, /export ATLAS_SHIM_DIR=/);
     }
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));

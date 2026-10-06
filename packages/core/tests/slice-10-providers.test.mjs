@@ -29,7 +29,9 @@ const SESSION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 // Live provider tests cost real API quota, so they run only when explicitly requested.
 // They are the ONLY evidence that counts for provider compatibility; the fake-executable
 // tests below prove the invocation boundary's error handling, never compatibility.
-const LIVE = process.env.OCEAN_LIVE_PROVIDER_TESTS === "1";
+const LIVE =
+  (process.env.OCEAN_LIVE_PROVIDER_TESTS ??
+    process.env.ATLAS_LIVE_PROVIDER_TESTS) === "1";
 const live = LIVE ? test : test.skip;
 const installedEnvironment = existsSync(
   path.join(os.homedir(), "atlas", SYSTEM_DIR, "runtime", "shims", "atlas"),

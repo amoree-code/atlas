@@ -40,16 +40,16 @@ async function withRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "t245-char-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   const previous = process.env.OCEAN_ROOT;
-  const previousLegacy = process.env.OCEAN_ROOT;
-  delete process.env.OCEAN_ROOT;
+  const previousLegacy = process.env.ATLAS_ROOT;
+  delete process.env.ATLAS_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
     return await fn(root);
   } finally {
     if (previous === undefined) delete process.env.OCEAN_ROOT;
     else process.env.OCEAN_ROOT = previous;
-    if (previousLegacy === undefined) delete process.env.OCEAN_ROOT;
-    else process.env.OCEAN_ROOT = previousLegacy;
+    if (previousLegacy === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previousLegacy;
     await rm(root, { recursive: true, force: true });
   }
 }
