@@ -9,7 +9,7 @@ import {
   guardedRunOperation,
 } from "../../application/operations/write-guard.js";
 import { defaultBrainIndexPort } from "../../composition/runtime.js";
-import { atlasRoot } from "../../paths.js";
+import { oceanRoot } from "../../paths.js";
 
 const OPERATION_BUDGET = {
   maxFiles: 20,
@@ -36,7 +36,7 @@ export async function runOperateCommand(text: string): Promise<void> {
   const operation = mapped.operation as OperationName;
   const scope: GuardScope = {
     action: operation,
-    target: atlasRoot(),
+    target: oceanRoot(),
     identifier: classification.identifier ?? null,
     projectId: null,
   };

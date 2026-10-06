@@ -13,13 +13,13 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { atlasPath, enginePath, SYSTEM_DIR } from "../../paths.js";
+import { enginePath, oceanPath, SYSTEM_DIR } from "../../paths.js";
 import { clientSkillRoots, type SkillClient } from "./core-skill-sync.js";
 
 // The hub is the one place skills live inside Ocean. Clients hold symlinks into it, so
 // there is a single copy to edit and nothing drifts per client.
 export function skillHubRoot(): string {
-  return atlasPath(SYSTEM_DIR, "skills");
+  return oceanPath(SYSTEM_DIR, "skills");
 }
 
 async function skillDirectories(root: string): Promise<string[]> {
@@ -84,7 +84,7 @@ export async function linkClientSkills(options: {
   const home = options.home ?? os.homedir();
   const hub = options.hub ?? skillHubRoot();
   const backup = path.join(
-    atlasPath(SYSTEM_DIR, "archive"),
+    oceanPath(SYSTEM_DIR, "archive"),
     `skills-backup-${new Date().toISOString().replace(/[:.]/g, "-")}`,
   );
   const actions: LinkAction[] = [];
@@ -178,7 +178,7 @@ export async function copyClientSkills(options: {
   const home = options.home ?? os.homedir();
   const hub = options.hub ?? skillHubRoot();
   const backup = path.join(
-    options.archive ?? atlasPath(SYSTEM_DIR, "archive"),
+    options.archive ?? oceanPath(SYSTEM_DIR, "archive"),
     `skills-backup-${new Date().toISOString().replace(/[:.]/g, "-")}`,
   );
   const actions: CopyAction[] = [];

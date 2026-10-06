@@ -34,13 +34,13 @@ cannot be resumed.
 
 ## Workspace ends up in the wrong place
 
-`atlasRoot()` defaults to the parent directory of the running `engine/` checkout; set
-`ATLAS_ROOT` to point at a different workspace root (see [workspace.md](workspace.md)).
-Re-run `ocean setup` after changing `ATLAS_ROOT` to bootstrap the new location.
+`oceanRoot()` defaults to the workspace root three directories above `kernel/packages/core`; set
+`OCEAN_ROOT` (older name `ATLAS_ROOT`) to point at a different workspace root (see [workspace.md](workspace.md)).
+Re-run `ocean setup` after changing `OCEAN_ROOT` to bootstrap the new location.
 
 ## Private workspace directories show up in `git status`
 
 They should not — this repository's `.gitignore` excludes `personal/*`, `projects/*`, and
 private workspace directories (see [security.md](security.md)). If they appear, the workspace root may have
-been accidentally created inside `engine/`; check `ATLAS_ROOT` and the location `ocean
+been accidentally created inside `engine/`; check `OCEAN_ROOT` and the location `ocean
 setup` reported.

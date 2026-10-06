@@ -3,8 +3,8 @@ import path from "node:path";
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import { atomicWrite } from "../../fs-utils.js";
 import {
-  atlasRoot,
   KNOWLEDGE_DIR,
+  oceanRoot,
   PERSONAL_DIR,
   resolveWithin,
   STORE_DIR,
@@ -31,7 +31,7 @@ import {
   freshnessFor,
   listRecordFiles,
   readFrontmatterFile,
-  relativeToAtlas,
+  relativeToOcean,
   requireAbsentTarget,
 } from "./record-io.js";
 
@@ -108,7 +108,7 @@ async function searchViaBrainIndex(
   query: string,
   indexPort: BrainIndexPort,
 ): Promise<OperationRecord[] | null> {
-  const root = atlasRoot();
+  const root = oceanRoot();
   try {
     await stat(brainIndexPath(root));
   } catch {
@@ -160,7 +160,7 @@ export async function searchRecords(
 ): Promise<OperationResult> {
   let root: string;
   try {
-    root = resolveWithin(atlasRoot(), ...rootSegments);
+    root = resolveWithin(oceanRoot(), ...rootSegments);
   } catch {
     return operationResult(operation, "record root escapes the Atlas root");
   }
@@ -208,7 +208,7 @@ export async function searchRecords(
         record.fields.name ?? record.fields.id ?? path.basename(file, ".md"),
       recordType,
       provenance: provenanceFor(recordType, record.fields),
-      sourcePath: relativeToAtlas(file),
+      sourcePath: relativeToOcean(file),
       freshness: freshnessFor(record.mtimeMs),
       confidence: classification.confidence,
       selectionReason: options.query
@@ -337,7 +337,7 @@ export async function writeRecord(
       reason: `${recordType} record '${slug.value}' written`,
       records: [],
       violations: [],
-      written: { sourcePath: relativeToAtlas(target.value), bytes },
+      written: { sourcePath: relativeToOcean(target.value), bytes },
       packet: null,
     };
   } catch (error) {

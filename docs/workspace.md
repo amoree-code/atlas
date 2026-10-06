@@ -32,15 +32,15 @@ git-ignored here; `brain/` is user-owned data that lives entirely outside this r
 - `engineRoot()` / `enginePath(...)` — always the directory containing this package
   (resolved from the running module, whether compiled under `dist/` or run under `tsx`
   from `src/`).
-- `atlasRoot()` — `process.env.ATLAS_ROOT` if set (resolved to an absolute path),
-  otherwise the parent directory of `engineRoot()`. This is the default private-workspace
+- `oceanRoot()` — `OCEAN_ROOT` (or the older `ATLAS_ROOT`) if set (resolved to an absolute path),
+  otherwise three directories above `engineRoot()` (`kernel/packages/core` → the workspace root). This is the default private-workspace
   location: `kernel/` is expected to sit inside the workspace root as a sibling of `brain/`.
-- `atlasPath(...)` — joins onto `<atlasRoot>/`, used for all private workspace state, via
+- `oceanPath(...)` — joins onto `<oceanRoot>/`, used for all private workspace state, via
   the `PERSONAL_DIR`/`PROJECTS_DIR`/`SYSTEM_DIR` constants (currently `brain/02-personal`,
   `brain/04-projects`, `kernel/bridge`).
 
-Set `ATLAS_ROOT` to point Ocean at a different workspace root, for example to run multiple
-isolated workspaces from one engine checkout.
+Set `OCEAN_ROOT` to point Ocean at a different workspace root, for example to run multiple
+isolated workspaces from one engine checkout. The older `ATLAS_ROOT` is still read when `OCEAN_ROOT` is unset.
 
 ## Bootstrap (`ocean setup`)
 

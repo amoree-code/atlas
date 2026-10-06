@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { redactSecrets } from "../../infrastructure/observability/runtime-logger.js";
-import { atlasPath, resolveWithin, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, resolveWithin, SYSTEM_DIR } from "../../paths.js";
 
 type Observation = {
   id: string;
@@ -13,7 +13,7 @@ type Observation = {
   stderr: string;
   createdAt: string;
 };
-const observationsRoot = () => atlasPath(SYSTEM_DIR, "observations");
+const observationsRoot = () => oceanPath(SYSTEM_DIR, "observations");
 
 export async function runObserveCommand(args: string[]): Promise<void> {
   if (args[0] === "show") {

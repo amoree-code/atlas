@@ -2,8 +2,8 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import {
-  atlasRoot,
   KNOWLEDGE_DIR,
+  oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
   resolveStorePath,
@@ -192,7 +192,7 @@ const TASK_ID_SHAPE = /^T-\d+$/i;
 async function planExactTaskRecord(
   identifier: string,
   budget: ContextBudget,
-  root = atlasRoot(),
+  root = oceanRoot(),
   projectId = "atlas",
 ): Promise<BoundedReadResult> {
   const rung: LadderRung = "exact-record";
@@ -421,7 +421,7 @@ async function planRankedReferences(
 export async function planContextRead(
   classification: IntentClassification,
   budget: unknown,
-  root = atlasRoot(),
+  root = oceanRoot(),
   projectId = "atlas",
   options?: { query?: string; indexPort?: BrainIndexPort },
 ): Promise<BoundedReadResult> {

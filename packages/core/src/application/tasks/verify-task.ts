@@ -2,7 +2,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import {
-  atlasPath,
+  oceanPath,
   PROJECTS_DIR,
   repoRoot,
   resolveWithin,
@@ -131,7 +131,7 @@ function isAllowedCommand(command: string): boolean {
  */
 export async function verifyTask(
   id: string,
-  root = atlasPath(PROJECTS_DIR, "atlas", "tasks"),
+  root = oceanPath(PROJECTS_DIR, "atlas", "tasks"),
   options: { cwd?: string; run?: CommandRunner } = {},
 ): Promise<VerificationOutcome> {
   const taskFile = resolveWithin(root, id, "task.md");

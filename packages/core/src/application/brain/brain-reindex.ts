@@ -9,9 +9,9 @@ import type {
 } from "../../domain/ports/brain-index-port.js";
 import type { EmbedderPort } from "../../domain/ports/embedder-port.js";
 import {
-  atlasRoot,
   INDEX_DIR,
   KNOWLEDGE_DIR,
+  oceanRoot,
   resolveWithin,
   STORE_DIR,
 } from "../../paths.js";
@@ -58,7 +58,7 @@ async function walk(root: string, depth = 0): Promise<string[]> {
 // meta.corpus_hash, without parsing frontmatter or building chunks. Used by brainSearch to
 // report `stale: true` when the index is older than the files it was built from, without
 // paying for a full reindex on every search.
-export async function computeCorpusHash(root = atlasRoot()): Promise<string> {
+export async function computeCorpusHash(root = oceanRoot()): Promise<string> {
   const entries: Array<{ storePath: string; contentHash: string }> = [];
   for (const store of STORES) {
     const storeRoot = resolveWithin(root, STORE_DIR[store]);
@@ -141,7 +141,7 @@ function resolveLink(
 export async function reindexBrain(
   options: ReindexOptions,
 ): Promise<ReindexResult> {
-  const root = options.root ?? atlasRoot();
+  const root = options.root ?? oceanRoot();
   const embedder = options.embedder ?? null;
 
   const walked: WalkedDoc[] = [];
@@ -297,6 +297,6 @@ export async function reindexBrain(
   };
 }
 
-export function brainIndexPath(root = atlasRoot()): string {
+export function brainIndexPath(root = oceanRoot()): string {
   return path.join(root, INDEX_DIR, "brain.sqlite");
 }

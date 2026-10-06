@@ -33,7 +33,7 @@ export async function runAuthCommand(
     "session_entry_contract",
     JSON.stringify(
       validateSessionEntryContract({
-        entryPoint: "atlas-run",
+        entryPoint: "ocean-run",
         controlLevel: "full-head",
         inputCapture: "none",
         contextTransport: "provider-owned-auth",

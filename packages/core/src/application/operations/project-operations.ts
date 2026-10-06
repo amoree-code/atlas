@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, PROJECTS_DIR } from "../../paths.js";
+import { oceanPath, PROJECTS_DIR } from "../../paths.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import {
   bindProject,
@@ -17,7 +17,7 @@ import {
   type WriteApproval,
 } from "./operation-contract.js";
 import { crossProjectGuard, type OperationOptions } from "./operation-scope.js";
-import { relativeToAtlas } from "./record-io.js";
+import { relativeToOcean } from "./record-io.js";
 
 export async function projectDetect(
   classification: IntentClassification,
@@ -31,7 +31,7 @@ export async function projectDetect(
     provenance: "project",
     sourcePath:
       resolution.status === "bound"
-        ? relativeToAtlas(atlasPath(PROJECTS_DIR, resolution.projectId))
+        ? relativeToOcean(oceanPath(PROJECTS_DIR, resolution.projectId))
         : "",
     freshness: "unknown",
     confidence: classification.confidence,
@@ -96,7 +96,7 @@ export async function projectCreate(
       : `project '${name.value}' already bound to ${projectPath}`,
     records: [],
     violations: [],
-    written: { sourcePath: relativeToAtlas(target.value), bytes: 0 },
+    written: { sourcePath: relativeToOcean(target.value), bytes: 0 },
     packet: null,
   };
 }
@@ -136,7 +136,7 @@ export async function projectUpdate(
     reason: `project '${project.projectId}' binding confirmed`,
     records: [],
     violations: [],
-    written: { sourcePath: relativeToAtlas(target.value), bytes: 0 },
+    written: { sourcePath: relativeToOcean(target.value), bytes: 0 },
     packet: null,
   };
 }

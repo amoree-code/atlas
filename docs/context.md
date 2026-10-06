@@ -14,11 +14,11 @@ Non-empty sections are joined with a blank line, in this order:
 | Section | Content | Bound |
 |---|---|---|
 | `request` | the request text | — |
-| `profile` | `## Effective Atlas profile` as compact `key: value` lines; empty and default fields are omitted, `writePolicy` is always shown | — |
+| `profile` | `## Effective Ocean profile` as compact `key: value` lines; empty and default fields are omitted, `writePolicy` is always shown | — |
 | `instructions` | `profile.instructions` | — |
-| `skills` | `## Atlas skills`: one line per profile skill, `- name: description (path to SKILL.md)`; bodies are not inlined. Owner-reviewed promoted skills matched by the request follow inline, since they have no SKILL.md | description 300 B; promoted skills 4 KB total, a truncated one ends with a marker naming its entry id, `ocean skill list` and the candidate store file (not granted: it also holds unreviewed candidates) |
+| `skills` | `## Ocean skills`: one line per profile skill, `- name: description (path to SKILL.md)`; bodies are not inlined. Owner-reviewed promoted skills matched by the request follow inline, since they have no SKILL.md | description 300 B; promoted skills 4 KB total, a truncated one ends with a marker naming its entry id, `ocean skill list` and the candidate store file (not granted: it also holds unreviewed candidates) |
 | `facts` | `## Durable profile facts`: newest first, then a pointer to the full set (`ocean memory facts <profile>` and the store file) | 2 KB including the pointer |
-| `handoff` | `## Atlas handoff` with the compact handoff context, verbatim | handoff budget |
+| `handoff` | `## Ocean handoff` with the compact handoff context, verbatim | handoff budget |
 | `context` | `## Context references`: `- path (recordType, bytes B): reason` per reference | 4 KB; overflow is listed in the manifest |
 
 ## How references are chosen
@@ -54,7 +54,7 @@ root for packet records. Only the prompt, which is persisted as a hash, carries 
   compression: object | null,       // null: nothing is inlined, so nothing is compressed
   lastContextCheckpoint: string,    // ISO timestamp of this build
   references: {                     // what the prompt points at (defaults to [])
-    path: string, base: "cwd" | "atlas-root", recordType: string,
+    path: string, base: "cwd" | "ocean-root", recordType: string,
     reason: string, bytes: number | null,
   }[],
 }
@@ -81,7 +81,8 @@ Ocean does not scan all sessions, tasks, personal files, daily files, or transcr
 `contextCompression` stays in the profile schema and in the profile identity hash, but it has no
 effect on headless prompts now that no context body is inlined, and the profile contract does
 not mention it. `application/context/context-compression.ts` has no production caller; only its
-unit tests exercise it.
+unit tests exercise it. A stored context reference with `base: "atlas-root"` is accepted and
+read as `"ocean-root"` for one release.
 
 Read access: the prompt points the provider at files it must be able to open. `runAgent` passes
 these directories outside the run cwd as `readDirectories` on the provider request:
