@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { redactSecrets } from "../../infrastructure/observability/runtime-logger.js";
-import { atlasPath, resolveWithin, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, resolveWithin, SYSTEM_DIR } from "../../paths.js";
 
 type Observation = {
   id: string;
@@ -13,13 +13,13 @@ type Observation = {
   stderr: string;
   createdAt: string;
 };
-const observationsRoot = () => atlasPath(SYSTEM_DIR, "observations");
+const observationsRoot = () => oceanPath(SYSTEM_DIR, "observations");
 
 export async function runObserveCommand(args: string[]): Promise<void> {
   if (args[0] === "show") {
     const id = args[1];
     if (!id || !/^[a-f0-9-]+$/i.test(id))
-      throw new Error("Usage: atlas observe show <id> [--grep <pattern>]");
+      throw new Error("Usage: ocean observe show <id> [--grep <pattern>]");
     const observation = JSON.parse(
       await readFile(resolveWithin(observationsRoot(), `${id}.json`), "utf8"),
     ) as Observation;
@@ -41,7 +41,7 @@ export async function runObserveCommand(args: string[]): Promise<void> {
   const separator = args.indexOf("--");
   const command = separator >= 0 ? args.slice(separator + 1) : args;
   if (!command.length)
-    throw new Error("Usage: atlas observe -- <command> [args]");
+    throw new Error("Usage: ocean observe -- <command> [args]");
   const result = await capture(command);
   await mkdir(observationsRoot(), { recursive: true });
   await writeFile(

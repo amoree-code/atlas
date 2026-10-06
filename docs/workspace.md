@@ -1,6 +1,6 @@
 # Workspace
 
-Atlas separates the public **engine** (`kernel/` in this repository) from a private
+Ocean separates the public **engine** (`kernel/` in this repository) from a private
 **workspace** (`~/ocean`) that holds every piece of user and runtime data. `kernel/` is
 `~/ocean`'s own git repository with its own remote — the workspace root above it is a
 separate, private, no-remote repository (see `git.md`'s policy for the boundary).
@@ -32,17 +32,17 @@ git-ignored here; `brain/` is user-owned data that lives entirely outside this r
 - `engineRoot()` / `enginePath(...)` — always the directory containing this package
   (resolved from the running module, whether compiled under `dist/` or run under `tsx`
   from `src/`).
-- `atlasRoot()` — `process.env.ATLAS_ROOT` if set (resolved to an absolute path),
-  otherwise the parent directory of `engineRoot()`. This is the default private-workspace
+- `oceanRoot()` — `OCEAN_ROOT` (or the older `ATLAS_ROOT`) if set (resolved to an absolute path),
+  otherwise three directories above `engineRoot()` (`kernel/packages/core` → the workspace root). This is the default private-workspace
   location: `kernel/` is expected to sit inside the workspace root as a sibling of `brain/`.
-- `atlasPath(...)` — joins onto `<atlasRoot>/`, used for all private workspace state, via
+- `oceanPath(...)` — joins onto `<oceanRoot>/`, used for all private workspace state, via
   the `PERSONAL_DIR`/`PROJECTS_DIR`/`SYSTEM_DIR` constants (currently `brain/02-personal`,
   `brain/04-projects`, `kernel/bridge`).
 
-Set `ATLAS_ROOT` to point Atlas at a different workspace root, for example to run multiple
-isolated workspaces from one engine checkout.
+Set `OCEAN_ROOT` to point Ocean at a different workspace root, for example to run multiple
+isolated workspaces from one engine checkout. The older `ATLAS_ROOT` is still read when `OCEAN_ROOT` is unset.
 
-## Bootstrap (`atlas setup`)
+## Bootstrap (`ocean setup`)
 
 `src/interfaces/cli/setup-command.ts` creates the workspace on first run (paths below via
 the same three constants, so they track any future layout change):
@@ -70,17 +70,17 @@ directory.
 Use the governed completion command when a task is genuinely finished:
 
 ```bash
-atlas tasks complete T-123
+ocean tasks complete T-123
 ```
 
 It requires every checklist item to be checked, writes `state: done`, and moves the
 whole task directory (including sibling artifacts) into `projects/atlas/tasks/archive/`
-in one operation. Read-only commands such as `atlas tasks list` do not mutate files.
+in one operation. Read-only commands such as `ocean tasks list` do not mutate files.
 
 Tasks that were marked `done` by an external editor can be reconciled explicitly:
 
 ```bash
-atlas tasks archive --auto
+ocean tasks archive --auto
 ```
 
 There is no background filesystem watcher; this keeps completion deterministic and avoids
@@ -89,17 +89,17 @@ making a read-only inspection command silently move user data.
 ## Skills
 
 There is one live skills store: `bridge/skills` (machine-local, git-ignored). `packages/core/skills` is
-only the set of core skills shipped with the engine; `atlas skill hub` copies it, plus any extra folders
+only the set of core skills shipped with the engine; `ocean skill hub` copies it, plus any extra folders
 you name, into the store (additive, never overwrites).
 
-`atlas skill copy` is how clients get skills (T-244: one home, clients get copies, not symlinks): it
+`ocean skill copy` is how clients get skills (T-244: one home, clients get copies, not symlinks): it
 gives `claude`, `codex` and `gemini` a real copy of every hub skill, whole directories included. It is a
 dry run until `--apply`; a link into the hub is just unlinked, any other link or a differing real
 directory is moved into a timestamped backup under `bridge/archive/`, and a skill that contains a
 symlink is reported as `failed` instead of copied. Entries the hub does not name are left alone.
-`atlas onboard` runs this as the `skills` step.
+`ocean onboard` runs this as the `skills` step.
 
-`atlas skill link` is the older symlink-based alternative it replaced: it shows the plan and
-`atlas skill link --apply` makes the links, backing up each replaced copy under `bridge/archive/`.
+`ocean skill link` is the older symlink-based alternative it replaced: it shows the plan and
+`ocean skill link --apply` makes the links, backing up each replaced copy under `bridge/archive/`.
 Skills a client does not already have are only linked with `--all`, because every skill adds always-on
 context. Onboarding no longer runs this.

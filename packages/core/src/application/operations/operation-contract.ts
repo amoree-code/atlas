@@ -1,5 +1,5 @@
 import path from "node:path";
-import { atlasRoot, engineRoot, resolveWithin } from "../../paths.js";
+import { engineRoot, oceanRoot, resolveWithin } from "../../paths.js";
 import { validateBudget } from "../context/context-ladder.js";
 import type {
   ContextPacket,
@@ -158,7 +158,7 @@ export function validateWriteTarget(
 ): { valid: true; value: string } | { valid: false; reason: string } {
   let resolved: string;
   try {
-    resolved = resolveWithin(atlasRoot(), ...segments);
+    resolved = resolveWithin(oceanRoot(), ...segments);
   } catch {
     return { valid: false, reason: "write target escapes the Atlas root" };
   }

@@ -48,7 +48,7 @@ export class McpClient {
     await this.request("initialize", {
       protocolVersion: "2025-06-18",
       capabilities: {},
-      clientInfo: { name: "atlas", version: "0.3.2" },
+      clientInfo: { name: "ocean", version: "0.3.2" },
     });
     this.notify("notifications/initialized", {});
   }

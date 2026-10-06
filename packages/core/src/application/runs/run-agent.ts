@@ -123,7 +123,7 @@ export async function runAgent(
       "session_entry_contract",
       JSON.stringify(
         validateSessionEntryContract({
-          entryPoint: "atlas-run",
+          entryPoint: "ocean-run",
           controlLevel: "full-head",
           inputCapture: "semantic",
           contextTransport: "profile-context-and-provider-adapter",
@@ -181,7 +181,7 @@ export async function runAgent(
     });
     const handoffContent =
       typeof handoff?.compactContext === "string"
-        ? `## Atlas handoff\n${handoff.compactContext}`
+        ? `## Ocean handoff\n${handoff.compactContext}`
         : "";
     const { prompt, bytes, breakdown } = assemblePrompt({
       request: request.prompt,

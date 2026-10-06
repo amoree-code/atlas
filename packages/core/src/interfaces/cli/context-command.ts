@@ -7,11 +7,11 @@ import {
 } from "../../application/context/context-cost.js";
 import { resolveProject } from "../../application/context/project-resolution.js";
 import { BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR } from "../../paths.js";
-import { atlasVersion } from "../../version.js";
+import { oceanVersion } from "../../version.js";
 import { listTasks } from "./tasks-command.js";
 
 export async function runContextCommand(json = false): Promise<void> {
-  const version = await atlasVersion();
+  const version = await oceanVersion();
   const resolution = await resolveProject(process.cwd());
   const project = resolution.status === "bound" ? resolution.projectId : null;
   const tasks = project
@@ -31,11 +31,11 @@ export async function runContextCommand(json = false): Promise<void> {
     return;
   }
   console.log(
-    `Atlas context\nversion: ${version}\nroots: ${[...BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR].join(", ")}`,
+    `Ocean context\nversion: ${version}\nroots: ${[...BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR].join(", ")}`,
   );
   if (resolution.status !== "bound")
     console.log(
-      `project: ${resolution.status} — no Atlas binding for this directory; run 'atlas project bind <name> <path>'`,
+      `project: ${resolution.status} — no Ocean binding for this directory; run 'ocean project bind <name> <path>'`,
     );
   else
     console.log(
@@ -48,7 +48,7 @@ export async function runContextCommand(json = false): Promise<void> {
 }
 
 const costUsage =
-  "Usage: atlas context cost [--json] [--budget <bytes>] [--project <dir>]";
+  "Usage: ocean context cost [--json] [--budget <bytes>] [--project <dir>]";
 const budgetSchema = z.coerce.number().int().positive();
 
 function parseCostArgs(
@@ -85,7 +85,7 @@ function costStatus(client: ClientContextCost): string {
   return client.overBudget ? "OVER" : "ok";
 }
 
-// `atlas context cost`: a read-only report of each client's always-on context bytes. Exits 0
+// `ocean context cost`: a read-only report of each client's always-on context bytes. Exits 0
 // even when a client is over budget — it is a report, not a gate.
 export async function runContextCostCommand(args: string[]): Promise<void> {
   const options = parseCostArgs(args);

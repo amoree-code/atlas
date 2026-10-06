@@ -41,7 +41,7 @@ async function runSearch(args: string[]): Promise<void> {
   const json = args.includes("--json");
   const query = args.filter((arg) => !arg.startsWith("--")).join(" ");
   if (!query) {
-    console.error("Usage: atlas memory search <query> [--json]");
+    console.error("Usage: ocean memory search <query> [--json]");
     process.exitCode = 1;
     return;
   }
@@ -62,7 +62,7 @@ async function runSearch(args: string[]): Promise<void> {
 async function runRead(args: string[]): Promise<void> {
   const idOrPath = args[0];
   if (!idOrPath) {
-    console.error("Usage: atlas memory read <id|path>");
+    console.error("Usage: ocean memory read <id|path>");
     process.exitCode = 1;
     return;
   }
@@ -85,7 +85,7 @@ async function runNeighbors(args: string[]): Promise<void> {
   const depthIndex = args.indexOf("--depth");
   const depth = depthIndex >= 0 ? Number(args[depthIndex + 1]) : 1;
   if (!idOrPath) {
-    console.error("Usage: atlas memory neighbors <id|path> [--depth N]");
+    console.error("Usage: ocean memory neighbors <id|path> [--depth N]");
     process.exitCode = 1;
     return;
   }
@@ -118,7 +118,7 @@ export async function runMemoryCommand(
   if (action === "facts") {
     const profile = args[0];
     if (!profile) {
-      console.error("Usage: atlas memory facts <profile> [key] [value]");
+      console.error("Usage: ocean memory facts <profile> [key] [value]");
       process.exitCode = 1;
       return;
     }
@@ -169,7 +169,7 @@ export async function runMemoryCommand(
     return;
   }
   console.error(
-    "Usage: atlas memory doctor|sync [--apply]|facts <profile> [key] [value]|facts <profile> delete <key>|reindex [--no-vectors]|search <q> [--json]|read <id|path>|neighbors <id|path> [--depth N]",
+    "Usage: ocean memory doctor|sync [--apply]|facts <profile> [key] [value]|facts <profile> delete <key>|reindex [--no-vectors]|search <q> [--json]|read <id|path>|neighbors <id|path> [--depth N]",
   );
   process.exitCode = 1;
 }

@@ -1,13 +1,13 @@
 # Migration
 
-Atlas provides an explicit, local migration command. Preview the operation with
-`atlas migrate`, then apply the idempotent session database migrations with
-`atlas migrate --apply`. The command reports SQLite integrity after applying changes.
+Ocean provides an explicit, local migration command. Preview the operation with
+`ocean migrate`, then apply the idempotent session database migrations with
+`ocean migrate --apply`. The command reports SQLite integrity after applying changes.
 
 ## SQLite schema
 
 `SessionStore` (`src/infrastructure/persistence/session-store.ts`) creates missing tables
-and applies additive column migrations. `atlas migrate --apply` is the explicit upgrade
+and applies additive column migrations. `ocean migrate --apply` is the explicit upgrade
 boundary. Back up `<workspace>/kernel/bridge/sessions/sessions.sqlite` before upgrading if you
 want a rollback point (see [sessions.md](sessions.md)).
 
@@ -22,6 +22,6 @@ explicit profile migration before the required field is enforced.
 Since the workspace root is a private directory (`~/ocean`) whose `kernel/` this repository
 is (see [workspace.md](workspace.md)), moving it is a plain filesystem operation: copy the
 workspace root (or `kernel/bridge/` and `brain/` individually) to the new location,
-then point `ATLAS_ROOT` at it (or place `kernel/` as its sibling again for the default
-resolution). Re-run the platform startup installer (`atlas setup`) if the workspace path
+then point `OCEAN_ROOT` (or the older `ATLAS_ROOT`) at it (or place `kernel/` as its sibling again for the default
+resolution). Re-run the platform startup installer (`ocean setup`) if the workspace path
 changed, so the OS-level startup entry points at the correct working directory.

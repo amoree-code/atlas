@@ -47,7 +47,7 @@ test("unbound and ambiguous project resolution each produce one focused confirma
       projectId: "atlas",
       name: "Atlas",
       path: "/tmp/atlas",
-      matchedOn: "atlas-root",
+      matchedOn: "ocean-root",
       confidence: "high",
     }),
     null,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -76,9 +76,31 @@ test("sync creates Atlas wrappers and shell activation", async () => {
     assert.match(wrapper, /intercept --client/);
     const atlasWrapper = await readFile(providerWrapperPath("atlas"), "utf8");
     assert.match(atlasWrapper, /dist[\\/]main\.js/);
+    const oceanWrapper = await readFile(providerWrapperPath("ocean"), "utf8");
+    assert.equal(oceanWrapper, atlasWrapper);
+    if (process.platform !== "win32") {
+      assert.match(wrapper, /export OCEAN_SHIM_DIR=/);
+      assert.match(wrapper, /export ATLAS_SHIM_DIR=/);
+    }
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
     assert.match(await readFile(profile, "utf8"), /atlas interception/);
+  });
+});
+
+test("doctor reports a missing ocean CLI wrapper", async () => {
+  await withEnvironment(async () => {
+    await syncProviderWrappers();
+    await rm(providerWrapperPath("ocean"), { force: true });
+    const findings = await wrapperDoctor();
+    assert.ok(
+      findings.some((finding) =>
+        finding.startsWith("ocean: CLI wrapper is missing"),
+      ),
+    );
+    assert.ok(
+      !findings.some((finding) => finding.startsWith("atlas: CLI wrapper")),
+    );
   });
 });
 

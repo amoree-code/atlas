@@ -1,18 +1,18 @@
 {
-  "name": "atlas-monorepo",
+  "name": "ocean-monorepo",
   "private": true,
   "packageManager": "pnpm@12.4.2",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm --filter atlas run build",
-    "dev": "pnpm --filter atlas run dev",
-    "start": "pnpm --filter atlas run start",
-    "typecheck": "pnpm --filter atlas run typecheck",
-    "typecheck:watch": "pnpm --filter atlas run typecheck:watch",
-    "check:skills": "pnpm --filter atlas run check:skills",
-    "generate:skills": "pnpm --filter atlas run generate:skills",
+    "build": "pnpm --filter ocean run build",
+    "dev": "pnpm --filter ocean run dev",
+    "start": "pnpm --filter ocean run start",
+    "typecheck": "pnpm --filter ocean run typecheck",
+    "typecheck:watch": "pnpm --filter ocean run typecheck:watch",
+    "check:skills": "pnpm --filter ocean run check:skills",
+    "generate:skills": "pnpm --filter ocean run generate:skills",
     "check:privacy": "node scripts/scan-privacy.mjs",
     "check:tasks": "node packages/core/scripts/validate-tasks.mjs",
     "check:package": "node scripts/validate-package.mjs",
@@ -21,7 +21,7 @@
     "check:style": "biome check .",
     "check:unused": "knip --include files,dependencies,devDependencies,unlisted,binaries,unresolved",
     "check": "pnpm typecheck && pnpm check:style && pnpm check:unused && pnpm check:privacy && pnpm check:skills && pnpm check:tasks && pnpm check:package && pnpm check:system",
-    "test": "pnpm --filter atlas run test",
+    "test": "pnpm --filter ocean run test",
     "prepare": "node scripts/prepare-hooks.mjs",
     "changeset": "changeset"
   },

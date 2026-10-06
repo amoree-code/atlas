@@ -267,5 +267,5 @@ test("atlas context cost prints JSON and a table without contents or home paths"
 
     const bad = run(["--budget", "abc"]);
     assert.equal(bad.status, 1);
-    assert.match(bad.stderr, /Usage: atlas context cost/);
+    assert.match(bad.stderr, /Usage: ocean context cost/);
   }));

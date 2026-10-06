@@ -3,7 +3,7 @@
 See [operating-model.md](operating-model.md) for the canonical ownership, request-flow,
 provenance, credential, CLI/MCP, and provider-boundary contract.
 
-Atlas is a local-first operating layer for AI agents (an "AI OS"), implemented as a Node.js
+Ocean is a local-first operating layer for AI agents (an "AI OS"), implemented as a Node.js
 runtime for running headless AI agent CLIs (Claude, Codex, Gemini, Antigravity, Hermes)
 inside one workspace. The engine repository is public and
 provider-neutral; all user data and technical state live in a private workspace next to it.
@@ -24,7 +24,7 @@ boundary and returns a content hash.
 ## Layers
 
 - **Interfaces** — `src/main.ts` performs top-level dispatch, while focused handlers and the
-  canonical help catalog live under `src/interfaces/cli/`. Run `atlas --help` for the complete
+  canonical help catalog live under `src/interfaces/cli/`. Run `ocean --help` for the complete
   current command surface.
 - **Application** — `src/application/runs/run-agent.ts` (`runAgent` / `resumeAgent`, the orchestration
   entry points) and `src/infrastructure/process/service.ts` (long-running process for startup integration).
@@ -70,23 +70,23 @@ flowchart TB
 
     subgraph PrivateBoundary["Private workspace (not in this repo, git-ignored)"]
         Personal["personal/, projects/"]
-        AtlasState["private roots (config, profiles, sessions,\ncontrol-plane, integrations, archive)"]
+        OceanState["private roots (config, profiles, sessions,\ncontrol-plane, integrations, archive)"]
     end
 
     Commands -.creates.-> PrivateBoundary
-    Store -.reads/writes.-> AtlasState
-    Profiles -.reads.-> AtlasState
+    Store -.reads/writes.-> OceanState
+    Profiles -.reads.-> OceanState
 ```
 
 ## Public engine / private workspace boundary
 
 This repository (`engine/`) contains only source, tests, templates, and build output — no
-user data. Everything Atlas reads or writes at run time lives in a separate **workspace**
+user data. Everything Ocean reads or writes at run time lives in a separate **workspace**
 root (see [workspace.md](workspace.md)). The two are joined only through paths resolved at
 startup (`src/paths.ts`) and are never mixed into the same directory tree or the same git
 history.
 
-## Execution flow (`atlas run`)
+## Execution flow (`ocean run`)
 
 1. `main.ts` parses the command and calls `runAgent`.
 2. `runAgent` loads the named profile (`profile-loader.ts`), opens the session store, and

@@ -12,7 +12,7 @@ export async function runAuthCommand(
   provider: string,
 ): Promise<void> {
   if (!provider || !["status", "login"].includes(action)) {
-    console.error("Usage: atlas auth status|login <client>");
+    console.error("Usage: ocean auth status|login <client>");
     process.exitCode = 1;
     return;
   }
@@ -33,7 +33,7 @@ export async function runAuthCommand(
     "session_entry_contract",
     JSON.stringify(
       validateSessionEntryContract({
-        entryPoint: "atlas-run",
+        entryPoint: "ocean-run",
         controlLevel: "full-head",
         inputCapture: "none",
         contextTransport: "provider-owned-auth",

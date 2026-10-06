@@ -59,7 +59,7 @@ test("scans references/*.md, not only SKILL.md", async () => {
     "references/more.md": "```bash\n~/gone/run.sh --flag\n```\n",
   });
   assert.equal(status, 1);
-  assert.match(out, /references\/more\.md/);
+  assert.match(out, /references[\\/]more\.md/);
 });
 
 test("a backslash-continued command does not capture the backslash", async () => {

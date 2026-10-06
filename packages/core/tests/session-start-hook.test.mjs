@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ATLAS_BOOTSTRAP_MAX_BYTES } from "../dist/application/context/resource-injection.js";
+import { OCEAN_BOOTSTRAP_MAX_BYTES } from "../dist/application/context/resource-injection.js";
 import {
   claudeNativeHookStatus,
   claudeSessionStartHook,
@@ -17,7 +17,7 @@ test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutp
   assert.equal(result.hookSpecificOutput.hookEventName, "SessionStart");
   assert.ok(
     Buffer.byteLength(result.hookSpecificOutput.additionalContext) <=
-      ATLAS_BOOTSTRAP_MAX_BYTES,
+      OCEAN_BOOTSTRAP_MAX_BYTES,
   );
   assert.match(
     result.hookSpecificOutput.additionalContext,
@@ -27,9 +27,9 @@ test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutp
 
 test("claudeSessionStartHook reports unbound for a cwd with no Atlas binding, not a guess", async () => {
   const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-unbound-"));
-  const atlasRoot = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-root-"));
+  const oceanRoot = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-root-"));
   const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = atlasRoot;
+  process.env.ATLAS_ROOT = oceanRoot;
   try {
     const result = await claudeSessionStartHook({ cwd: outside });
     assert.match(

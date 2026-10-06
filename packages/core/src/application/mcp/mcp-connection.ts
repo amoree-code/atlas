@@ -8,7 +8,7 @@ export type StdioMcpServer = {
   cwd: string;
 };
 
-export function atlasMcpConfig(): { mcpServers: { atlas: StdioMcpServer } } {
+export function oceanMcpConfig(): { mcpServers: { atlas: StdioMcpServer } } {
   return {
     mcpServers: {
       atlas: {

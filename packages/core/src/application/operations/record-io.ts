@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { readFrontmatterFile as readFrontmatterFileWithLimit } from "../../fs-utils.js";
-import { atlasRoot } from "../../paths.js";
+import { oceanRoot } from "../../paths.js";
 import type { Freshness } from "../context/context-packet.js";
 
 // Bounded, deterministic Atlas record I/O (T-198 slice 7). Every read is scoped to a
@@ -59,8 +59,8 @@ export async function listRecordFiles(
   return files;
 }
 
-export function relativeToAtlas(file: string): string {
-  return path.relative(atlasRoot(), file).split(path.sep).join("/");
+export function relativeToOcean(file: string): string {
+  return path.relative(oceanRoot(), file).split(path.sep).join("/");
 }
 
 export async function requireAbsentTarget(
@@ -70,7 +70,7 @@ export async function requireAbsentTarget(
     await stat(target);
     return {
       ok: false,
-      reason: `refusing to overwrite an existing record at ${relativeToAtlas(target)}`,
+      reason: `refusing to overwrite an existing record at ${relativeToOcean(target)}`,
     };
   } catch {
     return { ok: true };

@@ -25,7 +25,7 @@ import {
   actionFingerprint,
   mcpApprovalSchema,
 } from "../../domain/mcp/mcp-contract.js";
-import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
 import { openSessionStoreReadOnly } from "../persistence/session-store.js";
 
 type Request = {
@@ -44,7 +44,7 @@ type Response = {
 const tools = [
   {
     name: "atlas_status",
-    description: "Return the Atlas runtime and workspace status.",
+    description: "Return the Ocean runtime and workspace status.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
@@ -54,7 +54,7 @@ const tools = [
   },
   {
     name: "atlas_doctor",
-    description: "Run the read-only Atlas workspace health checks.",
+    description: "Run the read-only Ocean workspace health checks.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
@@ -64,7 +64,7 @@ const tools = [
   },
   {
     name: "atlas_profiles_list",
-    description: "List available Atlas profiles.",
+    description: "List available Ocean profiles.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
@@ -74,7 +74,7 @@ const tools = [
   },
   {
     name: "atlas_tasks_list",
-    description: "List Atlas tasks, optionally filtered by state.",
+    description: "List Ocean tasks, optionally filtered by state.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
@@ -84,7 +84,7 @@ const tools = [
   },
   {
     name: "atlas_task_get",
-    description: "Read one bounded Atlas task record.",
+    description: "Read one bounded Ocean task record.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
@@ -160,7 +160,7 @@ const tools = [
   {
     name: "atlas_session_promote",
     description:
-      "Promote a completed session result into reviewed Atlas knowledge.",
+      "Promote a completed session result into reviewed Ocean knowledge.",
     annotations: { readOnlyHint: false },
     inputSchema: {
       type: "object",
@@ -223,23 +223,23 @@ const tools = [
 
 const resources = [
   {
-    uri: "atlas://status",
-    name: "Atlas status",
-    description: "Current Atlas workspace health.",
+    uri: "ocean://status",
+    name: "Ocean status",
+    description: "Current Ocean workspace health.",
   },
   {
-    uri: "atlas://profiles",
-    name: "Atlas profiles",
-    description: "Available Atlas role profiles.",
+    uri: "ocean://profiles",
+    name: "Ocean profiles",
+    description: "Available Ocean role profiles.",
   },
   {
-    uri: "atlas://tasks",
-    name: "Atlas tasks",
-    description: "Current Atlas tasks.",
+    uri: "ocean://tasks",
+    name: "Ocean tasks",
+    description: "Current Ocean tasks.",
   },
   {
-    uri: "atlas://handoffs",
-    name: "Atlas handoffs",
+    uri: "ocean://handoffs",
+    name: "Ocean handoffs",
     description: "Compact cross-client session handoffs.",
   },
 ];
@@ -248,12 +248,12 @@ const prompts = [
   {
     name: "atlas_review_workspace",
     description:
-      "Review Atlas workspace health and summarize actionable findings.",
+      "Review Ocean workspace health and summarize actionable findings.",
     arguments: [],
   },
   {
     name: "atlas_review_task",
-    description: "Review one Atlas task and identify its next verified action.",
+    description: "Review one Ocean task and identify its next verified action.",
     arguments: [
       { name: "task", description: "Task identifier", required: true },
     ],
@@ -273,7 +273,7 @@ function textResult(value: unknown): {
 async function profiles(): Promise<string[]> {
   try {
     return (
-      await readdir(atlasPath(SYSTEM_DIR, "profiles"), { withFileTypes: true })
+      await readdir(oceanPath(SYSTEM_DIR, "profiles"), { withFileTypes: true })
     )
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
       .map((entry) => entry.name.slice(0, -5))
@@ -290,9 +290,9 @@ async function callTool(
 ): Promise<unknown> {
   if (name === "atlas_status")
     return {
-      name: "Atlas",
+      name: "Ocean",
       version: "0.3.6",
-      workspace: atlasPath(),
+      workspace: oceanPath(),
       mcp: "stdio",
     };
   if (name === "atlas_doctor") {
@@ -343,11 +343,11 @@ async function callTool(
       if (!session) throw new Error("Session not found");
       if (!session.summaryPath)
         throw new Error("Session summary not available");
-      const summaryPath = path.resolve(atlasRoot(), session.summaryPath);
-      const root = `${path.resolve(atlasPath(SYSTEM_DIR, "sessions", "summaries"))}${path.sep}`;
+      const summaryPath = path.resolve(oceanRoot(), session.summaryPath);
+      const root = `${path.resolve(oceanPath(SYSTEM_DIR, "sessions", "summaries"))}${path.sep}`;
       if (!summaryPath.startsWith(root))
         throw new Error(
-          "Session summary path is outside the Atlas summary directory",
+          "Session summary path is outside the Ocean summary directory",
         );
       const maxBytes =
         typeof args.maxBytes === "number"
@@ -443,20 +443,22 @@ async function readResource(
   uri: string,
 ): Promise<{ uri: string; mimeType: string; text: string }> {
   let value: unknown;
-  if (uri === "atlas://status") {
+  // "atlas://" is the pre-rename scheme; still accepted on read for one release.
+  const resource = /^(?:ocean|atlas):\/\/(.*)$/.exec(uri)?.[1];
+  if (resource === "status") {
     const report = await workspaceReport(defaultWrapperManager);
     value = {
-      name: "Atlas",
+      name: "Ocean",
       version: "0.3.6",
-      workspace: atlasPath(),
+      workspace: oceanPath(),
       healthy: !hasFailures(report.findings),
       findings: report.findings,
     };
-  } else if (uri === "atlas://profiles") value = { profiles: await profiles() };
-  else if (uri === "atlas://tasks") value = { tasks: await listTasks() };
-  else if (uri === "atlas://handoffs")
+  } else if (resource === "profiles") value = { profiles: await profiles() };
+  else if (resource === "tasks") value = { tasks: await listTasks() };
+  else if (resource === "handoffs")
     value = { handoffs: await listHandoffs(defaultSessionStoreFactory) };
-  else throw new Error(`Unknown Atlas resource: ${uri}`);
+  else throw new Error(`Unknown Ocean resource: ${uri}`);
   return {
     uri,
     mimeType: "application/json",
@@ -477,7 +479,7 @@ async function getPrompt(
 ): Promise<unknown> {
   if (name === "atlas_review_workspace")
     return {
-      description: "Atlas workspace review",
+      description: "Ocean workspace review",
       messages: [
         {
           role: "user",
@@ -497,13 +499,13 @@ async function getPrompt(
           role: "user",
           content: {
             type: "text",
-            text: `Read the Atlas task ${task}, report PROVEN, NOT PROVEN, or BLOCKED, and propose exactly one next verified action.`,
+            text: `Read the Ocean task ${task}, report PROVEN, NOT PROVEN, or BLOCKED, and propose exactly one next verified action.`,
           },
         },
       ],
     };
   }
-  throw new Error(`Unknown Atlas prompt: ${name}`);
+  throw new Error(`Unknown Ocean prompt: ${name}`);
 }
 
 export async function handleAtlasMcpRequest(
@@ -517,7 +519,7 @@ export async function handleAtlasMcpRequest(
       result: {
         protocolVersion: "2025-06-18",
         capabilities: { tools: {}, resources: {}, prompts: {} },
-        serverInfo: { name: "atlas", version: "0.3.6" },
+        serverInfo: { name: "ocean", version: "0.3.6" },
       },
     };
   if (request.method === "tools/list")

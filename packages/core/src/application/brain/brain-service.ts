@@ -3,7 +3,7 @@ import path from "node:path";
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
 import type { EmbedderPort } from "../../domain/ports/embedder-port.js";
 import {
-  atlasRoot,
+  oceanRoot,
   resolveStorePath,
   resolveWithin,
   STORE_DIR,
@@ -56,7 +56,7 @@ function snippetOf(text: string, maxLen = 240): string {
 export async function brainSearch(
   options: BrainSearchOptions,
 ): Promise<BrainSearchResult> {
-  const root = options.root ?? atlasRoot();
+  const root = options.root ?? oceanRoot();
   const limit = Math.max(1, Math.min(20, options.limit ?? 8));
   const indexFile = brainIndexPath(root);
   let exists = true;
@@ -208,7 +208,7 @@ export type BrainReadResult = {
 export async function brainRead(
   options: BrainReadOptions,
 ): Promise<BrainReadResult> {
-  const root = options.root ?? atlasRoot();
+  const root = options.root ?? oceanRoot();
   const maxBytes = Math.max(512, Math.min(16_000, options.maxBytes ?? 8_000));
   const indexFile = brainIndexPath(root);
   const reader = options.indexPort.openIndexReadOnly(indexFile);
@@ -270,7 +270,7 @@ export type BrainNeighbor = {
 export async function brainNeighbors(
   options: BrainNeighborsOptions,
 ): Promise<{ neighbors: BrainNeighbor[] }> {
-  const root = options.root ?? atlasRoot();
+  const root = options.root ?? oceanRoot();
   const depth = options.depth ?? 1;
   const direction = options.direction ?? "both";
   const limit = Math.max(1, Math.min(50, options.limit ?? 20));
@@ -323,7 +323,7 @@ export async function brainNeighbors(
   }
 }
 
-export async function ensureIndexBuilt(root = atlasRoot()): Promise<boolean> {
+export async function ensureIndexBuilt(root = oceanRoot()): Promise<boolean> {
   try {
     await stat(brainIndexPath(root));
     return true;
@@ -333,7 +333,7 @@ export async function ensureIndexBuilt(root = atlasRoot()): Promise<boolean> {
 }
 
 export { reindexBrain };
-export function relativeStorePath(file: string, root = atlasRoot()): string {
+export function relativeStorePath(file: string, root = oceanRoot()): string {
   for (const [store, dir] of Object.entries(STORE_DIR)) {
     const relative = path.relative(resolveWithin(root, dir), file);
     if (!relative.startsWith("..") && !path.isAbsolute(relative))

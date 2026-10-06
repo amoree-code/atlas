@@ -18,7 +18,7 @@ import {
   actionFingerprint,
   mcpApprovalSchema,
 } from "../../domain/mcp/mcp-contract.js";
-import { atlasPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 type Request = {
   jsonrpc?: string;
@@ -145,7 +145,7 @@ function requiredText(args: Record<string, unknown>, key: string): string {
 }
 
 async function conflicts(): Promise<unknown[]> {
-  const directory = atlasPath(
+  const directory = oceanPath(
     SYSTEM_DIR,
     "integrations",
     "obsidian",

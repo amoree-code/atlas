@@ -7,9 +7,9 @@ import { validateSessionEntryContract } from "../../domain/sessions/entry-contra
 import { redactRuntimeText } from "../../infrastructure/observability/runtime-logger.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import {
-  atlasPath,
-  atlasRoot,
   KNOWLEDGE_DIR,
+  oceanPath,
+  oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
 } from "../../paths.js";
@@ -22,7 +22,7 @@ export async function runCaptureCommand(
   try {
     if (action === "add") {
       const content = redactRuntimeText(args.join(" ").trim());
-      if (!content) throw new Error("Usage: atlas capture add <idea>");
+      if (!content) throw new Error("Usage: ocean capture add <idea>");
       const sessionId = randomUUID();
       store.create({
         sessionId,
@@ -31,7 +31,7 @@ export async function runCaptureCommand(
         parentSessionId: null,
         profile: "manual-capture",
         profileIdentity: "",
-        workingDirectory: atlasRoot(),
+        workingDirectory: oceanRoot(),
         resumeData: null,
       });
       store.appendEvent(
@@ -39,7 +39,7 @@ export async function runCaptureCommand(
         "session_entry_contract",
         JSON.stringify(
           validateSessionEntryContract({
-            entryPoint: "atlas-run",
+            entryPoint: "ocean-run",
             controlLevel: "full-head",
             inputCapture: "semantic",
             contextTransport: "manual-capture",
@@ -79,7 +79,7 @@ export async function runCaptureCommand(
     if (action === "promote" || action === "discard") {
       const captureId = Number(args[0]);
       if (!Number.isInteger(captureId))
-        throw new Error(`Usage: atlas capture ${action} <capture-id> [target]`);
+        throw new Error(`Usage: ocean capture ${action} <capture-id> [target]`);
       if (action === "promote") {
         const item = store.getCaptureItem(captureId);
         if (!item) throw new Error(`Capture item not found: ${captureId}`);
@@ -101,7 +101,7 @@ export async function runCaptureCommand(
       return;
     }
     console.error(
-      "Usage: atlas capture add <idea>|scan [session-id]|list [status]|promote <id> <target>|discard <id>",
+      "Usage: ocean capture add <idea>|scan [session-id]|list [status]|promote <id> <target>|discard <id>",
     );
     process.exitCode = 1;
   } finally {
@@ -117,8 +117,8 @@ async function promote(
     const relative = target.slice("memory/".length);
     if (!relative.endsWith(".md") || relative.includes(".."))
       throw new Error("Memory target must be an existing canonical .md file.");
-    const file = path.resolve(atlasPath(PERSONAL_DIR), relative);
-    const memoryRoot = path.resolve(atlasPath(PERSONAL_DIR)) + path.sep;
+    const file = path.resolve(oceanPath(PERSONAL_DIR), relative);
+    const memoryRoot = path.resolve(oceanPath(PERSONAL_DIR)) + path.sep;
     if (!file.startsWith(memoryRoot))
       throw new Error("Memory target must stay inside brain/02-personal.");
     const header = `\n\n## Captured note — ${new Date().toISOString().slice(0, 10)}\n\n${item.content.trim()}\n\n_Source: session-capture-${item.captureId}; review status: unverified._\n`;
@@ -133,7 +133,7 @@ async function promote(
   }
   if (target === "backlog") {
     await appendFile(
-      atlasPath(PROJECTS_DIR, "backlog.md"),
+      oceanPath(PROJECTS_DIR, "backlog.md"),
       `\n- [TODO] (P2) atlas — ${item.content.replace(/\s+/g, " ").trim()}  {${new Date().toISOString().slice(0, 10)}}\n`,
     );
     return;
@@ -152,7 +152,7 @@ async function promote(
     .slice(0, 60);
   const slug = safe || `capture-${item.captureId}`;
   const file = path.join(
-    atlasPath(KNOWLEDGE_DIR, match[1], `${slug}-${item.captureId}.md`),
+    oceanPath(KNOWLEDGE_DIR, match[1], `${slug}-${item.captureId}.md`),
   );
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(

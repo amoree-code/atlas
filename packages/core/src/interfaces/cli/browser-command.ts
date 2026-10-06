@@ -118,7 +118,7 @@ export async function runBrowserCommand(
       const paths = args.slice(2).filter((value) => !value.startsWith("--"));
       if (!paths.length)
         throw new Error(
-          "Usage: atlas browser upload <session-id> <selector> <path>... --approve",
+          "Usage: ocean browser upload <session-id> <selector> <path>... --approve",
         );
       return print(
         await manager.upload(
@@ -209,6 +209,6 @@ function print(value: unknown): void {
 
 function usage(): void {
   console.error(
-    "Usage: atlas browser detect|open|show|events|close|approve|navigate|read|observe|extract|click|type|replace-text|select|scroll|wait|upload|download|submit|run",
+    "Usage: ocean browser detect|open|show|events|close|approve|navigate|read|observe|extract|click|type|replace-text|select|scroll|wait|upload|download|submit|run",
   );
 }

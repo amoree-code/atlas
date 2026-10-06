@@ -27,9 +27,9 @@ import {
 } from "../dist/application/operations/write-guard.js";
 import { defaultBrainIndexPort } from "../dist/composition/runtime.js";
 import {
-  atlasRoot,
   engineRoot,
   KNOWLEDGE_DIR,
+  oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
 } from "../dist/paths.js";
@@ -822,7 +822,7 @@ test("a cross-project request is refused explicitly", () =>
 
 test("private Atlas content is never written inside the public engine package", () => {
   const engineRelative = path
-    .relative(atlasRoot(), engineRoot())
+    .relative(oceanRoot(), engineRoot())
     .split(path.sep);
   const rejected = validateWriteTarget(...engineRelative, "src", "leak.md");
   assert.equal(rejected.valid, false);
