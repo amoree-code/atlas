@@ -252,10 +252,12 @@ export async function wrapperDoctor(commandPath?: string): Promise<string[]> {
       const contents = await readFile(wrapperPath(name), "utf8");
       if (!contents.includes("dist/main.js"))
         findings.push(
-          `${name}: CLI wrapper is stale or does not route through Atlas`,
+          `${name}: CLI wrapper is stale or does not route through Atlas; run: ocean doctor --fix`,
         );
     } catch {
-      findings.push(`${name}: CLI wrapper is missing at ${wrapperPath(name)}`);
+      findings.push(
+        `${name}: CLI wrapper is missing at ${wrapperPath(name)}; run: ocean doctor --fix`,
+      );
     }
   }
   for (const provider of providers) {
