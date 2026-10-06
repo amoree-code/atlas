@@ -19,7 +19,7 @@ pnpm check:style      # biome check .
 - Public code only under `packages/core/src/`. Provider execution only under
   `packages/core/src/infrastructure/providers/`.
 - Private personal/project data (`brain/`) lives as a sibling of this repo, outside it
-  entirely. Machine-local state (`bridge/` — profiles, sessions, config, control-plane,
+  entirely. Machine-local state (`bridge/` — profiles, sessions, config, registry,
   integrations, archive) is physically nested inside this repo but git-ignored; never
   commit any of it.
 - `sessions/sessions.sqlite` holds session metadata/events/links only — nothing else.

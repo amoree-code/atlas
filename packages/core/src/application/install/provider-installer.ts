@@ -7,7 +7,7 @@ import type {
   WrapperManagerPort,
 } from "../../domain/ports/platform-ports.js";
 import type { ProviderRecord } from "../../domain/providers/provider.js";
-import { oceanPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, REGISTRY_DIR } from "../../paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -100,7 +100,7 @@ const catalog: InstallSpec[] = [
 ];
 
 const installationReceiptPath = (): string =>
-  oceanPath(SYSTEM_DIR, "control-plane", "registry", "installations.json");
+  oceanPath(REGISTRY_DIR, "installations.json");
 
 export function listInstallSpecs(): InstallSpec[] {
   return catalog.map((spec) => ({

@@ -138,7 +138,7 @@ ocean/                      private workspace root (local-only repo, no remote)
 │   │       └── package.json
 │   ├── scripts/
 │   └── bridge/             machine-local state — git-ignored, never published
-│                           profiles, sessions, config, control-plane, integrations
+│                           profiles, sessions, config, registry, integrations
 ├── brain/                  private user, project and knowledge records
 └── sessions/               narrative session records
 ```

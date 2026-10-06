@@ -1,4 +1,12 @@
-import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { connectObsidianVault } from "../../application/obsidian/vault-discovery.js";
@@ -11,10 +19,12 @@ import {
   enginePath,
   INBOX_DIR,
   KNOWLEDGE_DIR,
+  LEGACY_REGISTRY_DIR,
   oceanPath,
   oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
+  REGISTRY_DIR,
   SYSTEM_DIR,
   TEMPLATES_DIR,
 } from "../../paths.js";
@@ -32,7 +42,7 @@ const stateDirectories = [
   `${SYSTEM_DIR}/config/startup`,
   `${SYSTEM_DIR}/profiles`,
   `${SYSTEM_DIR}/sessions`,
-  `${SYSTEM_DIR}/control-plane`,
+  REGISTRY_DIR,
   `${SYSTEM_DIR}/integrations`,
   `${SYSTEM_DIR}/archive`,
   `${SYSTEM_DIR}/runtime/shims`,
@@ -114,12 +124,29 @@ export type SetupOptions = {
   obsidianMode?: "read-only" | "read-write";
 };
 
+async function exists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function migrateLegacyRegistry(): Promise<void> {
+  const legacy = oceanPath(LEGACY_REGISTRY_DIR);
+  const current = oceanPath(REGISTRY_DIR);
+  if ((await exists(legacy)) && !(await exists(current)))
+    await rename(legacy, current);
+}
+
 export async function setup(options: SetupOptions = {}): Promise<void> {
   await Promise.all(
     personalDirectories.map((directory) =>
       mkdir(oceanPath(directory), { recursive: true }),
     ),
   );
+  await migrateLegacyRegistry();
   await Promise.all(
     stateDirectories.map((directory) =>
       mkdir(oceanPath(directory), { recursive: true }),

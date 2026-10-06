@@ -1,10 +1,10 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, oceanRoot, REGISTRY_DIR } from "../../paths.js";
 
 // Deterministic, local, metadata-first project resolution: no model call, no network round
-// trip. Bindings are a flat JSON registry (same pattern as kernel/bridge/control-plane/registry/
+// trip. Bindings are a flat JSON registry (same pattern as kernel/bridge/registry/
 // providers.json), not a new workspace root.
 export type ProjectBinding = {
   id: string;
@@ -46,12 +46,7 @@ export function projectConfirmationQuestion(
 }
 
 function bindingsFile(): string {
-  return oceanPath(
-    SYSTEM_DIR,
-    "control-plane",
-    "registry",
-    "project-bindings.json",
-  );
+  return oceanPath(REGISTRY_DIR, "project-bindings.json");
 }
 
 export function findGitRoot(startDir: string): string | null {
