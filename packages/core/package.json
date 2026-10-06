@@ -1,5 +1,5 @@
 {
-  "name": "atlas",
+  "name": "ocean",
   "version": "0.3.7",
   "private": false,
   "type": "module",
@@ -12,6 +12,7 @@
     "skills"
   ],
   "bin": {
+    "ocean": "./dist/main.js",
     "atlas": "./dist/main.js"
   },
   "scripts": {
