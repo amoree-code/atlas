@@ -66,7 +66,7 @@ test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, nev
       `${SYSTEM_DIR}/profiles`,
       `${SYSTEM_DIR}/sessions`,
       `${SYSTEM_DIR}/config/startup`,
-      `${SYSTEM_DIR}/control-plane`,
+      `${SYSTEM_DIR}/registry`,
       `${SYSTEM_DIR}/integrations`,
       `${SYSTEM_DIR}/archive`,
     ]) {

@@ -22,7 +22,7 @@ git-ignored here; `brain/` is user-owned data that lives entirely outside this r
 │       ├── config/
 │       │   ├── startup/
 │       │   └── CONFIG.md
-│       ├── control-plane/    private governance and permissions
+│       ├── registry/         machine-local provider, install and project registry
 │       ├── integrations/     private client integrations
 │       └── archive/          private retained legacy history
 ```
@@ -51,7 +51,7 @@ the same three constants, so they track any future layout change):
   `brain/06-templates`, and `brain/04-projects/atlas/tasks`
   under the workspace root.
 - Creates `kernel/bridge/config/startup`, `kernel/bridge/profiles`,
-  `kernel/bridge/sessions`, `kernel/bridge/control-plane`, `kernel/bridge/integrations`, and
+  `kernel/bridge/sessions`, `kernel/bridge/registry`, `kernel/bridge/integrations`, and
   `kernel/bridge/archive` under the workspace root.
 - Writes `kernel/bridge/profiles/default.json` from the template in `packages/core/templates/`,
   without overwriting existing files.

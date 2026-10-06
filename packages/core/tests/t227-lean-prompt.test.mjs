@@ -465,7 +465,7 @@ test("buildContextReferences references a single task record without reading it"
     });
     assert.deepEqual(unknown.manifest.references, []);
 
-    const registry = path.join(root, SYSTEM_DIR, "control-plane", "registry");
+    const registry = path.join(root, SYSTEM_DIR, "registry");
     await mkdir(registry, { recursive: true });
     await writeFile(path.join(registry, "project-bindings.json"), "{not json");
     const malformed = await buildContextReferences({

@@ -2,6 +2,7 @@ import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { connectObsidianVault } from "../../application/obsidian/vault-discovery.js";
+import { registryFile } from "../../fs-utils.js";
 import {
   installShellIntegration,
   syncProviderWrappers,
@@ -15,6 +16,7 @@ import {
   oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
+  REGISTRY_DIR,
   SYSTEM_DIR,
   TEMPLATES_DIR,
 } from "../../paths.js";
@@ -28,11 +30,17 @@ const personalDirectories = [
   `${PROJECTS_DIR}/atlas/tasks`,
 ];
 
+const REGISTRY_FILES = [
+  "providers.json",
+  "installations.json",
+  "project-bindings.json",
+];
+
 const stateDirectories = [
   `${SYSTEM_DIR}/config/startup`,
   `${SYSTEM_DIR}/profiles`,
   `${SYSTEM_DIR}/sessions`,
-  `${SYSTEM_DIR}/control-plane`,
+  REGISTRY_DIR,
   `${SYSTEM_DIR}/integrations`,
   `${SYSTEM_DIR}/archive`,
   `${SYSTEM_DIR}/runtime/shims`,
@@ -120,6 +128,7 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
       mkdir(oceanPath(directory), { recursive: true }),
     ),
   );
+  for (const file of REGISTRY_FILES) registryFile(file);
   await Promise.all(
     stateDirectories.map((directory) =>
       mkdir(oceanPath(directory), { recursive: true }),

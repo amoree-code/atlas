@@ -70,7 +70,7 @@ flowchart TB
 
     subgraph PrivateBoundary["Private workspace (not in this repo, git-ignored)"]
         Personal["personal/, projects/"]
-        OceanState["private roots (config, profiles, sessions,\ncontrol-plane, integrations, archive)"]
+        OceanState["private roots (config, profiles, sessions,\nregistry, integrations, archive)"]
     end
 
     Commands -.creates.-> PrivateBoundary
