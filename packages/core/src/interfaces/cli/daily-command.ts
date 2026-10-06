@@ -7,7 +7,7 @@ import {
 } from "../../application/skills/task-observer.js";
 import type { Session } from "../../domain/sessions/session.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
-import { atlasPath, DAILY_DIR } from "../../paths.js";
+import { DAILY_DIR, oceanPath } from "../../paths.js";
 import { listTasks } from "./tasks-command.js";
 
 /**
@@ -97,7 +97,7 @@ export async function runDailyCommand(
     store.close();
   }
   const date = new Date().toISOString().slice(0, 10);
-  const file = atlasPath(DAILY_DIR, `${date}.md`);
+  const file = oceanPath(DAILY_DIR, `${date}.md`);
   const content = `${[
     `# Daily brief — ${date}`,
     "",

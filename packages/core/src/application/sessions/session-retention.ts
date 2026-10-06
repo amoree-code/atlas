@@ -5,7 +5,7 @@ import type {
   SessionStoreOpener,
   SessionStorePort,
 } from "../../domain/ports/session-store-port.js";
-import { atlasPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 import { writeSessionSummary } from "../memory/session-summary.js";
 
 // Session retention (T-228): summarize finished, unsummarized sessions to markdown, then
@@ -102,7 +102,7 @@ export async function simulateRetention(
   plan: RetentionPlan,
   openStore: SessionStoreOpener,
 ): Promise<SimulationResult> {
-  const simDir = atlasPath(SYSTEM_DIR, "sessions", ".compaction-sim");
+  const simDir = oceanPath(SYSTEM_DIR, "sessions", ".compaction-sim");
   await mkdir(simDir, { recursive: true, mode: 0o700 });
   const copyPath = path.join(simDir, `sim-${process.pid}-${Date.now()}.sqlite`);
   await rm(copyPath, { force: true });
@@ -163,7 +163,7 @@ export async function applyRetention(
     );
   }
 
-  const backupDir = atlasPath(SYSTEM_DIR, "sessions", ".backups");
+  const backupDir = oceanPath(SYSTEM_DIR, "sessions", ".backups");
   await mkdir(backupDir, { recursive: true, mode: 0o700 });
   const backupPath = path.join(backupDir, `sessions-${Date.now()}.sqlite`);
   await store.backupTo(backupPath);

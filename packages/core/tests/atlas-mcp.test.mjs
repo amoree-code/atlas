@@ -41,7 +41,7 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
       method: "tools/call",
       params: { name: "atlas_status", arguments: {} },
     });
-    assert.match(status.result.content[0].text, /"name":"Atlas"/);
+    assert.match(status.result.content[0].text, /"name":"Ocean"/);
   } finally {
     if (previous === undefined) delete process.env.ATLAS_ROOT;
     else process.env.ATLAS_ROOT = previous;
@@ -80,15 +80,39 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
   });
   assert.deepEqual(
     listedResources.result.resources.map((resource) => resource.uri),
-    ["atlas://status", "atlas://profiles", "atlas://tasks", "atlas://handoffs"],
+    ["ocean://status", "ocean://profiles", "ocean://tasks", "ocean://handoffs"],
   );
   const resource = await handleAtlasMcpRequest({
     jsonrpc: "2.0",
     id: 4,
     method: "resources/read",
-    params: { uri: "atlas://status" },
+    params: { uri: "ocean://status" },
   });
-  assert.match(resource.result.contents[0].text, /"name": "Atlas"/);
+  assert.match(resource.result.contents[0].text, /"name": "Ocean"/);
+  for (const uri of ["ocean://tasks", "atlas://tasks"]) {
+    const tasks = await handleAtlasMcpRequest({
+      jsonrpc: "2.0",
+      id: 7,
+      method: "resources/read",
+      params: { uri },
+    });
+    assert.equal(tasks.error, undefined, uri);
+    assert.equal(tasks.result.contents[0].uri, uri);
+    assert.ok(Array.isArray(JSON.parse(tasks.result.contents[0].text).tasks));
+  }
+  const unknown = await handleAtlasMcpRequest({
+    jsonrpc: "2.0",
+    id: 8,
+    method: "resources/read",
+    params: { uri: "tasks" },
+  });
+  assert.ok(unknown.error);
+  const init = await handleAtlasMcpRequest({
+    jsonrpc: "2.0",
+    id: 9,
+    method: "initialize",
+  });
+  assert.equal(init.result.serverInfo.name, "ocean");
   const listedPrompts = await handleAtlasMcpRequest({
     jsonrpc: "2.0",
     id: 5,

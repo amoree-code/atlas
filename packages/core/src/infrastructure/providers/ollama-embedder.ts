@@ -1,4 +1,5 @@
 import type { EmbedderPort } from "../../domain/ports/embedder-port.js";
+import { oceanEnv } from "../../paths.js";
 
 // Local-only embedder for the brain index (T-228). Talks to a local Ollama daemon over
 // loopback only — never a remote host, never a `:cloud` model (Ollama's proxy to
@@ -15,7 +16,7 @@ function assertLoopback(rawUrl: string): URL {
     url = new URL(rawUrl);
   } catch {
     throw new RemoteEmbedderRefusedError(
-      `ATLAS_OLLAMA_URL is not a valid URL: ${rawUrl}`,
+      `OCEAN_OLLAMA_URL is not a valid URL: ${rawUrl}`,
     );
   }
   if (!LOOPBACK_HOSTNAMES.has(url.hostname)) {
@@ -54,9 +55,8 @@ export async function createOllamaEmbedder(
   options: OllamaEmbedderOptions = {},
 ): Promise<EmbedderPort> {
   const baseUrl =
-    options.baseUrl ?? process.env.ATLAS_OLLAMA_URL ?? "http://127.0.0.1:11434";
-  const model =
-    options.model ?? process.env.ATLAS_EMBED_MODEL ?? "embeddinggemma";
+    options.baseUrl ?? oceanEnv("OLLAMA_URL") ?? "http://127.0.0.1:11434";
+  const model = options.model ?? oceanEnv("EMBED_MODEL") ?? "embeddinggemma";
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
   const doFetch = options.fetchImpl ?? fetch;
 

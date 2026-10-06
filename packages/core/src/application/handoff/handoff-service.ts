@@ -12,8 +12,8 @@ import {
   validateHandoff,
 } from "../../domain/sessions/handoff.js";
 import {
-  atlasPath,
   engineRoot,
+  oceanPath,
   PROJECTS_DIR,
   resolveWithin,
 } from "../../paths.js";
@@ -159,7 +159,7 @@ export async function listHandoffs(
 }
 
 export async function getTask(id: string): Promise<Task> {
-  const tasksRoot = atlasPath(PROJECTS_DIR, "atlas", "tasks");
+  const tasksRoot = oceanPath(PROJECTS_DIR, "atlas", "tasks");
   const candidates = [
     resolveWithin(tasksRoot, id, "task.md"),
     resolveWithin(tasksRoot, "archive", "Atlas", id, "task.md"),

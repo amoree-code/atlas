@@ -2,7 +2,7 @@ import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
-import { atlasPath, atlasRoot, INBOX_DIR } from "../../paths.js";
+import { INBOX_DIR, oceanPath, oceanRoot } from "../../paths.js";
 import { findGitRoot } from "../context/project-resolution.js";
 import type { TaskObservation } from "../skills/task-observer.js";
 import type { ModelNarrative } from "./model-narrative.js";
@@ -171,7 +171,7 @@ export async function writeBrainDump(input: {
     `Session id: ${session.sessionId} · Raw events: \`atlas session events ${session.sessionId}\``,
   ];
 
-  const directory = atlasPath(INBOX_DIR, "brain-dump");
+  const directory = oceanPath(INBOX_DIR, "brain-dump");
   await mkdir(directory, { recursive: true });
 
   const titleSlug = slugify(title);
@@ -189,6 +189,6 @@ export async function writeBrainDump(input: {
   const file = path.join(directory, filename);
   await writeFile(file, `${lines.join("\n")}\n`, "utf8");
   return {
-    brainDumpPath: path.relative(atlasRoot(), file).split(path.sep).join("/"),
+    brainDumpPath: path.relative(oceanRoot(), file).split(path.sep).join("/"),
   };
 }

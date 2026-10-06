@@ -24,7 +24,7 @@ canonical JSON file; legacy profile directories are read only for compatibility 
   allowedCommands: string[],                             // default []
   writePolicy: "none" | "workspace" | "allowed-paths",  // default "none"
   contextSources: string[],                              // default []
-  contextCompression: "none" | "atlas-bounded",        // default "none"
+  contextCompression: "none" | "ocean-bounded",        // default "none"
   clients: { [client: string]: { enabled: boolean, model?: string, profile?: string,
     home?: string, mode?: string, capabilities: string[], limitations: string[] } },
 }
@@ -53,11 +53,12 @@ starts. `description` and `version` are both optional on disk (they default to `
 - `version` is a human-assigned label for a profile's configuration (bump it when you
   change a profile's fields); it participates in the identity described below.
 
-When `skills` is empty, Atlas selects only `core-thinking` and `verification`. This is the
+When `skills` is empty, Ocean selects only `core-thinking` and `verification`. This is the
 small default set; expensive or promoted skills remain prompt-matched and owner-reviewed.
 `contextCompression` is kept in the schema and the profile identity, but has no effect on
 headless prompts (and is not written into the profile contract): context sources are
-referenced, not inlined, so there is nothing to compress.
+referenced, not inlined, so there is nothing to compress. A profile that still says
+`"atlas-bounded"` is accepted and read as `"ocean-bounded"` for one release.
 
 Writable profiles fail closed because direct provider execution cannot enforce file writes.
 `writePolicy` is therefore not treated as advisory; an enforcing sandbox must be added before
@@ -94,7 +95,7 @@ they answer different questions:
 - **Session** (one row in `kernel/bridge/sessions/sessions.sqlite`) — *one run*: the record of a single
   agent invocation, which profile (and, via `profileIdentity`, which exact profile
   configuration) produced it, its status, and its transcript of events (see
-  [sessions.md](sessions.md)). A session is created fresh every time `atlas run` starts,
+  [sessions.md](sessions.md)). A session is created fresh every time `ocean run` starts,
   and can be resumed, but it never becomes a profile or a project.
 
 A profile is loaded by name for a run; the run happens against a project's files (via
@@ -102,7 +103,7 @@ A profile is loaded by name for a run; the run happens against a project's files
 
 ## Default profile
 
-`atlas setup` writes `kernel/bridge/profiles/default.json` from
+`ocean setup` writes `kernel/bridge/profiles/default.json` from
 `templates/profiles/default.json` if it does not already exist:
 
 ```json
@@ -124,7 +125,7 @@ A profile is loaded by name for a run; the run happens against a project's files
 ## Role profiles
 
 `templates/profiles/` also ships public starter templates for three other roles; unlike
-`default`, `atlas setup` does not install these automatically — copy the one you need into
+`default`, `ocean setup` does not install these automatically — copy the one you need into
 `kernel/bridge/profiles/<name>.json` under the workspace root:
 
 - **`strategist.json`** — plans and reasons about approach; `writePolicy: "none"`.
@@ -154,5 +155,5 @@ frontmatter, directory name, and `skills/index.json` entry. It is a development 
 runtime skill loading does not invoke CI tooling.
 
 Completed sessions can produce a bounded, redacted skill candidate with
-`atlas skill learn <session-id>`. The candidate is stored privately with its source session
-and remains inactive until an owner explicitly runs `atlas skill review <id> promoted`.
+`ocean skill learn <session-id>`. The candidate is stored privately with its source session
+and remains inactive until an owner explicitly runs `ocean skill review <id> promoted`.

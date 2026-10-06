@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 export type ConflictSide = "vault" | "atlas";
 export type ObsidianConflict = {
@@ -19,7 +19,7 @@ export type ObsidianConflict = {
 };
 
 function conflictsDirectory(
-  root = atlasPath(SYSTEM_DIR, "integrations", "obsidian", "conflicts"),
+  root = oceanPath(SYSTEM_DIR, "integrations", "obsidian", "conflicts"),
 ): string {
   return root;
 }

@@ -1,6 +1,6 @@
 # Universal browser client setup
 
-Atlas owns the browser workflow and task format. AI clients connect to the same
+Ocean owns the browser workflow and task format. AI clients connect to the same
 browser through a standard MCP server; client-specific setup only changes where
 the MCP entry is stored.
 
@@ -19,10 +19,10 @@ extension mode that attaches to existing Chrome tabs and authenticated sessions.
 Add this entry to the client configuration (do not commit credentials or private
 profile paths):
 
-Atlas can print the same entry without writing any client configuration:
+Ocean can print the same entry without writing any client configuration:
 
 ```sh
-atlas mcp playwright-config
+ocean mcp playwright-config
 ```
 
 ```json
@@ -53,8 +53,8 @@ verify: <observable success signal>
 
 The client plans; Playwright performs the browser actions; the skill requires a
 post-condition after each state-changing action and stops when the success signal
-is verified. Use Atlas's `atlas browser run` JSON tasks for deterministic,
-repeatable workflows and persistent Atlas sessions.
+is verified. Use Ocean's `ocean browser run` JSON tasks for deterministic,
+repeatable workflows and persistent Ocean sessions.
 
 ## Client wiring
 

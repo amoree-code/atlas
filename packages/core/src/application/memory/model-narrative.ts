@@ -2,6 +2,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
+import { oceanEnv, oceanEnvPair } from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -114,7 +115,7 @@ export function parseResult(stdout: string): ModelNarrative | null {
  * Returns null on any failure (auth, timeout, parse error) so the caller falls
  * back to the deterministic heuristic in daily-narrative.ts. Never throws.
  *
- * Guarded against recursion: the spawned call carries ATLAS_NARRATIVE_CALL=1,
+ * Guarded against recursion: the spawned call carries OCEAN_NARRATIVE_CALL=1 (and ATLAS_NARRATIVE_CALL=1),
  * and session-closeout.ts skips calling this again when that flag is already
  * set on the current process (i.e. this IS a narrative-generation session).
  */
@@ -126,8 +127,8 @@ export async function generateModelNarrative(input: {
 }): Promise<ModelNarrative | null> {
   // Opt-in only: unset (tests, CI, a fresh install) means no model call — no
   // network, no auth requirement, no cost, fully deterministic by default.
-  if (process.env.ATLAS_MODEL_NARRATIVE !== "1") return null;
-  if (process.env.ATLAS_NARRATIVE_CALL === "1") return null;
+  if (oceanEnv("MODEL_NARRATIVE") !== "1") return null;
+  if (oceanEnv("NARRATIVE_CALL") === "1") return null;
   if (isTrivialSession(input.events, input.changedFiles)) return null;
 
   const prompt = buildPrompt(input);
@@ -151,7 +152,7 @@ export async function generateModelNarrative(input: {
       {
         timeout: 30_000,
         maxBuffer: 65_536,
-        env: { ...process.env, ATLAS_NARRATIVE_CALL: "1" },
+        env: { ...process.env, ...oceanEnvPair("NARRATIVE_CALL", "1") },
       },
     );
     return parseResult(result.stdout);

@@ -1,4 +1,4 @@
-# Working in Atlas
+# Working in Ocean
 
 Local-first Node.js runtime for headless AI agents (Claude, Codex, Gemini, Hermes,
 Antigravity). Public, provider-neutral engine; private data lives outside it.
@@ -40,7 +40,7 @@ pnpm check:style      # biome check .
 Headless prompts carry references, not bodies: a skill index with SKILL.md paths, a compact
 profile contract, a facts digest (<= 2 KB, with a pointer) and context references (paths + why),
 assembled in `packages/core/src/application/runs/prompt-assembly.ts` and
-`packages/core/src/application/context/context-references.ts`. `atlas context cost` reports each
+`packages/core/src/application/context/context-references.ts`. `ocean context cost` reports each
 client's always-on bytes (rules, memory index, skill frontmatter).
 
 <!-- graft:start -->

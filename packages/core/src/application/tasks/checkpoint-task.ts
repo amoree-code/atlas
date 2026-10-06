@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { atlasPath, PROJECTS_DIR, resolveWithin } from "../../paths.js";
+import { oceanPath, PROJECTS_DIR, resolveWithin } from "../../paths.js";
 
 export type CheckpointInput = {
   note: string;
@@ -15,7 +15,7 @@ export type CheckpointInput = {
  */
 export async function checkpointTask(
   id: string,
-  root = atlasPath(PROJECTS_DIR, "atlas", "tasks"),
+  root = oceanPath(PROJECTS_DIR, "atlas", "tasks"),
   input: CheckpointInput,
 ): Promise<{ checkpointed: string }> {
   if (!input.note?.trim()) throw new Error("Checkpoint requires a note.");

@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 type StepStatus = "done" | "skipped";
 
@@ -10,7 +10,7 @@ export type OnboardingState = {
 };
 
 export function onboardingStatePath(): string {
-  return atlasPath(SYSTEM_DIR, "state", "onboarding.json");
+  return oceanPath(SYSTEM_DIR, "state", "onboarding.json");
 }
 
 export async function loadOnboardingState(): Promise<OnboardingState> {

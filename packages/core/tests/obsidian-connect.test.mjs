@@ -10,11 +10,11 @@ test("connects an Obsidian vault with read-only default", async () => {
   const vaultPath = await mkdtemp(
     path.join(os.tmpdir(), "atlas-obsidian-connect-"),
   );
-  const atlasRoot = await mkdtemp(
+  const oceanRoot = await mkdtemp(
     path.join(os.tmpdir(), "atlas-obsidian-connect-state-"),
   );
   const configFile = path.join(
-    atlasRoot,
+    oceanRoot,
     SYSTEM_DIR,
     "integrations",
     "obsidian",

@@ -7,11 +7,11 @@ import {
 } from "../../application/context/context-cost.js";
 import { resolveProject } from "../../application/context/project-resolution.js";
 import { BRAIN_RECORD_DIRS, PROJECTS_DIR, SYSTEM_DIR } from "../../paths.js";
-import { atlasVersion } from "../../version.js";
+import { oceanVersion } from "../../version.js";
 import { listTasks } from "./tasks-command.js";
 
 export async function runContextCommand(json = false): Promise<void> {
-  const version = await atlasVersion();
+  const version = await oceanVersion();
   const resolution = await resolveProject(process.cwd());
   const project = resolution.status === "bound" ? resolution.projectId : null;
   const tasks = project

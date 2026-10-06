@@ -51,7 +51,7 @@ test("compression preserves required evidence and records recovery metadata", ()
     budget: 260,
   });
   assert.equal(result.safeToUse, true);
-  assert.equal(result.method, "atlas-bounded-v1");
+  assert.equal(result.method, "ocean-bounded-v1");
   assert.ok(result.compressedBytes <= 260);
   assert.ok(result.originalBytes > result.compressedBytes);
   assert.match(result.content, /changed files/);

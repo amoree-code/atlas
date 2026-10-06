@@ -12,7 +12,7 @@ const engineDirectory = path.resolve(moduleDirectory, "..");
 // ~/ocean/kernel/packages/core (this package) sits three directories below ~/ocean
 // (kernel, packages, core), which itself sits next to ~/ocean/brain and
 // ~/ocean/kernel/bridge (see PERSONAL_DIR/PROJECTS_DIR/SYSTEM_DIR below).
-const defaultAtlasRoot = path.resolve(engineDirectory, "..", "..", "..");
+const defaultOceanRoot = path.resolve(engineDirectory, "..", "..", "..");
 
 export function engineRoot(): string {
   return engineDirectory;
@@ -34,7 +34,7 @@ export function repoPath(...parts: string[]): string {
   return path.join(repoRoot(), ...parts);
 }
 
-// Single point of truth for the top-level layout under atlasRoot(). Flipped in
+// Single point of truth for the top-level layout under oceanRoot(). Flipped in
 // T-224 stage B to the Ocean/PARA layout (~/ocean/brain/..., ~/ocean/kernel/bridge)
 // now that every call site (stage A) reads these constants instead of a literal.
 //
@@ -95,14 +95,27 @@ export function storeRelativeToRoot(storePath: string): string {
   return [dir, ...rest].join("/");
 }
 
-export function atlasRoot(): string {
-  return process.env.ATLAS_ROOT
-    ? path.resolve(process.env.ATLAS_ROOT)
-    : defaultAtlasRoot;
+export function oceanEnv(
+  name: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  return env[`OCEAN_${name}`] ?? env[`ATLAS_${name}`];
 }
 
-export function atlasPath(...parts: string[]): string {
-  return path.join(atlasRoot(), ...parts);
+export function oceanEnvPair(
+  name: string,
+  value: string,
+): Record<string, string> {
+  return { [`OCEAN_${name}`]: value, [`ATLAS_${name}`]: value };
+}
+
+export function oceanRoot(): string {
+  const root = oceanEnv("ROOT");
+  return root ? path.resolve(root) : defaultOceanRoot;
+}
+
+export function oceanPath(...parts: string[]): string {
+  return path.join(oceanRoot(), ...parts);
 }
 
 // path.resolve is purely lexical: it never follows symlinks. Resolves the real location

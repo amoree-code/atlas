@@ -1,3 +1,4 @@
+import { oceanEnvPair } from "../../paths.js";
 import type { ProjectResolution } from "./project-resolution.js";
 
 // This module used to read Atlas files (memory, knowledge, inbox, README, governance rules)
@@ -5,7 +6,7 @@ import type { ProjectResolution } from "./project-resolution.js";
 // per T-198: providers get a tiny identity/bootstrap signal only, never Atlas file contents.
 // On-demand reads happen through explicit Atlas operations (tasks, memory, knowledge, …),
 // not through what gets stuffed into a launch argument or env var at startup.
-export const ATLAS_BOOTSTRAP_MAX_BYTES = 256;
+export const OCEAN_BOOTSTRAP_MAX_BYTES = 256;
 
 export type AtlasBootstrap = {
   content: string;
@@ -26,9 +27,9 @@ export function buildAtlasBootstrap(
 ): AtlasBootstrap {
   const content = `atlas=1 project=${projectTag(project)} confidence=${project.confidence} ops=${SUPPORTED_OPERATIONS}`;
   const bytes = Buffer.byteLength(content, "utf8");
-  if (bytes > ATLAS_BOOTSTRAP_MAX_BYTES) {
+  if (bytes > OCEAN_BOOTSTRAP_MAX_BYTES) {
     throw new Error(
-      `Atlas bootstrap exceeds the ${ATLAS_BOOTSTRAP_MAX_BYTES}-byte budget (${bytes} bytes): ${content}`,
+      `Atlas bootstrap exceeds the ${OCEAN_BOOTSTRAP_MAX_BYTES}-byte budget (${bytes} bytes): ${content}`,
     );
   }
   return {
@@ -43,7 +44,7 @@ export function bootstrapEnvironment(
   bootstrap: AtlasBootstrap,
 ): Record<string, string> {
   return {
-    ATLAS_BOOTSTRAP: bootstrap.content,
-    ATLAS_BOOTSTRAP_BYTES: String(bootstrap.manifest.bytes),
+    ...oceanEnvPair("BOOTSTRAP", bootstrap.content),
+    ...oceanEnvPair("BOOTSTRAP_BYTES", String(bootstrap.manifest.bytes)),
   };
 }

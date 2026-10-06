@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
-import { atlasRoot, engineRoot, resolveWithin } from "../../paths.js";
+import { engineRoot, oceanRoot, resolveWithin } from "../../paths.js";
 import { validateBudget } from "../context/context-ladder.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import {
@@ -240,7 +240,7 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
   if (isRecordOperation) {
     const resolved = path.resolve(request.scope.target);
     try {
-      resolveWithin(atlasRoot(), resolved);
+      resolveWithin(oceanRoot(), resolved);
     } catch {
       return decision(
         request,

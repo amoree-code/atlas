@@ -7,12 +7,12 @@ import {
   syncProviderWrappers,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
 import {
-  atlasPath,
-  atlasRoot,
   DAILY_DIR,
   enginePath,
   INBOX_DIR,
   KNOWLEDGE_DIR,
+  oceanPath,
+  oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
   SYSTEM_DIR,
@@ -66,7 +66,7 @@ async function installMacStartup(): Promise<void> {
 <plist version="1.0"><dict>
 <key>Label</key><string>${label}</string>
 <key>ProgramArguments</key><array><string>${node}</string><string>${entry}</string><string>service</string></array>
-<key>WorkingDirectory</key><string>${atlasRoot()}</string>
+<key>WorkingDirectory</key><string>${oceanRoot()}</string>
 <key>RunAtLoad</key><true/>
 <key>KeepAlive</key><true/>
 </dict></plist>
@@ -83,7 +83,7 @@ Description=Ocean local runtime
 
 [Service]
 Type=simple
-WorkingDirectory=${atlasRoot()}
+WorkingDirectory=${oceanRoot()}
 ExecStart=${process.execPath} ${enginePath("dist", "main.js")} service
 Restart=on-failure
 
@@ -104,7 +104,7 @@ async function installWindowsStartup(): Promise<void> {
     "Startup",
   );
   const launcher = path.join(startup, "atlas.cmd");
-  const contents = `@echo off\ncd /d "${atlasRoot()}"\n"${process.execPath}" "${enginePath("dist", "main.js")}" service\n`;
+  const contents = `@echo off\ncd /d "${oceanRoot()}"\n"${process.execPath}" "${enginePath("dist", "main.js")}" service\n`;
   await mkdir(startup, { recursive: true });
   await writeFile(launcher, contents);
 }
@@ -117,31 +117,31 @@ export type SetupOptions = {
 export async function setup(options: SetupOptions = {}): Promise<void> {
   await Promise.all(
     personalDirectories.map((directory) =>
-      mkdir(atlasPath(directory), { recursive: true }),
+      mkdir(oceanPath(directory), { recursive: true }),
     ),
   );
   await Promise.all(
     stateDirectories.map((directory) =>
-      mkdir(atlasPath(directory), { recursive: true }),
+      mkdir(oceanPath(directory), { recursive: true }),
     ),
   );
   await ensureFile(
-    atlasPath(PERSONAL_DIR, "MEMORY.md"),
+    oceanPath(PERSONAL_DIR, "MEMORY.md"),
     "# Memory\n\n## Records (generated)\n",
   );
   await ensureFile(
-    atlasPath(KNOWLEDGE_DIR, "KNOWLEDGE.md"),
+    oceanPath(KNOWLEDGE_DIR, "KNOWLEDGE.md"),
     "# Knowledge\n\n## Records (generated)\n",
   );
   await ensureFile(
-    atlasPath(SYSTEM_DIR, "profiles", "default.json"),
+    oceanPath(SYSTEM_DIR, "profiles", "default.json"),
     await readFile(
       new URL("../../../templates/profiles/default.json", import.meta.url),
       "utf8",
     ),
   );
   await ensureFile(
-    atlasPath(SYSTEM_DIR, "config", "startup", "STARTUP.md"),
+    oceanPath(SYSTEM_DIR, "config", "startup", "STARTUP.md"),
     "# Ocean startup\n\nManaged by `ocean setup`.\n",
   );
   await syncProviderWrappers();
@@ -150,7 +150,7 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   if (process.platform === "darwin") await installMacStartup();
   if (process.platform === "linux") await installLinuxStartup();
   if (process.platform === "win32") await installWindowsStartup();
-  await restrictDirectories(atlasPath(SYSTEM_DIR));
+  await restrictDirectories(oceanPath(SYSTEM_DIR));
   if (options.obsidianPath) {
     const result = await connectObsidianVault(
       options.obsidianPath,
@@ -161,6 +161,6 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
     );
   }
   console.log(
-    `Ocean setup complete: ${atlasRoot()} (AI CLI interception enabled in ${shellProfile})`,
+    `Ocean setup complete: ${oceanRoot()} (AI CLI interception enabled in ${shellProfile})`,
   );
 }
