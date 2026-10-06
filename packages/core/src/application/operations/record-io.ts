@@ -59,7 +59,7 @@ export async function listRecordFiles(
   return files;
 }
 
-export function relativeToAtlas(file: string): string {
+export function relativeToOcean(file: string): string {
   return path.relative(oceanRoot(), file).split(path.sep).join("/");
 }
 
@@ -70,7 +70,7 @@ export async function requireAbsentTarget(
     await stat(target);
     return {
       ok: false,
-      reason: `refusing to overwrite an existing record at ${relativeToAtlas(target)}`,
+      reason: `refusing to overwrite an existing record at ${relativeToOcean(target)}`,
     };
   } catch {
     return { ok: true };

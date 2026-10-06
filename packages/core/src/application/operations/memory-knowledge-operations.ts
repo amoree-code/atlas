@@ -31,7 +31,7 @@ import {
   freshnessFor,
   listRecordFiles,
   readFrontmatterFile,
-  relativeToAtlas,
+  relativeToOcean,
   requireAbsentTarget,
 } from "./record-io.js";
 
@@ -208,7 +208,7 @@ export async function searchRecords(
         record.fields.name ?? record.fields.id ?? path.basename(file, ".md"),
       recordType,
       provenance: provenanceFor(recordType, record.fields),
-      sourcePath: relativeToAtlas(file),
+      sourcePath: relativeToOcean(file),
       freshness: freshnessFor(record.mtimeMs),
       confidence: classification.confidence,
       selectionReason: options.query
@@ -337,7 +337,7 @@ export async function writeRecord(
       reason: `${recordType} record '${slug.value}' written`,
       records: [],
       violations: [],
-      written: { sourcePath: relativeToAtlas(target.value), bytes },
+      written: { sourcePath: relativeToOcean(target.value), bytes },
       packet: null,
     };
   } catch (error) {

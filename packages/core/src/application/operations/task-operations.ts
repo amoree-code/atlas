@@ -26,7 +26,7 @@ import {
   FRONTMATTER_READ_BYTES,
   freshnessFor,
   readFrontmatterFile,
-  relativeToAtlas,
+  relativeToOcean,
   requireAbsentTarget,
 } from "./record-io.js";
 
@@ -82,7 +82,7 @@ export async function taskGet(
     identifier: identifier.value,
     recordType: "task",
     provenance: "task",
-    sourcePath: relativeToAtlas(file),
+    sourcePath: relativeToOcean(file),
     freshness: freshnessFor(record.mtimeMs),
     confidence: classification.confidence,
     selectionReason: `exact task record requested by identifier ${identifier.value}`,
@@ -139,7 +139,7 @@ export async function taskList(
       identifier: record.fields.id ?? entry.name,
       recordType: "task",
       provenance: "task",
-      sourcePath: relativeToAtlas(file),
+      sourcePath: relativeToOcean(file),
       freshness: freshnessFor(record.mtimeMs),
       confidence: classification.confidence,
       selectionReason: `live task in project '${project.projectId}'`,
@@ -222,7 +222,7 @@ export async function taskCreate(
       reason: `${id} created for project '${project.projectId}'`,
       records: [],
       violations: [],
-      written: { sourcePath: relativeToAtlas(target.value), bytes },
+      written: { sourcePath: relativeToOcean(target.value), bytes },
       packet: null,
     };
   } catch (error) {
@@ -317,7 +317,7 @@ export async function taskUpdate(
     reason: `task ${identifier.value} updated (${patchKeys.join(", ")})`,
     records: [],
     violations: [],
-    written: { sourcePath: relativeToAtlas(target.value), bytes },
+    written: { sourcePath: relativeToOcean(target.value), bytes },
     packet: null,
   };
 }
@@ -361,7 +361,7 @@ export async function taskCompleteOperation(
       reason: `task ${identifier.value} completed (state: ${result.state})`,
       records: [],
       violations: [],
-      written: { sourcePath: relativeToAtlas(target.value), bytes: 0 },
+      written: { sourcePath: relativeToOcean(target.value), bytes: 0 },
       packet: null,
     };
   } catch (error) {

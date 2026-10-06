@@ -12,7 +12,7 @@ const engineDirectory = path.resolve(moduleDirectory, "..");
 // ~/ocean/kernel/packages/core (this package) sits three directories below ~/ocean
 // (kernel, packages, core), which itself sits next to ~/ocean/brain and
 // ~/ocean/kernel/bridge (see PERSONAL_DIR/PROJECTS_DIR/SYSTEM_DIR below).
-const defaultAtlasRoot = path.resolve(engineDirectory, "..", "..", "..");
+const defaultOceanRoot = path.resolve(engineDirectory, "..", "..", "..");
 
 export function engineRoot(): string {
   return engineDirectory;
@@ -98,7 +98,7 @@ export function storeRelativeToRoot(storePath: string): string {
 export function oceanRoot(): string {
   return process.env.ATLAS_ROOT
     ? path.resolve(process.env.ATLAS_ROOT)
-    : defaultAtlasRoot;
+    : defaultOceanRoot;
 }
 
 export function oceanPath(...parts: string[]): string {
