@@ -109,7 +109,7 @@ import {
   wrapperDoctor,
   wrapperStatus,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
-import { oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
+import { oceanEnv, oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
 import { runAuthCommand } from "./auth-command.js";
 import { runBrowserCommand } from "./browser-command.js";
 import { runCaptureCommand } from "./capture-command.js";
@@ -150,7 +150,7 @@ async function commandSetup(): Promise<void> {
 }
 
 async function commandService(): Promise<void> {
-  const shutdownAfterMs = Number(process.env.ATLAS_SERVICE_TEST_SHUTDOWN_MS);
+  const shutdownAfterMs = Number(oceanEnv("SERVICE_TEST_SHUTDOWN_MS"));
   await runService(
     Number.isFinite(shutdownAfterMs) && shutdownAfterMs > 0
       ? shutdownAfterMs
@@ -672,7 +672,7 @@ async function commandSchedule(): Promise<void> {
     process.once("SIGTERM", stop);
     await runSchedulerWorker(oceanRoot(), defaultAgentRuntime, {
       signal: controller.signal,
-      pollMs: Number(process.env.ATLAS_SCHEDULER_POLL_MS ?? 30_000),
+      pollMs: Number(oceanEnv("SCHEDULER_POLL_MS") ?? 30_000),
     });
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
@@ -746,7 +746,7 @@ async function commandLoop(): Promise<void> {
     process.once("SIGTERM", stop);
     await runTaskLoopWorker(oceanRoot(), defaultAgentRuntime, {
       signal: controller.signal,
-      pollMs: Number(process.env.ATLAS_LOOP_POLL_MS ?? 30_000),
+      pollMs: Number(oceanEnv("LOOP_POLL_MS") ?? 30_000),
     });
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
@@ -763,10 +763,10 @@ async function commandLoop(): Promise<void> {
 }
 
 async function commandGateway(): Promise<void> {
-  const port = Number(process.env.ATLAS_GATEWAY_PORT ?? 8787);
-  const token = process.env.ATLAS_GATEWAY_TOKEN;
+  const port = Number(oceanEnv("GATEWAY_PORT") ?? 8787);
+  const token = oceanEnv("GATEWAY_TOKEN");
   if (!token) {
-    console.error("ATLAS_GATEWAY_TOKEN is required");
+    console.error("OCEAN_GATEWAY_TOKEN is required");
     process.exitCode = 1;
   } else {
     const server = createWebhookGateway(

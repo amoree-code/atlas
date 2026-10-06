@@ -95,10 +95,23 @@ export function storeRelativeToRoot(storePath: string): string {
   return [dir, ...rest].join("/");
 }
 
+export function oceanEnv(
+  name: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  return env[`OCEAN_${name}`] ?? env[`ATLAS_${name}`];
+}
+
+export function oceanEnvPair(
+  name: string,
+  value: string,
+): Record<string, string> {
+  return { [`OCEAN_${name}`]: value, [`ATLAS_${name}`]: value };
+}
+
 export function oceanRoot(): string {
-  return process.env.ATLAS_ROOT
-    ? path.resolve(process.env.ATLAS_ROOT)
-    : defaultOceanRoot;
+  const root = oceanEnv("ROOT");
+  return root ? path.resolve(root) : defaultOceanRoot;
 }
 
 export function oceanPath(...parts: string[]): string {

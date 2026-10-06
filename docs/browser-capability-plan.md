@@ -17,6 +17,6 @@ Completed scope:
 Remaining proof boundary:
 
 - The normal test suite proves policy and fake-provider behavior.
-- `ATLAS_BROWSER_INTEGRATION=1 pnpm test` proves the local real-browser path when a
+- `OCEAN_BROWSER_INTEGRATION=1 pnpm test` proves the local real-browser path when a
   Chromium-family executable is installed.
 - Native cross-platform browser proof remains separate from the default CI gates.

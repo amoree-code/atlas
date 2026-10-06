@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ATLAS_BOOTSTRAP_MAX_BYTES } from "../dist/application/context/resource-injection.js";
+import { OCEAN_BOOTSTRAP_MAX_BYTES } from "../dist/application/context/resource-injection.js";
 import {
   claudeNativeHookStatus,
   claudeSessionStartHook,
@@ -17,7 +17,7 @@ test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutp
   assert.equal(result.hookSpecificOutput.hookEventName, "SessionStart");
   assert.ok(
     Buffer.byteLength(result.hookSpecificOutput.additionalContext) <=
-      ATLAS_BOOTSTRAP_MAX_BYTES,
+      OCEAN_BOOTSTRAP_MAX_BYTES,
   );
   assert.match(
     result.hookSpecificOutput.additionalContext,

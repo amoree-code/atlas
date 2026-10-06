@@ -13,7 +13,7 @@ The server also exposes bounded read-only continuity surfaces: `atlas_task_get`,
 plus `atlas://handoffs`. Every client receives the same Ocean-owned metadata; provider-native
 transcripts and credentials are not copied between clients.
 
-The server reads the private connection at `ATLAS_ROOT/kernel/bridge/integrations/obsidian/connection.json`. It never receives provider credentials. Keep the connection `read-only` until the client route is verified. Mutating tools require both client approval and an explicit `read-write` connection.
+The server reads the private connection at `OCEAN_ROOT/kernel/bridge/integrations/obsidian/connection.json`. It never receives provider credentials. Keep the connection `read-only` until the client route is verified. Mutating tools require both client approval and an explicit `read-write` connection.
 
 ## Obsidian sync flow
 

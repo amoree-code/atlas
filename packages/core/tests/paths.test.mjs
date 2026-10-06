@@ -40,6 +40,20 @@ test("ATLAS_ROOT explicitly overrides the default private root", () => {
   }
 });
 
+test("OCEAN_ROOT wins over the older ATLAS_ROOT, and ATLAS_ROOT alone still works", () => {
+  const ocean = path.join(os.tmpdir(), "ocean-root-new");
+  const atlas = path.join(os.tmpdir(), "atlas-root-old");
+  try {
+    process.env.ATLAS_ROOT = atlas;
+    assert.equal(oceanRoot(), path.resolve(atlas));
+    process.env.OCEAN_ROOT = ocean;
+    assert.equal(oceanRoot(), path.resolve(ocean));
+  } finally {
+    delete process.env.OCEAN_ROOT;
+    delete process.env.ATLAS_ROOT;
+  }
+});
+
 test("enginePath always resolves relative to engine root, ignoring ATLAS_ROOT", () => {
   process.env.ATLAS_ROOT = path.join(os.tmpdir(), "atlas-root-unrelated");
   try {

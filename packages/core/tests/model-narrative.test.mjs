@@ -75,3 +75,19 @@ test("generateModelNarrative skips recursively when already inside a narrative-g
     delete process.env.ATLAS_NARRATIVE_CALL;
   }
 });
+
+test("generateModelNarrative recursion guard also trips on OCEAN_NARRATIVE_CALL", async () => {
+  process.env.OCEAN_MODEL_NARRATIVE = "1";
+  process.env.OCEAN_NARRATIVE_CALL = "1";
+  try {
+    const result = await generateModelNarrative({
+      session: { workingDirectory: "/tmp/example", title: "Example session" },
+      events: [{ type: "provider_output", data: "a".repeat(60) }],
+      changedFiles: ["src/file.ts"],
+    });
+    assert.equal(result, null);
+  } finally {
+    delete process.env.OCEAN_MODEL_NARRATIVE;
+    delete process.env.OCEAN_NARRATIVE_CALL;
+  }
+});

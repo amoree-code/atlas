@@ -27,9 +27,6 @@ pnpm build
 node packages/core/dist/main.js setup
 ```
 
-Setup from a checkout installs the command as `atlas`, the older name; it accepts every
-`ocean` command shown in these docs.
-
 Connect an Obsidian vault during setup, or connect it later:
 
 ```bash
@@ -61,7 +58,7 @@ By default, `setup` creates the Ocean workspace as a private sibling directory n
 this repository (e.g. `ocean/` next to `ocean/kernel/`), not inside it, and installs
 user-level startup integration pointed at this repository's `packages/core/dist/main.js`.
 Later logins
-start the local runtime automatically. Set `ATLAS_ROOT` to use a different workspace
+start the local runtime automatically. Set `OCEAN_ROOT` (the older `ATLAS_ROOT` is still read) to use a different workspace
 location instead.
 
 Run an agent:
@@ -150,7 +147,7 @@ Only `kernel/` is this repository. `brain/` and `sessions/` are siblings in the 
 workspace and are not part of it. `bridge/` sits physically inside this repo but is
 git-ignored in full and is never part of a public commit.
 
-The workspace root resolves to the parent directory by default; set `ATLAS_ROOT` to choose
+The workspace root resolves to the parent directory by default; set `OCEAN_ROOT` (the older `ATLAS_ROOT` is still read) to choose
 another. Startup entries execute the engine from
 `kernel/packages/core/dist/main.js` while using the private workspace as their working
 directory.
