@@ -106,7 +106,7 @@ each provider stdout event (bounded to 64,000 characters), `process_exit`, and `
 failure. `listEvents(sessionId)` returns the full ordered log for a session.
 
 Every governed session also records a `session_entry_contract` event. It declares
-the entry point (`ocean-run`, `terminal-shim`, `interactive-managed`, or
+the entry point (`atlas-run`, `terminal-shim`, `interactive-managed`, or
 `desktop-wrapper`), control level, input-capture boundary, context transport,
 policy enforcement, promotion rule, and resume capability. The contract prevents
 a successful command resolution from being misreported as full Ocean governance.

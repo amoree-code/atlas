@@ -24,7 +24,7 @@ canonical JSON file; legacy profile directories are read only for compatibility 
   allowedCommands: string[],                             // default []
   writePolicy: "none" | "workspace" | "allowed-paths",  // default "none"
   contextSources: string[],                              // default []
-  contextCompression: "none" | "ocean-bounded",        // default "none"
+  contextCompression: "none" | "atlas-bounded",        // default "none"
   clients: { [client: string]: { enabled: boolean, model?: string, profile?: string,
     home?: string, mode?: string, capabilities: string[], limitations: string[] } },
 }

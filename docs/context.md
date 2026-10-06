@@ -54,7 +54,7 @@ root for packet records. Only the prompt, which is persisted as a hash, carries 
   compression: object | null,       // null: nothing is inlined, so nothing is compressed
   lastContextCheckpoint: string,    // ISO timestamp of this build
   references: {                     // what the prompt points at (defaults to [])
-    path: string, base: "cwd" | "ocean-root", recordType: string,
+    path: string, base: "cwd" | "atlas-root", recordType: string,
     reason: string, bytes: number | null,
   }[],
 }

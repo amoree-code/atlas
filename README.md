@@ -147,8 +147,8 @@ Only `kernel/` is this repository. `brain/` and `sessions/` are siblings in the 
 workspace and are not part of it. `bridge/` sits physically inside this repo but is
 git-ignored in full and is never part of a public commit.
 
-The workspace root resolves to the parent directory by default; set `OCEAN_ROOT` (or the
-older `ATLAS_ROOT`) to choose another. Startup entries execute the engine from
+The workspace root resolves to the parent directory by default; set `ATLAS_ROOT` to choose
+another. Startup entries execute the engine from
 `kernel/packages/core/dist/main.js` while using the private workspace as their working
 directory.
 
