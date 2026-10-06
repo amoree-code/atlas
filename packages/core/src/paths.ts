@@ -34,7 +34,7 @@ export function repoPath(...parts: string[]): string {
   return path.join(repoRoot(), ...parts);
 }
 
-// Single point of truth for the top-level layout under atlasRoot(). Flipped in
+// Single point of truth for the top-level layout under oceanRoot(). Flipped in
 // T-224 stage B to the Ocean/PARA layout (~/ocean/brain/..., ~/ocean/kernel/bridge)
 // now that every call site (stage A) reads these constants instead of a literal.
 //
@@ -95,14 +95,14 @@ export function storeRelativeToRoot(storePath: string): string {
   return [dir, ...rest].join("/");
 }
 
-export function atlasRoot(): string {
+export function oceanRoot(): string {
   return process.env.ATLAS_ROOT
     ? path.resolve(process.env.ATLAS_ROOT)
     : defaultAtlasRoot;
 }
 
-export function atlasPath(...parts: string[]): string {
-  return path.join(atlasRoot(), ...parts);
+export function oceanPath(...parts: string[]): string {
+  return path.join(oceanRoot(), ...parts);
 }
 
 // path.resolve is purely lexical: it never follows symlinks. Resolves the real location

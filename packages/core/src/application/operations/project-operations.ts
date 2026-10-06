@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, PROJECTS_DIR } from "../../paths.js";
+import { oceanPath, PROJECTS_DIR } from "../../paths.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import {
   bindProject,
@@ -31,7 +31,7 @@ export async function projectDetect(
     provenance: "project",
     sourcePath:
       resolution.status === "bound"
-        ? relativeToAtlas(atlasPath(PROJECTS_DIR, resolution.projectId))
+        ? relativeToAtlas(oceanPath(PROJECTS_DIR, resolution.projectId))
         : "",
     freshness: "unknown",
     confidence: classification.confidence,

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
 
 // Deterministic, local, metadata-first project resolution: no model call, no network round
 // trip. Bindings are a flat JSON registry (same pattern as kernel/bridge/control-plane/registry/
@@ -46,7 +46,7 @@ export function projectConfirmationQuestion(
 }
 
 function bindingsFile(): string {
-  return atlasPath(
+  return oceanPath(
     SYSTEM_DIR,
     "control-plane",
     "registry",
@@ -81,7 +81,7 @@ export async function listProjectBindings(): Promise<ProjectBinding[]> {
 async function saveProjectBindings(bindings: ProjectBinding[]): Promise<void> {
   const file = bindingsFile();
   await mkdir(path.dirname(file), { recursive: true });
-  const tmp = `${file}.atlas-tmp-${process.pid}`;
+  const tmp = `${file}.ocean-tmp-${process.pid}`;
   await writeFile(
     tmp,
     `${JSON.stringify({ version: 1, bindings }, null, 2)}\n`,
@@ -152,7 +152,7 @@ export async function resolveProject(cwd: string): Promise<ProjectResolution> {
     };
   }
 
-  const root = atlasRoot();
+  const root = oceanRoot();
   const isFilesystemRoot = root === path.parse(root).root;
   if (
     resolvedCwd === root ||

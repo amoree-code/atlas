@@ -25,7 +25,7 @@ import {
   actionFingerprint,
   mcpApprovalSchema,
 } from "../../domain/mcp/mcp-contract.js";
-import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
 import { openSessionStoreReadOnly } from "../persistence/session-store.js";
 
 type Request = {
@@ -273,7 +273,7 @@ function textResult(value: unknown): {
 async function profiles(): Promise<string[]> {
   try {
     return (
-      await readdir(atlasPath(SYSTEM_DIR, "profiles"), { withFileTypes: true })
+      await readdir(oceanPath(SYSTEM_DIR, "profiles"), { withFileTypes: true })
     )
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
       .map((entry) => entry.name.slice(0, -5))
@@ -292,7 +292,7 @@ async function callTool(
     return {
       name: "Atlas",
       version: "0.3.6",
-      workspace: atlasPath(),
+      workspace: oceanPath(),
       mcp: "stdio",
     };
   if (name === "atlas_doctor") {
@@ -343,8 +343,8 @@ async function callTool(
       if (!session) throw new Error("Session not found");
       if (!session.summaryPath)
         throw new Error("Session summary not available");
-      const summaryPath = path.resolve(atlasRoot(), session.summaryPath);
-      const root = `${path.resolve(atlasPath(SYSTEM_DIR, "sessions", "summaries"))}${path.sep}`;
+      const summaryPath = path.resolve(oceanRoot(), session.summaryPath);
+      const root = `${path.resolve(oceanPath(SYSTEM_DIR, "sessions", "summaries"))}${path.sep}`;
       if (!summaryPath.startsWith(root))
         throw new Error(
           "Session summary path is outside the Atlas summary directory",
@@ -448,7 +448,7 @@ async function readResource(
     value = {
       name: "Atlas",
       version: "0.3.6",
-      workspace: atlasPath(),
+      workspace: oceanPath(),
       healthy: !hasFailures(report.findings),
       findings: report.findings,
     };

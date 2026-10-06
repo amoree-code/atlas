@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { atlasRoot, resolveWithin } from "../../paths.js";
+import { oceanRoot, resolveWithin } from "../../paths.js";
 import {
   planContextRead,
   resolveLadderRung,
@@ -140,7 +140,7 @@ function recordTypeForIntent(
 
 async function freshnessOf(
   relativeSourcePath: string,
-  root = atlasRoot(),
+  root = oceanRoot(),
 ): Promise<Freshness> {
   try {
     const resolved = resolveWithin(root, relativeSourcePath);
@@ -270,7 +270,7 @@ export async function buildContextPacket(
     ? await planContextRead(
         classification,
         budget,
-        atlasRoot(),
+        oceanRoot(),
         activeProject.projectId ?? "atlas",
         options,
       )
@@ -288,7 +288,7 @@ export async function buildContextPacket(
             : path.basename(sourcePath, path.extname(sourcePath)),
         recordType: recordTypeForIntent(classification.intent),
         sourcePath,
-        freshness: await freshnessOf(sourcePath, atlasRoot()),
+        freshness: await freshnessOf(sourcePath, oceanRoot()),
         confidence: classification.confidence,
         selectionReason: readPlan.reason,
       })),

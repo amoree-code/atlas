@@ -32,10 +32,10 @@ git-ignored here; `brain/` is user-owned data that lives entirely outside this r
 - `engineRoot()` / `enginePath(...)` — always the directory containing this package
   (resolved from the running module, whether compiled under `dist/` or run under `tsx`
   from `src/`).
-- `atlasRoot()` — `process.env.ATLAS_ROOT` if set (resolved to an absolute path),
+- `oceanRoot()` — `process.env.ATLAS_ROOT` if set (resolved to an absolute path),
   otherwise the parent directory of `engineRoot()`. This is the default private-workspace
   location: `kernel/` is expected to sit inside the workspace root as a sibling of `brain/`.
-- `atlasPath(...)` — joins onto `<atlasRoot>/`, used for all private workspace state, via
+- `oceanPath(...)` — joins onto `<oceanRoot>/`, used for all private workspace state, via
   the `PERSONAL_DIR`/`PROJECTS_DIR`/`SYSTEM_DIR` constants (currently `brain/02-personal`,
   `brain/04-projects`, `kernel/bridge`).
 

@@ -6,7 +6,7 @@ import type {
 } from "../../domain/context/context.js";
 import { validateContextManifest } from "../../domain/context/context-validator.js";
 import type { Profile } from "../../domain/profiles/profile.js";
-import { atlasRoot } from "../../paths.js";
+import { oceanRoot } from "../../paths.js";
 import { resolveLadderRung } from "./context-ladder.js";
 import { buildContextPacket } from "./context-packet.js";
 import { classifyIntent } from "./intent-router.js";
@@ -130,7 +130,7 @@ export async function selectPacketReferences(
     const boundaries = await canonicalBoundaries(allowedPaths, cwd);
     for (const reference of packet.selectedReferences) {
       const canonicalPath = await withinAllowedPaths(
-        path.join(atlasRoot(), reference.sourcePath),
+        path.join(oceanRoot(), reference.sourcePath),
         boundaries,
       );
       if (!canonicalPath) {
@@ -158,7 +158,7 @@ export function referenceTarget(
 ): string {
   return reference.base === "cwd"
     ? path.resolve(cwd, reference.path)
-    : path.join(atlasRoot(), reference.path);
+    : path.join(oceanRoot(), reference.path);
 }
 
 function inside(directory: string, root: string): boolean {
@@ -202,7 +202,7 @@ function renderReference(reference: ContextReference): string {
   const target =
     reference.base === "cwd"
       ? reference.path
-      : path.join(atlasRoot(), reference.path);
+      : path.join(oceanRoot(), reference.path);
   const bytes = reference.bytes === null ? "?" : String(reference.bytes);
   const reason = reference.reason.replace(/\s*\n\s*/g, " ");
   return `- ${target} (${reference.recordType}, ${bytes} B): ${reason}`;

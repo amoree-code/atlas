@@ -13,10 +13,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 import type { WrapperManagerPort } from "../../domain/ports/platform-ports.js";
 import {
-  atlasPath,
   BRAIN_RECORD_DIRS,
   CHARTER_DIR,
   enginePath,
+  oceanPath,
   POLICIES_DIR,
   PROJECTS_DIR,
   repoPath,
@@ -87,7 +87,7 @@ function links(content: string): string[] {
 async function checkStructure(): Promise<Finding[]> {
   const findings: Finding[] = [];
   for (const root of roots) {
-    const directory = atlasPath(root);
+    const directory = oceanPath(root);
     findings.push(
       (await exists(directory))
         ? {
@@ -112,7 +112,7 @@ async function checkStructure(): Promise<Finding[]> {
 async function checkLinks(): Promise<Finding[]> {
   const findings: Finding[] = [];
   for (const root of roots) {
-    for (const file of await markdownFiles(atlasPath(root))) {
+    for (const file of await markdownFiles(oceanPath(root))) {
       const content = await readFile(file, "utf8");
       for (const link of links(content)) {
         const target = path.resolve(path.dirname(file), link);
@@ -120,7 +120,7 @@ async function checkLinks(): Promise<Finding[]> {
           findings.push({
             code: "BROKEN_LINK",
             severity: "WARN",
-            path: path.relative(atlasPath(), file),
+            path: path.relative(oceanPath(), file),
             message: `broken relative link: ${link}`,
             fixable: false,
           });
@@ -240,7 +240,7 @@ async function checkWorkspaceContracts(): Promise<Finding[]> {
     [
       "TASK_RECORDS",
       "node",
-      ["scripts/validate-tasks.mjs", atlasPath(PROJECTS_DIR, "atlas", "tasks")],
+      ["scripts/validate-tasks.mjs", oceanPath(PROJECTS_DIR, "atlas", "tasks")],
       enginePath,
     ],
   ] as const;
@@ -290,10 +290,10 @@ async function checkPermissions(): Promise<Finding[]> {
       },
     ];
   const unsafe: string[] = [];
-  for (const directory of await activeDirectories(atlasPath(SYSTEM_DIR))) {
+  for (const directory of await activeDirectories(oceanPath(SYSTEM_DIR))) {
     const mode = (await stat(directory)).mode & 0o777;
     if ((mode & 0o077) !== 0)
-      unsafe.push(path.relative(atlasPath(), directory));
+      unsafe.push(path.relative(oceanPath(), directory));
   }
   return unsafe.length
     ? [
@@ -318,11 +318,11 @@ async function checkDuplicates(): Promise<Finding[]> {
   const seen = new Map<string, string>();
   const duplicates: string[] = [];
   for (const root of [...BRAIN_RECORD_DIRS, PROJECTS_DIR]) {
-    for (const file of await markdownFiles(atlasPath(root))) {
+    for (const file of await markdownFiles(oceanPath(root))) {
       const hash = createHash("sha256")
         .update(await readFile(file))
         .digest("hex");
-      const relative = path.relative(atlasPath(), file);
+      const relative = path.relative(oceanPath(), file);
       const previous = seen.get(hash);
       if (previous) duplicates.push(`${previous} = ${relative}`);
       else seen.set(hash, relative);
@@ -348,7 +348,7 @@ async function checkDuplicates(): Promise<Finding[]> {
 }
 
 async function checkProfileAuthority(): Promise<Finding[]> {
-  const root = atlasPath(SYSTEM_DIR, "profiles");
+  const root = oceanPath(SYSTEM_DIR, "profiles");
   if (!(await exists(root)))
     return [
       {
@@ -410,8 +410,8 @@ async function checkVersion(): Promise<Finding[]> {
 }
 
 async function checkGovernance(): Promise<Finding[]> {
-  const core = atlasPath(CHARTER_DIR, "core.md");
-  const policies = atlasPath(POLICIES_DIR);
+  const core = oceanPath(CHARTER_DIR, "core.md");
+  const policies = oceanPath(POLICIES_DIR);
   if (!(await exists(core)) || !(await exists(policies)))
     return [
       {
@@ -491,14 +491,14 @@ export async function repairWorkspace(
       (finding) => finding.code === "PRIVATE_PERMISSIONS" && finding.fixable,
     )
   ) {
-    for (const directory of await activeDirectories(atlasPath(SYSTEM_DIR)))
+    for (const directory of await activeDirectories(oceanPath(SYSTEM_DIR)))
       await chmod(directory, 0o700);
     changes.push("restricted active system directories to owner-only");
   }
   await wrapperManager.syncProviderWrappers();
   changes.push("synchronized provider wrappers");
   const after = await scanWorkspace(wrapperManager);
-  const reportDirectory = atlasPath(SYSTEM_DIR, "runtime", "reports");
+  const reportDirectory = oceanPath(SYSTEM_DIR, "runtime", "reports");
   await mkdir(reportDirectory, { recursive: true });
   await writeFile(
     path.join(reportDirectory, "repair-report.json"),

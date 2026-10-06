@@ -34,7 +34,7 @@ cannot be resumed.
 
 ## Workspace ends up in the wrong place
 
-`atlasRoot()` defaults to the parent directory of the running `engine/` checkout; set
+`oceanRoot()` defaults to the parent directory of the running `engine/` checkout; set
 `ATLAS_ROOT` to point at a different workspace root (see [workspace.md](workspace.md)).
 Re-run `ocean setup` after changing `ATLAS_ROOT` to bootstrap the new location.
 

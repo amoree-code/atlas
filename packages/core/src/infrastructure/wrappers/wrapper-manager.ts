@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { atomicWrite } from "../../fs-utils.js";
-import { atlasPath, enginePath, SYSTEM_DIR } from "../../paths.js";
+import { enginePath, oceanPath, SYSTEM_DIR } from "../../paths.js";
 import {
   builtInProviderRecords,
   loadProviderRegistry,
@@ -23,7 +23,7 @@ import {
 const execFile = promisify(execFileCallback);
 
 export function shimDirectory(): string {
-  return atlasPath(SYSTEM_DIR, "runtime", "shims");
+  return oceanPath(SYSTEM_DIR, "runtime", "shims");
 }
 
 function shellQuote(value: string): string {

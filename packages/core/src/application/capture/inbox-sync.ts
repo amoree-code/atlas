@@ -1,11 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
-import { atlasPath, INBOX_DIR } from "../../paths.js";
+import { INBOX_DIR, oceanPath } from "../../paths.js";
 
 const marker = "## Capture candidates (generated)";
 
 export async function syncCaptureInbox(store: SessionStorePort): Promise<void> {
-  const file = atlasPath(INBOX_DIR, "INBOX.md");
+  const file = oceanPath(INBOX_DIR, "INBOX.md");
   let current: string;
   try {
     current = await readFile(file, "utf8");

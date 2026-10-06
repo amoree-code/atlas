@@ -10,7 +10,7 @@ export async function atomicWrite(
   target: string,
   content: string,
 ): Promise<number> {
-  const temp = `${target}.atlas-tmp-${process.pid}-${Date.now()}`;
+  const temp = `${target}.ocean-tmp-${process.pid}-${Date.now()}`;
   try {
     await writeFile(temp, content, "utf8");
     await rename(temp, target);

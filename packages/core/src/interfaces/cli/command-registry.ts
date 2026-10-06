@@ -34,7 +34,7 @@ import {
   stopTaskLoop,
 } from "../../application/loops/task-loop.js";
 import {
-  atlasMcpConfig,
+  oceanMcpConfig,
   playwrightMcpConfig,
 } from "../../application/mcp/mcp-connection.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
@@ -109,7 +109,7 @@ import {
   wrapperDoctor,
   wrapperStatus,
 } from "../../infrastructure/wrappers/wrapper-manager.js";
-import { atlasPath, atlasRoot, SYSTEM_DIR } from "../../paths.js";
+import { oceanPath, oceanRoot, SYSTEM_DIR } from "../../paths.js";
 import { runAuthCommand } from "./auth-command.js";
 import { runBrowserCommand } from "./browser-command.js";
 import { runCaptureCommand } from "./capture-command.js";
@@ -371,7 +371,7 @@ async function commandMemory(): Promise<void> {
 async function commandMcp(): Promise<void> {
   const action = process.argv[3] ?? "config";
   if (action === "config")
-    console.log(JSON.stringify(atlasMcpConfig(), null, 2));
+    console.log(JSON.stringify(oceanMcpConfig(), null, 2));
   else if (action === "playwright-config")
     console.log(JSON.stringify(playwrightMcpConfig(), null, 2));
   else if (action === "serve") await runAtlasMcpServer();
@@ -652,7 +652,7 @@ async function commandSchedule(): Promise<void> {
   } else if (action === "run-due")
     console.log(
       JSON.stringify(
-        { ran: await runDueSchedules(atlasRoot(), defaultAgentRuntime) },
+        { ran: await runDueSchedules(oceanRoot(), defaultAgentRuntime) },
         null,
         2,
       ),
@@ -660,7 +660,7 @@ async function commandSchedule(): Promise<void> {
   else if (action === "worker-once")
     console.log(
       JSON.stringify(
-        { ran: await runSchedulerWorkerOnce(atlasRoot(), defaultAgentRuntime) },
+        { ran: await runSchedulerWorkerOnce(oceanRoot(), defaultAgentRuntime) },
         null,
         2,
       ),
@@ -670,7 +670,7 @@ async function commandSchedule(): Promise<void> {
     const stop = () => controller.abort();
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
-    await runSchedulerWorker(atlasRoot(), defaultAgentRuntime, {
+    await runSchedulerWorker(oceanRoot(), defaultAgentRuntime, {
       signal: controller.signal,
       pollMs: Number(process.env.ATLAS_SCHEDULER_POLL_MS ?? 30_000),
     });
@@ -685,7 +685,7 @@ async function commandSchedule(): Promise<void> {
       ),
     );
   else if (action === "run-now")
-    await runSchedule(process.argv[4] ?? "", atlasRoot(), defaultAgentRuntime);
+    await runSchedule(process.argv[4] ?? "", oceanRoot(), defaultAgentRuntime);
   else {
     console.error(
       "Usage: ocean schedule list|add|enable|disable|run-due|run-now|worker-once|worker",
@@ -720,7 +720,7 @@ async function commandLoop(): Promise<void> {
             taskId,
             profile,
             prompt,
-            cwd: atlasRoot(),
+            cwd: oceanRoot(),
             approved: true,
             maxIterations: value("--max-iterations", 10),
             intervalMs: value("--interval-ms", 60_000),
@@ -734,7 +734,7 @@ async function commandLoop(): Promise<void> {
   } else if (action === "worker-once") {
     console.log(
       JSON.stringify(
-        { ran: await runTaskLoopsOnce(atlasRoot(), defaultAgentRuntime) },
+        { ran: await runTaskLoopsOnce(oceanRoot(), defaultAgentRuntime) },
         null,
         2,
       ),
@@ -744,7 +744,7 @@ async function commandLoop(): Promise<void> {
     const stop = () => controller.abort();
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
-    await runTaskLoopWorker(atlasRoot(), defaultAgentRuntime, {
+    await runTaskLoopWorker(oceanRoot(), defaultAgentRuntime, {
       signal: controller.signal,
       pollMs: Number(process.env.ATLAS_LOOP_POLL_MS ?? 30_000),
     });
@@ -770,7 +770,7 @@ async function commandGateway(): Promise<void> {
     process.exitCode = 1;
   } else {
     const server = createWebhookGateway(
-      atlasRoot(),
+      oceanRoot(),
       token,
       defaultAgentRuntime,
     );
@@ -1008,7 +1008,7 @@ async function commandRun(): Promise<void> {
     process.exitCode = 1;
   } else {
     const session = await runAgent(
-      { profileName, client, taskId, handoffId, prompt, cwd: atlasRoot() },
+      { profileName, client, taskId, handoffId, prompt, cwd: oceanRoot() },
       defaultAgentRuntime,
     );
     console.log(
@@ -1056,7 +1056,7 @@ async function commandSession(): Promise<void> {
       try {
         console.log(
           await readFile(
-            path.resolve(atlasRoot(), session.summaryPath),
+            path.resolve(oceanRoot(), session.summaryPath),
             "utf8",
           ),
         );
@@ -1178,7 +1178,7 @@ async function commandSession(): Promise<void> {
       try {
         const result = await applyRetention(
           store,
-          atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
+          oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
           plan,
           fingerprint,
         );
@@ -1194,7 +1194,7 @@ async function commandSession(): Promise<void> {
     if (simulate) {
       const result = await simulateRetention(
         store,
-        atlasPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
+        oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
         plan,
         defaultSessionStoreOpener,
       );
