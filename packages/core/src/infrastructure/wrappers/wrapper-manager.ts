@@ -250,9 +250,9 @@ export async function wrapperDoctor(commandPath?: string): Promise<string[]> {
   for (const name of CLI_WRAPPER_NAMES) {
     try {
       const contents = await readFile(wrapperPath(name), "utf8");
-      if (!contents.includes("dist/main.js"))
+      if (!contents.includes(enginePath("dist", "main.js")))
         findings.push(
-          `${name}: CLI wrapper is stale or does not route through Atlas; run: ocean doctor --fix`,
+          `${name}: CLI wrapper is stale or does not route through Ocean; run: ocean doctor --fix`,
         );
     } catch {
       findings.push(
@@ -268,7 +268,7 @@ export async function wrapperDoctor(commandPath?: string): Promise<string[]> {
         !contents.includes(`intercept --client "${provider.id}"`)
       ) {
         findings.push(
-          `${provider.id}: wrapper is stale or does not route through Atlas`,
+          `${provider.id}: wrapper is stale or does not route through Ocean`,
         );
       }
     } catch {
