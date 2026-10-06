@@ -391,7 +391,12 @@ async function callTool(
       target:
         typeof args.target === "string" ? args.target : "knowledge/results",
     };
-    if (approval.fingerprint !== actionFingerprint(name, actionArgs))
+    // An approval is bound to the name the caller fingerprinted, which for a
+    // legacy caller is the `atlas_*` name it actually sent.
+    if (
+      approval.fingerprint !== actionFingerprint(name, actionArgs) &&
+      approval.fingerprint !== actionFingerprint(requested, actionArgs)
+    )
       throw new Error(
         "Session promotion approval does not match the requested action",
       );

@@ -3,6 +3,7 @@ import { access, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
 import { handleAtlasMcpRequest } from "../dist/infrastructure/mcp/atlas-server.js";
 import { SYSTEM_DIR } from "../dist/paths.js";
 
@@ -136,4 +137,52 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
     params: { name: "ocean_review_task", arguments: { task: "T-1" } },
   });
   assert.match(prompt.result.messages[0].content.text, /T-1/);
+});
+
+test("legacy atlas_* names still work on prompts/get and keep approvals bound to the sent name", async () => {
+  const legacyPrompt = await handleAtlasMcpRequest({
+    jsonrpc: "2.0",
+    id: 20,
+    method: "prompts/get",
+    params: { name: "atlas_review_task", arguments: { task: "T-1" } },
+  });
+  assert.match(legacyPrompt.result.messages[0].content.text, /T-1/);
+
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-legacy-"));
+  const previous = process.env.ATLAS_ROOT;
+  process.env.ATLAS_ROOT = root;
+  try {
+    const actionArgs = { sessionId: "missing", target: "knowledge/results" };
+    const promote = (name, fingerprint) =>
+      handleAtlasMcpRequest({
+        jsonrpc: "2.0",
+        id: 21,
+        method: "tools/call",
+        params: {
+          name,
+          arguments: {
+            sessionId: "missing",
+            approval: { approved: true, fingerprint },
+          },
+        },
+      });
+    const mismatch = /approval does not match/;
+    for (const [sent, fingerprinted] of [
+      ["atlas_session_promote", "atlas_session_promote"],
+      ["atlas_session_promote", "ocean_session_promote"],
+      ["ocean_session_promote", "ocean_session_promote"],
+    ]) {
+      const response = await promote(
+        sent,
+        actionFingerprint(fingerprinted, actionArgs),
+      );
+      assert.ok(response.error, "promotion of a missing session must fail");
+      assert.doesNotMatch(response.error.message, mismatch);
+    }
+    const wrong = await promote("atlas_session_promote", "0".repeat(64));
+    assert.match(wrong.error.message, mismatch);
+  } finally {
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
+  }
 });
