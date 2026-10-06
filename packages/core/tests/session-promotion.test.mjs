@@ -12,7 +12,7 @@ test("promotes an approved completed session into knowledge and rejects missing 
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-session-promotion-"),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
   await mkdir(path.join(root, KNOWLEDGE_DIR), { recursive: true });
   await writeFile(
@@ -60,5 +60,5 @@ test("promotes an approved completed session into knowledge and rejects missing 
     await readFile(path.join(root, result.file), "utf8"),
     /human-approved/,
   );
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });

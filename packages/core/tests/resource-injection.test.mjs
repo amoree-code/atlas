@@ -15,13 +15,13 @@ import {
 
 async function withTempAtlasRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-bootstrap-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 
@@ -63,11 +63,11 @@ test("bootstrap is delivered only as environment variables, never as file conten
   });
   const env = bootstrapEnvironment(bootstrap);
   assert.equal(env.OCEAN_BOOTSTRAP, bootstrap.content);
-  assert.equal(env.ATLAS_BOOTSTRAP, bootstrap.content);
-  assert.equal(env.OCEAN_BOOTSTRAP_BYTES, env.ATLAS_BOOTSTRAP_BYTES);
+  assert.equal(env.OCEAN_BOOTSTRAP, bootstrap.content);
+  assert.equal(env.OCEAN_BOOTSTRAP_BYTES, env.OCEAN_BOOTSTRAP_BYTES);
   assert.equal(Object.keys(env).length, 4);
   assert.ok(
-    Buffer.byteLength(env.ATLAS_BOOTSTRAP) <= OCEAN_BOOTSTRAP_MAX_BYTES,
+    Buffer.byteLength(env.OCEAN_BOOTSTRAP) <= OCEAN_BOOTSTRAP_MAX_BYTES,
   );
 });
 

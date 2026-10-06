@@ -46,8 +46,8 @@ for (const [label, entryPoint, eventType] of [
 ]) {
   test(`client-test reads ${label} entry contract and bootstrap events`, async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ocean-client-test-"));
-    const previous = process.env.ATLAS_ROOT;
-    process.env.ATLAS_ROOT = root;
+    const previous = process.env.OCEAN_ROOT;
+    process.env.OCEAN_ROOT = root;
     const logs = [];
     const log = console.log;
     try {
@@ -78,8 +78,8 @@ for (const [label, entryPoint, eventType] of [
       await runClientTestCommand("claude", true);
     } finally {
       console.log = log;
-      if (previous === undefined) delete process.env.ATLAS_ROOT;
-      else process.env.ATLAS_ROOT = previous;
+      if (previous === undefined) delete process.env.OCEAN_ROOT;
+      else process.env.OCEAN_ROOT = previous;
     }
     const report = JSON.parse(logs.join("\n"));
     assert.equal(report.latestSession.entryContract.entryPoint, entryPoint);

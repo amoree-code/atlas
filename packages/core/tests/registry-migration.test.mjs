@@ -12,11 +12,11 @@ async function withRoot(run) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-registry-"));
   const home = await mkdtemp(path.join(os.tmpdir(), "atlas-registry-home-"));
   const saved = {
-    ATLAS_ROOT: process.env.ATLAS_ROOT,
+    OCEAN_ROOT: process.env.OCEAN_ROOT,
     HOME: process.env.HOME,
     APPDATA: process.env.APPDATA,
   };
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   process.env.HOME = home;
   if (process.platform === "win32")
     process.env.APPDATA = path.join(home, "AppData", "Roaming");

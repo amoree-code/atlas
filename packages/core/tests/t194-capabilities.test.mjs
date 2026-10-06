@@ -74,7 +74,7 @@ test("compression falls back to bounded original when required evidence cannot f
 
 test("observer records proven repeated work without creating or promoting a skill", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-observer-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const store = await openSessionStore();
   const sessionId = "observer-session";
   store.create({
@@ -122,13 +122,13 @@ test("observer records proven repeated work without creating or promoting a skil
       "discarded",
     );
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
 test("observer only treats real user corrections as repeated-correction, not provider output mentioning those words", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-observer-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const store = await openSessionStore();
   const sessionId = "observer-correction-session";
   store.create({
@@ -171,13 +171,13 @@ test("observer only treats real user corrections as repeated-correction, not pro
     assert.equal(corrections.length, 1);
     assert.match(corrections[0].summary, /use pnpm instead of npm/);
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
 test("approving an observation creates a skill candidate, not just a status flag", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-observer-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const store = await openSessionStore();
   const sessionId = "observer-approval-session";
   store.create({
@@ -224,6 +224,6 @@ test("approving an observation creates a skill candidate, not just a status flag
     assert.equal(candidate.sourceSessionId, sessionId);
     assert.equal(candidate.instructions, observation.summary);
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });

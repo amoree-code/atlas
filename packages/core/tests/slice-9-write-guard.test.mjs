@@ -35,13 +35,13 @@ async function withRoot(fn) {
     path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1", "task.md"),
     "---\nid: T-1\nstate: active\n---\n\nbody\n",
   );
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 

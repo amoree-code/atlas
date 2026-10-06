@@ -35,7 +35,7 @@ function cli(root, ...args) {
     process.execPath,
     [path.resolve("dist/main.js"), ...args],
     {
-      env: { ...process.env, ATLAS_ROOT: root },
+      env: { ...process.env, OCEAN_ROOT: root },
       encoding: "utf8",
     },
   );

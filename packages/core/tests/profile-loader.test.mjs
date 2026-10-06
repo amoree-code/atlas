@@ -8,7 +8,7 @@ import { loadProfile } from "../dist/infrastructure/filesystem/profile-loader.js
 import { openSessionStore } from "../dist/infrastructure/persistence/session-store.js";
 import { SYSTEM_DIR } from "../dist/paths.js";
 
-test("loadProfile reads profiles from private ATLAS_ROOT/system/profiles, not the engine tree", async () => {
+test("loadProfile reads profiles from private OCEAN_ROOT/system/profiles, not the engine tree", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
@@ -21,25 +21,25 @@ test("loadProfile reads profiles from private ATLAS_ROOT/system/profiles, not th
     }),
   );
 
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     const profile = await loadProfile("reviewer");
     assert.equal(profile.name, "reviewer");
     assert.equal(profile.provider, "claude");
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
-test("loadProfile rejects a name whose file does not exist under ATLAS_ROOT", async () => {
+test("loadProfile rejects a name whose file does not exist under OCEAN_ROOT", async () => {
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-profile-loader-missing-"),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     await assert.rejects(loadProfile("missing"));
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -57,11 +57,11 @@ test("loadProfile rejects traversal names before reading outside the profiles ro
       role: "outside",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     await assert.rejects(loadProfile("../outside"), /Invalid profile name/);
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -85,7 +85,7 @@ test("loadProfile keeps legacy profile directories compatible during migration",
     "Inspect before editing.",
   );
 
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     const profile = await loadProfile("developer");
     assert.equal(profile.provider, "hermes");
@@ -93,7 +93,7 @@ test("loadProfile keeps legacy profile directories compatible during migration",
     assert.equal(profile.writePolicy, "workspace");
     assert.equal(profile.instructions, "Inspect before editing.");
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -125,7 +125,7 @@ test("all practical role profiles use the universal client contract", async () =
       JSON.stringify({ ...template, name }),
     );
 
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     for (const name of names) {
       const profile = await loadProfile(name);
@@ -142,7 +142,7 @@ test("all practical role profiles use the universal client contract", async () =
       assert.ok(profile.instructions.length > 0);
     }
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -187,9 +187,9 @@ test("validates a profile distribution and rejects private state", async () => {
   );
 });
 
-test("openSessionStore persists sessions under ATLAS_ROOT/system/sessions/sessions.sqlite", async () => {
+test("openSessionStore persists sessions under OCEAN_ROOT/system/sessions/sessions.sqlite", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-persist-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     const store = await openSessionStore();
     store.create({
@@ -207,6 +207,6 @@ test("openSessionStore persists sessions under ATLAS_ROOT/system/sessions/sessio
     assert.equal(reopened.get("persisted-1").sessionId, "persisted-1");
     reopened.close();
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });

@@ -8,7 +8,7 @@ import { PlaywrightBrowserProvider } from "../dist/infrastructure/providers/play
 test("real Playwright browser lifecycle and basic operations", {
   skip:
     (process.env.OCEAN_BROWSER_INTEGRATION ??
-      process.env.ATLAS_BROWSER_INTEGRATION) !== "1",
+      process.env.OCEAN_BROWSER_INTEGRATION) !== "1",
 }, async () => {
   const profileDir = await mkdtemp(
     path.join(os.tmpdir(), "atlas-browser-integration-"),

@@ -35,15 +35,15 @@ function fakeSteps(calls) {
 }
 
 async function withTempRoot(fn) {
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = await mkdtemp(
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = await mkdtemp(
     path.join(os.tmpdir(), "atlas-onboard-"),
   );
   try {
     await fn();
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 

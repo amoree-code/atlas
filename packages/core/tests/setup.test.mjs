@@ -36,16 +36,16 @@ function platformStartupFile(home) {
   );
 }
 
-test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, never the engine tree", async () => {
+test("setup isolates its writes to OCEAN_ROOT and the (fake) home directory, never the engine tree", async () => {
   const privateRoot = await mkdtemp(
     path.join(os.tmpdir(), "atlas-setup-root-"),
   );
   const fakeHome = await mkdtemp(path.join(os.tmpdir(), "atlas-setup-home-"));
 
-  const originalAtlasRoot = process.env.ATLAS_ROOT;
+  const originalAtlasRoot = process.env.OCEAN_ROOT;
   const originalHome = process.env.HOME;
   const originalAppData = process.env.APPDATA;
-  process.env.ATLAS_ROOT = privateRoot;
+  process.env.OCEAN_ROOT = privateRoot;
   process.env.HOME = fakeHome;
   if (process.platform === "win32")
     process.env.APPDATA = path.join(fakeHome, "AppData", "Roaming");
@@ -100,8 +100,8 @@ test("setup isolates its writes to ATLAS_ROOT and the (fake) home directory, nev
       "startup entry should use the private root as its working directory",
     );
   } finally {
-    if (originalAtlasRoot === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = originalAtlasRoot;
+    if (originalAtlasRoot === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = originalAtlasRoot;
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
     if (originalAppData === undefined) delete process.env.APPDATA;

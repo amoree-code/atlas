@@ -35,8 +35,8 @@ test("doctor reports missing roots and broken active links without mutating", as
     {
       env: {
         ...process.env,
-        ATLAS_ROOT: root,
-        ATLAS_SKIP_DEPENDENCY_AUDIT: "1",
+        OCEAN_ROOT: root,
+        OCEAN_SKIP_DEPENDENCY_AUDIT: "1",
       },
       encoding: "utf8",
     },

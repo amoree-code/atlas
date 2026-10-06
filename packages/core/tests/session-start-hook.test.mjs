@@ -28,8 +28,8 @@ test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutp
 test("claudeSessionStartHook reports unbound for a cwd with no Atlas binding, not a guess", async () => {
   const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-unbound-"));
   const oceanRoot = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-root-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = oceanRoot;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = oceanRoot;
   try {
     const result = await claudeSessionStartHook({ cwd: outside });
     assert.match(
@@ -37,8 +37,8 @@ test("claudeSessionStartHook reports unbound for a cwd with no Atlas binding, no
       /project=unbound/,
     );
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });
 

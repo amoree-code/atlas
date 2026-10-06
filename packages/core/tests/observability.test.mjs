@@ -36,7 +36,7 @@ test("redacts JWTs with short segments, not just long ones", () => {
 
 test("writes structured runtime logs outside engine", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-logs-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   await appendRuntimeLog({
     timestamp: "2026-09-10T00:00:00.000Z",
     event: "provider_exit",
@@ -57,5 +57,5 @@ test("writes structured runtime logs outside engine", async () => {
     status: "completed",
     payload: "ok",
   });
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });

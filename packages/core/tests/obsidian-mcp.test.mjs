@@ -61,7 +61,7 @@ test("MCP client completes a real Atlas-to-Obsidian round trip", async () => {
     command: process.execPath,
     args: [path.resolve("dist/main.js"), "obsidian", "mcp"],
     cwd: path.resolve("."),
-    env: { ATLAS_ROOT: root },
+    env: { OCEAN_ROOT: root },
     allowedTools: ["obsidian_write", "obsidian_read"],
   });
   try {

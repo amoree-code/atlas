@@ -1,4 +1,6 @@
-// Tests sandbox the workspace through ATLAS_*; an inherited OCEAN_* would win over it.
+// Tests sandbox the workspace through OCEAN_*; clear any OCEAN_* inherited from the shell so it
+// cannot leak into them. The engine still falls back to the legacy ATLAS_* names, so clear those too.
 for (const name of Object.keys(process.env)) {
-  if (name.startsWith("OCEAN_")) delete process.env[name];
+  if (name.startsWith("OCEAN_") || name.startsWith("ATLAS_"))
+    delete process.env[name];
 }

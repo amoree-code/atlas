@@ -367,7 +367,7 @@ test("ollama embedder against a local stub server succeeds for a loopback, non-c
 });
 
 test("live Ollama embedder round trip (opt-in only)", {
-  skip: process.env.ATLAS_LIVE_EMBEDDER_TESTS !== "1",
+  skip: process.env.OCEAN_LIVE_EMBEDDER_TESTS !== "1",
 }, async () => {
   await withFixtureRoot(async (root) => {
     const embedder = await createOllamaEmbedder({ model: "embeddinggemma" });

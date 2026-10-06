@@ -32,24 +32,24 @@ async function withEnvironment(run) {
   const root = await import("node:fs/promises").then(({ mkdtemp }) =>
     mkdtemp(path.join(os.tmpdir(), "atlas-intercept-")),
   );
-  const oldRoot = process.env.ATLAS_ROOT;
+  const oldRoot = process.env.OCEAN_ROOT;
   const oldPath = process.env.PATH;
   const oldShell = process.env.SHELL;
-  const oldProfile = process.env.ATLAS_SHELL_PROFILE;
-  process.env.ATLAS_ROOT = root;
+  const oldProfile = process.env.OCEAN_SHELL_PROFILE;
+  process.env.OCEAN_ROOT = root;
   process.env.SHELL = "/bin/zsh";
-  process.env.ATLAS_SHELL_PROFILE = path.join(root, "profile");
+  process.env.OCEAN_SHELL_PROFILE = path.join(root, "profile");
   try {
     await run(root);
   } finally {
-    if (oldRoot === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = oldRoot;
+    if (oldRoot === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = oldRoot;
     if (oldPath === undefined) delete process.env.PATH;
     else process.env.PATH = oldPath;
     if (oldShell === undefined) delete process.env.SHELL;
     else process.env.SHELL = oldShell;
-    if (oldProfile === undefined) delete process.env.ATLAS_SHELL_PROFILE;
-    else process.env.ATLAS_SHELL_PROFILE = oldProfile;
+    if (oldProfile === undefined) delete process.env.OCEAN_SHELL_PROFILE;
+    else process.env.OCEAN_SHELL_PROFILE = oldProfile;
   }
 }
 
@@ -80,7 +80,7 @@ test("sync creates Atlas wrappers and shell activation", async () => {
     assert.equal(oceanWrapper, atlasWrapper);
     if (process.platform !== "win32") {
       assert.match(wrapper, /export OCEAN_SHIM_DIR=/);
-      assert.match(wrapper, /export ATLAS_SHIM_DIR=/);
+      assert.match(wrapper, /export OCEAN_SHIM_DIR=/);
     }
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
@@ -114,7 +114,7 @@ unixOnly("the Atlas wrapper forwards CLI commands to the engine", async () => {
         env: {
           ...process.env,
           PATH: `${directory}${path.delimiter}${process.env.PATH}`,
-          ATLAS_ROOT: root,
+          OCEAN_ROOT: root,
         },
         encoding: "utf8",
       },
@@ -145,7 +145,7 @@ unixOnly(
       const env = {
         ...process.env,
         PATH: `${directory}${path.delimiter}${bin}`,
-        ATLAS_ROOT: root,
+        OCEAN_ROOT: root,
       };
       const result = spawnSync(path.join(directory, "claude"), ["hello"], {
         env,
@@ -289,7 +289,7 @@ unixOnly(
         ],
         {
           cwd: process.cwd(),
-          env: { ...process.env, ATLAS_ROOT: root },
+          env: { ...process.env, OCEAN_ROOT: root },
           stdio: "ignore",
         },
       );
@@ -481,10 +481,10 @@ if [ "$1" = "login" ] && [ "$2" = "status" ]; then
   exit 0
 fi
 if [ "$1" = "login" ] && [ "$2" = "--device-auth" ]; then
-  touch "$ATLAS_ROOT/recovered"
+  touch "$OCEAN_ROOT/recovered"
   exit 0
 fi
-if [ -f "$ATLAS_ROOT/recovered" ]; then
+if [ -f "$OCEAN_ROOT/recovered" ]; then
   printf 'resumed-output\\n'
   exit 0
 fi

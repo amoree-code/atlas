@@ -23,13 +23,13 @@ async function withTempTask(bytes, fn) {
   await mkdir(taskDir, { recursive: true });
   const file = path.join(taskDir, "task.md");
   await writeFile(file, "x".repeat(bytes));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root, file);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 
@@ -39,13 +39,13 @@ async function withTempDecision(bytes, fn) {
   await mkdir(decisionsDir, { recursive: true });
   const file = path.join(decisionsDir, "decision-001.md");
   await writeFile(file, "x".repeat(bytes));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root, file);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 
@@ -211,8 +211,8 @@ test("missing project (cwd outside any binding and outside the Atlas root) repor
   const emptyAtlasRoot = await mkdtemp(
     path.join(os.tmpdir(), "atlas-packet-empty-root-"),
   );
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = emptyAtlasRoot;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = emptyAtlasRoot;
   try {
     const classification = classifyIntent("what project am I in");
     const packet = await buildContextPacket(
@@ -223,8 +223,8 @@ test("missing project (cwd outside any binding and outside the Atlas root) repor
     assert.equal(packet.activeProject.status, "unbound");
     assert.equal(packet.activeProject.projectId, null);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });
 

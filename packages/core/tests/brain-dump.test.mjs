@@ -38,7 +38,7 @@ function baseSession(overrides = {}) {
 
 test("names the file from the date, time, and a slug of the work log — not the raw session id", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   const result = await writeBrainDump({
     session: baseSession(),
@@ -55,12 +55,12 @@ test("names the file from the date, time, and a slug of the work log — not the
   );
   assert.doesNotMatch(filename, /11112222-3333-4444-5555-666677778888/);
 
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("falls back to the project name, then the short session id, when the title has no usable Latin slug", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   const withProject = await writeBrainDump({
     session: baseSession({ workingDirectory: "/opt/projects/ameer" }),
@@ -89,12 +89,12 @@ test("falls back to the project name, then the short session id, when the title 
     "2026-09-21-1552-abcdef12.md",
   );
 
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("appends a numeric suffix instead of overwriting when two sessions land on the same slug", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   const first = await writeBrainDump({
     session: baseSession({ sessionId: "session-one" }),
@@ -122,12 +122,12 @@ test("appends a numeric suffix instead of overwriting when two sessions land on 
   const files = await readdir(path.join(root, INBOX_DIR, "brain-dump"));
   assert.equal(files.length, 2);
 
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("mirrors task-observer signals under a Signals section when present, and omits it otherwise", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   const withSignals = await writeBrainDump({
     session: baseSession({ sessionId: "session-signals" }),
@@ -176,5 +176,5 @@ test("mirrors task-observer signals under a Signals section when present, and om
   );
   assert.doesNotMatch(contentWithoutSignals, /## Signals/);
 
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });

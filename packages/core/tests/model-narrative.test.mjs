@@ -40,8 +40,8 @@ test("isTrivialSession is true with no changed files and no substantial provider
   );
 });
 
-test("generateModelNarrative never calls the model unless ATLAS_MODEL_NARRATIVE=1 (cost is opt-in, off by default)", async () => {
-  delete process.env.ATLAS_MODEL_NARRATIVE;
+test("generateModelNarrative never calls the model unless OCEAN_MODEL_NARRATIVE=1 (cost is opt-in, off by default)", async () => {
+  delete process.env.OCEAN_MODEL_NARRATIVE;
   const session = {
     workingDirectory: "/tmp/example",
     title: "Example session",
@@ -56,8 +56,8 @@ test("generateModelNarrative never calls the model unless ATLAS_MODEL_NARRATIVE=
 });
 
 test("generateModelNarrative skips recursively when already inside a narrative-generation call", async () => {
-  process.env.ATLAS_MODEL_NARRATIVE = "1";
-  process.env.ATLAS_NARRATIVE_CALL = "1";
+  process.env.OCEAN_MODEL_NARRATIVE = "1";
+  process.env.OCEAN_NARRATIVE_CALL = "1";
   try {
     const session = {
       workingDirectory: "/tmp/example",
@@ -71,8 +71,8 @@ test("generateModelNarrative skips recursively when already inside a narrative-g
     });
     assert.equal(result, null);
   } finally {
-    delete process.env.ATLAS_MODEL_NARRATIVE;
-    delete process.env.ATLAS_NARRATIVE_CALL;
+    delete process.env.OCEAN_MODEL_NARRATIVE;
+    delete process.env.OCEAN_NARRATIVE_CALL;
   }
 });
 

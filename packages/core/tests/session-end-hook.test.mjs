@@ -52,7 +52,7 @@ test("claudeSessionEndHook registers a desktop session from its transcript and r
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-end-hook-"));
   const projectDir = path.join(root, "project");
   await mkdir(path.join(projectDir, ".git"), { recursive: true });
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   const transcriptPath = path.join(root, "transcript.jsonl");
   await writeFile(
@@ -116,7 +116,7 @@ test("claudeSessionEndHook registers a desktop session from its transcript and r
   assert.match(brainDump, /wire the brain-dump hook/);
   assert.match(brainDump, /Session id: desktop-hook-session-1/);
 
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("claudeSessionEndHook is a no-op without a session_id and never throws", async () => {
@@ -127,7 +127,7 @@ test("claudeSessionEndHook is a no-op without a session_id and never throws", as
 
 test("claudeSessionEndHook is idempotent for a session that already closed out", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-end-hook-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   const payload = {
     session_id: "desktop-hook-session-2",
@@ -140,5 +140,5 @@ test("claudeSessionEndHook is idempotent for a session that already closed out",
     claudeSessionEndHook(payload, defaultSessionStoreFactory),
   );
 
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });

@@ -11,8 +11,8 @@ import {
 
 test("task loop persists bounded state and stops explicitly", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-loop-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     const loop = await startTaskLoop({
       taskId: "T-213",
@@ -28,8 +28,8 @@ test("task loop persists bounded state and stops explicitly", async () => {
     assert.equal(loop.maxIterations, 3);
     assert.equal((await stopTaskLoop(loop.id)).status, "stopped");
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
     await rm(root, { recursive: true, force: true });
   }
 });
