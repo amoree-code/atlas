@@ -58,3 +58,12 @@ test("privacy scanner catches generic bearer and key assignments", async () => {
   assert.match(result.stderr, /credential/);
   assert.doesNotMatch(result.stderr, /a{24}|b{16}/);
 });
+test("privacy scanner ignores the .git file a linked worktree has instead of a directory", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-privacy-worktree-"));
+  await writeFile(
+    path.join(root, ".git"),
+    `gitdir: ${["", "Users", "someone", "repo"].join("/")}/.git/worktrees/example\n`,
+  );
+  const result = await scan(root);
+  assert.equal(result.code, 0, result.stderr);
+});

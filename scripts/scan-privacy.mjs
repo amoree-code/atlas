@@ -30,6 +30,8 @@ const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 
 async function walk(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
+    // In a linked git worktree `.git` is a file ("gitdir: /abs/path"), not a directory.
+    if (directory === root && entry.name === ".git") continue;
     if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
     const target = path.join(directory, entry.name);
     if (gitRepository && isGitIgnored(target)) continue;
