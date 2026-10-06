@@ -2,7 +2,7 @@ import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ProviderRecord } from "../../domain/providers/provider.js";
-import { oceanPath, SYSTEM_DIR } from "../../paths.js";
+import { oceanEnv, oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 export type { ProviderRecord } from "../../domain/providers/provider.js";
 
@@ -60,7 +60,7 @@ export function resolveOriginalExecutable(
   env = process.env,
 ): string {
   const shimRoot = path.resolve(
-    env.ATLAS_SHIM_DIR ?? oceanPath(SYSTEM_DIR, "runtime", "shims"),
+    oceanEnv("SHIM_DIR", env) ?? oceanPath(SYSTEM_DIR, "runtime", "shims"),
   );
   const pathEntries = (env.PATH ?? "").split(path.delimiter).filter(Boolean);
   const names =

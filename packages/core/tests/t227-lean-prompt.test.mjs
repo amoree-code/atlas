@@ -151,7 +151,7 @@ function legacyPromptBytes(fixture, request) {
   return Buffer.byteLength(
     [
       request,
-      `## Effective Atlas profile\n${contract}`,
+      `## Effective Ocean profile\n${contract}`,
       instructions,
       skills,
       factText,
@@ -180,7 +180,7 @@ test("headless prompt carries a skill index, compact contract, facts digest and 
     // Every skill and reference lies under cwd, so no extra read access is requested.
     assert.deepEqual(readDirectories, []);
 
-    assert.match(captured, /## Atlas skills/);
+    assert.match(captured, /## Ocean skills/);
     for (const name of SKILLS) {
       const line = captured
         .split("\n")
@@ -264,7 +264,7 @@ test("formatProfileContract emits compact key: value lines without defaults", ()
     role: "reader",
   });
   const plain = formatProfileContract(base, { taskId: null, handoffId: null });
-  assert.match(plain, /^## Effective Atlas profile\nprofile: plain\n/);
+  assert.match(plain, /^## Effective Ocean profile\nprofile: plain\n/);
   assert.match(plain, /writePolicy: none/);
   for (const absent of [
     "model:",
@@ -307,6 +307,37 @@ test("formatProfileContract emits compact key: value lines without defaults", ()
   assert.ok(!text.includes("enabled"));
   // contextCompression has no headless effect, so the contract does not advertise it.
   assert.ok(!text.includes("contextCompression"));
+  // The pre-rename value still parses and reads as the new one.
+  assert.equal(bound.contextCompression, "ocean-bounded");
+  assert.equal(
+    validateProfile({
+      name: "p",
+      role: "developer",
+      provider: "codex",
+      contextCompression: "ocean-bounded",
+    }).contextCompression,
+    "ocean-bounded",
+  );
+  assert.equal(
+    validateProfile({ name: "p", role: "developer", provider: "codex" })
+      .contextCompression,
+    "none",
+  );
+});
+
+test("a context reference stored with base atlas-root parses as ocean-root", async () => {
+  const { contextReferenceSchema } = await import(
+    "../dist/domain/context/context.js"
+  );
+  const reference = { path: "a.md", recordType: "task", reason: "r", bytes: 1 };
+  assert.equal(
+    contextReferenceSchema.parse({ ...reference, base: "atlas-root" }).base,
+    "ocean-root",
+  );
+  assert.equal(
+    contextReferenceSchema.parse({ ...reference, base: "cwd" }).base,
+    "cwd",
+  );
 });
 
 test("formatSkillIndex collapses and caps descriptions", () => {
@@ -404,7 +435,7 @@ test("buildContextReferences references a single task record without reading it"
     });
     assert.equal(result.manifest.references.length, 1);
     const [reference] = result.manifest.references;
-    assert.equal(reference.base, "atlas-root");
+    assert.equal(reference.base, "ocean-root");
     assert.equal(reference.recordType, "task");
     assert.equal(reference.path, `${PROJECTS_DIR}/atlas/tasks/T-9/task.md`);
     assert.equal(reference.bytes, Buffer.byteLength("TASK-BODY-SENTINEL"));

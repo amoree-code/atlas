@@ -16,6 +16,7 @@ import {
   BRAIN_RECORD_DIRS,
   CHARTER_DIR,
   enginePath,
+  oceanEnv,
   oceanPath,
   POLICIES_DIR,
   PROJECTS_DIR,
@@ -187,7 +188,7 @@ async function checkWrappers(
 }
 
 async function checkDependencies(): Promise<Finding[]> {
-  if (process.env.ATLAS_SKIP_DEPENDENCY_AUDIT === "1") {
+  if (oceanEnv("SKIP_DEPENDENCY_AUDIT") === "1") {
     return [
       {
         code: "DEPENDENCY_AUDIT_SKIPPED",

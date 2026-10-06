@@ -58,7 +58,10 @@ async function buildReport(
     store.list().find((session) => session.provider === provider.id) ?? null;
   const events = latest ? store.listEvents(latest.sessionId) : [];
   const entry = events.find((event) => event.type === "session_entry_contract");
-  const manifest = events.find((event) => event.type === "atlas_bootstrap");
+  const manifest = events.find(
+    (event) =>
+      event.type === "ocean_bootstrap" || event.type === "atlas_bootstrap",
+  );
   const entryBoundary =
     provider.id === "claude"
       ? await claudeEntryBoundaryStatus()
@@ -91,7 +94,7 @@ async function buildReport(
     // Ocean shim; whether the provider itself reads it natively (a hook, a config convention)
     // is unverified until that provider's own consumption is tested — never claimed PROVEN here.
     transport:
-      "NOT PROVEN: bootstrap-env (delivered as ATLAS_BOOTSTRAP; native provider consumption unverified)",
+      "NOT PROVEN: bootstrap-env (delivered as OCEAN_BOOTSTRAP; native provider consumption unverified)",
     providerOwnedPaths:
       provider.id === "claude"
         ? [

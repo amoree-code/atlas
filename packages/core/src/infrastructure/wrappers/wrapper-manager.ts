@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { atomicWrite } from "../../fs-utils.js";
-import { enginePath, oceanPath, SYSTEM_DIR } from "../../paths.js";
+import { enginePath, oceanEnv, oceanPath, SYSTEM_DIR } from "../../paths.js";
 import {
   builtInProviderRecords,
   loadProviderRegistry,
@@ -21,6 +21,8 @@ import {
 } from "../providers/provider-registry.js";
 
 const execFile = promisify(execFileCallback);
+
+const CLI_WRAPPER_NAMES = ["ocean", "atlas"] as const;
 
 export function shimDirectory(): string {
   return oceanPath(SYSTEM_DIR, "runtime", "shims");
@@ -48,12 +50,12 @@ function wrapperContents(provider: ProviderRecord): string {
   const node = shellQuote(process.execPath);
   const entry = shellQuote(enginePath("dist", "main.js"));
   if (process.platform === "win32") {
-    return `@echo off\r\nset "ATLAS_SHIM_DIR=${shimDirectory()}"\r\n"${process.execPath}" "${enginePath("dist", "main.js")}" intercept --client "${provider.id}" -- %*\r\n`;
+    return `@echo off\r\nset "OCEAN_SHIM_DIR=${shimDirectory()}"\r\nset "ATLAS_SHIM_DIR=${shimDirectory()}"\r\n"${process.execPath}" "${enginePath("dist", "main.js")}" intercept --client "${provider.id}" -- %*\r\n`;
   }
-  return `#!/bin/sh\nexport ATLAS_SHIM_DIR=${shellQuote(shimDirectory())}\nexec ${node} ${entry} intercept --client ${shellQuote(provider.id)} -- "$@"\n`;
+  return `#!/bin/sh\nexport OCEAN_SHIM_DIR=${shellQuote(shimDirectory())}\nexport ATLAS_SHIM_DIR=${shellQuote(shimDirectory())}\nexec ${node} ${entry} intercept --client ${shellQuote(provider.id)} -- "$@"\n`;
 }
 
-function atlasWrapperContents(): string {
+function cliWrapperContents(): string {
   if (process.platform === "win32") {
     return `@echo off\r\n"${process.execPath}" "${enginePath("dist", "main.js")}" %*\r\n`;
   }
@@ -81,9 +83,11 @@ export async function syncProviderWrappers(): Promise<{
 }> {
   const providers = loadProviderRegistry();
   await mkdir(shimDirectory(), { recursive: true });
-  const atlasWrapper = wrapperPath("atlas");
-  await writeFile(atlasWrapper, atlasWrapperContents());
-  if (process.platform !== "win32") await chmod(atlasWrapper, 0o755);
+  for (const name of CLI_WRAPPER_NAMES) {
+    const cliWrapper = wrapperPath(name);
+    await writeFile(cliWrapper, cliWrapperContents());
+    if (process.platform !== "win32") await chmod(cliWrapper, 0o755);
+  }
   for (const provider of providers) {
     const file = wrapperPath(provider.command);
     await writeFile(file, wrapperContents(provider));
@@ -205,7 +209,7 @@ async function shellProfilePath(): Promise<string> {
   const home = os.homedir();
   if (process.platform === "win32")
     return (
-      process.env.ATLAS_SHELL_PROFILE ??
+      oceanEnv("SHELL_PROFILE") ??
       path.join(
         home,
         "Documents",
@@ -213,7 +217,8 @@ async function shellProfilePath(): Promise<string> {
         "Microsoft.PowerShell_profile.ps1",
       )
     );
-  if (process.env.ATLAS_SHELL_PROFILE) return process.env.ATLAS_SHELL_PROFILE;
+  const profile = oceanEnv("SHELL_PROFILE");
+  if (profile) return profile;
   const shell = await currentShellName();
   if (shell === "fish")
     return path.join(home, ".config", "fish", "config.fish");
@@ -242,14 +247,18 @@ export async function installShellIntegration(): Promise<string> {
 export async function wrapperDoctor(commandPath?: string): Promise<string[]> {
   const findings: string[] = [];
   const providers = loadProviderRegistry();
-  try {
-    const contents = await readFile(wrapperPath("atlas"), "utf8");
-    if (!contents.includes("dist/main.js"))
+  for (const name of CLI_WRAPPER_NAMES) {
+    try {
+      const contents = await readFile(wrapperPath(name), "utf8");
+      if (!contents.includes("dist/main.js"))
+        findings.push(
+          `${name}: CLI wrapper is stale or does not route through Atlas; run: ocean doctor --fix`,
+        );
+    } catch {
       findings.push(
-        "atlas: CLI wrapper is stale or does not route through Atlas",
+        `${name}: CLI wrapper is missing at ${wrapperPath(name)}; run: ocean doctor --fix`,
       );
-  } catch {
-    findings.push(`atlas: CLI wrapper is missing at ${wrapperPath("atlas")}`);
+    }
   }
   for (const provider of providers) {
     try {

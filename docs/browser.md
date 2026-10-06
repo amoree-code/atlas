@@ -64,7 +64,7 @@ still require `--approve`.
 
 ## Browser availability
 
-Use `ATLAS_BROWSER_EXECUTABLE` to select a Chromium-family executable when the
+Use `OCEAN_BROWSER_EXECUTABLE` (older `ATLAS_BROWSER_EXECUTABLE` still read) to select a Chromium-family executable when the
 automatic paths are insufficient. The default unit suite uses the fake provider:
 
 ```text
@@ -75,7 +75,7 @@ Run the real Playwright integration check explicitly when a local browser is
 available:
 
 ```text
-ATLAS_BROWSER_INTEGRATION=1 pnpm test
+OCEAN_BROWSER_INTEGRATION=1 pnpm test
 ```
 
 The integration test is opt-in and does not run in CI by default.

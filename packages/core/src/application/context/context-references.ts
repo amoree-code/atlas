@@ -139,7 +139,7 @@ export async function selectPacketReferences(
       }
       references.push({
         path: reference.sourcePath,
-        base: "atlas-root",
+        base: "ocean-root",
         recordType: reference.recordType,
         reason: reference.selectionReason,
         bytes: await sizeOf(canonicalPath),
