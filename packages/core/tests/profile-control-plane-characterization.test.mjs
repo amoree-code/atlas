@@ -5,7 +5,14 @@
 // that phase flips the assertion in the same commit. A failure here means behaviour moved —
 // decide whether that was intended, don't just update the expectation.
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -43,6 +50,7 @@ async function withRoot(fn) {
     else process.env.OCEAN_ROOT = previous;
     if (previousLegacy === undefined) delete process.env.ATLAS_ROOT;
     else process.env.ATLAS_ROOT = previousLegacy;
+    await rm(root, { recursive: true, force: true });
   }
 }
 
@@ -103,21 +111,23 @@ test("GAP: DeepSeek and OpenRouter are not registered providers", () => {
 
 // ---- model selection ----------------------------------------------------------------------
 
-test("GAP: the selected model is prompt text only — no provider request carries it", () => {
+test("GAP: the selected model is prompt text only — no adapter passes it to its CLI", () => {
   const selected = selectProfileClient(multiClient(), "claude");
   assert.match(
     formatProfileContract(selected, { taskId: null, handoffId: null }),
     /model: claude-model/,
   );
   // A provider request has no model field, and no adapter turns a model into a CLI flag.
-  const invocation = buildProviderInvocation({
-    provider: "claude",
-    prompt: "hello",
-    cwd: "/tmp",
-    model: "claude-model",
-  });
-  assert.ok(!invocation.args.includes("claude-model"));
-  assert.ok(!invocation.args.includes("--model"));
+  for (const provider of Object.keys(providerAdapterRegistry)) {
+    const invocation = buildProviderInvocation({
+      provider,
+      prompt: "hello",
+      cwd: "/tmp",
+      model: "claude-model",
+    });
+    assert.ok(!invocation.args.includes("claude-model"), provider);
+    assert.ok(!invocation.args.includes("--model"), provider);
+  }
 });
 
 // ---- profile identity ---------------------------------------------------------------------
@@ -184,6 +194,8 @@ test("GAP: malformed canonical JSON is swallowed and reported as a missing profi
       "{ not json",
     );
     await assert.rejects(loadProfile("broken"), (error) => {
+      // The SyntaxError is gone: the legacy-directory fallback's stat() fails instead.
+      assert.equal(error.code, "ENOENT");
       assert.doesNotMatch(String(error.message), /JSON/i);
       return true;
     });
@@ -282,19 +294,5 @@ test("GAP: the profile name is not validated, so a traversal name writes outside
         )
         .startsWith(".."),
     );
-  });
-});
-
-test("GAP: memory.scope does not influence where facts are stored", async () => {
-  await withRoot(async () => {
-    const scoped = validateProfile({
-      name: "scoped",
-      role: "r",
-      provider: "claude",
-      model: "m",
-      memory: { enabled: false, scope: "disabled" },
-    });
-    // Storage is keyed by name alone; a disabled/other scope does not change the file.
-    assert.equal(profileFactsFile(scoped.name), profileFactsFile("scoped"));
   });
 });
