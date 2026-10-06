@@ -19,17 +19,17 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
     assert.deepEqual(
       listed.result.tools.map((tool) => tool.name),
       [
-        "atlas_status",
-        "atlas_doctor",
-        "atlas_profiles_list",
-        "atlas_tasks_list",
-        "atlas_task_get",
-        "atlas_handoffs_list",
-        "atlas_handoff_get",
-        "atlas_session_get",
-        "atlas_session_summary",
-        "atlas_session_events",
-        "atlas_session_promote",
+        "ocean_status",
+        "ocean_doctor",
+        "ocean_profiles_list",
+        "ocean_tasks_list",
+        "ocean_task_get",
+        "ocean_handoffs_list",
+        "ocean_handoff_get",
+        "ocean_session_get",
+        "ocean_session_summary",
+        "ocean_session_events",
+        "ocean_session_promote",
         "brain_search",
         "brain_read",
         "brain_neighbors",
@@ -39,9 +39,16 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
-      params: { name: "atlas_status", arguments: {} },
+      params: { name: "ocean_status", arguments: {} },
     });
     assert.match(status.result.content[0].text, /"name":"Ocean"/);
+    const legacy = await handleAtlasMcpRequest({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "atlas_status", arguments: {} },
+    });
+    assert.deepEqual(legacy.result, status.result);
   } finally {
     if (previous === undefined) delete process.env.ATLAS_ROOT;
     else process.env.ATLAS_ROOT = previous;
@@ -58,7 +65,7 @@ test("read-only session tools do not initialize a missing session database", asy
       id: 9,
       method: "tools/call",
       params: {
-        name: "atlas_session_get",
+        name: "ocean_session_get",
         arguments: { sessionId: "missing" },
       },
     });
@@ -120,13 +127,13 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
   });
   assert.deepEqual(
     listedPrompts.result.prompts.map((prompt) => prompt.name),
-    ["atlas_review_workspace", "atlas_review_task"],
+    ["ocean_review_workspace", "ocean_review_task"],
   );
   const prompt = await handleAtlasMcpRequest({
     jsonrpc: "2.0",
     id: 6,
     method: "prompts/get",
-    params: { name: "atlas_review_task", arguments: { task: "T-1" } },
+    params: { name: "ocean_review_task", arguments: { task: "T-1" } },
   });
   assert.match(prompt.result.messages[0].content.text, /T-1/);
 });
