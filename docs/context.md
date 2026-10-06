@@ -14,11 +14,11 @@ Non-empty sections are joined with a blank line, in this order:
 | Section | Content | Bound |
 |---|---|---|
 | `request` | the request text | — |
-| `profile` | `## Effective Ocean profile` as compact `key: value` lines; empty and default fields are omitted, `writePolicy` is always shown | — |
+| `profile` | `## Effective Atlas profile` as compact `key: value` lines; empty and default fields are omitted, `writePolicy` is always shown | — |
 | `instructions` | `profile.instructions` | — |
-| `skills` | `## Ocean skills`: one line per profile skill, `- name: description (path to SKILL.md)`; bodies are not inlined. Owner-reviewed promoted skills matched by the request follow inline, since they have no SKILL.md | description 300 B; promoted skills 4 KB total, a truncated one ends with a marker naming its entry id, `ocean skill list` and the candidate store file (not granted: it also holds unreviewed candidates) |
+| `skills` | `## Atlas skills`: one line per profile skill, `- name: description (path to SKILL.md)`; bodies are not inlined. Owner-reviewed promoted skills matched by the request follow inline, since they have no SKILL.md | description 300 B; promoted skills 4 KB total, a truncated one ends with a marker naming its entry id, `ocean skill list` and the candidate store file (not granted: it also holds unreviewed candidates) |
 | `facts` | `## Durable profile facts`: newest first, then a pointer to the full set (`ocean memory facts <profile>` and the store file) | 2 KB including the pointer |
-| `handoff` | `## Ocean handoff` with the compact handoff context, verbatim | handoff budget |
+| `handoff` | `## Atlas handoff` with the compact handoff context, verbatim | handoff budget |
 | `context` | `## Context references`: `- path (recordType, bytes B): reason` per reference | 4 KB; overflow is listed in the manifest |
 
 ## How references are chosen
