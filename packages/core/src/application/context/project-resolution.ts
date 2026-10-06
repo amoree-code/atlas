@@ -20,7 +20,7 @@ export type ProjectResolution =
       projectId: string;
       name: string;
       path: string;
-      matchedOn: "git-root" | "cwd" | "path" | "atlas-root";
+      matchedOn: "git-root" | "cwd" | "path" | "ocean-root";
       confidence: "high";
     }
   | {
@@ -164,7 +164,7 @@ export async function resolveProject(cwd: string): Promise<ProjectResolution> {
       projectId: "atlas",
       name: "Atlas",
       path: root,
-      matchedOn: "atlas-root",
+      matchedOn: "ocean-root",
       confidence: "high",
     };
   }

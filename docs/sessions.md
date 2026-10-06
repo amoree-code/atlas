@@ -106,9 +106,11 @@ each provider stdout event (bounded to 64,000 characters), `process_exit`, and `
 failure. `listEvents(sessionId)` returns the full ordered log for a session.
 
 Every governed session also records a `session_entry_contract` event. It declares
-the entry point (`atlas-run`, `terminal-shim`, `interactive-managed`, or
+the entry point (`ocean-run`, `terminal-shim`, `interactive-managed`, or
 `desktop-wrapper`), control level, input-capture boundary, context transport,
-policy enforcement, promotion rule, and resume capability. The contract prevents
+policy enforcement, promotion rule, and resume capability. Events stored with the older
+`atlas-run` entry point are still accepted for one release. The shim bootstrap manifest is
+recorded as an `ocean_bootstrap` event (older sessions carry `atlas_bootstrap`; both are read). The contract prevents
 a successful command resolution from being misreported as full Ocean governance.
 
 Successful and unsuccessful provider exits also append a bounded `evidence` event. Evidence

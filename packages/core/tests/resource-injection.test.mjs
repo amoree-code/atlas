@@ -31,7 +31,7 @@ test("bound project bootstrap stays within the 256-byte budget and carries no At
     projectId: "atlas",
     name: "Atlas",
     path: "/x",
-    matchedOn: "atlas-root",
+    matchedOn: "ocean-root",
     confidence: "high",
   });
   assert.ok(

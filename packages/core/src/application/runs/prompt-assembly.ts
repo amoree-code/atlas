@@ -88,7 +88,7 @@ export function formatProfileContract(
     lines.push(`memoryScope: ${collapse(profile.memory.scope)}`);
   if (run.taskId) lines.push(`taskId: ${collapse(run.taskId)}`);
   if (run.handoffId) lines.push(`handoffId: ${collapse(run.handoffId)}`);
-  return `## Effective Atlas profile\n${lines.join("\n")}`;
+  return `## Effective Ocean profile\n${lines.join("\n")}`;
 }
 
 // One line per skill: name, one-line description, and the SKILL.md path the provider reads
@@ -99,7 +99,7 @@ export function formatSkillIndex(entries: SkillIndexEntry[]): string {
     (entry) =>
       `- ${entry.name}: ${truncateUtf8(entry.description.replace(/\s+/g, " ").trim(), SKILL_DESCRIPTION_MAX_BYTES)} (${entry.path})`,
   );
-  return `## Atlas skills\nSkill bodies are not inlined; read a skill's SKILL.md at the path shown before applying it.\n${lines.join("\n")}`;
+  return `## Ocean skills\nSkill bodies are not inlined; read a skill's SKILL.md at the path shown before applying it.\n${lines.join("\n")}`;
 }
 
 // Promoted skills have no SKILL.md, so their (budget-bounded) text stays inline.

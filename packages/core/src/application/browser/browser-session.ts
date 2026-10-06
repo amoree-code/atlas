@@ -134,7 +134,7 @@ export class BrowserSessionManager {
       "session_entry_contract",
       JSON.stringify(
         validateSessionEntryContract({
-          entryPoint: "atlas-run",
+          entryPoint: "ocean-run",
           controlLevel: "full-head",
           inputCapture: "semantic",
           contextTransport: "browser-capability-contract",
