@@ -1,40 +1,40 @@
 # Browser capability
 
-Atlas exposes a provider-neutral browser capability through the `atlas browser` CLI.
+Ocean exposes a provider-neutral browser capability through the `ocean browser` CLI.
 The implementation uses `playwright-core` with an already-installed Chromium-family
-browser. Atlas never downloads a browser binary during install or build.
+browser. Ocean never downloads a browser binary during install or build.
 
 ## Lifecycle
 
 ```text
-atlas browser detect
-atlas browser open --profile default
-atlas browser show <session-id>
-atlas browser events <session-id>
-atlas browser close <session-id>
+ocean browser detect
+ocean browser open --profile default
+ocean browser show <session-id>
+ocean browser events <session-id>
+ocean browser close <session-id>
 ```
 
 `open` launches a headless browser on loopback CDP, persists the browser metadata in
-the private `kernel/bridge/sessions/sessions.sqlite`, and returns an Atlas session id. Every
+the private `kernel/bridge/sessions/sessions.sqlite`, and returns an Ocean session id. Every
 later operation reconnects to that session. Browser profiles and downloads stay under
 the private workspace `system/browser/` directory.
 
 ## Operations
 
 ```text
-atlas browser navigate <session-id> <url> [--approve]
-atlas browser read <session-id>
-atlas browser observe <session-id>
-atlas browser extract <session-id> <selector> [--attribute <name>]
-atlas browser click <session-id> <selector> --expect navigates|stays|count:<selector>:<number>
-atlas browser type <session-id> <selector> <text> [--no-clear]
-atlas browser select <session-id> <selector> <value>
-atlas browser scroll <session-id> [delta-y]
-atlas browser wait <session-id> [--selector <selector>] [--url-contains <text>]
-atlas browser upload <session-id> <selector> <path>... --approve
-atlas browser download <session-id> <selector> [--destination <directory>] --approve
-atlas browser submit <session-id> <selector> --approve
-atlas browser run <session-id> <task-file> [--approve]
+ocean browser navigate <session-id> <url> [--approve]
+ocean browser read <session-id>
+ocean browser observe <session-id>
+ocean browser extract <session-id> <selector> [--attribute <name>]
+ocean browser click <session-id> <selector> --expect navigates|stays|count:<selector>:<number>
+ocean browser type <session-id> <selector> <text> [--no-clear]
+ocean browser select <session-id> <selector> <value>
+ocean browser scroll <session-id> [delta-y]
+ocean browser wait <session-id> [--selector <selector>] [--url-contains <text>]
+ocean browser upload <session-id> <selector> <path>... --approve
+ocean browser download <session-id> <selector> [--destination <directory>] --approve
+ocean browser submit <session-id> <selector> --approve
+ocean browser run <session-id> <task-file> [--approve]
 ```
 
 Cross-origin navigation and upload/download/submit require explicit `--approve`.

@@ -1,18 +1,18 @@
-# Atlas operating model
+# Ocean operating model
 
-Atlas is the canonical local source of truth for project, task, memory, knowledge,
+Ocean is the canonical local source of truth for project, task, memory, knowledge,
 decision, session, and evidence state. Provider clients are entry points and execution
 hands; they are not alternate storage owners.
 
 ## Ownership
 
-The Atlas root owns the durable state under `personal/`, `projects/`, and `system/`.
+The Ocean root owns the durable state under `personal/`, `projects/`, and `system/`.
 The public `engine/` package contains code, tests, and templates only. Private records
 must never be written into the engine package or provider-owned memory files. The
 unrelated `second-brain` workspace is outside this boundary and is never read, written,
 or integrated.
 
-Provider authentication remains provider-owned. Atlas does not broker credentials,
+Provider authentication remains provider-owned. Ocean does not broker credentials,
 copy them into prompts, persist them in sessions, or write them to logs. Provider
 commands receive only the credentials already managed by their installed client.
 
@@ -37,7 +37,7 @@ result limits, byte limits, path safety, freshness, and provenance.
 ## Ambiguous binding
 
 Project resolution returns `bound`, `unbound`, or `ambiguous` with confidence. An
-unbound or ambiguous result produces one focused confirmation question. Atlas never
+unbound or ambiguous result produces one focused confirmation question. Ocean never
 scans broadly or chooses the first matching project. A missing path, git root, project
 name, or binding remains unresolved until the user supplies the missing target.
 
@@ -54,19 +54,19 @@ Corrections are additive evidence. A correction writes a new record with an expl
 ## CLI and MCP
 
 Simple deterministic reads use the local CLI/application operation path and do not
-require an MCP round trip. `atlas operate <request>` classifies the request and executes
+require an MCP round trip. `ocean operate <request>` classifies the request and executes
 only the mapped bounded operation. Writes remain refused unless the caller supplies the
 existing explicit approval contract.
 
 MCP is optional. It is an adapter and discovery surface, not the storage layer, source
 of truth, or approval authority. A client bypassing the registered hook, shim, or
-adapter may operate outside Atlas; Atlas reports the boundary when it can detect it and
+adapter may operate outside Ocean; Ocean reports the boundary when it can detect it and
 does not claim universal enforcement.
 
 ## Verification status
 
 Claude, Codex, and Gemini have verified headless invocation paths on the development
-machine. Claude has a registered Atlas `SessionStart` hook; direct hook execution and
+machine. Claude has a registered Ocean `SessionStart` hook; direct hook execution and
 configuration registration are proven, while invocation and application by a newly
 opened live Claude session require a fresh-session check. Providers without a verified
 headless contract remain explicitly unsupported or shim-fallback; executable discovery

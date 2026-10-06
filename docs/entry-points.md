@@ -1,19 +1,19 @@
-# Atlas entry-point contract
+# Ocean entry-point contract
 
-Atlas has one full-head execution path and several compatibility boundaries. The
+Ocean has one full-head execution path and several compatibility boundaries. The
 entry point is part of the session evidence; command resolution alone is not proof
 of full governance.
 
 ## Entry points
 
-### `atlas run`
+### `ocean run`
 
-This is the canonical `full-head` path. Atlas owns the profile, bounded context,
+This is the canonical `full-head` path. Ocean owns the profile, bounded context,
 skills, policy, approval contract, session, provider adapter, output events,
 evidence, and explicit capture/promotion boundary.
 
 ```text
-atlas run
+ocean run
   -> profile and policy
   -> bounded context and provider adapter
   -> provider process
@@ -23,7 +23,7 @@ atlas run
 
 ### Terminal shim
 
-`atlas setup` installs shims for the registered provider commands. A direct
+`ocean setup` installs shims for the registered provider commands. A direct
 `claude`, `codex`, `gemini`, `agy`, `hermes`, `kilo`, or `kimi` command enters
 `terminal-shim` with `observed` control.
 
@@ -35,11 +35,11 @@ conversation capture for raw terminal bytes.
 Inspect the boundary with:
 
 ```bash
-atlas client status
-atlas client doctor
-atlas client doctor /absolute/path/to/native/provider
-atlas session show <session-id>
-atlas session events <session-id>
+ocean client status
+ocean client doctor
+ocean client doctor /absolute/path/to/native/provider
+ocean session show <session-id>
+ocean session events <session-id>
 ```
 
 ### Managed interactive session
@@ -52,8 +52,8 @@ complete merely because a PTY starts successfully.
 Start the managed boundary explicitly with:
 
 ```bash
-atlas client open hermes
-atlas client open claude
+ocean client open hermes
+ocean client open claude
 ```
 
 The command owns the PTY and records a `managed-partial` entry contract. The
@@ -71,17 +71,17 @@ or skills.
 
 Desktop clients may launch a provider by absolute path and bypass `PATH`. A
 desktop integration is governed only when its supported wrapper setting points to
-an Atlas shim and a real process inspection verifies the result. Otherwise the
+an Ocean shim and a real process inspection verifies the result. Otherwise the
 session is `bypass` or `not proven`.
 
-Passing an observed native path to `atlas client doctor` reports the bypass
+Passing an observed native path to `ocean client doctor` reports the bypass
 explicitly; it does not rewrite client configuration or credentials.
 
 ## Session contract
 
 Each governed provider session records a `session_entry_contract` event containing:
 
-- `entryPoint`: `atlas-run`, `terminal-shim`, `interactive-managed`, or `desktop-wrapper`.
+- `entryPoint`: `ocean-run`, `terminal-shim`, `interactive-managed`, or `desktop-wrapper`.
 - `controlLevel`: `full-head`, `managed-partial`, `observed`, or `bypass`.
 - `inputCapture`: `semantic`, `bounded-terminal`, or `none`.
 - `contextTransport`: the provider-native or environment transport actually used.
@@ -91,7 +91,7 @@ Each governed provider session records a `session_entry_contract` event containi
 
 ## Data ownership
 
-Runtime sessions and bounded events live in the private Atlas session store.
+Runtime sessions and bounded events live in the private Ocean session store.
 Provider credentials remain provider-owned. Session summaries are not knowledge.
 Captures, knowledge, projects, tasks, Obsidian notes, browser actions, and
 schedules require their own explicit operation and approval boundary.
@@ -101,4 +101,4 @@ schedules require their own explicit operation and approval boundary.
 - `PROVEN`: the exact entry path and behavior were exercised and evidence persisted.
 - `NOT PROVEN`: the path exists but the required real behavior was not exercised.
 - `BLOCKED BY CLIENT LIMITATION`: the provider account, model, subscription, or native client blocked proof.
-- `BYPASS`: the process was launched outside the managed Atlas boundary.
+- `BYPASS`: the process was launched outside the managed Ocean boundary.

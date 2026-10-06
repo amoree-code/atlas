@@ -1,6 +1,6 @@
 # Sessions
 
-Every `atlas run` or `atlas session resume` creates or continues a session record: what
+Every `ocean run` or `ocean session resume` creates or continues a session record: what
 was run, for which profile, its provider-side session id, its status, and its event log.
 Sessions are persisted in SQLite so they survive process restarts and can be listed,
 inspected, or resumed later.
@@ -22,7 +22,7 @@ if absent:
 
 - `handoffs` — compact provider-neutral task continuity records linked to tasks and sessions.
 - `ideas` — explicit raw idea records; ordinary conversation is not written here.
-- `capture_items` — reviewable references to explicit `user_input` events. Use `atlas capture` to list,
+- `capture_items` — reviewable references to explicit `user_input` events. Use `ocean capture` to list,
   promote, or discard candidates; provider completion does not sync them into the inbox view.
 
 Completed proven sessions may also produce bounded observations in
@@ -31,8 +31,8 @@ profiles, signal types, confidence, and evidence references. They are not skills
 and normal runs never promote them automatically. Review with:
 
 ```bash
-atlas skill observe [session-id]
-atlas skill observation-review <observation-id> discarded
+ocean skill observe [session-id]
+ocean skill observation-review <observation-id> discarded
 ```
 
 `openSessionStore()` ensures the `kernel/bridge/sessions/` directory exists and returns a `SessionStore`;
@@ -106,10 +106,10 @@ each provider stdout event (bounded to 64,000 characters), `process_exit`, and `
 failure. `listEvents(sessionId)` returns the full ordered log for a session.
 
 Every governed session also records a `session_entry_contract` event. It declares
-the entry point (`atlas-run`, `terminal-shim`, `interactive-managed`, or
+the entry point (`ocean-run`, `terminal-shim`, `interactive-managed`, or
 `desktop-wrapper`), control level, input-capture boundary, context transport,
 policy enforcement, promotion rule, and resume capability. The contract prevents
-a successful command resolution from being misreported as full Atlas governance.
+a successful command resolution from being misreported as full Ocean governance.
 
 Successful and unsuccessful provider exits also append a bounded `evidence` event. Evidence
 records include a source, timestamp, result (`proven`, `not_proven`, or `limitation`), an
@@ -129,16 +129,16 @@ secrets, private home paths, prompts, and provider documents are redacted or exc
 ## Cross-client handoff
 
 ```bash
-atlas handoff create --task T-193 --session <session-id> --next "Run verification"
-atlas handoff context <handoff-id>
-atlas handoff list --task T-193
-atlas run --profile reviewer --client codex --task T-193 --handoff <handoff-id> --prompt "Continue"
-atlas client open hermes --task T-193 --handoff <handoff-id>
+ocean handoff create --task T-193 --session <session-id> --next "Run verification"
+ocean handoff context <handoff-id>
+ocean handoff list --task T-193
+ocean run --profile reviewer --client codex --task T-193 --handoff <handoff-id> --prompt "Continue"
+ocean client open hermes --task T-193 --handoff <handoff-id>
 ```
 
 The handoff contains compact task metadata, decisions, changed files, verification, limitations,
 permissions, context manifest, profile identity, and one next action. It never copies the source
 provider transcript or credentials. MCP exposes the same bounded retrieval path.
 
-`atlas idea save` is the explicit raw-idea path; it does not create an inbox file. `atlas daily
+`ocean idea save` is the explicit raw-idea path; it does not create an inbox file. `ocean daily
 start` previews one dated brief and `--apply` writes it only when that day's file is empty.
