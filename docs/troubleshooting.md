@@ -1,6 +1,6 @@
 # Troubleshooting
 
-## `ocean run` prints "Usage: ocean run --profile <name> --prompt <text>"
+## `ocean run` prints `Usage: ocean run --profile <name> [--client <client>] [--task <id>] [--handoff <id>] --prompt <text>`
 
 Both `--profile` and `--prompt` are required. `--prompt` consumes every argument after it
 as the prompt text (`src/main.ts`), so pass it last.

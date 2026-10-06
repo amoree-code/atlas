@@ -27,6 +27,9 @@ pnpm build
 node packages/core/dist/main.js setup
 ```
 
+Setup from a checkout installs the command as `atlas`, the older name; it accepts every
+`ocean` command shown in these docs.
+
 Connect an Obsidian vault during setup, or connect it later:
 
 ```bash
@@ -199,7 +202,7 @@ flowchart LR
     C --> D[verification]
     D --> E[session-handoff]
     C -.observation.-> F["ocean skill learn"]
-    F --> G["ocean skill review --promoted"]
+    F --> G["ocean skill review &lt;id&gt; promoted"]
     G -->|activates| H[New skill candidate]
 ```
 
