@@ -1,5 +1,8 @@
+import { existsSync, mkdirSync, renameSync } from "node:fs";
 import { readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
+import { LEGACY_REGISTRY_DIR, oceanPath, REGISTRY_DIR } from "./paths.js";
 
 // Small filesystem/parsing helpers shared across layers, kept alongside paths.ts rather than
 // under any single layer since both application and infrastructure code use them directly.
@@ -89,4 +92,17 @@ export async function readFrontmatterFile(
   } catch {
     return null;
   }
+}
+
+// Registry files moved out of control-plane/; each one is carried over the first time anything
+// touches it, so no command can create an empty registry that strands the old one.
+export function registryFile(name: string): string {
+  const current = oceanPath(REGISTRY_DIR, name);
+  if (existsSync(current)) return current;
+  const legacy = oceanPath(LEGACY_REGISTRY_DIR, name);
+  if (existsSync(legacy)) {
+    mkdirSync(path.dirname(current), { recursive: true });
+    renameSync(legacy, current);
+  }
+  return current;
 }

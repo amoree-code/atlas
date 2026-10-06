@@ -2,7 +2,8 @@ import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ProviderRecord } from "../../domain/providers/provider.js";
-import { oceanEnv, oceanPath, REGISTRY_DIR, SYSTEM_DIR } from "../../paths.js";
+import { registryFile } from "../../fs-utils.js";
+import { oceanEnv, oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 export type { ProviderRecord } from "../../domain/providers/provider.js";
 
@@ -14,8 +15,7 @@ const builtInProviders: ProviderRecord[] = [
   { id: "hermes", command: "hermes", interactive: true, headless: true },
 ];
 
-const providerRegistryPath = (): string =>
-  oceanPath(REGISTRY_DIR, "providers.json");
+const providerRegistryPath = (): string => registryFile("providers.json");
 
 export function builtInProviderRecords(): ProviderRecord[] {
   return builtInProviders.map((provider) => ({ ...provider }));

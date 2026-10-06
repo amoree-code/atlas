@@ -1,15 +1,8 @@
-import {
-  access,
-  chmod,
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { connectObsidianVault } from "../../application/obsidian/vault-discovery.js";
+import { registryFile } from "../../fs-utils.js";
 import {
   installShellIntegration,
   syncProviderWrappers,
@@ -19,7 +12,6 @@ import {
   enginePath,
   INBOX_DIR,
   KNOWLEDGE_DIR,
-  LEGACY_REGISTRY_DIR,
   oceanPath,
   oceanRoot,
   PERSONAL_DIR,
@@ -36,6 +28,12 @@ const personalDirectories = [
   INBOX_DIR,
   TEMPLATES_DIR,
   `${PROJECTS_DIR}/atlas/tasks`,
+];
+
+const REGISTRY_FILES = [
+  "providers.json",
+  "installations.json",
+  "project-bindings.json",
 ];
 
 const stateDirectories = [
@@ -124,29 +122,13 @@ export type SetupOptions = {
   obsidianMode?: "read-only" | "read-write";
 };
 
-async function exists(file: string): Promise<boolean> {
-  try {
-    await access(file);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function migrateLegacyRegistry(): Promise<void> {
-  const legacy = oceanPath(LEGACY_REGISTRY_DIR);
-  const current = oceanPath(REGISTRY_DIR);
-  if ((await exists(legacy)) && !(await exists(current)))
-    await rename(legacy, current);
-}
-
 export async function setup(options: SetupOptions = {}): Promise<void> {
   await Promise.all(
     personalDirectories.map((directory) =>
       mkdir(oceanPath(directory), { recursive: true }),
     ),
   );
-  await migrateLegacyRegistry();
+  for (const file of REGISTRY_FILES) registryFile(file);
   await Promise.all(
     stateDirectories.map((directory) =>
       mkdir(oceanPath(directory), { recursive: true }),
