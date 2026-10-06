@@ -3,6 +3,7 @@ import { access, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
 import { handleAtlasMcpRequest } from "../dist/infrastructure/mcp/atlas-server.js";
 import { SYSTEM_DIR } from "../dist/paths.js";
 
@@ -19,17 +20,17 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
     assert.deepEqual(
       listed.result.tools.map((tool) => tool.name),
       [
-        "atlas_status",
-        "atlas_doctor",
-        "atlas_profiles_list",
-        "atlas_tasks_list",
-        "atlas_task_get",
-        "atlas_handoffs_list",
-        "atlas_handoff_get",
-        "atlas_session_get",
-        "atlas_session_summary",
-        "atlas_session_events",
-        "atlas_session_promote",
+        "ocean_status",
+        "ocean_doctor",
+        "ocean_profiles_list",
+        "ocean_tasks_list",
+        "ocean_task_get",
+        "ocean_handoffs_list",
+        "ocean_handoff_get",
+        "ocean_session_get",
+        "ocean_session_summary",
+        "ocean_session_events",
+        "ocean_session_promote",
         "brain_search",
         "brain_read",
         "brain_neighbors",
@@ -39,9 +40,16 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
-      params: { name: "atlas_status", arguments: {} },
+      params: { name: "ocean_status", arguments: {} },
     });
     assert.match(status.result.content[0].text, /"name":"Ocean"/);
+    const legacy = await handleAtlasMcpRequest({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "atlas_status", arguments: {} },
+    });
+    assert.deepEqual(legacy.result, status.result);
   } finally {
     if (previous === undefined) delete process.env.ATLAS_ROOT;
     else process.env.ATLAS_ROOT = previous;
@@ -58,7 +66,7 @@ test("read-only session tools do not initialize a missing session database", asy
       id: 9,
       method: "tools/call",
       params: {
-        name: "atlas_session_get",
+        name: "ocean_session_get",
         arguments: { sessionId: "missing" },
       },
     });
@@ -120,13 +128,61 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
   });
   assert.deepEqual(
     listedPrompts.result.prompts.map((prompt) => prompt.name),
-    ["atlas_review_workspace", "atlas_review_task"],
+    ["ocean_review_workspace", "ocean_review_task"],
   );
   const prompt = await handleAtlasMcpRequest({
     jsonrpc: "2.0",
     id: 6,
     method: "prompts/get",
-    params: { name: "atlas_review_task", arguments: { task: "T-1" } },
+    params: { name: "ocean_review_task", arguments: { task: "T-1" } },
   });
   assert.match(prompt.result.messages[0].content.text, /T-1/);
+});
+
+test("legacy atlas_* names still work on prompts/get and keep approvals bound to the sent name", async () => {
+  const legacyPrompt = await handleAtlasMcpRequest({
+    jsonrpc: "2.0",
+    id: 20,
+    method: "prompts/get",
+    params: { name: "atlas_review_task", arguments: { task: "T-1" } },
+  });
+  assert.match(legacyPrompt.result.messages[0].content.text, /T-1/);
+
+  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-legacy-"));
+  const previous = process.env.ATLAS_ROOT;
+  process.env.ATLAS_ROOT = root;
+  try {
+    const actionArgs = { sessionId: "missing", target: "knowledge/results" };
+    const promote = (name, fingerprint) =>
+      handleAtlasMcpRequest({
+        jsonrpc: "2.0",
+        id: 21,
+        method: "tools/call",
+        params: {
+          name,
+          arguments: {
+            sessionId: "missing",
+            approval: { approved: true, fingerprint },
+          },
+        },
+      });
+    const mismatch = /approval does not match/;
+    for (const [sent, fingerprinted] of [
+      ["atlas_session_promote", "atlas_session_promote"],
+      ["atlas_session_promote", "ocean_session_promote"],
+      ["ocean_session_promote", "ocean_session_promote"],
+    ]) {
+      const response = await promote(
+        sent,
+        actionFingerprint(fingerprinted, actionArgs),
+      );
+      assert.ok(response.error, "promotion of a missing session must fail");
+      assert.doesNotMatch(response.error.message, mismatch);
+    }
+    const wrong = await promote("atlas_session_promote", "0".repeat(64));
+    assert.match(wrong.error.message, mismatch);
+  } finally {
+    if (previous === undefined) delete process.env.ATLAS_ROOT;
+    else process.env.ATLAS_ROOT = previous;
+  }
 });

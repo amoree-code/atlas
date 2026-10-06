@@ -43,7 +43,7 @@ type Response = {
 
 const tools = [
   {
-    name: "atlas_status",
+    name: "ocean_status",
     description: "Return the Ocean runtime and workspace status.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -53,7 +53,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_doctor",
+    name: "ocean_doctor",
     description: "Run the read-only Ocean workspace health checks.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -63,7 +63,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_profiles_list",
+    name: "ocean_profiles_list",
     description: "List available Ocean profiles.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -73,7 +73,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_tasks_list",
+    name: "ocean_tasks_list",
     description: "List Ocean tasks, optionally filtered by state.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -83,7 +83,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_task_get",
+    name: "ocean_task_get",
     description: "Read one bounded Ocean task record.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -94,7 +94,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_handoffs_list",
+    name: "ocean_handoffs_list",
     description: "List compact cross-client session handoffs.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -104,7 +104,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_handoff_get",
+    name: "ocean_handoff_get",
     description: "Read one bounded cross-client session handoff.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -118,7 +118,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_session_get",
+    name: "ocean_session_get",
     description: "Read one session metadata record without its transcript.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -129,7 +129,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_session_summary",
+    name: "ocean_session_summary",
     description: "Read one bounded human-readable session summary.",
     annotations: { readOnlyHint: true },
     inputSchema: {
@@ -143,7 +143,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_session_events",
+    name: "ocean_session_events",
     description:
       "Read one bounded session event log explicitly requested by id.",
     annotations: { readOnlyHint: true },
@@ -158,7 +158,7 @@ const tools = [
     },
   },
   {
-    name: "atlas_session_promote",
+    name: "ocean_session_promote",
     description:
       "Promote a completed session result into reviewed Ocean knowledge.",
     annotations: { readOnlyHint: false },
@@ -246,13 +246,13 @@ const resources = [
 
 const prompts = [
   {
-    name: "atlas_review_workspace",
+    name: "ocean_review_workspace",
     description:
       "Review Ocean workspace health and summarize actionable findings.",
     arguments: [],
   },
   {
-    name: "atlas_review_task",
+    name: "ocean_review_task",
     description: "Review one Ocean task and identify its next verified action.",
     arguments: [
       { name: "task", description: "Task identifier", required: true },
@@ -284,41 +284,50 @@ async function profiles(): Promise<string[]> {
   }
 }
 
+// Tool and prompt names were `atlas_*` before the rename. They are no longer
+// advertised, but callers that hard-code them still work for one release.
+function currentName(name: string): string {
+  return name.startsWith("atlas_")
+    ? `ocean_${name.slice("atlas_".length)}`
+    : name;
+}
+
 async function callTool(
-  name: string,
+  requested: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  if (name === "atlas_status")
+  const name = currentName(requested);
+  if (name === "ocean_status")
     return {
       name: "Ocean",
       version: "0.3.6",
       workspace: oceanPath(),
       mcp: "stdio",
     };
-  if (name === "atlas_doctor") {
+  if (name === "ocean_doctor") {
     const report = await workspaceReport(defaultWrapperManager);
     return {
       healthy: !hasFailures(report.findings),
       findings: report.findings,
     };
   }
-  if (name === "atlas_profiles_list") return { profiles: await profiles() };
-  if (name === "atlas_tasks_list")
+  if (name === "ocean_profiles_list") return { profiles: await profiles() };
+  if (name === "ocean_tasks_list")
     return {
       tasks: await listTasks(
         typeof args.state === "string" ? args.state : undefined,
       ),
     };
-  if (name === "atlas_task_get")
+  if (name === "ocean_task_get")
     return await getTask(requiredArgument(args, "taskId"));
-  if (name === "atlas_handoffs_list")
+  if (name === "ocean_handoffs_list")
     return {
       handoffs: await listHandoffs(
         defaultSessionStoreFactory,
         typeof args.taskId === "string" ? args.taskId : undefined,
       ),
     };
-  if (name === "atlas_handoff_get")
+  if (name === "ocean_handoff_get")
     return await getHandoff(
       requiredArgument(args, "handoffId"),
       defaultSessionStoreFactory,
@@ -326,7 +335,7 @@ async function callTool(
         ? Math.min(16_000, Math.max(512, args.maxBytes))
         : 8_000,
     );
-  if (name === "atlas_session_get") {
+  if (name === "ocean_session_get") {
     const store = await openSessionStoreReadOnly();
     try {
       const session = store.get(requiredArgument(args, "sessionId"));
@@ -336,7 +345,7 @@ async function callTool(
       store.close();
     }
   }
-  if (name === "atlas_session_summary") {
+  if (name === "ocean_session_summary") {
     const store = await openSessionStoreReadOnly();
     try {
       const session = store.get(requiredArgument(args, "sessionId"));
@@ -362,7 +371,7 @@ async function callTool(
       store.close();
     }
   }
-  if (name === "atlas_session_events") {
+  if (name === "ocean_session_events") {
     const store = await openSessionStoreReadOnly();
     try {
       const events = store.listEvents(requiredArgument(args, "sessionId"));
@@ -375,14 +384,19 @@ async function callTool(
       store.close();
     }
   }
-  if (name === "atlas_session_promote") {
+  if (name === "ocean_session_promote") {
     const approval = mcpApprovalSchema.parse(args.approval);
     const actionArgs = {
       sessionId: args.sessionId,
       target:
         typeof args.target === "string" ? args.target : "knowledge/results",
     };
-    if (approval.fingerprint !== actionFingerprint(name, actionArgs))
+    // An approval is bound to the name the caller fingerprinted, which for a
+    // legacy caller is the `atlas_*` name it actually sent.
+    if (
+      approval.fingerprint !== actionFingerprint(name, actionArgs) &&
+      approval.fingerprint !== actionFingerprint(requested, actionArgs)
+    )
       throw new Error(
         "Session promotion approval does not match the requested action",
       );
@@ -474,10 +488,11 @@ function requiredArgument(args: Record<string, unknown>, key: string): string {
 }
 
 async function getPrompt(
-  name: string,
+  requested: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  if (name === "atlas_review_workspace")
+  const name = currentName(requested);
+  if (name === "ocean_review_workspace")
     return {
       description: "Ocean workspace review",
       messages: [
@@ -485,12 +500,12 @@ async function getPrompt(
           role: "user",
           content: {
             type: "text",
-            text: "Run atlas_doctor and summarize only actionable findings. Do not change files.",
+            text: "Run ocean_doctor and summarize only actionable findings. Do not change files.",
           },
         },
       ],
     };
-  if (name === "atlas_review_task") {
+  if (name === "ocean_review_task") {
     const task = requiredArgument(args, "task");
     return {
       description: `Review ${task}`,
@@ -579,7 +594,10 @@ export async function handleAtlasMcpRequest(
       },
     };
   const name = request.params?.name;
-  if (typeof name !== "string" || !tools.some((tool) => tool.name === name))
+  if (
+    typeof name !== "string" ||
+    !tools.some((tool) => tool.name === currentName(name))
+  )
     return {
       jsonrpc: "2.0",
       id: request.id,
