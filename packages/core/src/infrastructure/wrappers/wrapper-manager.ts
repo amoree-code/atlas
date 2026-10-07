@@ -240,13 +240,17 @@ function withoutEol(line: string): string {
 function stripInterceptionBlocks(text: string): string {
   const lines = text.split(/(?<=\n)/);
   const kept: string[] = [];
+  // Once a name has no end marker after some position it has none after any later one, so
+  // repeated unterminated begin markers cost one scan, not one scan each.
+  const noEndFor = new Set<string>();
   for (let index = 0; index < lines.length; index += 1) {
     const begin = BLOCK_BEGIN.exec(withoutEol(lines[index]));
-    if (begin) {
+    if (begin && !noEndFor.has(begin[1])) {
       const end = `# <<< ${begin[1]} interception <<<`;
       const close = lines.findIndex(
         (line, at) => at > index && withoutEol(line) === end,
       );
+      if (close < 0) noEndFor.add(begin[1]);
       if (close >= 0) {
         if (kept.length && withoutEol(kept[kept.length - 1]).trim() === "")
           kept.pop();
