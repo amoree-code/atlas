@@ -11,12 +11,7 @@ import {
   type Handoff,
   validateHandoff,
 } from "../../domain/sessions/handoff.js";
-import {
-  engineRoot,
-  oceanPath,
-  PROJECTS_DIR,
-  resolveWithin,
-} from "../../paths.js";
+import { engineRoot, resolveWithin, workspaceTasksRoot } from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
 const maxContentBytes = 16_000;
@@ -159,9 +154,11 @@ export async function listHandoffs(
 }
 
 export async function getTask(id: string): Promise<Task> {
-  const tasksRoot = oceanPath(PROJECTS_DIR, "atlas", "tasks");
+  const tasksRoot = workspaceTasksRoot();
   const candidates = [
     resolveWithin(tasksRoot, id, "task.md"),
+    // Archived under "Ocean", or under the pre-rename "Atlas" namespace.
+    resolveWithin(tasksRoot, "archive", "Ocean", id, "task.md"),
     resolveWithin(tasksRoot, "archive", "Atlas", id, "task.md"),
   ];
   let file = "";

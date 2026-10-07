@@ -1,3 +1,4 @@
+import { sameProject } from "../../paths.js";
 export type TaskLinkCandidate = {
   id: string;
   projectId: string;
@@ -34,7 +35,10 @@ export function rankTaskCandidates(
   const scored = candidates.map((candidate) => {
     const reasons: string[] = [];
     let score = 0;
-    if (request.projectId && candidate.projectId === request.projectId) {
+    if (
+      request.projectId &&
+      sameProject(candidate.projectId, request.projectId)
+    ) {
       score += 100;
       reasons.push("project match");
     }

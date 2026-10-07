@@ -1,6 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { oceanPath, PROJECTS_DIR } from "../../paths.js";
+import {
+  oceanPath,
+  PROJECTS_DIR,
+  projectFolder,
+  WORKSPACE_PROJECT_ID,
+} from "../../paths.js";
 import { appendConflict, contentHash } from "./conflict-log.js";
 import type { ObsidianConnection } from "./vault-discovery.js";
 import type { ObsidianSyncResult } from "./vault-sync.js";
@@ -20,10 +25,17 @@ function isPromotionArea(file: string): boolean {
     file.startsWith(root),
   );
 }
-function isAtlasProject(file: string): boolean {
-  return (
-    file.startsWith("01-Projects/Atlas/") || file === "01-Projects/Atlas.md"
-  );
+// The workspace project's mirror in the vault: 01-Projects/Ocean(.md|/), or the pre-rename
+// 01-Projects/Atlas(.md|/) in a vault that has not been renamed.
+const PROJECT_MIRRORS = ["Ocean", "Atlas"] as const;
+
+function projectMirror(file: string): { relative: string } | null {
+  for (const name of PROJECT_MIRRORS) {
+    if (file === `01-Projects/${name}.md`) return { relative: "README.md" };
+    const prefix = `01-Projects/${name}/`;
+    if (file.startsWith(prefix)) return { relative: file.slice(prefix.length) };
+  }
+  return null;
 }
 
 async function readOptional(file: string): Promise<string | undefined> {
@@ -63,23 +75,24 @@ export async function ingestVaultChanges(
       output.promotionCandidates.push(relative);
       continue;
     }
-    if (!isAtlasProject(relative)) continue;
+    const mirror = projectMirror(relative);
+    if (!mirror) continue;
     const vaultContent = await readOptional(
       path.join(connection.vaultPath, relative),
     );
-    const atlasRelative =
-      relative === "01-Projects/Atlas.md"
-        ? "README.md"
-        : relative.slice("01-Projects/Atlas/".length);
-    const atlasFile = oceanPath(PROJECTS_DIR, "atlas", atlasRelative);
-    const atlasContent = await readOptional(atlasFile);
+    const oceanFile = oceanPath(
+      PROJECTS_DIR,
+      projectFolder(WORKSPACE_PROJECT_ID),
+      mirror.relative,
+    );
+    const oceanContent = await readOptional(oceanFile);
     const record = await appendConflict({
       path: relative,
       baselineSha256: baseline[relative]?.sha256 ?? null,
       vaultSha256: contentHash(vaultContent),
-      oceanSha256: contentHash(atlasContent),
+      oceanSha256: contentHash(oceanContent),
       vaultContent,
-      oceanContent: atlasContent,
+      oceanContent,
       source: "vault-ingestion",
     });
     output.conflicts.push(record);

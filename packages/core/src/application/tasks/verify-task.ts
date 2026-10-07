@@ -1,12 +1,7 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import {
-  oceanPath,
-  PROJECTS_DIR,
-  repoRoot,
-  resolveWithin,
-} from "../../paths.js";
+import { repoRoot, resolveWithin, workspaceTasksRoot } from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -132,7 +127,7 @@ function isAllowedCommand(command: string): boolean {
  */
 export async function verifyTask(
   id: string,
-  root = oceanPath(PROJECTS_DIR, "atlas", "tasks"),
+  root = workspaceTasksRoot(),
   options: { cwd?: string; run?: CommandRunner } = {},
 ): Promise<VerificationOutcome> {
   const taskFile = resolveWithin(root, id, "task.md");

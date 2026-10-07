@@ -22,6 +22,7 @@ import {
   PROJECTS_DIR,
   repoPath,
   SYSTEM_DIR,
+  workspaceTasksRoot,
 } from "../../paths.js";
 import {
   doctorMemoryIndexes,
@@ -241,7 +242,7 @@ async function checkWorkspaceContracts(): Promise<Finding[]> {
     [
       "TASK_RECORDS",
       "node",
-      ["scripts/validate-tasks.mjs", oceanPath(PROJECTS_DIR, "atlas", "tasks")],
+      ["scripts/validate-tasks.mjs", workspaceTasksRoot()],
       enginePath,
     ],
   ] as const;

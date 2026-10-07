@@ -28,8 +28,8 @@ async function withTempAtlasRoot(fn) {
 test("bound project bootstrap stays within the 256-byte budget and carries no Ocean file content", () => {
   const bootstrap = buildOceanBootstrap({
     status: "bound",
-    projectId: "atlas",
-    name: "Atlas",
+    projectId: "ocean",
+    name: "Ocean",
     path: "/x",
     matchedOn: "ocean-root",
     confidence: "high",
@@ -39,7 +39,7 @@ test("bound project bootstrap stays within the 256-byte budget and carries no Oc
     `${bootstrap.manifest.bytes} exceeds ${OCEAN_BOOTSTRAP_MAX_BYTES}`,
   );
   assert.equal(bootstrap.manifest.transport, "bootstrap-env");
-  assert.match(bootstrap.content, /project=atlas/);
+  assert.match(bootstrap.content, /project=ocean/);
   assert.doesNotMatch(bootstrap.content, /##\s*(?:Atlas|Ocean) resource/);
 });
 
@@ -80,11 +80,11 @@ test("resolveProject reports unbound for an arbitrary cwd with no binding and no
   });
 });
 
-test("resolveProject resolves a cwd inside the Atlas root itself to the atlas project", async () => {
+test("resolveProject resolves a cwd inside the Atlas root itself to the workspace project (ocean)", async () => {
   await withTempAtlasRoot(async (root) => {
     const resolution = await resolveProject(root);
     assert.equal(resolution.status, "bound");
-    assert.equal(resolution.projectId, "atlas");
+    assert.equal(resolution.projectId, "ocean");
     assert.equal(resolution.confidence, "high");
   });
 });

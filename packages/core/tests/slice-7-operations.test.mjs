@@ -726,7 +726,7 @@ test("project.detect reports the bound project without guessing", () =>
       { cwd: root },
     );
     assert.equal(result.ok, true);
-    assert.equal(result.records[0].identifier, "atlas");
+    assert.equal(result.records[0].identifier, "ocean");
     assert.equal(result.records[0].fields.status, "bound");
   }));
 

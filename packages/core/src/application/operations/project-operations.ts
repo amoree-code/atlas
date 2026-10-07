@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { oceanPath, PROJECTS_DIR } from "../../paths.js";
+import { oceanPath, PROJECTS_DIR, projectFolder } from "../../paths.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import {
   bindProject,
@@ -31,7 +31,9 @@ export async function projectDetect(
     provenance: "project",
     sourcePath:
       resolution.status === "bound"
-        ? relativeToOcean(oceanPath(PROJECTS_DIR, resolution.projectId))
+        ? relativeToOcean(
+            oceanPath(PROJECTS_DIR, projectFolder(resolution.projectId)),
+          )
         : "",
     freshness: "unknown",
     confidence: classification.confidence,
@@ -115,7 +117,10 @@ export async function projectUpdate(
       "write refused: an explicit absolute project path is required",
     );
   }
-  const target = validateWriteTarget(PROJECTS_DIR, project.projectId);
+  const target = validateWriteTarget(
+    PROJECTS_DIR,
+    projectFolder(project.projectId),
+  );
   if (!target.valid)
     return operationResult("project.update", `write refused: ${target.reason}`);
   const approvalCheck = approvalMatchesTarget(

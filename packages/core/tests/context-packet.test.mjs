@@ -199,7 +199,7 @@ test("explicit project path (cwd inside the Ocean root) resolves a bound active 
     const classification = classifyIntent("what project am I in");
     const packet = await buildContextPacket(classification, GOOD_BUDGET, root);
     assert.equal(packet.activeProject.status, "bound");
-    assert.equal(packet.activeProject.projectId, "atlas");
+    assert.equal(packet.activeProject.projectId, "ocean");
   }));
 
 // --- missing project ---

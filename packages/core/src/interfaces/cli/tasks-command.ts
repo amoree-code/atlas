@@ -13,7 +13,9 @@ import {
   enginePath,
   oceanPath,
   PROJECTS_DIR,
+  projectFolder,
   resolveWithin,
+  WORKSPACE_PROJECT_ID,
 } from "../../paths.js";
 
 const execFile = promisify(execFileCallback);
@@ -27,7 +29,8 @@ export async function runTasksCommand(
   args: string[],
 ): Promise<void> {
   const projectIndex = args.indexOf("--project");
-  const projectId = projectIndex >= 0 ? args[projectIndex + 1] : "atlas";
+  const projectId =
+    projectIndex >= 0 ? args[projectIndex + 1] : WORKSPACE_PROJECT_ID;
   if (!projectId) throw new Error("--project requires a project id");
   if (action === "list") {
     const state = args.find(
@@ -40,7 +43,11 @@ export async function runTasksCommand(
     try {
       const result = await execFile(process.execPath, [
         enginePath("scripts", "validate-tasks.mjs"),
-        resolveWithin(oceanPath(PROJECTS_DIR), projectId, "tasks"),
+        resolveWithin(
+          oceanPath(PROJECTS_DIR),
+          projectFolder(projectId),
+          "tasks",
+        ),
       ]);
       process.stdout.write(result.stdout);
     } catch (error) {
@@ -68,7 +75,7 @@ export async function runTasksCommand(
     ].join("\n");
     const target = resolveWithin(
       oceanPath(PROJECTS_DIR),
-      projectId,
+      projectFolder(projectId),
       "index.md",
     );
     if (args.includes("--write")) {
@@ -87,7 +94,7 @@ export async function runTasksCommand(
       );
     const result = await checkpointTask(
       id,
-      resolveWithin(oceanPath(PROJECTS_DIR), projectId, "tasks"),
+      resolveWithin(oceanPath(PROJECTS_DIR), projectFolder(projectId), "tasks"),
       {
         note: args[noteIndex + 1],
         next: nextIndex >= 0 ? args[nextIndex + 1] : undefined,
@@ -105,7 +112,7 @@ export async function runTasksCommand(
     }
     const outcome = await verifyTask(
       id,
-      resolveWithin(oceanPath(PROJECTS_DIR), projectId, "tasks"),
+      resolveWithin(oceanPath(PROJECTS_DIR), projectFolder(projectId), "tasks"),
     );
     console.log(JSON.stringify(outcome, null, 2));
     if (!outcome.passed) process.exitCode = 1;
@@ -123,7 +130,11 @@ export async function runTasksCommand(
         JSON.stringify(
           await completeTask(
             id,
-            resolveWithin(oceanPath(PROJECTS_DIR), projectId, "tasks"),
+            resolveWithin(
+              oceanPath(PROJECTS_DIR),
+              projectFolder(projectId),
+              "tasks",
+            ),
             { verify: !args.includes("--no-verify") },
           ),
           null,
@@ -145,7 +156,7 @@ export async function runTasksCommand(
   }
   const apply = args.includes("--apply") || args.includes("--auto");
   const result = await archiveDoneTasks(
-    resolveWithin(oceanPath(PROJECTS_DIR), projectId, "tasks"),
+    resolveWithin(oceanPath(PROJECTS_DIR), projectFolder(projectId), "tasks"),
     apply,
   );
   console.log(JSON.stringify({ dryRun: !apply, ...result }, null, 2));

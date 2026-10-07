@@ -6,9 +6,11 @@ import {
   oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
+  projectFolder,
   resolveStorePath,
   resolveWithin,
   storeRelativeToRoot,
+  WORKSPACE_PROJECT_ID,
 } from "../../paths.js";
 import { brainSearch } from "../brain/brain-service.js";
 import type { IntentClassification } from "./intent-router.js";
@@ -193,7 +195,7 @@ async function planExactTaskRecord(
   identifier: string,
   budget: ContextBudget,
   root = oceanRoot(),
-  projectId = "atlas",
+  projectId = WORKSPACE_PROJECT_ID,
 ): Promise<BoundedReadResult> {
   const rung: LadderRung = "exact-record";
   if (!TASK_ID_SHAPE.test(identifier)) {
@@ -222,7 +224,11 @@ async function planExactTaskRecord(
   let resolvedPath: string;
   try {
     resolvedPath = resolveWithin(
-      resolveWithin(path.join(root, PROJECTS_DIR), projectId, "tasks"),
+      resolveWithin(
+        path.join(root, PROJECTS_DIR),
+        projectFolder(projectId, root),
+        "tasks",
+      ),
       normalized,
       "task.md",
     );
@@ -422,7 +428,7 @@ export async function planContextRead(
   classification: IntentClassification,
   budget: unknown,
   root = oceanRoot(),
-  projectId = "atlas",
+  projectId = WORKSPACE_PROJECT_ID,
   options?: { query?: string; indexPort?: BrainIndexPort },
 ): Promise<BoundedReadResult> {
   const { rung, reason } = resolveLadderRung(classification);

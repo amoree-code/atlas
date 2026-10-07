@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -62,6 +62,56 @@ export const BRAIN_RECORD_DIRS = [
   KNOWLEDGE_DIR,
   TEMPLATES_DIR,
 ] as const;
+// The workspace's own project. It was called "atlas" before the rename, and on a machine that
+// has not been through the layout migration (T-243) its folder under PROJECTS_DIR, its archive
+// namespace and the `project:` field of every task record still say so. Callers use these
+// helpers instead of a literal, so both spellings resolve to the folder that actually holds the
+// tasks and the migration needs no further code change.
+export const WORKSPACE_PROJECT_ID = "ocean";
+const LEGACY_WORKSPACE_PROJECT_ID = "atlas";
+
+export function sameProject(a: string, b: string): boolean {
+  return a === b || (isWorkspaceProject(a) && isWorkspaceProject(b));
+}
+
+export function isWorkspaceProject(projectId: string): boolean {
+  const id = projectId.toLowerCase();
+  return id === WORKSPACE_PROJECT_ID || id === LEGACY_WORKSPACE_PROJECT_ID;
+}
+
+function isDirectory(target: string): boolean {
+  try {
+    return statSync(target).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+// The folder name to use under PROJECTS_DIR for a project id. The workspace project keys on the
+// `tasks` directory it already has — never on the bare folder — so an empty `ocean/` created by
+// accident cannot hide the real tasks that still live under `atlas/`.
+export function projectFolder(
+  projectId: string,
+  root: string = oceanRoot(),
+): string {
+  if (!isWorkspaceProject(projectId)) return projectId;
+  const tasks = (folder: string) =>
+    path.join(root, PROJECTS_DIR, folder, "tasks");
+  if (isDirectory(tasks(WORKSPACE_PROJECT_ID))) return WORKSPACE_PROJECT_ID;
+  if (isDirectory(tasks(LEGACY_WORKSPACE_PROJECT_ID)))
+    return LEGACY_WORKSPACE_PROJECT_ID;
+  return WORKSPACE_PROJECT_ID;
+}
+
+export function workspaceTasksRoot(root: string = oceanRoot()): string {
+  return path.join(
+    root,
+    PROJECTS_DIR,
+    projectFolder(WORKSPACE_PROJECT_ID, root),
+    "tasks",
+  );
+}
+
 export const SYSTEM_DIR = "kernel/bridge";
 export const REGISTRY_DIR = `${SYSTEM_DIR}/registry`;
 export const LEGACY_REGISTRY_DIR = `${SYSTEM_DIR}/control-plane/registry`;
