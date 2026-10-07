@@ -10,8 +10,8 @@ const engineDirectory = path.resolve(moduleDirectory, "..");
 
 // The default runtime data root is the private workspace root, e.g.
 // ~/ocean/kernel/packages/core (this package) sits three directories below ~/ocean
-// (kernel, packages, core), which itself sits next to ~/ocean/brain and
-// ~/ocean/kernel/bridge (see PERSONAL_DIR/PROJECTS_DIR/SYSTEM_DIR below).
+// (kernel, packages, core), which holds the record areas and the bridge
+// (see PERSONAL_DIR/PROJECTS_DIR/SYSTEM_DIR below).
 const defaultOceanRoot = path.resolve(engineDirectory, "..", "..", "..");
 
 export function engineRoot(): string {
@@ -38,27 +38,42 @@ export function repoPath(...parts: string[]): string {
 // T-224 stage B to the Ocean/PARA layout (~/ocean/brain/..., ~/ocean/kernel/bridge)
 // now that every call site (stage A) reads these constants instead of a literal.
 //
+// T-243 phase 6 flattens it: brain/<area> moves up to <area>, and kernel/bridge leaves the
+// public repo for bridge. Each half keys on a sentinel directory it always holds — never on a
+// bare folder, so an empty one created by accident cannot hide the real data — and falls back
+// to the old location, so one build runs before, during and after the data move. Decided once
+// per process against the root it starts with; a process started before the move keeps the old
+// layout until it restarts.
+function layoutPrefix(flat: string, nested: string, sentinel: string): string {
+  const root = oceanRoot();
+  if (isDirectory(path.join(root, flat, sentinel))) return flat;
+  if (isDirectory(path.join(root, nested, sentinel))) return nested;
+  return flat;
+}
+const BRAIN_PREFIX = layoutPrefix("", "brain", "04-projects");
+const brainArea = (area: string) => path.posix.join(BRAIN_PREFIX, area);
+//
 // The old flat `personal/` directory had five children (memory, knowledge, daily,
 // inbox[+brain-dump], templates) that PARA scatters to five independent, sibling
 // top-level folders under brain/ — not one renamed parent with the same children
 // underneath. PERSONAL_DIR alone can't stand in for all five the way SYSTEM_DIR
 // and PROJECTS_DIR still can for their own (uniform) subtrees, so each gets its
 // own constant. PERSONAL_DIR keeps meaning what `personal/memory` meant: it is
-// brain/02-personal itself, not a parent with a further "memory" segment under it.
-export const PERSONAL_DIR = "brain/02-personal";
-export const KNOWLEDGE_DIR = "brain/05-knowledge";
-export const DAILY_DIR = "brain/01-daily";
-export const INBOX_DIR = "brain/00-inbox";
-export const TEMPLATES_DIR = "brain/06-templates";
-export const INDEX_DIR = "brain/.index";
-export const PROJECTS_DIR = "brain/04-projects";
+// 02-personal itself, not a parent with a further "memory" segment under it.
+export const PERSONAL_DIR = brainArea("02-personal");
+export const KNOWLEDGE_DIR = brainArea("05-knowledge");
+export const DAILY_DIR = brainArea("01-daily");
+export const INBOX_DIR = brainArea("00-inbox");
+export const TEMPLATES_DIR = brainArea("06-templates");
+export const INDEX_DIR = brainArea(".index");
+export const PROJECTS_DIR = brainArea("04-projects");
 // Every top-level brain area that holds markdown records (used by the doctor and the
 // context command to scan the private store).
 export const BRAIN_RECORD_DIRS = [
   INBOX_DIR,
   DAILY_DIR,
   PERSONAL_DIR,
-  "brain/03-professional",
+  brainArea("03-professional"),
   KNOWLEDGE_DIR,
   TEMPLATES_DIR,
 ] as const;
@@ -112,11 +127,11 @@ export function workspaceTasksRoot(root: string = oceanRoot()): string {
   );
 }
 
-export const SYSTEM_DIR = "kernel/bridge";
+export const SYSTEM_DIR = layoutPrefix("bridge", "kernel/bridge", "sessions");
 export const REGISTRY_DIR = `${SYSTEM_DIR}/registry`;
 export const LEGACY_REGISTRY_DIR = `${SYSTEM_DIR}/control-plane/registry`;
 // Governance is private: the charter and the policies it routes to live in the brain.
-export const CHARTER_DIR = "brain/charter";
+export const CHARTER_DIR = brainArea("charter");
 export const POLICIES_DIR = `${CHARTER_DIR}/policies`;
 
 // The brain index (brain-reindex.ts, brain-service.ts, context-ladder.ts) stores and

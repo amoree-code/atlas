@@ -3,8 +3,11 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const explicitRoot = process.argv[2];
-// The workspace project's folder is "ocean", or the pre-rename "atlas" until the layout migration.
+// The workspace project's folder is "ocean", or the pre-rename "atlas" until the layout migration,
+// under the flat layout (04-projects/) or the pre-T-243 brain/04-projects/.
 const defaultRoots = [
+  "../04-projects/ocean/tasks",
+  "../04-projects/atlas/tasks",
   "../brain/04-projects/ocean/tasks",
   "../brain/04-projects/atlas/tasks",
 ].map((candidate) => path.resolve(candidate));

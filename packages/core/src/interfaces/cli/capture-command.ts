@@ -121,7 +121,7 @@ async function promote(
     const file = path.resolve(oceanPath(PERSONAL_DIR), relative);
     const memoryRoot = path.resolve(oceanPath(PERSONAL_DIR)) + path.sep;
     if (!file.startsWith(memoryRoot))
-      throw new Error("Memory target must stay inside brain/02-personal.");
+      throw new Error(`Memory target must stay inside ${PERSONAL_DIR}.`);
     const header = `\n\n## Captured note — ${new Date().toISOString().slice(0, 10)}\n\n${item.content.trim()}\n\n_Source: session-capture-${item.captureId}; review status: unverified._\n`;
     await appendFile(file, header);
     await syncMemoryIndexes(true);

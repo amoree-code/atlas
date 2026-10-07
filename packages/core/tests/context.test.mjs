@@ -15,7 +15,8 @@ test("context returns a compact JSON packet without loading task bodies", async 
   const result = spawnSync(
     process.execPath,
     [path.resolve("dist/main.js"), "context", "--json"],
-    { encoding: "utf8" },
+    // Run from inside the workspace root, where the workspace project resolves.
+    { cwd: process.env.OCEAN_ROOT, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr);
   const packet = JSON.parse(result.stdout);

@@ -26,9 +26,11 @@ const HOME = homedir();
 // assumption baked into a published package.
 const WORKSPACE = process.env.OCEAN_ROOT ?? path.join(HOME, "ocean");
 
-// Roots to scan. The hub is machine-local and absent in CI, so it is optional.
+// Roots to scan. The hub is machine-local and absent in CI, so it is optional; it lives in
+// bridge/, or kernel/bridge/ before the T-243 layout move.
 const roots = [
   path.resolve(process.argv[2] ?? "skills"),
+  path.join(WORKSPACE, "bridge", "skills"),
   path.join(WORKSPACE, "kernel", "bridge", "skills"),
 ];
 
