@@ -9,7 +9,7 @@ const commandGroups = [
     "Knowledge",
     "memory, observe, capture, handoff, idea, daily, skill, catalog",
   ],
-  ["Integrations", "obsidian, hook, migrate, env"],
+  ["Integrations", "obsidian, hook, migrate, layout, env"],
 ] as const;
 
 export function renderHelp(): string {

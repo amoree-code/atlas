@@ -123,6 +123,7 @@ import { runLifecycleCommand, runPolicyCommand } from "./governance-command.js";
 import { runHandoffCommand } from "./handoff-command.js";
 import { runIdeaCommand } from "./idea-command.js";
 import { intercept } from "./intercept-command.js";
+import { runLayoutCommand } from "./layout-command.js";
 import { runMemoryCommand } from "./memory-command.js";
 import { runMigrateCommand } from "./migrate-command.js";
 import { runObserveCommand } from "./observe-command.js";
@@ -357,6 +358,15 @@ async function commandLifecycle(): Promise<void> {
 async function commandObserve(): Promise<void> {
   try {
     await runObserveCommand(process.argv.slice(3));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+async function commandLayout(): Promise<void> {
+  try {
+    await runLayoutCommand(process.argv.slice(3));
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
@@ -1230,6 +1240,7 @@ export const commandRegistry: Record<string, CommandHandler> = {
   lifecycle: commandLifecycle,
   observe: commandObserve,
   migrate: commandMigrate,
+  layout: commandLayout,
   memory: commandMemory,
   mcp: commandMcp,
   obsidian: commandObsidian,
