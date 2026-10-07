@@ -880,12 +880,20 @@ test("a request naming the workspace project by its pre-rename id is not a cross
   }));
 
 test("private Ocean content is never written inside the public engine package", () => {
-  const engineRelative = path
-    .relative(oceanRoot(), engineRoot())
-    .split(path.sep);
-  const rejected = validateWriteTarget(...engineRelative, "src", "leak.md");
-  assert.equal(rejected.valid, false);
-  assert.match(rejected.reason, /public engine package/);
+  // The engine lives inside the real workspace root (~/ocean/kernel/packages/core), not inside
+  // the test sandbox, so validate against that root. Nothing is written.
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = path.resolve(engineRoot(), "..", "..", "..");
+  try {
+    const engineRelative = path
+      .relative(oceanRoot(), engineRoot())
+      .split(path.sep);
+    const rejected = validateWriteTarget(...engineRelative, "src", "leak.md");
+    assert.equal(rejected.valid, false);
+    assert.match(rejected.reason, /public engine package/);
+  } finally {
+    process.env.OCEAN_ROOT = previous;
+  }
 });
 
 test("write targets that escape the Ocean root are refused", async () => {

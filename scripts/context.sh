@@ -3,8 +3,11 @@
 set -u
 
 ROOT="${OCEAN_ROOT:-${ATLAS_ROOT:-$HOME/ocean}}"
+# Record areas sit at the root, or under brain/ before the T-243 layout move.
+BRAIN="$ROOT"
+if [ ! -d "$ROOT/04-projects" ] && [ -d "$ROOT/brain/04-projects" ]; then BRAIN="$ROOT/brain"; fi
 D=$(date +%Y-%m-%d)
-FILE="$ROOT/brain/01-daily/$D.md"
+FILE="$BRAIN/01-daily/$D.md"
 
 echo "=== today: $D ==="
 if [ -f "$FILE" ]; then echo "daily record: $FILE"; else echo "daily record: NOT CREATED (run day-start.sh)"; fi
@@ -32,7 +35,7 @@ done
 
 echo
 echo "=== registry active rows ==="
-REG="$ROOT/brain/04-projects/registry.md"
+REG="$BRAIN/04-projects/registry.md"
 [ -f "$REG" ] && grep -E '^\| \*\*' "$REG" | grep 'active' || echo "(registry.md not found or no active rows)"
 
 echo
