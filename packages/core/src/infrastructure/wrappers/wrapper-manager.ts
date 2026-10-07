@@ -227,12 +227,40 @@ async function shellProfilePath(): Promise<string> {
   return path.join(home, ".profile");
 }
 
+const BLOCK_BEGIN = /^# >>> (atlas|ocean) interception >>>$/;
+
+function withoutEol(line: string): string {
+  return line.replace(/\r?\n$/, "");
+}
+
+// Removes every managed interception block ("atlas" is the pre-rename marker) and nothing else:
+// all other lines keep their exact bytes and line endings. Only the single blank separator the
+// installer puts above its block goes with it. A begin marker without a matching end marker is
+// left alone rather than guessed at.
+function stripInterceptionBlocks(text: string): string {
+  const lines = text.split(/(?<=\n)/);
+  const kept: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const begin = BLOCK_BEGIN.exec(withoutEol(lines[index]));
+    if (begin) {
+      const end = `# <<< ${begin[1]} interception <<<`;
+      const close = lines.findIndex(
+        (line, at) => at > index && withoutEol(line) === end,
+      );
+      if (close >= 0) {
+        if (kept.length && withoutEol(kept[kept.length - 1]).trim() === "")
+          kept.pop();
+        index = close;
+        continue;
+      }
+    }
+    kept.push(lines[index]);
+  }
+  return kept.join("");
+}
+
 export async function installShellIntegration(): Promise<string> {
   const file = await shellProfilePath();
-  // "atlas interception" is the pre-rename marker; any block under either name is replaced,
-  // so re-running setup never leaves two interception blocks in the profile.
-  const marker =
-    /\n?# >>> (atlas|ocean) interception >>>[\s\S]*?# <<< \1 interception <<<\n?/g;
   let existing = "";
   try {
     existing = await readFile(file, "utf8");
@@ -240,12 +268,12 @@ export async function installShellIntegration(): Promise<string> {
     /* new profile */
   }
   const line = await installShellPath();
-  const block = `# >>> ocean interception >>>\n${line}\n# <<< ocean interception <<<\n`;
-  // Strip every existing block and trailing blank lines first, so the result is the same
-  // however many times setup runs (it used to gain a blank line per run).
-  const rest = existing.replace(marker, "").trimEnd();
+  const eol = existing.includes("\r\n") ? "\r\n" : "\n";
+  let rest = stripInterceptionBlocks(existing);
+  if (rest && !rest.endsWith("\n")) rest += eol;
+  const block = `${["# >>> ocean interception >>>", line, "# <<< ocean interception <<<"].join(eol)}${eol}`;
   await mkdir(path.dirname(file), { recursive: true });
-  await atomicWrite(file, `${rest ? `${rest}\n\n` : ""}${block}`);
+  await atomicWrite(file, rest ? `${rest}${eol}${block}` : block);
   return file;
 }
 
