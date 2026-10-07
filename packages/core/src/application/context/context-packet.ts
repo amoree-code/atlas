@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { oceanRoot, resolveWithin } from "../../paths.js";
+import { oceanRoot, resolveWithin, WORKSPACE_PROJECT_ID } from "../../paths.js";
 import {
   planContextRead,
   resolveLadderRung,
@@ -271,7 +271,7 @@ export async function buildContextPacket(
         classification,
         budget,
         oceanRoot(),
-        activeProject.projectId ?? "atlas",
+        activeProject.projectId ?? WORKSPACE_PROJECT_ID,
         options,
       )
     : null;

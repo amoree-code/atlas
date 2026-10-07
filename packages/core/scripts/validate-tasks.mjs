@@ -3,7 +3,24 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const explicitRoot = process.argv[2];
-const root = path.resolve(explicitRoot ?? "../brain/04-projects/atlas/tasks");
+// The workspace project's folder is "ocean", or the pre-rename "atlas" until the layout migration.
+const defaultRoots = [
+  "../brain/04-projects/ocean/tasks",
+  "../brain/04-projects/atlas/tasks",
+].map((candidate) => path.resolve(candidate));
+let root = defaultRoots[0];
+if (explicitRoot) root = path.resolve(explicitRoot);
+else {
+  for (const candidate of defaultRoots) {
+    try {
+      await access(candidate);
+      root = candidate;
+      break;
+    } catch {
+      // try the next known location
+    }
+  }
+}
 const records = [];
 const errors = [];
 

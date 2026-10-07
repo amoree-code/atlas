@@ -168,3 +168,21 @@ test("corrections are additive evidence and never overwrite the original record"
     else process.env.OCEAN_ROOT = previous;
   }
 });
+
+test("task linking treats the workspace project's old and new ids as one project, and other projects as different", () => {
+  const candidate = (projectId) => ({
+    id: "T-1",
+    projectId,
+    state: "active",
+    updatedAt: "2026-09-16",
+    keywords: [],
+    relationships: [],
+  });
+  const reasons = (candidateId, requestId) =>
+    rankTaskCandidates([candidate(candidateId)], { projectId: requestId })[0]
+      .reasons;
+  assert.ok(reasons("atlas", "ocean").includes("project match"));
+  assert.ok(reasons("ocean", "atlas").includes("project match"));
+  assert.ok(reasons("acme", "acme").includes("project match"));
+  assert.ok(!reasons("ocean-language", "ocean").includes("project match"));
+});

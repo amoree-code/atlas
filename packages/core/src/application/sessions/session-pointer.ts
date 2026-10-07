@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import type { Session, SessionStatus } from "../../domain/sessions/session.js";
+import { sameProject } from "../../paths.js";
 import { validateBudget } from "../context/context-ladder.js";
 import { resolveProject } from "../context/project-resolution.js";
 
@@ -127,7 +128,7 @@ export async function planSessionResume(
     if (
       pointer.projectId &&
       currentProject &&
-      pointer.projectId !== currentProject
+      !sameProject(pointer.projectId, currentProject)
     ) {
       return refused(
         `cross-project resume refused: session belongs to '${pointer.projectId}', current directory resolves to '${currentProject}'`,
@@ -137,7 +138,7 @@ export async function planSessionResume(
   if (
     options.requestedProject &&
     pointer.projectId &&
-    options.requestedProject !== pointer.projectId
+    !sameProject(options.requestedProject, pointer.projectId)
   ) {
     return refused(
       `cross-project resume refused: session belongs to '${pointer.projectId}', request targeted '${options.requestedProject}'`,

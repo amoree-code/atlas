@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { registryFile } from "../../fs-utils.js";
-import { oceanRoot } from "../../paths.js";
+import { oceanRoot, WORKSPACE_PROJECT_ID } from "../../paths.js";
 
 // Deterministic, local, metadata-first project resolution: no model call, no network round
 // trip. Bindings are a flat JSON registry (same pattern as kernel/bridge/registry/
@@ -88,7 +88,7 @@ async function saveProjectBindings(bindings: ProjectBinding[]): Promise<void> {
 
 // Resolves the active Ocean project from a working directory: no terminal-in-Ocean
 // requirement. Match order is git root, then the exact cwd, then (as a last resort) whether
-// the path is inside the Ocean workspace root itself, which is always project "atlas".
+// the path is inside the Ocean workspace root itself, which is always the workspace project.
 export async function resolveProject(cwd: string): Promise<ProjectResolution> {
   const resolvedCwd = path.resolve(cwd);
   const gitRoot = findGitRoot(resolvedCwd);
@@ -157,8 +157,8 @@ export async function resolveProject(cwd: string): Promise<ProjectResolution> {
   ) {
     return {
       status: "bound",
-      projectId: "atlas",
-      name: "Atlas",
+      projectId: WORKSPACE_PROJECT_ID,
+      name: "Ocean",
       path: root,
       matchedOn: "ocean-root",
       confidence: "high",

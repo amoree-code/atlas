@@ -9,7 +9,12 @@ import {
   oceanPath,
   oceanRoot,
   PERSONAL_DIR,
+  PROJECTS_DIR,
+  projectFolder,
   resolveWithin,
+  sameProject,
+  WORKSPACE_PROJECT_ID,
+  workspaceTasksRoot,
 } from "../dist/paths.js";
 
 test("engineRoot resolves to the engine package directory, one level above this module", () => {
@@ -110,4 +115,49 @@ test("resolveWithin allows a symlink inside its root that points elsewhere insid
   );
 
   assert.doesNotThrow(() => resolveWithin(root, "internal-link", "file.txt"));
+});
+
+async function projectsRoot(...folders) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-project-folder-"));
+  for (const folder of folders)
+    await mkdir(path.join(root, PROJECTS_DIR, folder), { recursive: true });
+  return root;
+}
+
+test("the workspace project resolves to the folder that holds its tasks, ocean or the pre-rename atlas", async () => {
+  assert.equal(WORKSPACE_PROJECT_ID, "ocean");
+  const legacy = await projectsRoot("atlas/tasks");
+  assert.equal(projectFolder("ocean", legacy), "atlas");
+  assert.equal(projectFolder("atlas", legacy), "atlas");
+  assert.equal(projectFolder("ATLAS", legacy), "atlas");
+  assert.equal(
+    workspaceTasksRoot(legacy),
+    path.join(legacy, PROJECTS_DIR, "atlas", "tasks"),
+  );
+  const migrated = await projectsRoot("ocean/tasks");
+  assert.equal(projectFolder("atlas", migrated), "ocean");
+  assert.equal(projectFolder("ocean", migrated), "ocean");
+  const both = await projectsRoot("ocean/tasks", "atlas/tasks");
+  assert.equal(projectFolder("atlas", both), "ocean");
+  const fresh = await projectsRoot();
+  assert.equal(projectFolder("atlas", fresh), "ocean");
+});
+
+test("an empty ocean folder never hides the tasks that still live under atlas", async () => {
+  const root = await projectsRoot("ocean", "atlas/tasks");
+  assert.equal(projectFolder("ocean", root), "atlas");
+  assert.equal(
+    workspaceTasksRoot(root),
+    path.join(root, PROJECTS_DIR, "atlas", "tasks"),
+  );
+});
+
+test("other projects keep their own folder name untouched, and only the workspace aliases compare equal", async () => {
+  const root = await projectsRoot("atlas/tasks");
+  assert.equal(projectFolder("ocean-language", root), "ocean-language");
+  assert.equal(projectFolder("freelance/acme", root), "freelance/acme");
+  assert.equal(sameProject("atlas", "ocean"), true);
+  assert.equal(sameProject("Ocean", "ATLAS"), true);
+  assert.equal(sameProject("ocean", "ocean-language"), false);
+  assert.equal(sameProject("acme", "acme"), true);
 });

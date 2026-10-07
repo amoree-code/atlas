@@ -22,7 +22,7 @@ test("context returns a compact JSON packet without loading task bodies", async 
   const { version } = JSON.parse(
     await readFile(path.resolve("package.json"), "utf8"),
   );
-  assert.equal(packet.project, "atlas");
+  assert.equal(packet.project, "ocean");
   assert.equal(packet.version, version);
   assert.deepEqual(packet.roots, [
     ...BRAIN_RECORD_DIRS,

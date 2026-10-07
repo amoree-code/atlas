@@ -23,9 +23,11 @@ import {
   oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
+  projectFolder,
   REGISTRY_DIR,
   SYSTEM_DIR,
   TEMPLATES_DIR,
+  WORKSPACE_PROJECT_ID,
 } from "../../paths.js";
 
 const personalDirectories = [
@@ -34,7 +36,6 @@ const personalDirectories = [
   DAILY_DIR,
   INBOX_DIR,
   TEMPLATES_DIR,
-  `${PROJECTS_DIR}/atlas/tasks`,
 ];
 
 const REGISTRY_FILES = [
@@ -146,9 +147,12 @@ export type SetupOptions = {
 
 export async function setup(options: SetupOptions = {}): Promise<void> {
   await Promise.all(
-    personalDirectories.map((directory) =>
-      mkdir(oceanPath(directory), { recursive: true }),
-    ),
+    [
+      ...personalDirectories,
+      // Where the workspace project's tasks live today ("atlas/" until the layout migration),
+      // never a second, empty folder that would hide them.
+      `${PROJECTS_DIR}/${projectFolder(WORKSPACE_PROJECT_ID)}/tasks`,
+    ].map((directory) => mkdir(oceanPath(directory), { recursive: true })),
   );
   for (const file of REGISTRY_FILES) registryFile(file);
   await Promise.all(

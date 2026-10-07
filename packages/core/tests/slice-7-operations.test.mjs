@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
@@ -161,6 +162,47 @@ test("task.create requires explicit title and approval, then creates the next bo
     assert.equal(decision.allowed, true, decision.reason);
     assert.equal(result.ok, true, result.reason);
     assert.match(await readFile(target, "utf8"), /title: Improve onboarding/);
+  });
+});
+
+test("task.create under the ocean id writes next to the tasks that still live in atlas/", async () => {
+  await withFixture(async (root) => {
+    await bindProject("ocean", root);
+    const classification = classifyIntent(
+      "create a new task called Improve onboarding",
+    );
+    const budget = BUDGET;
+    // The id scan and the write target share one folder: T-1 and T-2 live under atlas/, so the
+    // new task is atlas/tasks/T-3, never a fresh ocean/tasks/T-1 beside them.
+    const target = path.join(
+      root,
+      PROJECTS_DIR,
+      "atlas",
+      "tasks",
+      "T-3",
+      "task.md",
+    );
+    const scope = {
+      action: "task.create",
+      target,
+      identifier: null,
+      projectId: "ocean",
+    };
+    const sessionId = "task-create-ocean-session";
+    const grant = createGrant(sessionId, scope);
+    const { decision, result } = await guardedRunOperation(
+      { sessionId, classification, scope, budget, grant },
+      (approval) =>
+        runOperation("task.create", classification, budget, {
+          cwd: root,
+          approval,
+        }),
+    );
+    assert.equal(decision.allowed, true, decision.reason);
+    assert.equal(result.ok, true, result.reason);
+    assert.match(result.reason, /^T-3 created for project 'ocean'/);
+    assert.match(await readFile(target, "utf8"), /project: ocean/);
+    assert.equal(existsSync(path.join(root, PROJECTS_DIR, "ocean")), false);
   });
 });
 
@@ -726,7 +768,7 @@ test("project.detect reports the bound project without guessing", () =>
       { cwd: root },
     );
     assert.equal(result.ok, true);
-    assert.equal(result.records[0].identifier, "atlas");
+    assert.equal(result.records[0].identifier, "ocean");
     assert.equal(result.records[0].fields.status, "bound");
   }));
 
@@ -818,6 +860,23 @@ test("a cross-project request is refused explicitly", () =>
     );
     assert.equal(result.ok, false);
     assert.match(result.reason, /cross-project request refused/);
+  }));
+
+test("a request naming the workspace project by its pre-rename id is not a cross-project request", () =>
+  withFixture(async (root) => {
+    for (const requestedProject of ["atlas", "ocean"]) {
+      const result = await runOperation(
+        "task.get",
+        classifyIntent("show T-1"),
+        BUDGET,
+        { cwd: root, requestedProject },
+      );
+      assert.doesNotMatch(
+        result.reason ?? "",
+        /cross-project/,
+        requestedProject,
+      );
+    }
   }));
 
 test("private Ocean content is never written inside the public engine package", () => {

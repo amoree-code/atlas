@@ -2,7 +2,12 @@ import type { Dirent } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { atomicWrite } from "../../fs-utils.js";
-import { PROJECTS_DIR, resolveWithin } from "../../paths.js";
+import {
+  oceanPath,
+  PROJECTS_DIR,
+  projectFolder,
+  resolveWithin,
+} from "../../paths.js";
 import type { ContextBudget } from "../context/context-ladder.js";
 import type { IntentClassification } from "../context/intent-router.js";
 import { completeTask } from "../tasks/archive-tasks.js";
@@ -192,11 +197,13 @@ export async function taskCreate(
       "task.create",
       "write refused: an explicit single-line task title is required",
     );
-  const root = taskRoot(project.projectId);
+  // Resolve the folder once so the id scan and the write target can never disagree.
+  const folder = projectFolder(project.projectId);
+  const root = oceanPath(PROJECTS_DIR, folder, "tasks");
   const id = await nextTaskId(root);
   const target = validateWriteTarget(
     PROJECTS_DIR,
-    project.projectId,
+    folder,
     "tasks",
     id,
     "task.md",
@@ -262,7 +269,7 @@ export async function taskUpdate(
 
   const target = validateWriteTarget(
     PROJECTS_DIR,
-    project.projectId,
+    projectFolder(project.projectId),
     "tasks",
     identifier.value,
     "task.md",
@@ -336,7 +343,7 @@ export async function taskCompleteOperation(
 
   const target = validateWriteTarget(
     PROJECTS_DIR,
-    project.projectId,
+    projectFolder(project.projectId),
     "tasks",
     identifier.value,
     "task.md",

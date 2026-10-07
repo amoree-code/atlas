@@ -12,6 +12,7 @@ import {
   oceanRoot,
   PERSONAL_DIR,
   PROJECTS_DIR,
+  WORKSPACE_PROJECT_ID,
 } from "../../paths.js";
 
 export async function runCaptureCommand(
@@ -134,7 +135,7 @@ async function promote(
   if (target === "backlog") {
     await appendFile(
       oceanPath(PROJECTS_DIR, "backlog.md"),
-      `\n- [TODO] (P2) atlas — ${item.content.replace(/\s+/g, " ").trim()}  {${new Date().toISOString().slice(0, 10)}}\n`,
+      `\n- [TODO] (P2) ${WORKSPACE_PROJECT_ID} — ${item.content.replace(/\s+/g, " ").trim()}  {${new Date().toISOString().slice(0, 10)}}\n`,
     );
     return;
   }

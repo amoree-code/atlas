@@ -4,9 +4,9 @@ import path from "node:path";
 import type { AgentRuntimeDeps } from "../../domain/ports/runtime-ports.js";
 import {
   oceanPath,
-  PROJECTS_DIR,
   resolveWithin,
   SYSTEM_DIR,
+  workspaceTasksRoot,
 } from "../../paths.js";
 import { runAgent } from "../runs/run-agent.js";
 import { checkpointTask } from "../tasks/checkpoint-task.js";
@@ -242,11 +242,7 @@ export async function runTaskLoopWorker(
 }
 
 async function taskClaimsDone(id: string): Promise<boolean> {
-  const file = resolveWithin(
-    oceanPath(PROJECTS_DIR, "atlas", "tasks"),
-    id,
-    "task.md",
-  );
+  const file = resolveWithin(workspaceTasksRoot(), id, "task.md");
   const source = await readFile(file, "utf8");
   return /^state:\s*done\s*$/m.test(source);
 }

@@ -243,6 +243,21 @@ test("cross-project resume is refused when the session belongs to another projec
     assert.match(plan.reason, /cross-project resume refused/);
   }));
 
+test("resuming with the workspace project's pre-rename id is not a cross-project resume", () =>
+  withStore(async (store, root) => {
+    const sessionId = createSession(store, {
+      status: "running",
+      workingDirectory: root,
+    });
+    for (const requestedProject of ["atlas", "ocean"]) {
+      const plan = await planSessionResume(store, sessionId, BUDGET, {
+        cwd: root,
+        requestedProject,
+      });
+      assert.doesNotMatch(plan.reason ?? "", /cross-project/, requestedProject);
+    }
+  }));
+
 test("a session outside any project binding resolves projectId null rather than guessing", () =>
   withStore(async (store, root) => {
     const outside = await mkdtemp(
@@ -408,6 +423,8 @@ test("session-pointer.ts imports no provider, network, or MCP module and invokes
     "../../domain/sessions/session.js",
     "../context/context-ladder.js",
     "../context/project-resolution.js",
+    // Pure path/project-id helpers (sameProject); no provider, network or MCP code.
+    "../../paths.js",
   ]);
   for (const specifier of imports)
     assert.ok(allowed.has(specifier), `unexpected import: ${specifier}`);

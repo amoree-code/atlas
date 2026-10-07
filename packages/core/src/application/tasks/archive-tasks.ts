@@ -1,4 +1,4 @@
-import type { Dirent } from "node:fs";
+import { type Dirent, existsSync } from "node:fs";
 import {
   access,
   mkdir,
@@ -9,7 +9,12 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { oceanPath, PROJECTS_DIR, resolveWithin } from "../../paths.js";
+import {
+  isWorkspaceProject,
+  resolveWithin,
+  WORKSPACE_PROJECT_ID,
+  workspaceTasksRoot,
+} from "../../paths.js";
 import { type CommandRunner, verifyTask } from "./verify-task.js";
 
 export type ArchiveResult = {
@@ -27,8 +32,18 @@ const field = (source: string, name: string): string =>
     ?.trim()
     .replace(/^['"]|['"]$/g, "") ?? "";
 
-const projectArchiveName = (project: string): string =>
-  project.toLowerCase() === "atlas" ? "Atlas" : project;
+// Archive namespace per project. The workspace project's namespace was "Atlas" before the
+// rename; keep using it while that folder is the one in use, and use "Ocean" otherwise.
+const WORKSPACE_ARCHIVE_NAMESPACES = ["Ocean", "Atlas"] as const;
+
+const projectArchiveName = (project: string, archiveRoot: string): string => {
+  if (!isWorkspaceProject(project)) return project;
+  const [current, legacy] = WORKSPACE_ARCHIVE_NAMESPACES;
+  return !existsSync(path.join(archiveRoot, current)) &&
+    existsSync(path.join(archiveRoot, legacy))
+    ? legacy
+    : current;
+};
 
 function setState(source: string, state: string): string {
   return source.replace(/^state:\s*.+$/m, `state: ${state}`);
@@ -36,7 +51,7 @@ function setState(source: string, state: string): string {
 
 export async function completeTask(
   id: string,
-  root = oceanPath(PROJECTS_DIR, "atlas", "tasks"),
+  root = workspaceTasksRoot(),
   options: { verify?: boolean; cwd?: string; run?: CommandRunner } = {},
 ): Promise<CompletionResult> {
   const taskFile = resolveWithin(root, id, "task.md");
@@ -69,7 +84,7 @@ export async function completeTask(
 }
 
 export async function archiveDoneTasks(
-  root = oceanPath(PROJECTS_DIR, "atlas", "tasks"),
+  root = workspaceTasksRoot(),
   apply = false,
 ): Promise<ArchiveResult> {
   const result: ArchiveResult = {
@@ -94,12 +109,18 @@ export async function archiveDoneTasks(
     try {
       await access(taskFile);
     } catch {
-      const archivedDirectory = resolveWithin(archiveRoot, "Atlas", entry.name);
-      try {
-        await access(path.join(archivedDirectory, "task.md"));
-      } catch {
-        continue;
+      let archivedDirectory: string | null = null;
+      for (const namespace of WORKSPACE_ARCHIVE_NAMESPACES) {
+        const candidate = resolveWithin(archiveRoot, namespace, entry.name);
+        try {
+          await access(path.join(candidate, "task.md"));
+          archivedDirectory = candidate;
+          break;
+        } catch {
+          // not archived under this namespace
+        }
       }
+      if (!archivedDirectory) continue;
       if (!apply) continue;
       for (const artifact of await readdir(sourceDirectory, {
         withFileTypes: true,
@@ -136,10 +157,10 @@ export async function archiveDoneTasks(
     result.candidates.push(id);
     if (!apply) continue;
 
-    const project = field(source, "project") || "atlas";
+    const project = field(source, "project") || WORKSPACE_PROJECT_ID;
     const destinationDirectory = resolveWithin(
       archiveRoot,
-      projectArchiveName(project),
+      projectArchiveName(project, archiveRoot),
       id,
     );
     try {

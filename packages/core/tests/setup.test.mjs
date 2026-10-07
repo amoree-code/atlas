@@ -8,6 +8,7 @@ import {
   enginePath,
   KNOWLEDGE_DIR,
   PERSONAL_DIR,
+  PROJECTS_DIR,
   SYSTEM_DIR,
 } from "../dist/paths.js";
 
@@ -155,4 +156,48 @@ test("setup reports a leftover pre-rename startup entry and leaves it in place",
     warnings.join("|"),
   );
   await stat(platformStartupFile(fakeHome));
+});
+
+async function setupAt(root, prepare) {
+  const fakeHome = await mkdtemp(
+    path.join(os.tmpdir(), "ocean-setup-folder-home-"),
+  );
+  if (prepare) await prepare(root);
+  const saved = {
+    root: process.env.OCEAN_ROOT,
+    home: process.env.HOME,
+    appData: process.env.APPDATA,
+  };
+  process.env.OCEAN_ROOT = root;
+  process.env.HOME = fakeHome;
+  if (process.platform === "win32")
+    process.env.APPDATA = path.join(fakeHome, "AppData", "Roaming");
+  try {
+    await setup();
+  } finally {
+    for (const [key, name] of [
+      ["root", "OCEAN_ROOT"],
+      ["home", "HOME"],
+      ["appData", "APPDATA"],
+    ]) {
+      if (saved[key] === undefined) delete process.env[name];
+      else process.env[name] = saved[key];
+    }
+  }
+}
+
+test("setup creates the workspace project's tasks folder as ocean/ on a fresh root", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-setup-fresh-"));
+  await setupAt(root);
+  await stat(path.join(root, PROJECTS_DIR, "ocean", "tasks"));
+  await assert.rejects(stat(path.join(root, PROJECTS_DIR, "atlas")));
+});
+
+test("setup on a machine that still has atlas/tasks keeps using it and creates no second, empty ocean/ folder", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-setup-legacy-"));
+  await setupAt(root, (r) =>
+    mkdir(path.join(r, PROJECTS_DIR, "atlas", "tasks"), { recursive: true }),
+  );
+  await stat(path.join(root, PROJECTS_DIR, "atlas", "tasks"));
+  await assert.rejects(stat(path.join(root, PROJECTS_DIR, "ocean")));
 });
