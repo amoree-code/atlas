@@ -21,7 +21,7 @@ test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutp
   );
   assert.match(
     result.hookSpecificOutput.additionalContext,
-    /^atlas=1 project=/,
+    /^ocean=1 project=/,
   );
 });
 
@@ -168,3 +168,37 @@ test("claudeNativeHookStatus reports registered only when settings.json actually
   const status = await claudeNativeHookStatus(fakeHome);
   assert.equal(status.registered, true);
 });
+
+for (const [folder, hook] of [
+  ["ocean", "ocean-session-bootstrap"],
+  ["ocean", "atlas-session-bootstrap"],
+  ["atlas", "ocean-session-bootstrap"],
+]) {
+  test(`claudeNativeHookStatus finds ${hook} under ~/${folder} and its registration`, async () => {
+    const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-fake-home-"));
+    const hooks = path.join(
+      fakeHome,
+      folder,
+      SYSTEM_DIR,
+      "integrations",
+      "claude-code",
+      "hooks",
+    );
+    await mkdir(hooks, { recursive: true });
+    const scriptPath = path.join(hooks, hook);
+    await writeFile(scriptPath, "#!/bin/sh\n");
+    await mkdir(path.join(fakeHome, ".claude"), { recursive: true });
+    await writeFile(
+      path.join(fakeHome, ".claude", "settings.json"),
+      JSON.stringify({
+        hooks: {
+          SessionStart: [{ hooks: [{ type: "command", command: scriptPath }] }],
+        },
+      }),
+    );
+    const status = await claudeNativeHookStatus(fakeHome);
+    assert.equal(status.scriptInstalled, true);
+    assert.equal(status.scriptPath, scriptPath);
+    assert.equal(status.registered, true);
+  });
+}

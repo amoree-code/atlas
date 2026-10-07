@@ -19,7 +19,10 @@ test("client test reports Ocean sources and Claude transport", () => {
   const report = JSON.parse(result.stdout);
   assert.equal(report.provider, "claude");
   assert.match(report.transport, /bootstrap-env/);
-  assert.ok(report.atlas.bootstrapBytes <= 256);
+  assert.ok(report.ocean.bootstrapBytes <= 256);
+  // Pre-rename keys are still emitted for one release, with identical values.
+  assert.deepEqual(report.atlas, report.ocean);
+  assert.equal(report.routing.atlasEngine, report.routing.oceanEngine);
   assert.ok(report.project);
   assert.ok(Array.isArray(report.providerOwnedPaths));
   assert.equal(report.routing.command, "claude");
@@ -30,7 +33,7 @@ test("client test reports Ocean sources and Claude transport", () => {
     ),
   );
   assert.match(
-    report.atlas.sessionStore,
+    report.ocean.sessionStore,
     new RegExp(`${sep}${systemPattern}${sep}sessions${sep}sessions\\.sqlite$`),
   );
 });

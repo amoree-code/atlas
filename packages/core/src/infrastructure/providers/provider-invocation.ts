@@ -64,7 +64,7 @@ export type ProviderResult = {
   exitCode: number | null;
   durationMs: number;
   providerSessionId: string | null;
-  atlasSessionId: string;
+  oceanSessionId: string;
   parentSessionId: string | null;
   malformedLines: number;
   partial: boolean;
@@ -155,7 +155,7 @@ export function parseProviderStream(
 export type ProviderInvocationRequest = {
   provider: string;
   prompt: string;
-  atlasSessionId: string;
+  oceanSessionId: string;
   parentSessionId?: string | null;
   cwd: string;
   timeoutMs?: number;
@@ -175,7 +175,7 @@ function result(
     exitCode: null,
     durationMs: 0,
     providerSessionId: null,
-    atlasSessionId: request.atlasSessionId,
+    oceanSessionId: request.oceanSessionId,
     parentSessionId: request.parentSessionId ?? null,
     malformedLines: 0,
     partial: false,

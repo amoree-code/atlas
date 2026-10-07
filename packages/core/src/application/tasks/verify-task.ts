@@ -25,6 +25,7 @@ const COMMAND_ALLOWLIST = new Set([
   "yarn",
   "node",
   "tsc",
+  "ocean",
   "atlas",
   "make",
   "bash",

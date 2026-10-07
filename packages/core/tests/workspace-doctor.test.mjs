@@ -48,3 +48,27 @@ test("doctor reports missing roots and broken active links without mutating", as
     before,
   );
 });
+
+test("policy doctor reads policy references written as `ocean policy` or the legacy `atlas policy`", async () => {
+  const { CHARTER_DIR, POLICIES_DIR } = await import("../dist/paths.js");
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-policy-doctor-"));
+  await mkdir(path.join(root, POLICIES_DIR), { recursive: true });
+  await writeFile(path.join(root, POLICIES_DIR, "task.md"), "# task\n");
+  await writeFile(
+    path.join(root, CHARTER_DIR, "core.md"),
+    [
+      "Load `ocean policy task` when starting work.",
+      "Load `atlas policy task` too (legacy wording).",
+      "Load `ocean policy list` to see them all.",
+      "Load `ocean policy missing-one` and `atlas policy missing-two`.",
+    ].join("\n"),
+  );
+  const result = spawnSync(
+    process.execPath,
+    [path.resolve("dist/main.js"), "policy", "doctor"],
+    { encoding: "utf8", env: { ...process.env, OCEAN_ROOT: root } },
+  );
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(report.missing.sort(), ["missing-one", "missing-two"]);
+  assert.equal(report.ok, false);
+});

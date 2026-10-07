@@ -10,7 +10,7 @@ export const OCEAN_BOOTSTRAP_MAX_BYTES = 256;
 
 export type OceanBootstrap = {
   content: string;
-  manifest: { bytes: number; source: "atlas"; transport: "bootstrap-env" };
+  manifest: { bytes: number; source: "ocean"; transport: "bootstrap-env" };
 };
 
 const SUPPORTED_OPERATIONS = "context,tasks,memory-search,knowledge-search";
@@ -25,7 +25,7 @@ function projectTag(project: ProjectResolution): string {
 export function buildOceanBootstrap(
   project: ProjectResolution,
 ): OceanBootstrap {
-  const content = `atlas=1 project=${projectTag(project)} confidence=${project.confidence} ops=${SUPPORTED_OPERATIONS}`;
+  const content = `ocean=1 project=${projectTag(project)} confidence=${project.confidence} ops=${SUPPORTED_OPERATIONS}`;
   const bytes = Buffer.byteLength(content, "utf8");
   if (bytes > OCEAN_BOOTSTRAP_MAX_BYTES) {
     throw new Error(
@@ -34,7 +34,7 @@ export function buildOceanBootstrap(
   }
   return {
     content,
-    manifest: { bytes, source: "atlas", transport: "bootstrap-env" },
+    manifest: { bytes, source: "ocean", transport: "bootstrap-env" },
   };
 }
 

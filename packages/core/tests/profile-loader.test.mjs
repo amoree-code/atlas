@@ -146,6 +146,27 @@ test("all practical role profiles use the universal client contract", async () =
   }
 });
 
+test("a profile distribution reads oceanRequires, or the pre-rename atlasRequires, oceanRequires winning", async () => {
+  const { validateProfileDistribution } = await import(
+    "../dist/domain/profiles/profile-distribution.js"
+  );
+  const base = { name: "p", version: "1.0.0" };
+  assert.equal(validateProfileDistribution(base).oceanRequires, "*");
+  assert.equal(
+    validateProfileDistribution({ ...base, atlasRequires: ">=0.3" })
+      .oceanRequires,
+    ">=0.3",
+  );
+  assert.equal(
+    validateProfileDistribution({
+      ...base,
+      atlasRequires: ">=0.3",
+      oceanRequires: ">=0.4",
+    }).oceanRequires,
+    ">=0.4",
+  );
+});
+
 test("validates a profile distribution and rejects private state", async () => {
   const root = await mkdtemp(
     path.join(os.tmpdir(), "atlas-profile-distribution-"),

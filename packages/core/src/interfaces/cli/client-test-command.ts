@@ -78,9 +78,20 @@ async function buildReport(
       shim: providerWrapperPath(provider.command),
       shimDirectory: shimDirectory(),
       nativeExecutable: executable,
+      oceanEngine: enginePath("dist", "main.js"),
+      // Pre-rename key, kept one release for scripts that read the JSON report.
       atlasEngine: enginePath("dist", "main.js"),
     },
     project,
+    ocean: {
+      root: oceanPath(),
+      bootstrapBytes: bootstrap.manifest.bytes,
+      bootstrapTransport: bootstrap.manifest.transport,
+      sessionStore: oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
+      runtimeLogs: oceanPath(SYSTEM_DIR, "runtime", "logs", "runtime.jsonl"),
+      sessionSummaries: oceanPath(SYSTEM_DIR, "sessions", "summaries"),
+    },
+    // Pre-rename key, kept one release for scripts that read the JSON report.
     atlas: {
       root: oceanPath(),
       bootstrapBytes: bootstrap.manifest.bytes,
@@ -151,17 +162,17 @@ function printReport(report: Awaited<ReturnType<typeof buildReport>>): void {
   console.log(
     `native executable: ${report.routing.nativeExecutable ?? "NOT FOUND outside Ocean shims"}`,
   );
-  console.log(`Ocean engine: ${report.routing.atlasEngine}`);
+  console.log(`Ocean engine: ${report.routing.oceanEngine}`);
   console.log(
     `project: ${report.project.status}${report.project.status === "bound" ? ` (${report.project.projectId}, confidence: ${report.project.confidence})` : ""}`,
   );
   console.log(
     `entry boundary: ${report.entryBoundary.kind} — ${report.entryBoundary.detail}`,
   );
-  console.log(`Ocean bootstrap bytes: ${report.atlas.bootstrapBytes}`);
-  console.log(`Ocean saves sessions: ${report.atlas.sessionStore}`);
-  console.log(`Ocean saves runtime logs: ${report.atlas.runtimeLogs}`);
-  console.log(`Ocean saves summaries: ${report.atlas.sessionSummaries}`);
+  console.log(`Ocean bootstrap bytes: ${report.ocean.bootstrapBytes}`);
+  console.log(`Ocean saves sessions: ${report.ocean.sessionStore}`);
+  console.log(`Ocean saves runtime logs: ${report.ocean.runtimeLogs}`);
+  console.log(`Ocean saves summaries: ${report.ocean.sessionSummaries}`);
   console.log(`transport: ${report.transport}`);
   console.log("Provider-owned paths:");
   for (const file of report.providerOwnedPaths)

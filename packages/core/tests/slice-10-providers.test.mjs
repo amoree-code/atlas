@@ -101,7 +101,7 @@ test("unsupported providers stay explicitly gated, never silently attempted", as
     const result = await invokeProviderHeadless({
       provider,
       prompt: "x",
-      atlasSessionId: SESSION,
+      oceanSessionId: SESSION,
       cwd: os.tmpdir(),
       guard: guardFor(provider),
     });
@@ -134,7 +134,7 @@ test("guard rejection happens before any process is spawned", async () => {
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     executable: file,
     guard: guardFor("claude", { approved: false }),
@@ -161,7 +161,7 @@ test("consent rejection (revoked/expired/wrong-session) blocks provider invocati
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     executable: file,
     guard: {
@@ -181,7 +181,7 @@ test("ambiguous intent cannot invoke a provider even with a grant", async () => 
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     guard: guardFor("claude", {
       classification: classifyIntent("continue the login work"),
@@ -201,7 +201,7 @@ test("path/scope rejection: an invalid budget denies the invocation", async () =
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     guard: {
       sessionId: SESSION,
@@ -221,7 +221,7 @@ test("invalid provider command produces a structured unavailable/failed result, 
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     executable: "/nonexistent/atlas-provider-binary",
     guard: guardFor("claude"),
@@ -240,7 +240,7 @@ unixOnly(
     const result = await invokeProviderHeadless({
       provider: "claude",
       prompt: "x",
-      atlasSessionId: SESSION,
+      oceanSessionId: SESSION,
       cwd: os.tmpdir(),
       executable: file,
       timeoutMs: 1_000,
@@ -263,7 +263,7 @@ unixOnly(
     const result = await invokeProviderHeadless({
       provider: "claude",
       prompt: "x",
-      atlasSessionId: SESSION,
+      oceanSessionId: SESSION,
       cwd: os.tmpdir(),
       executable: file,
       guard: guardFor("claude"),
@@ -309,13 +309,13 @@ test("a failing provider still propagates the Ocean session pointer and parent r
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     parentSessionId: parent,
     cwd: os.tmpdir(),
     executable: file,
     guard: guardFor("claude"),
   });
-  assert.equal(result.atlasSessionId, SESSION);
+  assert.equal(result.oceanSessionId, SESSION);
   assert.equal(result.parentSessionId, parent);
 });
 
@@ -329,7 +329,7 @@ test("provider output is redacted and clipped — no credential leakage into res
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     executable: file,
     guard: guardFor("claude"),
@@ -357,7 +357,7 @@ test("deterministic structured result: the same failure yields the same shape ev
   const first = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     executable: file,
     guard: guardFor("claude"),
@@ -365,7 +365,7 @@ test("deterministic structured result: the same failure yields the same shape ev
   const second = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     executable: file,
     guard: guardFor("claude"),
@@ -377,7 +377,7 @@ test("Arabic and English intents are guarded identically before provider invocat
   const arabic = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     guard: guardFor("claude", {
       classification: classifyIntent("شغل السيرفر"),
@@ -387,7 +387,7 @@ test("Arabic and English intents are guarded identically before provider invocat
   const english = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     guard: guardFor("claude", {
       classification: classifyIntent("run the build"),
@@ -516,7 +516,7 @@ live(
     const result = await invokeProviderHeadless({
       provider: "claude",
       prompt: "Reply with exactly: OK",
-      atlasSessionId: SESSION,
+      oceanSessionId: SESSION,
       cwd: dir,
       timeoutMs: 180_000,
       guard: guardFor("claude"),
@@ -543,7 +543,7 @@ live("live smoke: codex headless completes", async () => {
   const result = await invokeProviderHeadless({
     provider: "codex",
     prompt: "Reply with exactly: OK",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: dir,
     timeoutMs: 300_000,
     guard: guardFor("codex"),
@@ -563,7 +563,7 @@ live("live smoke: gemini headless completes", async () => {
   const result = await invokeProviderHeadless({
     provider: "gemini",
     prompt: "Reply with exactly: OK",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: dir,
     timeoutMs: 300_000,
     guard: guardFor("gemini"),
@@ -580,7 +580,7 @@ test("an unavailable provider is reported unavailable, never as a pass", async (
   const result = await invokeProviderHeadless({
     provider: "claude",
     prompt: "x",
-    atlasSessionId: SESSION,
+    oceanSessionId: SESSION,
     cwd: os.tmpdir(),
     executable: path.join(os.tmpdir(), "definitely-missing-provider-binary"),
     guard: guardFor("claude"),

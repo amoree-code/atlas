@@ -159,3 +159,21 @@ test("verifyTask defaults its working directory to the engine repo root", async 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("extractVerificationCommands allows the ocean and the legacy atlas command, and still rejects chained foreign commands", () => {
+  const body = `---
+id: T-903
+state: active
+---
+
+## Verification
+
+- \`ocean tasks verify T-1\`
+- \`atlas tasks verify T-1\`
+- \`ocean tasks verify T-1; rm -rf x\`
+`;
+  assert.deepEqual(extractVerificationCommands(body), [
+    "ocean tasks verify T-1",
+    "atlas tasks verify T-1",
+  ]);
+});

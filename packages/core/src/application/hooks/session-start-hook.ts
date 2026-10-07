@@ -65,30 +65,45 @@ export type ClaudeNativeHookStatus = {
   registered: boolean;
 };
 
+// The hook script and its registration are named after the product; the pre-rename name
+// ("atlas-session-bootstrap") and workspace folder ("~/atlas") are still recognised so a machine
+// that has not re-copied the hook keeps reporting the truth.
+const HOOK_NAMES = ["ocean-session-bootstrap", "atlas-session-bootstrap"];
+const WORKSPACE_FOLDERS = ["ocean", "atlas"];
+
 // Read-only status check: does the hook script exist on disk, and is it actually registered
 // under hooks.SessionStart in the live Claude Code settings? Registration is never done
-// automatically here (see ../../../../kernel/bridge/integrations/claude-code/hooks/atlas-session-bootstrap
-// for the manual-copy convention) — this only reports the truth, it never assumes it.
+// automatically here (see kernel/bridge/integrations/claude-code/hooks/ for the manual-copy
+// convention) — this only reports the truth, it never assumes it.
 export async function claudeNativeHookStatus(
   homeDir = os.homedir(),
 ): Promise<ClaudeNativeHookStatus> {
-  const scriptPath = path.join(
-    homeDir,
-    "atlas",
-    SYSTEM_DIR,
-    "integrations",
-    "claude-code",
-    "hooks",
-    "atlas-session-bootstrap",
+  const candidates = WORKSPACE_FOLDERS.flatMap((folder) =>
+    HOOK_NAMES.map((hook) =>
+      path.join(
+        homeDir,
+        folder,
+        SYSTEM_DIR,
+        "integrations",
+        "claude-code",
+        "hooks",
+        hook,
+      ),
+    ),
   );
-  const settingsPath = path.join(homeDir, ".claude", "settings.json");
+  let scriptPath = candidates[0];
   let scriptInstalled = false;
-  try {
-    await readFile(scriptPath, "utf8");
-    scriptInstalled = true;
-  } catch {
-    scriptInstalled = false;
+  for (const candidate of candidates) {
+    try {
+      await readFile(candidate, "utf8");
+      scriptPath = candidate;
+      scriptInstalled = true;
+      break;
+    } catch {
+      // try the next known location
+    }
   }
+  const settingsPath = path.join(homeDir, ".claude", "settings.json");
   let registered = false;
   try {
     const settings = JSON.parse(await readFile(settingsPath, "utf8")) as {
@@ -97,7 +112,7 @@ export async function claudeNativeHookStatus(
     const entries = settings.hooks?.SessionStart ?? [];
     registered = entries.some((entry) =>
       (entry.hooks ?? []).some((hook) =>
-        hook.command?.includes("atlas-session-bootstrap"),
+        HOOK_NAMES.some((name) => hook.command?.includes(name)),
       ),
     );
   } catch {
