@@ -62,7 +62,7 @@ test("ocean hook session-start CLI: bounded stdout JSON, run from a cwd outside 
   );
   assert.doesNotMatch(
     parsed.hookSpecificOutput.additionalContext,
-    /MEMORY|KNOWLEDGE|## Ocean resource/,
+    /MEMORY|KNOWLEDGE|## (?:Atlas|Ocean) resource/,
   );
 });
 
