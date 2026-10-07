@@ -60,7 +60,8 @@ const NESTED = {
   "ocean/brain/README.md": "brain readme",
   "ocean/brain/.DS_Store": "junk",
   "ocean/README.md": "root readme",
-  "ocean/.gitignore": "/kernel/\nbrain/.index/\n.env\n",
+  "ocean/.gitignore":
+    "/kernel/\nbrain/.index/\n!brain/keep.md\n/brain/\n  brain/tmp \n# brain/ note\nbrainstorm/\n.env\n",
   "ocean/kernel/bridge/sessions/sessions.sqlite": "db!",
   "ocean/kernel/bridge/sessions/log.txt":
     "<root>/kernel/bridge is data, not a pointer",
@@ -72,7 +73,11 @@ const NESTED = {
     '{"a":"<root>/kernel/bridge/hooks/x","b":"<root>/kernel/bridge/hooks/y"}',
   // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal ${HOME} spelling is what the scan must find
   ".claude/skills/demo/SKILL.md": "see ${HOME}/ocean/brain/04-projects\n",
-  ".zshrc": "export PATH=~/ocean-old/brain/:$PATH\n",
+  ".zshrc":
+    "export PATH=~/ocean-old/brain/:$PATH\nls ~/ocean/brainstorm <root>/kernel/bridge-x\n",
+  ".gemini/skills/demo/SKILL.md":
+    "cd ~/ocean/brain && ls <root>/kernel/bridge\n",
+  "dotfiles/bashrc": 'source "$HOME/ocean/kernel/bridge/env"\n',
   ".zprofile": "binary\0 ~/ocean/brain/x",
 };
 
@@ -82,6 +87,14 @@ test("layout plan describes the move of a nested root without writing anything",
     symlinkSync(
       "runtime",
       path.join(where.root, "kernel", "bridge", "current"),
+    );
+    symlinkSync(
+      path.join(where.root, "kernel", "bridge", "skills", "demo"),
+      path.join(where.home, ".claude", "skills", "linked"),
+    );
+    symlinkSync(
+      path.join(where.home, "dotfiles", "bashrc"),
+      path.join(where.home, ".bashrc"),
     );
     const before = snapshot(where.home);
     const result = plan(where);
@@ -110,20 +123,26 @@ test("layout plan describes the move of a nested root without writing anything",
     assert.deepEqual(report.strays, ["user"]);
     assert.deepEqual(report.gitignore, [
       { from: "brain/.index/", to: ".index/" },
+      { from: "!brain/keep.md", to: "!keep.md" },
+      { from: "/brain/", to: null },
+      { from: "  brain/tmp ", to: "  tmp " },
       { from: null, to: "/bridge/" },
     ]);
     const pointers = Object.fromEntries(
-      report.pointers.map(({ file, references }) => [
+      report.pointers.map(({ file, kind, references }) => [
         path.relative(where.home, file),
-        references,
+        `${kind}:${references}`,
       ]),
     );
     assert.deepEqual(pointers, {
-      ".claude/CLAUDE.md": 1,
-      ".claude/settings.json": 2,
-      ".claude/skills/demo/SKILL.md": 1,
-      "ocean/kernel/bridge/runtime/shims/claude": 1,
-      "ocean/brain/charter/core.md": 1,
+      ".claude/CLAUDE.md": "file:1",
+      ".claude/settings.json": "file:2",
+      ".bashrc": "file:1",
+      ".claude/skills/demo/SKILL.md": "file:1",
+      ".claude/skills/linked": "symlink:1",
+      ".gemini/skills/demo/SKILL.md": "file:2",
+      "ocean/kernel/bridge/runtime/shims/claude": "file:1",
+      "ocean/brain/charter/core.md": "file:1",
     });
   } finally {
     rmSync(where.home, { recursive: true, force: true });
@@ -137,6 +156,21 @@ test("without a collision the nested root is ready to apply", () => {
     const report = JSON.parse(plan(where).stdout);
     assert.deepEqual(report.collisions, []);
     assert.equal(report.ready, true);
+  } finally {
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("two moves onto one target collide even though the target does not exist yet", () => {
+  const { "ocean/README.md": _, ...files } = NESTED;
+  const where = fixture({ ...files, "ocean/brain/bridge/x.md": "x" });
+  try {
+    const report = JSON.parse(plan(where).stdout);
+    assert.deepEqual(report.collisions, [
+      { from: "brain/bridge", to: "bridge" },
+      { from: "kernel/bridge", to: "bridge" },
+    ]);
+    assert.equal(report.ready, false);
   } finally {
     rmSync(where.home, { recursive: true, force: true });
   }

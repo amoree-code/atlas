@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile, readlink, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { workspaceLayout } from "../../paths.js";
@@ -23,9 +23,11 @@ export type LayoutPlan = {
   collisions: { from: string; to: string }[];
   // Top-level entries the target structure does not name, e.g. a stray writer's folder.
   strays: string[];
-  // Files that hold the old root-anchored paths and must be repointed at cutover.
-  pointers: { file: string; references: number }[];
-  gitignore: { from: string | null; to: string }[];
+  // Files (or symlinks, by their target) that hold the old root-anchored paths and must be
+  // repointed at cutover.
+  pointers: { file: string; kind: "file" | "symlink"; references: number }[];
+  // A rewritten line, a line to add (from: null), or a line to drop (to: null).
+  gitignore: { from: string | null; to: string | null }[];
   ready: boolean;
 };
 
@@ -81,6 +83,7 @@ const HOME_POINTER_DIRS = [
   ".claude/agents",
   ".codex/skills",
   ".gemini/commands",
+  ".gemini/skills",
   ".agents/skills",
 ];
 // Bridge folders that hold data, not configuration; never scanned for pointers.
@@ -124,29 +127,33 @@ async function filesUnder(
     const target = path.join(directory, name);
     const info = await lstat(target).catch(() => null);
     if (info?.isDirectory()) found.push(...(await filesUnder(target)));
-    else if (info?.isFile()) found.push(target);
+    else if (info?.isFile() || info?.isSymbolicLink()) found.push(target);
   }
   return found;
 }
 
-// Every spelling a file may use for the old locations: absolute, and HOME-relative when the root
-// sits under HOME (~/, $HOME/, ${HOME}/).
-export function oldPathNeedles(root: string, home: string): string[] {
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Every spelling a file may use for the old locations — absolute, and HOME-relative when the root
+// sits under HOME (~/, $HOME/, ${HOME}/) — as whole path segments: `~/ocean/brain` and
+// `~/ocean/brain/x` match, `~/ocean/brainstorm`, `~/ocean-old/brain` and `kernel/bridge-x` do not.
+// Group 1 is the root spelling, group 2 the old area, so apply rewrites with the same rule.
+export function oldPathPattern(root: string, home: string): RegExp {
   const roots = [root];
   if (root.startsWith(`${home}${path.sep}`)) {
     const relative = path.relative(home, root);
     roots.push(`~/${relative}`, `$HOME/${relative}`, `\${HOME}/${relative}`);
   }
-  return roots.flatMap((prefix) => [
-    `${prefix}/brain/`,
-    `${prefix}/kernel/bridge`,
-  ]);
+  const prefixes = roots.map(escapeRegExp).join("|");
+  return new RegExp(
+    `(?<![\\w.-])(${prefixes})/(brain|kernel/bridge)(?![\\w.-])`,
+    "g",
+  );
 }
 
-function countNeedles(text: string, needles: string[]): number {
-  let count = 0;
-  for (const needle of needles) count += text.split(needle).length - 1;
-  return count;
+function countMatches(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length ?? 0;
 }
 
 async function pointerFiles(
@@ -167,7 +174,7 @@ async function scanPointers(
   home: string,
   layout: LayoutPlan["layout"],
 ): Promise<LayoutPlan["pointers"]> {
-  const needles = oldPathNeedles(root, home);
+  const pattern = oldPathPattern(root, home);
   const bridge = path.join(
     root,
     layout.bridge === "nested" ? "kernel/bridge" : "bridge",
@@ -179,11 +186,23 @@ async function scanPointers(
   const pointers: LayoutPlan["pointers"] = [];
   for (const file of await pointerFiles(home, bridge, charter)) {
     const info = await lstat(file).catch(() => null);
-    if (!info?.isFile() || info.size > MAX_POINTER_BYTES) continue;
+    if (info?.isSymbolicLink()) {
+      const target = await readlink(file).catch(() => "");
+      const references = countMatches(target, pattern);
+      if (references) {
+        pointers.push({ file, kind: "symlink", references });
+        continue;
+      }
+    }
+    // A symlinked dotfile (e.g. ~/.zshrc into a dotfiles repo) is read through its link.
+    const resolved = info?.isSymbolicLink()
+      ? await stat(file).catch(() => null)
+      : info;
+    if (!resolved?.isFile() || resolved.size > MAX_POINTER_BYTES) continue;
     const text = await readFile(file, "utf8").catch(() => "");
     if (text.includes("\0")) continue;
-    const references = countNeedles(text, needles);
-    if (references) pointers.push({ file, references });
+    const references = countMatches(text, pattern);
+    if (references) pointers.push({ file, kind: "file", references });
   }
   return pointers;
 }
@@ -196,12 +215,15 @@ async function gitignoreChanges(
   );
   if (source === null) return [];
   const lines = source.split(/\r?\n/);
-  const changes: LayoutPlan["gitignore"] = lines
-    .filter((line) => /^\/?brain\//.test(line.trim()))
-    .map((line) => ({
-      from: line,
-      to: line.replace(/^(\s*\/?)brain\//, "$1"),
-    }));
+  const changes: LayoutPlan["gitignore"] = [];
+  // brain/<rest>, /brain/<rest> and !brain/<rest> lose the brain/ segment; a line that named
+  // brain/ itself has nothing left to name and is dropped. Each line is kept verbatim in `from`.
+  for (const line of lines) {
+    const match = /^(\s*!?\/?)brain(?:\/(.*))?$/.exec(line);
+    if (!match) continue;
+    const rest = match[2] ?? "";
+    changes.push({ from: line, to: rest.trim() ? `${match[1]}${rest}` : null });
+  }
   if (!lines.some((line) => /^\/?bridge\/?$/.test(line.trim())))
     changes.push({ from: null, to: "/bridge/" });
   return changes;
@@ -222,6 +244,18 @@ export async function planLayout(
     for (const name of (await entries(path.join(root, "brain"))).sort())
       if (!OS_JUNK.has(name)) await addMove(`brain/${name}`, name);
   if (layout.bridge === "nested") await addMove("kernel/bridge", "bridge");
+  // Two moves onto one target (e.g. brain/bridge and kernel/bridge, or names that differ only in
+  // case on a case-insensitive volume) collide even though the target does not exist yet.
+  const byTarget = new Map<string, LayoutMove[]>();
+  for (const move of moves) {
+    const key = move.to.toLowerCase();
+    byTarget.set(key, [...(byTarget.get(key) ?? []), move]);
+  }
+  for (const group of byTarget.values())
+    if (group.length > 1)
+      for (const { from, to } of group)
+        if (!collisions.some((collision) => collision.from === from))
+          collisions.push({ from, to });
 
   const strays = (await entries(root))
     .filter((name) => !KNOWN_TOP_LEVEL.has(name))
