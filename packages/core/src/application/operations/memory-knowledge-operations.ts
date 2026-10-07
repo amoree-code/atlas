@@ -162,7 +162,7 @@ export async function searchRecords(
   try {
     root = resolveWithin(oceanRoot(), ...rootSegments);
   } catch {
-    return operationResult(operation, "record root escapes the Atlas root");
+    return operationResult(operation, "record root escapes the Ocean root");
   }
 
   if (options.query && options.indexPort) {
@@ -231,7 +231,7 @@ export async function searchRecords(
 
 // Canonical brain-record frontmatter (T-228): every new write emits this flat shape
 // directly — id/title/summary/tags/type/confidence/created/updated/last_confirmed_at — plus
-// provenance/status/correction_of, which are Atlas operation metadata, not part of the
+// provenance/status/correction_of, which are Ocean operation metadata, not part of the
 // brain-record schema itself, but useful alongside it. Existing files with the legacy
 // name/description/metadata:{...} shape are read through aliases (brain-markdown.ts) and are
 // never rewritten by this function.

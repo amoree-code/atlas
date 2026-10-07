@@ -16,8 +16,8 @@ RUN corepack enable && pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm test
 
-RUN useradd --create-home --shell /usr/sbin/nologin atlas \
-  && chown -R atlas:atlas /app
-USER atlas
+RUN useradd --create-home --shell /usr/sbin/nologin ocean \
+  && chown -R ocean:ocean /app
+USER ocean
 
 CMD ["pnpm", "test"]

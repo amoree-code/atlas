@@ -4,15 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
-import { handleAtlasMcpRequest } from "../dist/infrastructure/mcp/atlas-server.js";
+import { handleOceanMcpRequest } from "../dist/infrastructure/mcp/ocean-server.js";
 import { SYSTEM_DIR } from "../dist/paths.js";
 
-test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-no-obsidian-"));
+test("Ocean MCP exposes provider-neutral read-only tools without Obsidian", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-mcp-no-obsidian-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
-    const listed = await handleAtlasMcpRequest({
+    const listed = await handleOceanMcpRequest({
       jsonrpc: "2.0",
       id: 1,
       method: "tools/list",
@@ -36,14 +36,14 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
         "brain_neighbors",
       ],
     );
-    const status = await handleAtlasMcpRequest({
+    const status = await handleOceanMcpRequest({
       jsonrpc: "2.0",
       id: 2,
       method: "tools/call",
       params: { name: "ocean_status", arguments: {} },
     });
     assert.match(status.result.content[0].text, /"name":"Ocean"/);
-    const legacy = await handleAtlasMcpRequest({
+    const legacy = await handleOceanMcpRequest({
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
@@ -57,11 +57,11 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
 });
 
 test("read-only session tools do not initialize a missing session database", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-readonly-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-mcp-readonly-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
-    const response = await handleAtlasMcpRequest({
+    const response = await handleOceanMcpRequest({
       jsonrpc: "2.0",
       id: 9,
       method: "tools/call",
@@ -80,8 +80,8 @@ test("read-only session tools do not initialize a missing session database", asy
   }
 });
 
-test("Atlas MCP exposes bounded resources and prompt templates", async () => {
-  const listedResources = await handleAtlasMcpRequest({
+test("Ocean MCP exposes bounded resources and prompt templates", async () => {
+  const listedResources = await handleOceanMcpRequest({
     jsonrpc: "2.0",
     id: 3,
     method: "resources/list",
@@ -90,7 +90,7 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
     listedResources.result.resources.map((resource) => resource.uri),
     ["ocean://status", "ocean://profiles", "ocean://tasks", "ocean://handoffs"],
   );
-  const resource = await handleAtlasMcpRequest({
+  const resource = await handleOceanMcpRequest({
     jsonrpc: "2.0",
     id: 4,
     method: "resources/read",
@@ -98,7 +98,7 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
   });
   assert.match(resource.result.contents[0].text, /"name": "Ocean"/);
   for (const uri of ["ocean://tasks", "atlas://tasks"]) {
-    const tasks = await handleAtlasMcpRequest({
+    const tasks = await handleOceanMcpRequest({
       jsonrpc: "2.0",
       id: 7,
       method: "resources/read",
@@ -108,20 +108,20 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
     assert.equal(tasks.result.contents[0].uri, uri);
     assert.ok(Array.isArray(JSON.parse(tasks.result.contents[0].text).tasks));
   }
-  const unknown = await handleAtlasMcpRequest({
+  const unknown = await handleOceanMcpRequest({
     jsonrpc: "2.0",
     id: 8,
     method: "resources/read",
     params: { uri: "tasks" },
   });
   assert.ok(unknown.error);
-  const init = await handleAtlasMcpRequest({
+  const init = await handleOceanMcpRequest({
     jsonrpc: "2.0",
     id: 9,
     method: "initialize",
   });
   assert.equal(init.result.serverInfo.name, "ocean");
-  const listedPrompts = await handleAtlasMcpRequest({
+  const listedPrompts = await handleOceanMcpRequest({
     jsonrpc: "2.0",
     id: 5,
     method: "prompts/list",
@@ -130,7 +130,7 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
     listedPrompts.result.prompts.map((prompt) => prompt.name),
     ["ocean_review_workspace", "ocean_review_task"],
   );
-  const prompt = await handleAtlasMcpRequest({
+  const prompt = await handleOceanMcpRequest({
     jsonrpc: "2.0",
     id: 6,
     method: "prompts/get",
@@ -140,7 +140,7 @@ test("Atlas MCP exposes bounded resources and prompt templates", async () => {
 });
 
 test("legacy atlas_* names still work on prompts/get and keep approvals bound to the sent name", async () => {
-  const legacyPrompt = await handleAtlasMcpRequest({
+  const legacyPrompt = await handleOceanMcpRequest({
     jsonrpc: "2.0",
     id: 20,
     method: "prompts/get",
@@ -148,13 +148,13 @@ test("legacy atlas_* names still work on prompts/get and keep approvals bound to
   });
   assert.match(legacyPrompt.result.messages[0].content.text, /T-1/);
 
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-legacy-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-mcp-legacy-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
     const actionArgs = { sessionId: "missing", target: "knowledge/results" };
     const promote = (name, fingerprint) =>
-      handleAtlasMcpRequest({
+      handleOceanMcpRequest({
         jsonrpc: "2.0",
         id: 21,
         method: "tools/call",

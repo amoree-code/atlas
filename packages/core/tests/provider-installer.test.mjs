@@ -29,7 +29,7 @@ test("catalog exposes provider-neutral install recipes for AI clients", () => {
 test("installation fails closed until explicit approval", async () => {
   await assert.rejects(
     installProvider("hermes", false),
-    /Installation approval required\. Re-run with: atlas install hermes --yes/,
+    /Installation approval required\. Re-run with: ocean install hermes --yes/,
   );
 });
 

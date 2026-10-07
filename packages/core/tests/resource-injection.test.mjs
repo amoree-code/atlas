@@ -9,7 +9,7 @@ import {
 } from "../dist/application/context/project-resolution.js";
 import {
   bootstrapEnvironment,
-  buildAtlasBootstrap,
+  buildOceanBootstrap,
   OCEAN_BOOTSTRAP_MAX_BYTES,
 } from "../dist/application/context/resource-injection.js";
 
@@ -25,8 +25,8 @@ async function withTempAtlasRoot(fn) {
   }
 }
 
-test("bound project bootstrap stays within the 256-byte budget and carries no Atlas file content", () => {
-  const bootstrap = buildAtlasBootstrap({
+test("bound project bootstrap stays within the 256-byte budget and carries no Ocean file content", () => {
+  const bootstrap = buildOceanBootstrap({
     status: "bound",
     projectId: "atlas",
     name: "Atlas",
@@ -40,11 +40,11 @@ test("bound project bootstrap stays within the 256-byte budget and carries no At
   );
   assert.equal(bootstrap.manifest.transport, "bootstrap-env");
   assert.match(bootstrap.content, /project=atlas/);
-  assert.doesNotMatch(bootstrap.content, /##\s*Atlas resource/);
+  assert.doesNotMatch(bootstrap.content, /##\s*(?:Atlas|Ocean) resource/);
 });
 
 test("unbound project bootstrap reports unbound rather than guessing a project", () => {
-  const bootstrap = buildAtlasBootstrap({
+  const bootstrap = buildOceanBootstrap({
     status: "unbound",
     cwd: "/tmp/somewhere",
     gitRoot: null,
@@ -55,7 +55,7 @@ test("unbound project bootstrap reports unbound rather than guessing a project",
 });
 
 test("bootstrap is delivered only as environment variables, never as file content or provider args", () => {
-  const bootstrap = buildAtlasBootstrap({
+  const bootstrap = buildOceanBootstrap({
     status: "unbound",
     cwd: "/tmp",
     gitRoot: null,

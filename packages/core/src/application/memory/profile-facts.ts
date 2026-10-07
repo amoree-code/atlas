@@ -94,7 +94,7 @@ export function buildProfileFactsDigest(
   const ordered = [...facts].sort((a, b) => time(b) - time(a));
   const heading = "## Durable profile facts";
   const pointer = (shown: number) =>
-    `(${shown} of ${facts.length} facts, newest first; full set: atlas memory facts ${profile} or ${profileFactsFile(profile)})`;
+    `(${shown} of ${facts.length} facts, newest first; full set: ocean memory facts ${profile} or ${profileFactsFile(profile)})`;
   // Reserve the pointer's worst case (shown === total) so its size never grows past the budget.
   const reserved = Buffer.byteLength(pointer(facts.length)) + 1;
   const lines: string[] = [];

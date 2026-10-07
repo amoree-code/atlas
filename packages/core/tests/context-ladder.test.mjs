@@ -273,7 +273,7 @@ test("path traversal: a task id that isn't a clean T-<digits> shape is rejected 
       assert.deepEqual(result.files, []);
       assert.doesNotMatch(
         result.reason,
-        /not found under the Atlas task root/,
+        /not found under the Ocean task root/,
         "should be rejected at shape validation, never reach a filesystem stat",
       );
     }

@@ -229,7 +229,7 @@ async function planExactTaskRecord(
   } catch {
     return budgetRejection(
       rung,
-      "resolved task path escapes the Atlas task root — refusing to read outside scope",
+      "resolved task path escapes the Ocean task root — refusing to read outside scope",
       null,
     );
   }
@@ -239,7 +239,7 @@ async function planExactTaskRecord(
   } catch {
     return budgetRejection(
       rung,
-      `task ${normalized} was not found under the Atlas task root`,
+      `task ${normalized} was not found under the Ocean task root`,
       null,
     );
   }

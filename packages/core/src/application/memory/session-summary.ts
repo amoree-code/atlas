@@ -117,7 +117,7 @@ function renderSessionSummary(input: {
     "",
     "## Retrieval",
     "",
-    `- Detailed bounded events: atlas session events ${session.sessionId}`,
+    `- Detailed bounded events: ocean session events ${session.sessionId}`,
     `- Context bytes: ${session.contextBytes}`,
   ];
   let content = `${lines.join("\n")}\n`;

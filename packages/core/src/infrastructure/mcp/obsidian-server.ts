@@ -47,7 +47,7 @@ const tools = [
   {
     name: "obsidian_sync",
     description:
-      "Compare the configured Obsidian vault with Atlas metadata state.",
+      "Compare the configured Obsidian vault with Ocean metadata state.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",
@@ -79,7 +79,7 @@ const tools = [
   {
     name: "obsidian_conflicts_list",
     description:
-      "List Atlas-recorded Obsidian write conflicts without proposed note content.",
+      "List Ocean-recorded Obsidian write conflicts without proposed note content.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",

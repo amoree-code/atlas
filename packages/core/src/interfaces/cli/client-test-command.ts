@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveProject } from "../../application/context/project-resolution.js";
-import { buildAtlasBootstrap } from "../../application/context/resource-injection.js";
+import { buildOceanBootstrap } from "../../application/context/resource-injection.js";
 import { claudeNativeHookStatus } from "../../application/hooks/session-start-hook.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import {
@@ -22,7 +22,7 @@ export async function runClientTestCommand(
 ): Promise<void> {
   const cwd = path.resolve(process.cwd());
   const project = await resolveProject(cwd);
-  const bootstrap = buildAtlasBootstrap(project);
+  const bootstrap = buildOceanBootstrap(project);
   const providers = providerName
     ? [findProvider(providerName)]
     : loadProviderRegistry();
@@ -45,7 +45,7 @@ async function buildReport(
   provider: ReturnType<typeof findProvider>,
   cwd: string,
   project: Awaited<ReturnType<typeof resolveProject>>,
-  bootstrap: ReturnType<typeof buildAtlasBootstrap>,
+  bootstrap: ReturnType<typeof buildOceanBootstrap>,
   store: Awaited<ReturnType<typeof openSessionStore>>,
 ) {
   let executable: string | null = null;

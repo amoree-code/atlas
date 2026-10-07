@@ -107,7 +107,7 @@ export class BrowserService {
     this.requireApproval(
       "upload",
       Boolean(options.approved),
-      "attaching local files to a page is irreversible from Atlas's point of view",
+      "attaching local files to a page is irreversible from Ocean's point of view",
     );
     const result = await handle.upload(selector, paths);
     return {
@@ -129,7 +129,7 @@ export class BrowserService {
     this.requireApproval(
       "download",
       Boolean(options.approved),
-      "saving a file to disk is irreversible from Atlas's point of view",
+      "saving a file to disk is irreversible from Ocean's point of view",
     );
     const result = await handle.download(
       selector,
@@ -154,7 +154,7 @@ export class BrowserService {
     this.requireApproval(
       "submit",
       Boolean(options.approved),
-      "submitting a form is irreversible from Atlas's point of view",
+      "submitting a form is irreversible from Ocean's point of view",
     );
     const result = await handle.submit(selector, options.timeoutMs);
     const verified =

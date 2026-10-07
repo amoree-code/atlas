@@ -66,7 +66,7 @@ export async function brainSearch(
     exists = false;
   }
   if (!exists) {
-    throw new Error("brain index not built — run atlas memory reindex");
+    throw new Error("brain index not built — run ocean memory reindex");
   }
 
   const reader = options.indexPort.openIndexReadOnly(indexFile);

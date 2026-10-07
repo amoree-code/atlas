@@ -200,7 +200,7 @@ test("adds Claude resume ids without changing the CLI stream contract", () => {
 });
 
 unixOnly(
-  "headless providers bypass Atlas shims and run the original executable",
+  "headless providers bypass Ocean shims and run the original executable",
   async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "atlas-headless-provider-"),
@@ -250,7 +250,7 @@ unixOnly(
   },
 );
 
-test("resolves a configured client home only inside Atlas system/clients", () => {
+test("resolves a configured client home only inside Ocean system/clients", () => {
   const previousRoot = process.env.OCEAN_ROOT;
   const root = path.join(os.tmpdir(), "atlas-client-home-test");
   process.env.OCEAN_ROOT = root;
@@ -276,7 +276,7 @@ test("resolves a configured client home only inside Atlas system/clients", () =>
     });
     assert.throws(
       () => resolveClientHome(unsafe),
-      /must stay under Atlas system\/clients/,
+      /must stay under Ocean system\/clients/,
     );
   } finally {
     if (previousRoot === undefined) delete process.env.OCEAN_ROOT;

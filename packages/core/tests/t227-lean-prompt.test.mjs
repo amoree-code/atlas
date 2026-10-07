@@ -197,7 +197,7 @@ test("headless prompt carries a skill index, compact contract, facts digest and 
     assert.ok(!captured.includes('{"profile"'));
     assert.ok(captured.includes("- fact-39: value 39"));
     assert.ok(!captured.includes("- fact-00:"));
-    assert.ok(captured.includes("atlas memory facts lean"));
+    assert.ok(captured.includes("ocean memory facts lean"));
     assert.match(captured, /## Context references[\s\S]*- README\.md \(/);
 
     const store = new SessionStore(
@@ -378,7 +378,7 @@ test("buildProfileFactsDigest is newest first, bounded and UTF-8 safe", () => {
   assert.deepEqual(lines.slice(1, 4), ["- new: b", "- old: a", "- bad: c"]);
   assert.match(
     lines[4],
-    /^\(3 of 3 facts, newest first; full set: atlas memory facts p or /,
+    /^\(3 of 3 facts, newest first; full set: ocean memory facts p or /,
   );
 
   const big = [
@@ -397,7 +397,7 @@ test("buildProfileFactsDigest is newest first, bounded and UTF-8 safe", () => {
   assert.match(bounded, /- arabic: مرحبا/);
   assert.match(
     bounded,
-    /\(1 of 2 facts, newest first; full set: atlas memory facts p/,
+    /\(1 of 2 facts, newest first; full set: ocean memory facts p/,
   );
 });
 

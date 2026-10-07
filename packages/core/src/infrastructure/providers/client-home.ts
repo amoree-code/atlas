@@ -9,7 +9,7 @@ export function resolveClientHome(profile: Profile): string | undefined {
   const resolved = path.resolve(oceanPath(configured));
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
     throw new Error(
-      `Client home must stay under Atlas system/clients: ${configured}`,
+      `Client home must stay under Ocean system/clients: ${configured}`,
     );
   }
   return resolved;

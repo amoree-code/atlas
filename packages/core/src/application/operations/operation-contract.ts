@@ -151,7 +151,7 @@ export function validateSlug(
   return { valid: true, value: slug };
 }
 
-// A write destination must resolve inside the private Atlas workspace root and must never
+// A write destination must resolve inside the private Ocean workspace root and must never
 // land inside the public engine package, whatever the caller passed.
 export function validateWriteTarget(
   ...segments: string[]
@@ -160,14 +160,14 @@ export function validateWriteTarget(
   try {
     resolved = resolveWithin(oceanRoot(), ...segments);
   } catch {
-    return { valid: false, reason: "write target escapes the Atlas root" };
+    return { valid: false, reason: "write target escapes the Ocean root" };
   }
   const engine = path.resolve(engineRoot());
   if (resolved === engine || resolved.startsWith(`${engine}${path.sep}`)) {
     return {
       valid: false,
       reason:
-        "refusing to write private Atlas content inside the public engine package",
+        "refusing to write private Ocean content inside the public engine package",
     };
   }
   return { valid: true, value: resolved };
@@ -204,7 +204,7 @@ export function operationForIntent(
   }
   return {
     operation: null,
-    reason: `intent '${intent}' does not map to any Atlas record operation`,
+    reason: `intent '${intent}' does not map to any Ocean record operation`,
   };
 }
 

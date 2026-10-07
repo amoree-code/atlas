@@ -13,7 +13,7 @@ export type TaskSummary = {
 
 /**
  * Read task summaries for a project from the workspace. Lives in the application
- * layer so both the CLI (`atlas tasks list`) and the MCP server can call it
+ * layer so both the CLI (`ocean tasks list`) and the MCP server can call it
  * without the MCP server reaching back into the CLI layer.
  */
 export async function listTasks(

@@ -84,10 +84,10 @@ export async function createHandoffWithStore(
   const handoff = validateHandoff({
     handoffId: `handoff-${randomUUID()}`,
     taskId: task?.id ?? session?.taskId ?? null,
-    title: task?.title ?? session?.title ?? "Atlas session handoff",
+    title: task?.title ?? session?.title ?? "Ocean session handoff",
     objective:
       task?.objective ??
-      "Continue the selected Atlas session with bounded context.",
+      "Continue the selected Ocean session with bounded context.",
     state: task?.state ?? session?.status ?? "paused",
     profileId: input.profileId ?? session?.profile ?? "",
     profileIdentity: session?.profileIdentity ?? "",

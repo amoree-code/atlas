@@ -820,7 +820,7 @@ test("a cross-project request is refused explicitly", () =>
     assert.match(result.reason, /cross-project request refused/);
   }));
 
-test("private Atlas content is never written inside the public engine package", () => {
+test("private Ocean content is never written inside the public engine package", () => {
   const engineRelative = path
     .relative(oceanRoot(), engineRoot())
     .split(path.sep);
@@ -829,14 +829,14 @@ test("private Atlas content is never written inside the public engine package", 
   assert.match(rejected.reason, /public engine package/);
 });
 
-test("write targets that escape the Atlas root are refused", async () => {
+test("write targets that escape the Ocean root are refused", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-escape-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
     const rejected = validateWriteTarget("..", "..", "etc", "passwd");
     assert.equal(rejected.valid, false);
-    assert.match(rejected.reason, /escapes the Atlas root/);
+    assert.match(rejected.reason, /escapes the Ocean root/);
   } finally {
     if (previous === undefined) delete process.env.OCEAN_ROOT;
     else process.env.OCEAN_ROOT = previous;

@@ -523,7 +523,7 @@ async function getPrompt(
   throw new Error(`Unknown Ocean prompt: ${name}`);
 }
 
-export async function handleAtlasMcpRequest(
+export async function handleOceanMcpRequest(
   request: Request,
 ): Promise<Response | null> {
   if (request.method === "notifications/initialized") return null;
@@ -626,7 +626,7 @@ export async function handleAtlasMcpRequest(
   }
 }
 
-export async function runAtlasMcpServer(): Promise<void> {
+export async function runOceanMcpServer(): Promise<void> {
   let buffer = "";
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", async (chunk: string) => {
@@ -638,7 +638,7 @@ export async function runAtlasMcpServer(): Promise<void> {
       buffer = buffer.slice(newline + 1);
       if (!line) continue;
       const request = JSON.parse(line) as Request;
-      const response = await handleAtlasMcpRequest(request);
+      const response = await handleOceanMcpRequest(request);
       if (!response) continue;
       process.stdout.write(`${JSON.stringify(response)}\n`);
     }

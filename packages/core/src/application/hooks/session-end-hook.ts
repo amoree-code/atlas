@@ -100,7 +100,7 @@ export async function readTranscriptEvents(
  * (context injection only, no session-store write), this registers the
  * Claude Code session in sessions.sqlite the first time it is seen, replays
  * its transcript as bounded user_input/provider_output events, and runs it
- * through the same finalizeSession pipeline as `atlas run` and `atlas
+ * through the same finalizeSession pipeline as `ocean run` and `ocean
  * intercept` sessions — producing the summary, daily narrative, and
  * brain/00-inbox/brain-dump/ entry. Reuses the sessionId Claude Code itself
  * assigned, so a hook re-run for the same session (e.g. `/clear` followed by

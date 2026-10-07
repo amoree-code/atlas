@@ -31,7 +31,7 @@ async function activeProjectId(cwd: string): Promise<ProjectScope> {
     return { ok: true, projectId: resolution.projectId };
   return {
     ok: false,
-    reason: `no bound Atlas project for this working directory (status: ${resolution.status})`,
+    reason: `no bound Ocean project for this working directory (status: ${resolution.status})`,
   };
 }
 

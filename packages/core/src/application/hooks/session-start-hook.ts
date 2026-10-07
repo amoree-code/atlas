@@ -3,13 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { SYSTEM_DIR } from "../../paths.js";
 import { resolveProject } from "../context/project-resolution.js";
-import { buildAtlasBootstrap } from "../context/resource-injection.js";
+import { buildOceanBootstrap } from "../context/resource-injection.js";
 
 // The documented Claude Code SessionStart hook contract on this machine (verified against
 // the live ~/.claude/settings.json hook entries, e.g. the existing ai-guard-push PreToolUse
 // hook): a hook reads a small JSON payload on stdin and may print
 // {"hookSpecificOutput": {"hookEventName": "...", "additionalContext": "..."}} on stdout.
-// additionalContext is the only thing Atlas adds — never file content, never a transcript.
+// additionalContext is the only thing Ocean adds — never file content, never a transcript.
 export type ClaudeSessionStartPayload = {
   cwd?: string;
   session_id?: string;
@@ -49,7 +49,7 @@ export async function claudeSessionStartHook(
 ): Promise<ClaudeSessionStartResult> {
   const cwd = payload.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const project = await resolveProject(cwd);
-  const bootstrap = buildAtlasBootstrap(project);
+  const bootstrap = buildOceanBootstrap(project);
   return {
     hookSpecificOutput: {
       hookEventName: "SessionStart",

@@ -290,7 +290,7 @@ test("invalid budget is denied before anything else is considered", () =>
 
 // ---------------------------------------------------------------- path & scope safety
 
-test("a target outside the Atlas root is denied for a record write", () =>
+test("a target outside the Ocean root is denied for a record write", () =>
   withRoot(async () => {
     const scope = {
       action: "memory.write",
@@ -307,7 +307,7 @@ test("a target outside the Atlas root is denied for a record write", () =>
       grant,
     });
     assert.equal(verdict.code, "invalid-target");
-    assert.match(verdict.reason, /escapes the Atlas root/);
+    assert.match(verdict.reason, /escapes the Ocean root/);
   }));
 
 test("a null byte in the target is denied", () =>

@@ -5,7 +5,7 @@ import { readFrontmatterFile as readFrontmatterFileWithLimit } from "../../fs-ut
 import { oceanRoot } from "../../paths.js";
 import type { Freshness } from "../context/context-packet.js";
 
-// Bounded, deterministic Atlas record I/O (T-198 slice 7). Every read is scoped to a
+// Bounded, deterministic Ocean record I/O (T-198 slice 7). Every read is scoped to a
 // specific record directory and capped by the caller's budget — there is no repository-wide
 // scan anywhere in this module. Every write is atomic (temp file + rename, see fs-utils.ts)
 // and refuses to run without an explicit, matching approval.

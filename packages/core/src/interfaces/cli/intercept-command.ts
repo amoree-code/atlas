@@ -8,7 +8,7 @@ import {
 import { resolveProject } from "../../application/context/project-resolution.js";
 import {
   bootstrapEnvironment,
-  buildAtlasBootstrap,
+  buildOceanBootstrap,
 } from "../../application/context/resource-injection.js";
 import { finalizeSession } from "../../application/memory/session-closeout.js";
 import { authorizeRun } from "../../application/runs/run-authorization.js";
@@ -72,7 +72,7 @@ export async function intercept(
   const store = await openSessionStore();
   const workingDirectory = path.resolve(process.cwd());
   const projectResolution = await resolveProject(workingDirectory);
-  const bootstrap = buildAtlasBootstrap(projectResolution);
+  const bootstrap = buildOceanBootstrap(projectResolution);
   const runId = randomUUID();
   const contract = validateRunContract({
     runId,

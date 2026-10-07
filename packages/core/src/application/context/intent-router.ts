@@ -1,6 +1,6 @@
 // Deterministic intent router: pure text classification, no filesystem I/O, no model call,
 // no MCP round trip. Runs before any retrieval so a caller (CLI, shim, hook, or MCP adapter)
-// knows what Atlas operation — if any — a request maps to, without guessing an identifier or
+// knows what Ocean operation — if any — a request maps to, without guessing an identifier or
 // a project when the request does not name one clearly. See T-198 slice 4.
 
 type IntentCategory =
