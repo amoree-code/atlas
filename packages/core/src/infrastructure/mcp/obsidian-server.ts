@@ -79,7 +79,7 @@ const tools = [
   {
     name: "obsidian_conflicts_list",
     description:
-      "List Atlas-recorded Obsidian write conflicts without proposed note content.",
+      "List Ocean-recorded Obsidian write conflicts without proposed note content.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",

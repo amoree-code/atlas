@@ -86,9 +86,9 @@ async function saveProjectBindings(bindings: ProjectBinding[]): Promise<void> {
   await rename(tmp, file);
 }
 
-// Resolves the active Ocean project from a working directory: no terminal-in-Atlas
+// Resolves the active Ocean project from a working directory: no terminal-in-Ocean
 // requirement. Match order is git root, then the exact cwd, then (as a last resort) whether
-// the path is inside the Atlas workspace root itself, which is always project "atlas".
+// the path is inside the Ocean workspace root itself, which is always project "atlas".
 export async function resolveProject(cwd: string): Promise<ProjectResolution> {
   const resolvedCwd = path.resolve(cwd);
   const gitRoot = findGitRoot(resolvedCwd);
