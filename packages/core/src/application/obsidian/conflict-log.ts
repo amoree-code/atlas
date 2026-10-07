@@ -3,16 +3,22 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 
-export type ConflictSide = "vault" | "atlas";
+export type ConflictSide = "vault" | "ocean";
+// "atlas" is the pre-rename name of the Ocean side; still accepted as input for one release.
+export function parseConflictSide(value: unknown): ConflictSide | null {
+  if (value === "vault") return "vault";
+  if (value === "ocean" || value === "atlas") return "ocean";
+  return null;
+}
 export type ObsidianConflict = {
   version: 1;
   id: string;
   path: string;
   baselineSha256: string | null;
   vaultSha256: string | null;
-  atlasSha256: string | null;
+  oceanSha256: string | null;
   vaultContent?: string;
-  atlasContent?: string;
+  oceanContent?: string;
   proposedContent?: string;
   createdAt: string;
   source?: string;
@@ -50,17 +56,32 @@ export async function appendConflict(
   return file;
 }
 
+// Records written before the rename carry atlasSha256/atlasContent; read them as the ocean side.
+export function readConflictRecord(raw: unknown): ObsidianConflict {
+  const { atlasSha256, atlasContent, ...rest } = raw as ObsidianConflict & {
+    atlasSha256?: string | null;
+    atlasContent?: string;
+  };
+  return {
+    ...rest,
+    oceanSha256: rest.oceanSha256 ?? atlasSha256 ?? null,
+    ...(rest.oceanContent !== undefined || atlasContent !== undefined
+      ? { oceanContent: rest.oceanContent ?? atlasContent }
+      : {}),
+  };
+}
+
 function changedFromBaseline(
   record: ObsidianConflict,
   side: ConflictSide,
 ): boolean {
-  const hash = side === "vault" ? record.vaultSha256 : record.atlasSha256;
+  const hash = side === "vault" ? record.vaultSha256 : record.oceanSha256;
   return hash !== record.baselineSha256;
 }
 
 export async function resolveConflict(
   id: string,
-  keep: ConflictSide,
+  requestedKeep: string,
   options: {
     directory?: string;
     apply?: (record: ObsidianConflict, keep: ConflictSide) => Promise<void>;
@@ -71,16 +92,18 @@ export async function resolveConflict(
   status: "auto-resolved" | "manual-required";
   archived: string;
 }> {
+  const keep = parseConflictSide(requestedKeep);
+  if (!keep) throw new Error("Conflict side must be vault or ocean");
   if (!id || path.basename(id) !== id)
     throw new Error("Conflict id must be a conflict filename");
   const directory = options.directory ?? conflictsDirectory();
   const filename = id.endsWith(".json") ? id : `${id}.json`;
   const source = path.join(directory, filename);
-  const record = JSON.parse(await readFile(source, "utf8")) as ObsidianConflict;
+  const record = readConflictRecord(JSON.parse(await readFile(source, "utf8")));
   const vaultChanged = changedFromBaseline(record, "vault");
-  const atlasChanged = changedFromBaseline(record, "atlas");
+  const oceanChanged = changedFromBaseline(record, "ocean");
   const status =
-    vaultChanged !== atlasChanged ? "auto-resolved" : "manual-required";
+    vaultChanged !== oceanChanged ? "auto-resolved" : "manual-required";
   if (status === "auto-resolved" && options.apply)
     await options.apply(record, keep);
   const archiveDirectory = path.join(directory, "resolved");

@@ -64,7 +64,7 @@ export async function configureClaudeCodeWrapper(
   let backup: string | null = null;
   try {
     const metadata = await stat(settingsPath);
-    backup = `${settingsPath}.atlas-backup-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    backup = `${settingsPath}.ocean-backup-${new Date().toISOString().replace(/[:.]/g, "-")}`;
     await copyFile(settingsPath, backup);
     await writeFile(
       settingsPath,

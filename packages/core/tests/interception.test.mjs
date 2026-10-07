@@ -84,7 +84,82 @@ test("sync creates Ocean wrappers and shell activation", async () => {
     }
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
-    assert.match(await readFile(profile, "utf8"), /atlas interception/);
+    assert.match(
+      await readFile(profile, "utf8"),
+      /# >>> ocean interception >>>/,
+    );
+  });
+});
+
+const ATLAS_BLOCK =
+  "# >>> atlas interception >>>\nexport PATH=/old/shims:$PATH\n# <<< atlas interception <<<\n";
+
+async function installOver(root, before) {
+  const profile = path.join(root, "profile");
+  await writeFile(profile, before);
+  await installShellIntegration();
+  return readFile(profile, "utf8");
+}
+
+test("shell integration replaces a pre-rename atlas block, keeps every other line byte-for-byte, and is idempotent", async () => {
+  await withEnvironment(async (root) => {
+    const once = await installOver(
+      root,
+      `export KEEP_ME=1\n\n${ATLAS_BLOCK}alias also-keep=true\n`,
+    );
+    assert.equal((once.match(/# >>> /g) ?? []).length, 1);
+    assert.match(once, /# >>> ocean interception >>>/);
+    assert.doesNotMatch(once, /atlas interception|\/old\/shims/);
+    assert.ok(once.startsWith("export KEEP_ME=1\nalias also-keep=true\n"));
+    assert.equal(await installOver(root, once), once);
+  });
+});
+
+test("shell integration never joins the lines around a block, even with no blank line above it", async () => {
+  await withEnvironment(async (root) => {
+    const out = await installOver(root, `pre\n${ATLAS_BLOCK}post\n`);
+    assert.ok(out.startsWith("pre\npost\n"), JSON.stringify(out));
+    assert.equal((out.match(/# >>> /g) ?? []).length, 1);
+  });
+});
+
+test("shell integration keeps CRLF profiles CRLF without stray carriage returns", async () => {
+  await withEnvironment(async (root) => {
+    const crlf = ATLAS_BLOCK.replaceAll("\n", "\r\n");
+    const out = await installOver(
+      root,
+      `alias a=1\r\n\r\n${crlf}alias b=2\r\n`,
+    );
+    assert.ok(
+      out.startsWith("alias a=1\r\nalias b=2\r\n"),
+      JSON.stringify(out),
+    );
+    assert.doesNotMatch(out, /\r\r|[^\r]\n/);
+    assert.equal(await installOver(root, out), out);
+  });
+});
+
+test("shell integration collapses an atlas block and an ocean block into one without merging neighbours", async () => {
+  await withEnvironment(async (root) => {
+    const ocean = ATLAS_BLOCK.replaceAll("atlas", "ocean");
+    const out = await installOver(
+      root,
+      `pre\n${ATLAS_BLOCK}mid\n${ocean}post\n`,
+    );
+    assert.ok(out.startsWith("pre\nmid\npost\n"), JSON.stringify(out));
+    assert.equal((out.match(/# >>> /g) ?? []).length, 1);
+  });
+});
+
+test("shell integration leaves an unterminated begin marker alone and appends its own block", async () => {
+  await withEnvironment(async (root) => {
+    const before = "# >>> atlas interception >>>\nexport PATH=/old:$PATH\n";
+    const out = await installOver(root, before);
+    assert.ok(out.startsWith(before));
+    assert.match(
+      out,
+      /# >>> ocean interception >>>[\s\S]*# <<< ocean interception <<</,
+    );
   });
 });
 

@@ -38,7 +38,10 @@ import {
   playwrightMcpConfig,
 } from "../../application/mcp/mcp-connection.js";
 import { promoteSessionToKnowledge } from "../../application/memory/session-promotion.js";
-import { resolveConflict } from "../../application/obsidian/conflict-log.js";
+import {
+  parseConflictSide,
+  resolveConflict,
+} from "../../application/obsidian/conflict-log.js";
 import {
   listInboxCandidates,
   promoteInboxNote,
@@ -396,7 +399,7 @@ async function commandObsidian(): Promise<void> {
     ].includes(action)
   ) {
     console.error(
-      "Usage: ocean obsidian connect <vault-path> [--read-write]|discover|sync|watch|inbox|write|conflicts resolve <id> --keep=vault|atlas",
+      "Usage: ocean obsidian connect <vault-path> [--read-write]|discover|sync|watch|inbox|write|conflicts resolve <id> --keep=vault|ocean",
     );
     process.exitCode = 1;
   } else {
@@ -434,14 +437,15 @@ async function commandObsidian(): Promise<void> {
         if (action === "conflicts") {
           if (process.argv[4] !== "resolve")
             throw new Error(
-              "Usage: ocean obsidian conflicts resolve <id> --keep=vault|atlas",
+              "Usage: ocean obsidian conflicts resolve <id> --keep=vault|ocean",
             );
           const id = process.argv[5];
           const keepArg = process.argv.find((arg) => arg.startsWith("--keep="));
           const keep = keepArg?.slice("--keep=".length);
-          if (!id || (keep !== "vault" && keep !== "atlas"))
+          // "atlas" is the pre-rename name of the ocean side; still accepted.
+          if (!id || !keep || !parseConflictSide(keep))
             throw new Error(
-              "Usage: ocean obsidian conflicts resolve <id> --keep=vault|atlas",
+              "Usage: ocean obsidian conflicts resolve <id> --keep=vault|ocean",
             );
           console.log(JSON.stringify(await resolveConflict(id, keep), null, 2));
         } else if (action === "write") {

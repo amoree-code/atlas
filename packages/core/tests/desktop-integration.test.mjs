@@ -26,6 +26,7 @@ test("Claude Code wrapper setup previews and backs up a plain JSON settings file
     true,
   );
   assert.ok(applied.backup);
+  assert.match(applied.backup, /\.ocean-backup-/);
   assert.match(
     await readFile(settings, "utf8"),
     /claudeCode\.claudeProcessWrapper/,
