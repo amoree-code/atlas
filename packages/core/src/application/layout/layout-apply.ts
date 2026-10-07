@@ -217,10 +217,20 @@ export type ApplyResult = {
   skipped?: string[];
 };
 
+// An empty HOME or a root that is not an Ocean workspace (e.g. a fallback to the default root when
+// OCEAN_ROOT is empty) must never be migrated or rolled back.
+function requireHome(home: string): void {
+  if (!path.isAbsolute(home))
+    throw new Error(
+      `refusing: HOME is not an absolute path (${JSON.stringify(home)}).`,
+    );
+}
+
 export async function applyLayout(
   root: string,
   home: string = os.homedir(),
 ): Promise<ApplyResult> {
+  requireHome(home);
   const staging = path.join(root, STAGING);
   if (await exists(staging))
     throw new Error(
@@ -232,6 +242,10 @@ export async function applyLayout(
       `an earlier apply stopped at step "${unfinished.journal.step}" (${unfinished.backup}). Run \`ocean layout rollback\` first.`,
     );
   const plan = await planLayout(root, home);
+  if (!plan.workspace)
+    throw new Error(
+      `refusing: ${root} holds no Ocean workspace (no 04-projects in either layout). Is OCEAN_ROOT set?`,
+    );
   if (!plan.moves.length)
     return { applied: false, reason: "nothing to move: already flat" };
   if (!plan.ready)
@@ -479,6 +493,7 @@ export async function rollbackLayout(
   root: string,
   home: string = os.homedir(),
 ): Promise<RollbackResult> {
+  requireHome(home);
   const found = await latestJournal(home, root);
   const staging = path.join(root, STAGING);
   if (!found) {

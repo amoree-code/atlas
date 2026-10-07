@@ -568,3 +568,25 @@ test("pointers reached through symlinks are written where they really live, neve
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test("apply refuses a root that holds no workspace, and an empty HOME", () => {
+  const where = fixture();
+  try {
+    const stray = path.join(where.home, "elsewhere");
+    mkdirSync(path.join(stray, "kernel/bridge/sessions"), { recursive: true });
+    const before = tree(where.home);
+    const notWorkspace = layout(
+      { home: where.home, root: stray },
+      "apply",
+      "--yes",
+    );
+    assert.equal(notWorkspace.status, 1);
+    assert.match(notWorkspace.stderr, /holds no Ocean workspace/);
+    const noHome = layout({ home: "", root: where.root }, "apply", "--yes");
+    assert.equal(noHome.status, 1);
+    assert.match(noHome.stderr, /HOME is not an absolute path/);
+    assert.deepEqual(tree(where.home), before);
+  } finally {
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});

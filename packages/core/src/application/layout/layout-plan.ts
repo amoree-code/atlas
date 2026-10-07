@@ -17,6 +17,8 @@ export type LayoutMove = {
 
 export type LayoutPlan = {
   root: string;
+  // The root holds an Ocean workspace (04-projects in either layout). Nothing else is ever moved.
+  workspace: boolean;
   layout: ReturnType<typeof workspaceLayout>;
   moves: LayoutMove[];
   // A move whose target already exists. Never overwritten: apply refuses while any is listed.
@@ -261,6 +263,14 @@ export async function planLayout(
   home: string = os.homedir(),
 ): Promise<LayoutPlan> {
   const layout = workspaceLayout(root);
+  const isDirectory = (target: string) =>
+    lstat(target).then(
+      (info) => info.isDirectory(),
+      () => false,
+    );
+  const workspace =
+    (await isDirectory(path.join(root, "04-projects"))) ||
+    (await isDirectory(path.join(root, "brain", "04-projects")));
   const moves: LayoutMove[] = [];
   const collisions: LayoutPlan["collisions"] = [];
   const addMove = async (from: string, to: string) => {
@@ -289,12 +299,13 @@ export async function planLayout(
     .sort();
   return {
     root,
+    workspace,
     layout,
     moves,
     collisions,
     strays,
     pointers: await scanPointers(root, home, layout),
     gitignore: moves.length ? await gitignoreChanges(root) : [],
-    ready: moves.length > 0 && collisions.length === 0,
+    ready: workspace && moves.length > 0 && collisions.length === 0,
   };
 }
