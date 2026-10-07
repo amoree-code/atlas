@@ -17,6 +17,8 @@ export type LayoutMove = {
 
 export type LayoutPlan = {
   root: string;
+  // The root holds an Ocean workspace (04-projects in either layout). Nothing else is ever moved.
+  workspace: boolean;
   layout: ReturnType<typeof workspaceLayout>;
   moves: LayoutMove[];
   // A move whose target already exists. Never overwritten: apply refuses while any is listed.
@@ -139,7 +141,13 @@ const escapeRegExp = (text: string) =>
 // sits under HOME (~/, $HOME/, ${HOME}/) — as whole path segments: `~/ocean/brain` and
 // `~/ocean/brain/x` match, `~/ocean/brainstorm`, `~/ocean-old/brain` and `kernel/bridge-x` do not.
 // Group 1 is the root spelling, group 2 the old area, so apply rewrites with the same rule.
-export function oldPathPattern(root: string, home: string): RegExp {
+// Only the areas that actually move are matched: a path into a half that stays put is not stale.
+export type OldArea = "brain" | "kernel/bridge";
+export function oldPathPattern(
+  root: string,
+  home: string,
+  areas: OldArea[],
+): RegExp {
   const roots = [root];
   if (root.startsWith(`${home}${path.sep}`)) {
     const relative = path.relative(home, root);
@@ -147,7 +155,7 @@ export function oldPathPattern(root: string, home: string): RegExp {
   }
   const prefixes = roots.map(escapeRegExp).join("|");
   return new RegExp(
-    `(?<![\\w.-])(${prefixes})/(brain|kernel/bridge)(?![\\w.-])`,
+    `(?<![\\w.-])(${prefixes})/(${areas.map(escapeRegExp).join("|")})(?![\\w.-])`,
     "g",
   );
 }
@@ -156,16 +164,32 @@ function countMatches(text: string, pattern: RegExp): number {
   return text.match(pattern)?.length ?? 0;
 }
 
+// Symlinks anywhere in a tree that moves: an absolute target into the old tree would dangle once
+// the old tree is gone.
+async function symlinksUnder(directory: string): Promise<string[]> {
+  const found: string[] = [];
+  for (const name of await entries(directory)) {
+    const target = path.join(directory, name);
+    const info = await lstat(target).catch(() => null);
+    if (info?.isSymbolicLink()) found.push(target);
+    else if (info?.isDirectory()) found.push(...(await symlinksUnder(target)));
+  }
+  return found;
+}
+
 async function pointerFiles(
   home: string,
   bridge: string,
   charter: string,
+  movedTrees: string[],
 ): Promise<string[]> {
   const candidates = HOME_POINTERS.map((file) => path.join(home, file));
   for (const directory of HOME_POINTER_DIRS)
     candidates.push(...(await filesUnder(path.join(home, directory))));
   candidates.push(...(await filesUnder(bridge, BRIDGE_DATA_DIRS)));
   candidates.push(...(await filesUnder(charter)));
+  for (const tree of movedTrees)
+    candidates.push(...(await symlinksUnder(tree)));
   return [...new Set(candidates)];
 }
 
@@ -174,7 +198,11 @@ async function scanPointers(
   home: string,
   layout: LayoutPlan["layout"],
 ): Promise<LayoutPlan["pointers"]> {
-  const pattern = oldPathPattern(root, home);
+  const areas: OldArea[] = [];
+  if (layout.records === "nested") areas.push("brain");
+  if (layout.bridge === "nested") areas.push("kernel/bridge");
+  if (!areas.length) return [];
+  const pattern = oldPathPattern(root, home, areas);
   const bridge = path.join(
     root,
     layout.bridge === "nested" ? "kernel/bridge" : "bridge",
@@ -184,7 +212,8 @@ async function scanPointers(
     layout.records === "nested" ? "brain/charter" : "charter",
   );
   const pointers: LayoutPlan["pointers"] = [];
-  for (const file of await pointerFiles(home, bridge, charter)) {
+  const movedTrees = areas.map((area) => path.join(root, area));
+  for (const file of await pointerFiles(home, bridge, charter, movedTrees)) {
     const info = await lstat(file).catch(() => null);
     if (info?.isSymbolicLink()) {
       const target = await readlink(file).catch(() => "");
@@ -234,6 +263,14 @@ export async function planLayout(
   home: string = os.homedir(),
 ): Promise<LayoutPlan> {
   const layout = workspaceLayout(root);
+  const isDirectory = (target: string) =>
+    lstat(target).then(
+      (info) => info.isDirectory(),
+      () => false,
+    );
+  const workspace =
+    (await isDirectory(path.join(root, "04-projects"))) ||
+    (await isDirectory(path.join(root, "brain", "04-projects")));
   const moves: LayoutMove[] = [];
   const collisions: LayoutPlan["collisions"] = [];
   const addMove = async (from: string, to: string) => {
@@ -262,12 +299,13 @@ export async function planLayout(
     .sort();
   return {
     root,
+    workspace,
     layout,
     moves,
     collisions,
     strays,
     pointers: await scanPointers(root, home, layout),
     gitignore: moves.length ? await gitignoreChanges(root) : [],
-    ready: moves.length > 0 && collisions.length === 0,
+    ready: workspace && moves.length > 0 && collisions.length === 0,
   };
 }
