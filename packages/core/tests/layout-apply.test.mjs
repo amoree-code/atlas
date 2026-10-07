@@ -502,3 +502,69 @@ test("a pointer edited during the copy keeps that edit through apply and rollbac
     rmSync(where.home, { recursive: true, force: true });
   }
 });
+
+test("a pointer edited before apply fails never blocks rollback, and keeps the edit", () => {
+  const where = fixture();
+  const settings = path.join(where.home, ".claude/settings.json");
+  const locked = path.join(where.root, "kernel/bridge/runtime/locked");
+  try {
+    writeFileSync(locked, "unreadable");
+    chmodSync(locked, 0o000);
+    const failed = layout(where, "apply", "--yes", {
+      OCEAN_TEST_EDIT_ON_COPY: settings,
+    });
+    assert.equal(failed.status, 1, "the copy fails after the edit");
+    const rolled = layout(where, "rollback", "--yes");
+    assert.equal(rolled.status, 0, rolled.stderr);
+    assert.match(
+      read(settings),
+      /kernel\/bridge\/hooks\/start"}\nedited during the copy\n$/,
+    );
+    assert.equal(existsSync(path.join(where.root, ".layout-staging")), false);
+  } finally {
+    chmodSync(locked, 0o644);
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("pointers reached through symlinks are written where they really live, never in an old tree", () => {
+  const where = fixture();
+  const { home, root } = where;
+  try {
+    // Inside brain/, an absolute link to a dotfile outside the root that names an old path.
+    writeFileSync(
+      path.join(home, "dotfiles/zshrc"),
+      "cd ~/ocean/brain/01-daily\n",
+    );
+    mkdirSync(path.join(root, "brain/02-personal"), { recursive: true });
+    symlinkSync(
+      path.join(home, "dotfiles/zshrc"),
+      path.join(root, "brain/02-personal/zshrc"),
+    );
+    // Outside the root, a relative link into the old charter.
+    symlinkSync(
+      "../../ocean/brain/charter/core.md",
+      path.join(home, ".claude/skills/core.md"),
+    );
+    const before = tree(home);
+    const applied = layout(where, "apply", "--yes");
+    assert.equal(applied.status, 0, applied.stderr);
+    const after = tree(home);
+    assert.deepEqual(
+      within(after, "ocean/brain"),
+      within(before, "ocean/brain"),
+    );
+    assert.equal(
+      read(path.join(home, "dotfiles/zshrc")),
+      "cd ~/ocean/01-daily\n",
+    );
+    assert.equal(
+      read(path.join(root, "charter/core.md")),
+      "policies: `~/ocean/charter/policies`\n",
+    );
+    assert.equal(layout(where, "rollback", "--yes").status, 0);
+    assert.deepEqual(tree(home), before);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

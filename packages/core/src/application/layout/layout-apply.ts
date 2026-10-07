@@ -38,6 +38,11 @@ type Manifest = Record<string, string>;
 type PointerBackup = {
   file: string;
   kind: "file" | "symlink";
+  // Where apply writes and rollback reads: a file pointer resolved through any symlink, and moved
+  // into its new copy when it lives in an old tree (the old tree itself is never written).
+  target: string;
+  // The target lies in a new tree: rollback removes it with the tree instead of restoring it.
+  inTree: boolean;
   // file: the backup copy's name inside the backup folder; symlink: the old link target.
   backup: string;
   // The pointer before apply and as apply left it (file: sha256 of its content; symlink: its
@@ -130,8 +135,8 @@ async function replaceLink(link: string, target: string): Promise<void> {
 // What a pointer currently is, in the form its journal entry records.
 async function pointerState(pointer: PointerBackup): Promise<string> {
   return pointer.kind === "symlink"
-    ? readlink(pointer.file).catch(() => "")
-    : readFile(pointer.file).then(sha256, () => "");
+    ? readlink(pointer.target).catch(() => "")
+    : readFile(pointer.target).then(sha256, () => "");
 }
 
 // `<p>/brain/x` → `<p>/x` and `<p>/kernel/bridge/x` → `<p>/bridge/x`, by the plan's own pattern.
@@ -168,14 +173,6 @@ function newLocation(
       return path.join(root, to, path.relative(old, file));
   }
   return file;
-}
-
-function insideOldTree(
-  file: string,
-  root: string,
-  moves: LayoutJournal["moves"],
-): boolean {
-  return newLocation(file, root, moves) !== file;
 }
 
 function applyGitignore(source: string, plan: LayoutPlan): string {
@@ -251,23 +248,41 @@ export async function applyLayout(
   await chmod(path.join(home, BACKUPS), 0o700);
   const moves = plan.moves.map(({ from, to }) => ({ from, to }));
   const pointers: PointerBackup[] = [];
+  const targets = new Set<string>();
+  const realRoot = await realpath(root);
   for (const [index, pointer] of plan.pointers.entries()) {
     if (pointer.kind === "symlink") {
-      const target = await readlink(pointer.file);
+      const link = await readlink(pointer.file);
+      const target = newLocation(pointer.file, root, moves);
       pointers.push({
         file: pointer.file,
         kind: "symlink",
-        backup: target,
-        original: target,
+        target,
+        inTree: target !== pointer.file,
+        backup: link,
+        original: link,
       });
       continue;
     }
+    // Resolve first: two pointers can name one real file (a symlinked dotfile and its target),
+    // and a link can lead into an old tree or out of the root.
+    // Spelled under `root` as given (on macOS /var resolves to /private/var), so a file in an old
+    // tree is recognised as one.
+    const resolved = await realpath(pointer.file);
+    const real = resolved.startsWith(`${realRoot}${path.sep}`)
+      ? path.join(root, path.relative(realRoot, resolved))
+      : resolved;
+    const target = newLocation(real, root, moves);
+    if (targets.has(target)) continue;
+    targets.add(target);
     const name = `${index}-${path.basename(pointer.file)}`;
     const copy = path.join(backup, "pointers", name);
-    await copyFile(pointer.file, copy);
+    await copyFile(real, copy);
     pointers.push({
       file: pointer.file,
       kind: "file",
+      target,
+      inTree: target !== real,
       backup: name,
       original: sha256(await readFile(copy)),
     });
@@ -342,7 +357,7 @@ export async function applyLayout(
   let repointed = 0;
   const skipped: string[] = [];
   for (const pointer of pointers) {
-    const target = newLocation(pointer.file, root, moves);
+    const { target } = pointer;
     // Deleted since the snapshot: nothing left to repoint, and rollback leaves it deleted.
     if (!(await exists(target))) {
       skipped.push(pointer.file);
@@ -358,7 +373,7 @@ export async function applyLayout(
       const current = await readFile(target);
       // Edited since the snapshot (the copy can take a while): back up what is there now, so
       // rollback restores that and not an older version.
-      if (target === pointer.file && sha256(current) !== pointer.original) {
+      if (!pointer.inTree && sha256(current) !== pointer.original) {
         await writeFile(path.join(backup, "pointers", pointer.backup), current);
         pointer.original = sha256(current);
       }
@@ -390,13 +405,16 @@ export async function applyLayout(
   };
 }
 
+// Top-level names a record move can never target: the machinery and the repo's own files.
+const RESERVED = new Set(["brain", "kernel", "bridge", ".git", ".gitignore"]);
+
 // The journal decides what rollback deletes and writes, so only the moves apply can make and
 // pointer entries that name a real backup are accepted.
-function validateJournal(
+async function validateJournal(
   journal: LayoutJournal,
   root: string,
   home: string,
-): void {
+): Promise<void> {
   const fail = (why: string) => {
     throw new Error(`refusing to roll back: the journal ${why}.`);
   };
@@ -406,12 +424,20 @@ function validateJournal(
   const segment = /^(?!\.\.?$)[^/\\]+$/;
   for (const { from, to } of journal.moves) {
     const bridge = from === "kernel/bridge" && to === "bridge";
-    const record = segment.test(to) && from === `brain/${to}` && to !== "brain";
+    const record =
+      segment.test(to) && from === `brain/${to}` && !RESERVED.has(to);
     if (!bridge && !record)
       fail(`names a move apply never makes (${from} → ${to})`);
   }
+  const bases = [home, root];
+  for (const base of [home, root])
+    bases.push(await realpath(base).catch(() => base));
+  const ownedBy = (file: string) =>
+    path.isAbsolute(file) &&
+    bases.some((base) => file.startsWith(`${base}${path.sep}`));
   for (const pointer of journal.pointers) {
-    if (!path.isAbsolute(pointer.file)) fail("names a relative pointer");
+    if (!ownedBy(pointer.file) || !ownedBy(pointer.target))
+      fail(`names a pointer outside HOME and the root (${pointer.target})`);
     if (pointer.kind === "file" && !segment.test(pointer.backup))
       fail(`names a backup outside its folder (${pointer.backup})`);
   }
@@ -463,7 +489,7 @@ export async function rollbackLayout(
     return { rolledBack: false, reason: "no apply to roll back" };
   }
   const { backup, journal } = found;
-  validateJournal(journal, root, home);
+  await validateJournal(journal, root, home);
   const { moves } = journal;
   const placed = [];
   for (const move of moves)
@@ -487,15 +513,25 @@ export async function rollbackLayout(
           `refusing to roll back: ${to} changed since apply (${changed.slice(0, 5).join(", ")}${changed.length > 5 ? ", …" : ""}). Move those changes to the old tree first.`,
         );
     }
-  } else if (journal.step === "swapped") {
-    // Interrupted while repointing: the new trees may hold rewritten pointers, nothing else.
   } else if (placed.length) {
-    // Interrupted mid-rename: a placed tree is still byte-identical to its source.
+    // Interrupted mid-rename or mid-repoint: a placed tree still equals its source, except for
+    // the pointers apply rewrote inside it.
     for (const { from, to } of placed) {
+      const tree = path.join(root, to);
+      const rewritten = new Set(
+        journal.pointers
+          .filter(
+            (pointer) =>
+              pointer.inTree && pointer.target.startsWith(`${tree}${path.sep}`),
+          )
+          .map((pointer) =>
+            path.relative(tree, pointer.target).split(path.sep).join("/"),
+          ),
+      );
       const changed = differences(
         await manifest(path.join(root, from)),
-        await manifest(path.join(root, to)),
-      );
+        await manifest(tree),
+      ).filter((entry) => !rewritten.has(entry));
       if (changed.length)
         throw new Error(
           `refusing to roll back: ${to} differs from ${from} (${changed.slice(0, 5).join(", ")}).`,
@@ -503,16 +539,16 @@ export async function rollbackLayout(
     }
   }
 
-  const outside = journal.pointers.filter(
-    (pointer) => !insideOldTree(pointer.file, root, moves),
-  );
+  // A pointer apply never reached was never touched: whatever it holds now is the user's.
+  // One apply did reach is restored while it is exactly as apply left it, left alone while it is
+  // still original (interrupted between journal and write), and anything else is an edit.
   const edited = [];
   const toRestore: PointerBackup[] = [];
-  for (const pointer of outside) {
+  for (const pointer of journal.pointers) {
+    if (pointer.inTree || !pointer.applied) continue;
     const state = await pointerState(pointer);
-    if (pointer.applied && state === pointer.applied) toRestore.push(pointer);
-    else if (!pointer.applied && state === "") continue;
-    else if (state !== pointer.original) edited.push(pointer.file);
+    if (state === pointer.applied) toRestore.push(pointer);
+    else if (state !== pointer.original) edited.push(pointer.target);
   }
   const gitignorePath = path.join(root, ".gitignore");
   const gitignoreState = await readFile(gitignorePath).then(sha256, () => "");
@@ -520,7 +556,7 @@ export async function rollbackLayout(
     journal.gitignoreApplied !== undefined &&
     gitignoreState === journal.gitignoreApplied;
   if (
-    journal.gitignore &&
+    journal.gitignoreApplied !== undefined &&
     !restoreGitignore &&
     gitignoreState !== journal.gitignoreOriginal
   )
@@ -533,10 +569,10 @@ export async function rollbackLayout(
   let restored = 0;
   for (const pointer of toRestore) {
     if (pointer.kind === "symlink")
-      await replaceLink(pointer.file, pointer.backup);
+      await replaceLink(pointer.target, pointer.backup);
     else
       await writeAtomic(
-        pointer.file,
+        pointer.target,
         await readFile(path.join(backup, "pointers", pointer.backup), "utf8"),
       );
     restored += 1;
