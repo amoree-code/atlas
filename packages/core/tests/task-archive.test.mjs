@@ -276,3 +276,27 @@ test("getTask finds an archived task under the Ocean or the pre-rename Atlas nam
     delete process.env.OCEAN_ROOT;
   }
 });
+
+test("getTask reads live and archived tasks from a migrated ocean/tasks folder", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-gettask-migrated-"));
+  const tasksRoot = path.join(root, PROJECTS_DIR, "ocean", "tasks");
+  await mkdir(path.join(tasksRoot, "T-500"), { recursive: true });
+  await writeFile(
+    path.join(tasksRoot, "T-500", "task.md"),
+    task("T-500", "active"),
+  );
+  await mkdir(path.join(tasksRoot, "archive", "Ocean", "T-501"), {
+    recursive: true,
+  });
+  await writeFile(
+    path.join(tasksRoot, "archive", "Ocean", "T-501", "task.md"),
+    task("T-501"),
+  );
+  process.env.OCEAN_ROOT = root;
+  try {
+    assert.equal((await getTask("T-500")).id, "T-500");
+    assert.equal((await getTask("T-501")).id, "T-501");
+  } finally {
+    delete process.env.OCEAN_ROOT;
+  }
+});

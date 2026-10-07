@@ -1,5 +1,10 @@
 import type { BrainIndexPort } from "../../domain/ports/brain-index-port.js";
-import { oceanPath, PROJECTS_DIR, projectFolder } from "../../paths.js";
+import {
+  oceanPath,
+  PROJECTS_DIR,
+  projectFolder,
+  sameProject,
+} from "../../paths.js";
 import { resolveProject } from "../context/project-resolution.js";
 import type { OperationRecord, WriteApproval } from "./operation-contract.js";
 
@@ -47,7 +52,7 @@ export async function crossProjectGuard(
   if (!active.ok) return active;
   if (
     options.requestedProject &&
-    options.requestedProject !== active.projectId
+    !sameProject(options.requestedProject, active.projectId)
   ) {
     return {
       ok: false,

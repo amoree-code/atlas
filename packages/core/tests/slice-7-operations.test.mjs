@@ -820,6 +820,23 @@ test("a cross-project request is refused explicitly", () =>
     assert.match(result.reason, /cross-project request refused/);
   }));
 
+test("a request naming the workspace project by its pre-rename id is not a cross-project request", () =>
+  withFixture(async (root) => {
+    for (const requestedProject of ["atlas", "ocean"]) {
+      const result = await runOperation(
+        "task.get",
+        classifyIntent("show T-1"),
+        BUDGET,
+        { cwd: root, requestedProject },
+      );
+      assert.doesNotMatch(
+        result.reason ?? "",
+        /cross-project/,
+        requestedProject,
+      );
+    }
+  }));
+
 test("private Ocean content is never written inside the public engine package", () => {
   const engineRelative = path
     .relative(oceanRoot(), engineRoot())

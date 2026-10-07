@@ -66,6 +66,7 @@ export async function ingestVaultChanges(
     conflicts: [],
     removed: [...result.removed],
   };
+  const seenMirrors = new Set<string>();
   for (const relative of changed) {
     if (isInbox(relative)) {
       output.inbox.push(relative);
@@ -77,6 +78,9 @@ export async function ingestVaultChanges(
     }
     const mirror = projectMirror(relative);
     if (!mirror) continue;
+    // 01-Projects/Ocean and the pre-rename 01-Projects/Atlas mirror the same project file.
+    if (seenMirrors.has(mirror.relative)) continue;
+    seenMirrors.add(mirror.relative);
     const vaultContent = await readOptional(
       path.join(connection.vaultPath, relative),
     );
