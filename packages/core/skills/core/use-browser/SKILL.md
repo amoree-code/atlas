@@ -14,7 +14,7 @@ described in `docs/browser-clients.md`. The skill defines the task and verificat
 contract; MCP supplies the browser tools. Ocean's `ocean browser` capability remains
 the deterministic local backend for repeatable JSON task files.
 
-Use Ocean's `ocean browser` capability through the terminal as the default browser backend. Do not switch to `claude-in-chrome`, an extension, or another browser connector unless the user explicitly asks for that backend. If Atlas cannot detect or open a browser, report the exact command result and stop; do not ask the user to install a different browser extension as the first workaround.
+Use Ocean's `ocean browser` capability through the terminal as the default browser backend. Do not switch to `claude-in-chrome`, an extension, or another browser connector unless the user explicitly asks for that backend. If Ocean cannot detect or open a browser, report the exact command result and stop; do not ask the user to install a different browser extension as the first workaround.
 
 ## Cost-aware execution
 
