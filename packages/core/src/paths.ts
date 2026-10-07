@@ -44,13 +44,33 @@ export function repoPath(...parts: string[]): string {
 // to the old location, so one build runs before, during and after the data move. Decided once
 // per process against the root it starts with; a process started before the move keeps the old
 // layout until it restarts.
-function layoutPrefix(flat: string, nested: string, sentinel: string): string {
-  const root = oceanRoot();
+function layoutPrefix(
+  root: string,
+  flat: string,
+  nested: string,
+  sentinel: string,
+): string {
   if (isDirectory(path.join(root, flat, sentinel))) return flat;
   if (isDirectory(path.join(root, nested, sentinel))) return nested;
   return flat;
 }
-const BRAIN_PREFIX = layoutPrefix("", "brain", "04-projects");
+const recordsPrefix = (root: string) =>
+  layoutPrefix(root, "", "brain", "04-projects");
+const bridgePrefix = (root: string) =>
+  layoutPrefix(root, "bridge", "kernel/bridge", "sessions");
+
+// Which layout each half of a root is on, by the same rule the constants below are built with.
+export function workspaceLayout(root: string = oceanRoot()): {
+  records: "flat" | "nested";
+  bridge: "flat" | "nested";
+} {
+  return {
+    records: recordsPrefix(root) === "" ? "flat" : "nested",
+    bridge: bridgePrefix(root) === "bridge" ? "flat" : "nested",
+  };
+}
+
+const BRAIN_PREFIX = recordsPrefix(oceanRoot());
 const brainArea = (area: string) => path.posix.join(BRAIN_PREFIX, area);
 //
 // The old flat `personal/` directory had five children (memory, knowledge, daily,
@@ -127,7 +147,7 @@ export function workspaceTasksRoot(root: string = oceanRoot()): string {
   );
 }
 
-export const SYSTEM_DIR = layoutPrefix("bridge", "kernel/bridge", "sessions");
+export const SYSTEM_DIR = bridgePrefix(oceanRoot());
 export const REGISTRY_DIR = `${SYSTEM_DIR}/registry`;
 export const LEGACY_REGISTRY_DIR = `${SYSTEM_DIR}/control-plane/registry`;
 // Governance is private: the charter and the policies it routes to live in the brain.
