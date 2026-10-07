@@ -13,6 +13,16 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+// `ocean layout` refuses on Windows (see layout-command.ts); these fixtures rely on HOME, POSIX
+// symlinks and modes.
+const WINDOWS = process.platform === "win32";
+const posixTest = (name, fn) =>
+  test(
+    name,
+    { skip: WINDOWS && "ocean layout supports macOS and Linux only" },
+    fn,
+  );
+
 // The layout is read once per process from the root it loads with, so every case runs the CLI in
 // a fresh process against a fixture HOME whose workspace root is HOME/ocean.
 function fixture(files) {
@@ -81,75 +91,78 @@ const NESTED = {
   ".zprofile": "binary\0 ~/ocean/brain/x",
 };
 
-test("layout plan describes the move of a nested root without writing anything", () => {
-  const where = fixture(NESTED);
-  try {
-    symlinkSync(
-      "runtime",
-      path.join(where.root, "kernel", "bridge", "current"),
-    );
-    symlinkSync(
-      path.join(where.root, "kernel", "bridge", "skills", "demo"),
-      path.join(where.home, ".claude", "skills", "linked"),
-    );
-    symlinkSync(
-      path.join(where.home, "dotfiles", "bashrc"),
-      path.join(where.home, ".bashrc"),
-    );
-    const before = snapshot(where.home);
-    const result = plan(where);
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(snapshot(where.home), before, "plan wrote to disk");
-    const report = JSON.parse(result.stdout);
-    assert.deepEqual(report.layout, { records: "nested", bridge: "nested" });
-    assert.deepEqual(
-      report.moves.map(({ from, to, files, symlinks }) => [
-        from,
-        to,
-        files,
-        symlinks,
-      ]),
-      [
-        ["brain/04-projects", "04-projects", 1, 0],
-        ["brain/README.md", "README.md", 1, 0],
-        ["brain/charter", "charter", 1, 0],
-        ["kernel/bridge", "bridge", 3, 1],
-      ],
-    );
-    assert.deepEqual(report.collisions, [
-      { from: "brain/README.md", to: "README.md" },
-    ]);
-    assert.equal(report.ready, false, "a collision blocks apply");
-    assert.deepEqual(report.strays, ["user"]);
-    assert.deepEqual(report.gitignore, [
-      { from: "brain/.index/", to: ".index/" },
-      { from: "!brain/keep.md", to: "!keep.md" },
-      { from: "/brain/", to: null },
-      { from: "  brain/tmp ", to: "  tmp " },
-      { from: null, to: "/bridge/" },
-    ]);
-    const pointers = Object.fromEntries(
-      report.pointers.map(({ file, kind, references }) => [
-        path.relative(where.home, file),
-        `${kind}:${references}`,
-      ]),
-    );
-    assert.deepEqual(pointers, {
-      ".claude/CLAUDE.md": "file:1",
-      ".claude/settings.json": "file:2",
-      ".bashrc": "file:1",
-      ".claude/skills/demo/SKILL.md": "file:1",
-      ".claude/skills/linked": "symlink:1",
-      ".gemini/skills/demo/SKILL.md": "file:2",
-      "ocean/kernel/bridge/runtime/shims/claude": "file:1",
-      "ocean/brain/charter/core.md": "file:1",
-    });
-  } finally {
-    rmSync(where.home, { recursive: true, force: true });
-  }
-});
+posixTest(
+  "layout plan describes the move of a nested root without writing anything",
+  () => {
+    const where = fixture(NESTED);
+    try {
+      symlinkSync(
+        "runtime",
+        path.join(where.root, "kernel", "bridge", "current"),
+      );
+      symlinkSync(
+        path.join(where.root, "kernel", "bridge", "skills", "demo"),
+        path.join(where.home, ".claude", "skills", "linked"),
+      );
+      symlinkSync(
+        path.join(where.home, "dotfiles", "bashrc"),
+        path.join(where.home, ".bashrc"),
+      );
+      const before = snapshot(where.home);
+      const result = plan(where);
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(snapshot(where.home), before, "plan wrote to disk");
+      const report = JSON.parse(result.stdout);
+      assert.deepEqual(report.layout, { records: "nested", bridge: "nested" });
+      assert.deepEqual(
+        report.moves.map(({ from, to, files, symlinks }) => [
+          from,
+          to,
+          files,
+          symlinks,
+        ]),
+        [
+          ["brain/04-projects", "04-projects", 1, 0],
+          ["brain/README.md", "README.md", 1, 0],
+          ["brain/charter", "charter", 1, 0],
+          ["kernel/bridge", "bridge", 3, 1],
+        ],
+      );
+      assert.deepEqual(report.collisions, [
+        { from: "brain/README.md", to: "README.md" },
+      ]);
+      assert.equal(report.ready, false, "a collision blocks apply");
+      assert.deepEqual(report.strays, ["user"]);
+      assert.deepEqual(report.gitignore, [
+        { from: "brain/.index/", to: ".index/" },
+        { from: "!brain/keep.md", to: "!keep.md" },
+        { from: "/brain/", to: null },
+        { from: "  brain/tmp ", to: "  tmp " },
+        { from: null, to: "/bridge/" },
+      ]);
+      const pointers = Object.fromEntries(
+        report.pointers.map(({ file, kind, references }) => [
+          path.relative(where.home, file),
+          `${kind}:${references}`,
+        ]),
+      );
+      assert.deepEqual(pointers, {
+        ".claude/CLAUDE.md": "file:1",
+        ".claude/settings.json": "file:2",
+        ".bashrc": "file:1",
+        ".claude/skills/demo/SKILL.md": "file:1",
+        ".claude/skills/linked": "symlink:1",
+        ".gemini/skills/demo/SKILL.md": "file:2",
+        "ocean/kernel/bridge/runtime/shims/claude": "file:1",
+        "ocean/brain/charter/core.md": "file:1",
+      });
+    } finally {
+      rmSync(where.home, { recursive: true, force: true });
+    }
+  },
+);
 
-test("without a collision the nested root is ready to apply", () => {
+posixTest("without a collision the nested root is ready to apply", () => {
   const { "ocean/README.md": _, ...files } = NESTED;
   const where = fixture(files);
   try {
@@ -161,22 +174,25 @@ test("without a collision the nested root is ready to apply", () => {
   }
 });
 
-test("two moves onto one target collide even though the target does not exist yet", () => {
-  const { "ocean/README.md": _, ...files } = NESTED;
-  const where = fixture({ ...files, "ocean/brain/bridge/x.md": "x" });
-  try {
-    const report = JSON.parse(plan(where).stdout);
-    assert.deepEqual(report.collisions, [
-      { from: "brain/bridge", to: "bridge" },
-      { from: "kernel/bridge", to: "bridge" },
-    ]);
-    assert.equal(report.ready, false);
-  } finally {
-    rmSync(where.home, { recursive: true, force: true });
-  }
-});
+posixTest(
+  "two moves onto one target collide even though the target does not exist yet",
+  () => {
+    const { "ocean/README.md": _, ...files } = NESTED;
+    const where = fixture({ ...files, "ocean/brain/bridge/x.md": "x" });
+    try {
+      const report = JSON.parse(plan(where).stdout);
+      assert.deepEqual(report.collisions, [
+        { from: "brain/bridge", to: "bridge" },
+        { from: "kernel/bridge", to: "bridge" },
+      ]);
+      assert.equal(report.ready, false);
+    } finally {
+      rmSync(where.home, { recursive: true, force: true });
+    }
+  },
+);
 
-test("a root already on the flat layout has nothing to move", () => {
+posixTest("a root already on the flat layout has nothing to move", () => {
   const where = fixture({
     "ocean/04-projects/ocean/tasks/T-1/task.md": "task",
     "ocean/charter/core.md": "core",
@@ -195,7 +211,7 @@ test("a root already on the flat layout has nothing to move", () => {
   }
 });
 
-test("layout rejects an unknown action", () => {
+posixTest("layout rejects an unknown action", () => {
   const where = fixture({});
   try {
     const result = plan(where, ["move-it"]);
@@ -204,4 +220,14 @@ test("layout rejects an unknown action", () => {
   } finally {
     rmSync(where.home, { recursive: true, force: true });
   }
+});
+
+test("ocean layout refuses on Windows", { skip: !WINDOWS }, () => {
+  const result = spawnSync(
+    process.execPath,
+    [path.resolve("dist/main.js"), "layout", "plan"],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /supports macOS and Linux only/);
 });
