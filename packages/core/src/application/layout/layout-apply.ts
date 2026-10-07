@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   chmod,
   copyFile,
@@ -17,7 +17,12 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { type LayoutPlan, oldPathPattern, planLayout } from "./layout-plan.js";
+import {
+  type LayoutPlan,
+  type OldArea,
+  oldPathPattern,
+  planLayout,
+} from "./layout-plan.js";
 
 // T-243 phase 6: the writing half of `ocean layout`. It copies — never moves — each old tree to
 // its flat location through a staging folder, repoints the files the plan found, and keeps a
@@ -35,6 +40,11 @@ type PointerBackup = {
   kind: "file" | "symlink";
   // file: the backup copy's name inside the backup folder; symlink: the old link target.
   backup: string;
+  // The pointer before apply and as apply left it (file: sha256 of its content; symlink: its
+  // target). Rollback restores a pointer still in its applied state, skips one apply never
+  // reached, and refuses on anything else — a later edit is never overwritten.
+  original: string;
+  applied?: string;
 };
 export type LayoutJournal = {
   version: 1;
@@ -45,6 +55,9 @@ export type LayoutJournal = {
   moves: { from: string; to: string }[];
   pointers: PointerBackup[];
   gitignore: string | null;
+  // sha256 of .gitignore before apply and as apply wrote it — same rule as a pointer.
+  gitignoreOriginal?: string;
+  gitignoreApplied?: string;
   // The new trees as apply left them (after repointing), keyed by move target.
   manifests: Record<string, Manifest>;
 };
@@ -81,28 +94,67 @@ function differences(expected: Manifest, actual: Manifest): string[] {
   return [...keys].filter((key) => expected[key] !== actual[key]).sort();
 }
 
+const sha256 = (content: string | Buffer) =>
+  createHash("sha256").update(content).digest("hex");
+
+// Never follows anything already sitting at the temporary name.
+const temporaryName = (target: string) =>
+  `${target}.ocean-layout-${randomBytes(6).toString("hex")}`;
+
 async function writeAtomic(file: string, content: string): Promise<void> {
   // Write through a symlinked dotfile to the file it names, so the link itself survives.
   const target = await realpath(file).catch(() => file);
   const mode = (await stat(target)).mode & 0o7777;
-  const temporary = `${target}.ocean-layout-${process.pid}`;
-  await writeFile(temporary, content, { mode });
-  await chmod(temporary, mode);
-  await rename(temporary, target);
+  const temporary = temporaryName(target);
+  try {
+    await writeFile(temporary, content, { mode, flag: "wx" });
+    await chmod(temporary, mode);
+    await rename(temporary, target);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
 }
 
 async function replaceLink(link: string, target: string): Promise<void> {
-  const temporary = `${link}.ocean-layout-${process.pid}`;
-  await symlink(target, temporary);
-  await rename(temporary, link);
+  const temporary = temporaryName(link);
+  try {
+    await symlink(target, temporary);
+    await rename(temporary, link);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+}
+
+// What a pointer currently is, in the form its journal entry records.
+async function pointerState(pointer: PointerBackup): Promise<string> {
+  return pointer.kind === "symlink"
+    ? readlink(pointer.file).catch(() => "")
+    : readFile(pointer.file).then(sha256, () => "");
 }
 
 // `<p>/brain/x` → `<p>/x` and `<p>/kernel/bridge/x` → `<p>/bridge/x`, by the plan's own pattern.
-export function repoint(text: string, root: string, home: string): string {
-  return text.replace(oldPathPattern(root, home), (_, prefix, area) =>
+export function repoint(
+  text: string,
+  root: string,
+  home: string,
+  areas: OldArea[],
+): string {
+  return text.replace(oldPathPattern(root, home, areas), (_, prefix, area) =>
     area === "brain" ? prefix : `${prefix}/bridge`,
   );
 }
+
+// The old areas a set of moves empties, i.e. the only ones whose paths go stale.
+const movedAreas = (moves: LayoutJournal["moves"]): OldArea[] => [
+  ...(moves.some(({ from }) => from.startsWith("brain/"))
+    ? ["brain" as const]
+    : []),
+  ...(moves.some(({ from }) => from === "kernel/bridge")
+    ? ["kernel/bridge" as const]
+    : []),
+];
 
 // A pointer inside an old tree is rewritten in its new copy; the old tree is left untouched.
 function newLocation(
@@ -150,11 +202,13 @@ async function writeJournal(
   backup: string,
   journal: LayoutJournal,
 ): Promise<void> {
-  await writeFile(
-    path.join(backup, "journal.json"),
-    `${JSON.stringify(journal, null, 2)}\n`,
-    { mode: 0o600 },
-  );
+  const file = path.join(backup, "journal.json");
+  const temporary = temporaryName(file);
+  await writeFile(temporary, `${JSON.stringify(journal, null, 2)}\n`, {
+    mode: 0o600,
+    flag: "wx",
+  });
+  await rename(temporary, file);
 }
 
 export type ApplyResult = {
@@ -163,6 +217,7 @@ export type ApplyResult = {
   backup?: string;
   moved?: string[];
   repointed?: number;
+  skipped?: string[];
 };
 
 export async function applyLayout(
@@ -173,6 +228,11 @@ export async function applyLayout(
   if (await exists(staging))
     throw new Error(
       `${staging} exists: an earlier apply was interrupted. Run \`ocean layout rollback\` first.`,
+    );
+  const unfinished = await latestJournal(home, root);
+  if (unfinished && unfinished.journal.step !== "done")
+    throw new Error(
+      `an earlier apply stopped at step "${unfinished.journal.step}" (${unfinished.backup}). Run \`ocean layout rollback\` first.`,
     );
   const plan = await planLayout(root, home);
   if (!plan.moves.length)
@@ -193,18 +253,33 @@ export async function applyLayout(
   const pointers: PointerBackup[] = [];
   for (const [index, pointer] of plan.pointers.entries()) {
     if (pointer.kind === "symlink") {
-      pointers.push({ ...pointer, backup: await readlink(pointer.file) });
+      const target = await readlink(pointer.file);
+      pointers.push({
+        file: pointer.file,
+        kind: "symlink",
+        backup: target,
+        original: target,
+      });
       continue;
     }
     const name = `${index}-${path.basename(pointer.file)}`;
-    await copyFile(pointer.file, path.join(backup, "pointers", name));
-    pointers.push({ file: pointer.file, kind: "file", backup: name });
+    const copy = path.join(backup, "pointers", name);
+    await copyFile(pointer.file, copy);
+    pointers.push({
+      file: pointer.file,
+      kind: "file",
+      backup: name,
+      original: sha256(await readFile(copy)),
+    });
   }
   const gitignorePath = path.join(root, ".gitignore");
   const hasGitignore =
     plan.gitignore.length > 0 && (await exists(gitignorePath));
-  if (hasGitignore)
+  let gitignoreOriginal: string | undefined;
+  if (hasGitignore) {
     await copyFile(gitignorePath, path.join(backup, "gitignore"));
+    gitignoreOriginal = sha256(await readFile(path.join(backup, "gitignore")));
+  }
   const journal: LayoutJournal = {
     version: 1,
     root,
@@ -214,6 +289,7 @@ export async function applyLayout(
     moves,
     pointers,
     gitignore: hasGitignore ? "gitignore" : null,
+    gitignoreOriginal,
     manifests: {},
   };
   await writeJournal(backup, journal);
@@ -236,6 +312,18 @@ export async function applyLayout(
         `copy of ${from} does not match its source (${changed.slice(0, 5).join(", ")}${changed.length > 5 ? ", …" : ""}); was it written during the copy? Nothing is live yet — run \`ocean layout rollback\`.`,
       );
   }
+  // A write to an old tree after its copy was checked would be missing from the new layout:
+  // check every copy again, all at once, immediately before anything becomes visible.
+  for (const { from, to } of moves) {
+    const changed = differences(
+      await manifest(path.join(root, from)),
+      await manifest(path.join(staging, to)),
+    );
+    if (changed.length)
+      throw new Error(
+        `${from} changed while the copy was being made (${changed.slice(0, 5).join(", ")}); stop every writer (runtime, client sessions) and run \`ocean layout rollback\`, then apply again.`,
+      );
+  }
   journal.step = "copied";
   await writeJournal(backup, journal);
 
@@ -250,23 +338,43 @@ export async function applyLayout(
   await writeJournal(backup, journal);
 
   // 4. Repoint: files outside the root in place, files inside an old tree in their new copy.
+  const areas = movedAreas(moves);
   let repointed = 0;
+  const skipped: string[] = [];
   for (const pointer of pointers) {
     const target = newLocation(pointer.file, root, moves);
-    if (pointer.kind === "symlink")
-      await replaceLink(target, repoint(pointer.backup, root, home));
-    else
-      await writeAtomic(
-        target,
-        repoint(await readFile(target, "utf8"), root, home),
-      );
+    // Deleted since the snapshot: nothing left to repoint, and rollback leaves it deleted.
+    if (!(await exists(target))) {
+      skipped.push(pointer.file);
+      continue;
+    }
+    // Journal first: an interruption after this line leaves the pointer either still original or
+    // exactly applied, and rollback recognises both.
+    if (pointer.kind === "symlink") {
+      pointer.applied = repoint(pointer.backup, root, home, areas);
+      await writeJournal(backup, journal);
+      await replaceLink(target, pointer.applied);
+    } else {
+      const current = await readFile(target);
+      // Edited since the snapshot (the copy can take a while): back up what is there now, so
+      // rollback restores that and not an older version.
+      if (target === pointer.file && sha256(current) !== pointer.original) {
+        await writeFile(path.join(backup, "pointers", pointer.backup), current);
+        pointer.original = sha256(current);
+      }
+      const content = repoint(current.toString("utf8"), root, home, areas);
+      pointer.applied = sha256(content);
+      await writeJournal(backup, journal);
+      await writeAtomic(target, content);
+    }
     repointed += 1;
   }
-  if (hasGitignore)
-    await writeAtomic(
-      gitignorePath,
-      applyGitignore(await readFile(gitignorePath, "utf8"), plan),
-    );
+  if (hasGitignore) {
+    const content = applyGitignore(await readFile(gitignorePath, "utf8"), plan);
+    journal.gitignoreApplied = sha256(content);
+    await writeJournal(backup, journal);
+    await writeAtomic(gitignorePath, content);
+  }
 
   for (const { to } of moves)
     journal.manifests[to] = await manifest(path.join(root, to));
@@ -278,7 +386,37 @@ export async function applyLayout(
     backup,
     moved: moves.map(({ from, to }) => `${from} → ${to}`),
     repointed,
+    skipped,
   };
+}
+
+// The journal decides what rollback deletes and writes, so only the moves apply can make and
+// pointer entries that name a real backup are accepted.
+function validateJournal(
+  journal: LayoutJournal,
+  root: string,
+  home: string,
+): void {
+  const fail = (why: string) => {
+    throw new Error(`refusing to roll back: the journal ${why}.`);
+  };
+  if (journal.version !== 1) fail("has an unknown version");
+  if (journal.root !== root || journal.home !== home)
+    fail("belongs to another root or HOME");
+  const segment = /^(?!\.\.?$)[^/\\]+$/;
+  for (const { from, to } of journal.moves) {
+    const bridge = from === "kernel/bridge" && to === "bridge";
+    const record = segment.test(to) && from === `brain/${to}` && to !== "brain";
+    if (!bridge && !record)
+      fail(`names a move apply never makes (${from} → ${to})`);
+  }
+  for (const pointer of journal.pointers) {
+    if (!path.isAbsolute(pointer.file)) fail("names a relative pointer");
+    if (pointer.kind === "file" && !segment.test(pointer.backup))
+      fail(`names a backup outside its folder (${pointer.backup})`);
+  }
+  if (journal.gitignore !== null && journal.gitignore !== "gitignore")
+    fail("names an unexpected .gitignore backup");
 }
 
 async function latestJournal(
@@ -289,11 +427,14 @@ async function latestJournal(
   const names = (await readdir(folder).catch(() => [])).sort().reverse();
   for (const name of names) {
     const backup = path.join(folder, name);
-    const journal = JSON.parse(
-      await readFile(path.join(backup, "journal.json"), "utf8").catch(
-        () => "null",
-      ),
-    ) as LayoutJournal | null;
+    let journal: LayoutJournal | null = null;
+    try {
+      journal = JSON.parse(
+        await readFile(path.join(backup, "journal.json"), "utf8"),
+      ) as LayoutJournal;
+    } catch {
+      continue;
+    }
     if (journal?.root === root && journal.step !== "rolled-back")
       return { backup, journal };
   }
@@ -322,6 +463,7 @@ export async function rollbackLayout(
     return { rolledBack: false, reason: "no apply to roll back" };
   }
   const { backup, journal } = found;
+  validateJournal(journal, root, home);
   const { moves } = journal;
   const placed = [];
   for (const move of moves)
@@ -361,9 +503,35 @@ export async function rollbackLayout(
     }
   }
 
+  const outside = journal.pointers.filter(
+    (pointer) => !insideOldTree(pointer.file, root, moves),
+  );
+  const edited = [];
+  const toRestore: PointerBackup[] = [];
+  for (const pointer of outside) {
+    const state = await pointerState(pointer);
+    if (pointer.applied && state === pointer.applied) toRestore.push(pointer);
+    else if (!pointer.applied && state === "") continue;
+    else if (state !== pointer.original) edited.push(pointer.file);
+  }
+  const gitignorePath = path.join(root, ".gitignore");
+  const gitignoreState = await readFile(gitignorePath).then(sha256, () => "");
+  const restoreGitignore =
+    journal.gitignoreApplied !== undefined &&
+    gitignoreState === journal.gitignoreApplied;
+  if (
+    journal.gitignore &&
+    !restoreGitignore &&
+    gitignoreState !== journal.gitignoreOriginal
+  )
+    edited.push(gitignorePath);
+  if (edited.length)
+    throw new Error(
+      `refusing to roll back: changed since apply — ${edited.join(", ")}. Restoring the backup would lose that edit; merge it by hand from ${path.join(backup, "pointers")}, then run rollback again.`,
+    );
+
   let restored = 0;
-  for (const pointer of journal.pointers) {
-    if (insideOldTree(pointer.file, root, moves)) continue;
+  for (const pointer of toRestore) {
     if (pointer.kind === "symlink")
       await replaceLink(pointer.file, pointer.backup);
     else
@@ -373,9 +541,9 @@ export async function rollbackLayout(
       );
     restored += 1;
   }
-  if (journal.gitignore)
+  if (journal.gitignore && restoreGitignore)
     await writeAtomic(
-      path.join(root, ".gitignore"),
+      gitignorePath,
       await readFile(path.join(backup, journal.gitignore), "utf8"),
     );
   await rm(staging, { recursive: true, force: true });

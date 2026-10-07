@@ -61,12 +61,49 @@ function fixture() {
   return { home, root };
 }
 
+// Fault injection for the child process: patch node:fs/promises before the CLI loads it.
+//   OCEAN_TEST_DELETE_ON_COPY=<file> — delete <file> when the first tree copy starts;
+//   OCEAN_TEST_EDIT_ON_COPY=<file>   — append a line to <file> when the first tree copy starts;
+//   OCEAN_TEST_FAIL_WRITE=1          — fail the first atomic pointer write (after the swap).
+const FAULTS = path.join(os.tmpdir(), `ocean-layout-faults-${process.pid}.mjs`);
+writeFileSync(
+  FAULTS,
+  `import fs from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
+const { appendFile, cp, rename, rm } = fs;
+let copied = false, failed = false;
+fs.cp = async (...args) => {
+  if (!copied && process.env.OCEAN_TEST_DELETE_ON_COPY) { copied = true; await rm(process.env.OCEAN_TEST_DELETE_ON_COPY); }
+  if (!copied && process.env.OCEAN_TEST_EDIT_ON_COPY) { copied = true; await appendFile(process.env.OCEAN_TEST_EDIT_ON_COPY, "edited during the copy\\n"); }
+  return cp(...args);
+};
+fs.rename = async (from, to) => {
+  if (!failed && process.env.OCEAN_TEST_FAIL_WRITE && String(from).includes(".ocean-layout-") && !String(to).endsWith("journal.json")) { failed = true; throw new Error("injected write failure"); }
+  return rename(from, to);
+};
+syncBuiltinESMExports();
+`,
+);
+process.on("exit", () => rmSync(FAULTS, { force: true }));
+
 function layout({ home, root }, ...args) {
+  const faults = args.filter((arg) => typeof arg === "object");
+  const words = args.filter((arg) => typeof arg === "string");
   const result = spawnSync(
     process.execPath,
-    [path.resolve("dist/main.js"), "layout", ...args],
+    [
+      ...(faults.length ? ["--import", FAULTS] : []),
+      path.resolve("dist/main.js"),
+      "layout",
+      ...words,
+    ],
     {
-      env: { PATH: process.env.PATH, HOME: home, OCEAN_ROOT: root },
+      env: {
+        PATH: process.env.PATH,
+        HOME: home,
+        OCEAN_ROOT: root,
+        ...Object.assign({}, ...faults),
+      },
       encoding: "utf8",
     },
   );
@@ -128,7 +165,18 @@ test("apply copies both halves, repoints every pointer, and leaves the old trees
     const plan = layout(where, "plan").json;
     assert.deepEqual(plan.layout, { records: "flat", bridge: "flat" });
     assert.deepEqual(plan.moves, []);
-    assert.deepEqual(plan.pointers, [], "no old path is left anywhere");
+    const stale = Object.keys(after).filter((key) => {
+      if (key.startsWith("ocean/brain") || key.startsWith("ocean/kernel"))
+        return false;
+      const file = path.join(home, key);
+      if (lstatSync(file).isSymbolicLink())
+        return /ocean\/(brain|kernel\/bridge)/.test(readlinkSync(file));
+      return (
+        lstatSync(file).isFile() &&
+        /ocean\/(brain|kernel\/bridge)/.test(read(file))
+      );
+    });
+    assert.deepEqual(stale, [], "no old path is left outside the old trees");
 
     assert.equal(
       read(path.join(root, "04-projects/atlas/tasks/T-1/task.md")),
@@ -300,6 +348,157 @@ test("a run interrupted mid-copy blocks a new apply, and rollback restores the o
     assert.deepEqual(tree(where.home), before);
   } finally {
     chmodSync(locked, 0o644);
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("rollback refuses, changing nothing, when a repointed file was edited after apply", () => {
+  const where = fixture();
+  try {
+    assert.equal(layout(where, "apply", "--yes").status, 0);
+    const settings = path.join(where.home, ".claude/settings.json");
+    writeFileSync(settings, `${read(settings)}{"added":"later"}\n`);
+    const before = tree(where.home);
+    const rolled = layout(where, "rollback", "--yes");
+    assert.equal(rolled.status, 1);
+    assert.match(rolled.stderr, /changed since apply — .*settings\.json/);
+    assert.deepEqual(tree(where.home), before);
+  } finally {
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("rollback refuses a journal that names a move apply never makes", () => {
+  const where = fixture();
+  try {
+    assert.equal(layout(where, "apply", "--yes").status, 0);
+    const [stamp] = readdirSync(path.join(where.home, BACKUPS));
+    const file = path.join(where.home, BACKUPS, stamp, "journal.json");
+    const journal = JSON.parse(read(file));
+    journal.moves.push({ from: "brain/..", to: ".." });
+    writeFileSync(file, JSON.stringify(journal));
+    const before = tree(where.home);
+    const rolled = layout(where, "rollback", "--yes");
+    assert.equal(rolled.status, 1);
+    assert.match(
+      rolled.stderr,
+      /names a move apply never makes \(brain\/\.\. → \.\.\)/,
+    );
+    assert.deepEqual(tree(where.home), before);
+  } finally {
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("a pointer deleted during the copy is skipped, and rollback leaves it deleted", () => {
+  const where = fixture();
+  const claude = path.join(where.home, ".claude/CLAUDE.md");
+  try {
+    const before = tree(where.home);
+    const applied = layout(where, "apply", "--yes", {
+      OCEAN_TEST_DELETE_ON_COPY: claude,
+    });
+    assert.equal(applied.status, 0, applied.stderr);
+    assert.deepEqual(applied.json.skipped, [claude]);
+    const rolled = layout(where, "rollback", "--yes");
+    assert.equal(rolled.status, 0, rolled.stderr);
+    const { ".claude/CLAUDE.md": _, ...rest } = before;
+    assert.deepEqual(tree(where.home), rest);
+  } finally {
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("a run that fails after the swap blocks a new apply, and rollback restores the original tree", () => {
+  const where = fixture();
+  try {
+    const before = tree(where.home);
+    const failed = layout(where, "apply", "--yes", {
+      OCEAN_TEST_FAIL_WRITE: "1",
+    });
+    assert.equal(failed.status, 1);
+    assert.match(failed.stderr, /injected write failure/);
+    assert.ok(
+      existsSync(path.join(where.root, "04-projects")),
+      "the swap happened",
+    );
+    assert.match(
+      layout(where, "apply", "--yes").stderr,
+      /an earlier apply stopped at step "swapped"/,
+    );
+    const rolled = layout(where, "rollback", "--yes");
+    assert.equal(rolled.status, 0, rolled.stderr);
+    assert.deepEqual(tree(where.home), before);
+  } finally {
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("an absolute symlink inside a moved tree is repointed in the new copy only", () => {
+  const where = fixture();
+  try {
+    const link = path.join(where.root, "brain/02-personal/today");
+    mkdirSync(path.dirname(link), { recursive: true });
+    symlinkSync(path.join(where.root, "brain/01-daily/2026-10-07.md"), link);
+    assert.equal(layout(where, "apply", "--yes").status, 0);
+    assert.equal(
+      readlinkSync(path.join(where.root, "02-personal/today")),
+      path.join(where.root, "01-daily/2026-10-07.md"),
+    );
+    assert.equal(
+      readlinkSync(link),
+      path.join(where.root, "brain/01-daily/2026-10-07.md"),
+    );
+  } finally {
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("paths into a half that does not move are left alone", () => {
+  const where = fixture();
+  try {
+    // The bridge already moved; only the records are nested.
+    mkdirSync(path.join(where.root, "bridge/sessions"), { recursive: true });
+    const settings = path.join(where.home, ".claude/settings.json");
+    const original = read(settings);
+    const applied = layout(where, "apply", "--yes");
+    assert.equal(applied.status, 0, applied.stderr);
+    assert.deepEqual(
+      applied.json.moved.filter((move) => move.startsWith("kernel")),
+      [],
+    );
+    assert.equal(
+      read(settings),
+      original,
+      "kernel/bridge paths are not rewritten",
+    );
+    assert.equal(
+      read(path.join(where.home, ".claude/CLAUDE.md")),
+      "@~/ocean/charter/core.md\n",
+    );
+  } finally {
+    rmSync(where.home, { recursive: true, force: true });
+  }
+});
+
+test("a pointer edited during the copy keeps that edit through apply and rollback", () => {
+  const where = fixture();
+  const settings = path.join(where.home, ".claude/settings.json");
+  try {
+    const applied = layout(where, "apply", "--yes", {
+      OCEAN_TEST_EDIT_ON_COPY: settings,
+    });
+    assert.equal(applied.status, 0, applied.stderr);
+    assert.equal(
+      read(settings),
+      `{"hook":"${where.root}/bridge/hooks/start"}\nedited during the copy\n`,
+    );
+    assert.equal(layout(where, "rollback", "--yes").status, 0);
+    assert.equal(
+      read(settings),
+      `{"hook":"${where.root}/kernel/bridge/hooks/start"}\nedited during the copy\n`,
+    );
+  } finally {
     rmSync(where.home, { recursive: true, force: true });
   }
 });
