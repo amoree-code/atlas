@@ -52,3 +52,13 @@ test("validate-tasks skips cleanly when there is no private workspace", () => {
     "No private task workspace found; skipped task validation",
   );
 });
+
+test("validate-tasks prefers the flat layout over brain/ once the records have moved", () => {
+  assert.equal(
+    validate({
+      "04-projects/ocean/tasks": ["T-1", "T-2", "T-3"],
+      "brain/04-projects/atlas/tasks": ["T-1"],
+    }),
+    "Validated 3 live and 0 archived tasks",
+  );
+});
