@@ -72,3 +72,36 @@ test("policy doctor reads policy references written as `ocean policy` or the leg
   assert.deepEqual(report.missing.sort(), ["missing-one", "missing-two"]);
   assert.equal(report.ok, false);
 });
+
+test("doctor GOVERNANCE_DRIFT reads policy references written as `ocean policy` or the legacy `atlas policy`", async () => {
+  const { CHARTER_DIR, POLICIES_DIR } = await import("../dist/paths.js");
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-doctor-drift-"));
+  await mkdir(path.join(root, POLICIES_DIR), { recursive: true });
+  await writeFile(path.join(root, POLICIES_DIR, "task.md"), "# task\n");
+  const run = async (core) => {
+    await writeFile(path.join(root, CHARTER_DIR, "core.md"), core);
+    const result = spawnSync(
+      process.execPath,
+      [path.resolve("dist/main.js"), "doctor", "--json"],
+      {
+        env: {
+          ...process.env,
+          OCEAN_ROOT: root,
+          OCEAN_SKIP_DEPENDENCY_AUDIT: "1",
+        },
+        encoding: "utf8",
+      },
+    );
+    return JSON.parse(result.stdout).findings.filter(
+      (finding) => finding.code === "GOVERNANCE_DRIFT",
+    );
+  };
+  assert.equal(
+    (await run("Use `ocean policy task` and `atlas policy task`.\n")).length,
+    0,
+  );
+  const drift = await run("Use `ocean policy gone` first.\n");
+  assert.equal(drift.length, 1);
+  assert.match(drift[0].message, /gone/);
+  assert.equal((await run("Use `atlas policy gone-too` first.\n")).length, 1);
+});

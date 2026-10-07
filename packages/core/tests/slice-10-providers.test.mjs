@@ -427,16 +427,13 @@ installed(
 
 installed(
   "live hook verification: the Ocean SessionStart hook script executes and emits bounded context",
-  () => {
-    const hook = path.join(
-      os.homedir(),
-      "atlas",
-      SYSTEM_DIR,
-      "integrations",
-      "claude-code",
-      "hooks",
-      "atlas-session-bootstrap",
+  async () => {
+    const status = await claudeNativeHookStatus();
+    assert.ok(
+      status.scriptInstalled,
+      `hook script missing: ${status.scriptPath}`,
     );
+    const hook = status.scriptPath;
     const payload = JSON.stringify({
       cwd: os.tmpdir(),
       session_id: "slice10",

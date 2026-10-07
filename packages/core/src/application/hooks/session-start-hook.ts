@@ -110,9 +110,12 @@ export async function claudeNativeHookStatus(
       hooks?: { SessionStart?: Array<{ hooks?: Array<{ command?: string }> }> };
     };
     const entries = settings.hooks?.SessionStart ?? [];
+    // When a script is installed, only a registration of that very script counts: a command
+    // naming the other hook name would point at a file that is not there and silently fail.
+    const wanted = scriptInstalled ? [path.basename(scriptPath)] : HOOK_NAMES;
     registered = entries.some((entry) =>
       (entry.hooks ?? []).some((hook) =>
-        HOOK_NAMES.some((name) => hook.command?.includes(name)),
+        wanted.some((name) => hook.command?.includes(name)),
       ),
     );
   } catch {

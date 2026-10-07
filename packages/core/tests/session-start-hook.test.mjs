@@ -202,3 +202,64 @@ for (const [folder, hook] of [
     assert.equal(status.registered, true);
   });
 }
+
+async function hookHome({ script, registered }) {
+  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-fake-home-"));
+  const hooks = path.join(
+    fakeHome,
+    "ocean",
+    SYSTEM_DIR,
+    "integrations",
+    "claude-code",
+    "hooks",
+  );
+  await mkdir(hooks, { recursive: true });
+  if (script) await writeFile(path.join(hooks, script), "#!/bin/sh\n");
+  await mkdir(path.join(fakeHome, ".claude"), { recursive: true });
+  await writeFile(
+    path.join(fakeHome, ".claude", "settings.json"),
+    JSON.stringify({
+      hooks: {
+        SessionStart: [
+          { hooks: [{ type: "command", command: `${hooks}/${registered}` }] },
+        ],
+      },
+    }),
+  );
+  return fakeHome;
+}
+
+test("claudeNativeHookStatus does not count a registration of the other hook name when a script is installed (half-migrated machine)", async () => {
+  const status = await claudeNativeHookStatus(
+    await hookHome({
+      script: "ocean-session-bootstrap",
+      registered: "atlas-session-bootstrap",
+    }),
+  );
+  assert.equal(status.scriptInstalled, true);
+  assert.equal(status.registered, false);
+});
+
+test("claudeNativeHookStatus counts the registration of the installed legacy-named script", async () => {
+  const status = await claudeNativeHookStatus(
+    await hookHome({
+      script: "atlas-session-bootstrap",
+      registered: "atlas-session-bootstrap",
+    }),
+  );
+  assert.equal(status.scriptInstalled, true);
+  assert.equal(status.registered, true);
+});
+
+test("claudeNativeHookStatus still reports a registration under either name when no script is installed", async () => {
+  for (const registered of [
+    "ocean-session-bootstrap",
+    "atlas-session-bootstrap",
+  ]) {
+    const status = await claudeNativeHookStatus(
+      await hookHome({ script: null, registered }),
+    );
+    assert.equal(status.scriptInstalled, false);
+    assert.equal(status.registered, true, registered);
+  }
+});
