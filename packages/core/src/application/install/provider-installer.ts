@@ -154,7 +154,7 @@ export async function installProvider(
   const spec = findInstallSpec(id);
   if (!approved)
     throw new Error(
-      `Installation approval required. Re-run with: atlas install ${spec.provider.id} --yes`,
+      `Installation approval required. Re-run with: ocean install ${spec.provider.id} --yes`,
     );
   assertSupportedPlatform(spec, process.platform);
 
@@ -195,7 +195,7 @@ export async function removeInstalledProvider(
 ): Promise<ProviderRecord> {
   if (!approved)
     throw new Error(
-      `Removal approval required. Re-run with: atlas remove ${id} --yes`,
+      `Removal approval required. Re-run with: ocean remove ${id} --yes`,
     );
   const spec = findInstallSpec(id);
   const provider = await wrapperManager.removeProvider(spec.provider.id);

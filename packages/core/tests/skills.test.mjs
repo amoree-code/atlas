@@ -86,7 +86,7 @@ test("promoted skills are truncated by bytes with a marker naming the candidate"
     assert.ok(Buffer.byteLength(skill.instructions) <= 1000);
     // The marker is an actionable pointer: the entry id, the command and the store file.
     assert.match(skill.instructions, /entry id "arabic-review"/);
-    assert.match(skill.instructions, /`atlas skill list`/);
+    assert.match(skill.instructions, /`ocean skill list`/);
     assert.ok(
       skill.instructions.includes(
         path.join(root, SYSTEM_DIR, "skills", "candidates.json"),

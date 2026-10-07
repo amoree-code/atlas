@@ -13,8 +13,8 @@ import { resolveOriginalExecutable } from "./provider-registry.js";
 //
 // The per-provider flags below were verified live against the installed binaries. Note what
 // is deliberately NOT here: no --dangerously-skip-permissions (claude), no --full-auto or
-// --dangerously-bypass-approvals-and-sandbox (codex), no --yolo (gemini). Atlas approval is
-// the Atlas guard's job; an auto-approve flag is never used as a substitute for it. The
+// --dangerously-bypass-approvals-and-sandbox (codex), no --yolo (gemini). Ocean approval is
+// the Ocean guard's job; an auto-approve flag is never used as a substitute for it. The
 // flags that are present only disable the provider's *interactive directory-trust prompt*,
 // which is required for any headless run at all.
 export type ProviderParseMode = "json" | "text";
@@ -45,7 +45,7 @@ export function providerHeadlessSupport(provider: string): ProviderSupport {
   if (!spec)
     return {
       supported: false,
-      reason: `provider '${provider}' has no verified headless contract in Atlas — it stays gated as unsupported`,
+      reason: `provider '${provider}' has no verified headless contract in Ocean — it stays gated as unsupported`,
     };
   return { supported: true, spec };
 }
@@ -199,7 +199,7 @@ export async function invokeProviderHeadless(
     return result(
       request,
       "denied",
-      `provider invocation denied by the Atlas write guard: ${decision.reason}`,
+      `provider invocation denied by the Ocean write guard: ${decision.reason}`,
       { guard: decision },
     );
   }

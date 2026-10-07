@@ -233,10 +233,10 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
       scopeHash,
     );
   }
-  // A record write must resolve inside the private Atlas root and never inside the public
+  // A record write must resolve inside the private Ocean root and never inside the public
   // engine package, whatever path the caller passed. resolveWithin (paths.js) rejects both a
   // lexical escape and a symlink that resolves outside the given root, so a symlink planted
-  // inside the Atlas root pointing outside it can't be used to land a write elsewhere.
+  // inside the Ocean root pointing outside it can't be used to land a write elsewhere.
   if (isRecordOperation) {
     const resolved = path.resolve(request.scope.target);
     try {
@@ -245,7 +245,7 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
       return decision(
         request,
         "invalid-target",
-        "denied: target escapes the Atlas root",
+        "denied: target escapes the Ocean root",
         consent,
         scopeHash,
       );
@@ -260,7 +260,7 @@ export function evaluateGuard(request: GuardRequest): GuardDecision {
       return decision(
         request,
         "invalid-target",
-        "denied: refusing to write private Atlas content inside the public engine package",
+        "denied: refusing to write private Ocean content inside the public engine package",
         consent,
         scopeHash,
       );

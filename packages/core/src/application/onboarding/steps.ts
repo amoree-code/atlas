@@ -36,7 +36,7 @@ async function yes(io: OnboardingIO, question: string): Promise<boolean> {
 }
 
 // A guided step prints the exact command instead of running it: these touch client
-// configs, credentials or the user's own settings, which Atlas must not edit unasked.
+// configs, credentials or the user's own settings, which Ocean must not edit unasked.
 function guided(
   id: string,
   title: string,
@@ -71,7 +71,7 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
     },
     {
       id: "identity",
-      title: "Identity (who Atlas works for)",
+      title: "Identity (who Ocean works for)",
       optional: true,
       async run(io) {
         const name = (await io.ask("  Your name: ", "")).trim();
@@ -91,7 +91,7 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
     },
     {
       id: "clients",
-      title: "AI clients (which CLIs Atlas observes)",
+      title: "AI clients (which CLIs Ocean observes)",
       optional: false,
       async run(io) {
         for (const client of await wrapperStatus()) {
@@ -125,7 +125,7 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
           `  ${pending.length} client skill copies are out of date (originals are backed up).`,
         );
         if (!io.interactive) {
-          io.say("  Run: atlas skill copy --apply");
+          io.say("  Run: ocean skill copy --apply");
           return "skipped";
         }
         if (!(await yes(io, "  Apply now?"))) return "skipped";
@@ -146,14 +146,14 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
       },
     },
     guided("mcp", "MCP config for your clients", [
-      "Run: atlas mcp config",
+      "Run: ocean mcp config",
       "Paste the JSON into each client's MCP settings.",
     ]),
     guided("auth", "Provider authentication", [
-      "Run: atlas auth",
+      "Run: ocean auth",
       "Credentials stay in the OS keychain or environment, never in files.",
     ]),
-    guided("browser", "Browser capability", ["Run: atlas browser"]),
+    guided("browser", "Browser capability", ["Run: ocean browser"]),
     {
       id: "obsidian",
       title: "Obsidian vault",
@@ -173,7 +173,7 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
       'node "$HOME/ocean/kernel/packages/core/dist/main.js" client sync >/dev/null 2>&1 &',
     ]),
     guided("service", "Background service and schedules", [
-      "Run: atlas service   (and atlas schedule for recurring jobs)",
+      "Run: ocean service   (and ocean schedule for recurring jobs)",
     ]),
     {
       id: "verify",
@@ -200,10 +200,10 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
             "  PROVEN: wrappers configured, binaries resolve outside the shim directory.",
           );
         if (blocking.length > 0) {
-          io.say("  Fix the above, then run: atlas onboard --reset verify");
+          io.say("  Fix the above, then run: ocean onboard --reset verify");
           return "skipped";
         }
-        io.say("  Also run: atlas doctor");
+        io.say("  Also run: ocean doctor");
         return "done";
       },
     },

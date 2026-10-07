@@ -18,7 +18,7 @@ async function withAtlasRoot(fn) {
   }
 }
 
-test("atlas observe redacts secrets in captured output before writing to disk", async () => {
+test("ocean observe redacts secrets in captured output before writing to disk", async () => {
   await withAtlasRoot(async (root) => {
     const secretToken = `sk-ant-${"a".repeat(20)}`;
     await runObserveCommand([

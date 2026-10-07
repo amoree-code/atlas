@@ -96,8 +96,8 @@ import {
   defaultSessionStoreOpener,
   defaultWrapperManager,
 } from "../../composition/runtime.js";
-import { runAtlasMcpServer } from "../../infrastructure/mcp/atlas-server.js";
 import { runObsidianMcpServer } from "../../infrastructure/mcp/obsidian-server.js";
+import { runOceanMcpServer } from "../../infrastructure/mcp/ocean-server.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { runService } from "../../infrastructure/process/service.js";
 import { loadProviderRegistry } from "../../infrastructure/providers/provider-registry.js";
@@ -374,7 +374,7 @@ async function commandMcp(): Promise<void> {
     console.log(JSON.stringify(oceanMcpConfig(), null, 2));
   else if (action === "playwright-config")
     console.log(JSON.stringify(playwrightMcpConfig(), null, 2));
-  else if (action === "serve") await runAtlasMcpServer();
+  else if (action === "serve") await runOceanMcpServer();
   else {
     console.error("Usage: ocean mcp config|playwright-config|serve");
     process.exitCode = 1;

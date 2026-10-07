@@ -96,7 +96,7 @@ export async function loadPromotedSkills(
     }
     // A usable pointer: the store file and the command that prints it. The store is not
     // granted to restricted providers because it also holds unreviewed candidates.
-    const marker = `\n[truncated to the run budget; full text: entry id "${candidate.id}" in \`atlas skill list\` or ${file()}]`;
+    const marker = `\n[truncated to the run budget; full text: entry id "${candidate.id}" in \`ocean skill list\` or ${file()}]`;
     const markerBytes = Buffer.byteLength(marker);
     if (remaining <= markerBytes) break;
     const instructions = `${truncateUtf8(candidate.instructions, remaining - markerBytes)}${marker}`;

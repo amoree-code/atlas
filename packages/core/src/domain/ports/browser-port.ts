@@ -1,4 +1,4 @@
-// The browser provider boundary. Everything above this file is Atlas: capability,
+// The browser provider boundary. Everything above this file is Ocean: capability,
 // authority, verification, session identity. A provider is the only place a browser
 // engine may be named — see infrastructure/providers/playwright-browser-provider.ts.
 // Every call here returns a plain, JSON-safe value; a provider never decides whether

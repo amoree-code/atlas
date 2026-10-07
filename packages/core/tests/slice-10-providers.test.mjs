@@ -303,7 +303,7 @@ test("missing session id is reported as null rather than invented", () => {
   );
 });
 
-test("a failing provider still propagates the Atlas session pointer and parent relation", async () => {
+test("a failing provider still propagates the Ocean session pointer and parent relation", async () => {
   const { file } = await fakeProvider("#!/bin/sh\nexit 4\n");
   const parent = randomUUID();
   const result = await invokeProviderHeadless({
@@ -402,7 +402,7 @@ test("Arabic and English intents are guarded identically before provider invocat
 // ---------------------------------------------------------------- hook & shim verification
 
 installed(
-  "live shim verification: the Atlas shim executes and routes through the engine",
+  "live shim verification: the Ocean shim executes and routes through the engine",
   () => {
     const shim = path.join(
       os.homedir(),
@@ -426,7 +426,7 @@ installed(
 );
 
 installed(
-  "live hook verification: the Atlas SessionStart hook script executes and emits bounded context",
+  "live hook verification: the Ocean SessionStart hook script executes and emits bounded context",
   () => {
     const hook = path.join(
       os.homedir(),

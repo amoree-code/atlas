@@ -68,7 +68,7 @@ function desktopWrapperContents(provider: string): string {
   }
   return `#!/bin/sh
 if [ "$#" -lt 1 ]; then
-  echo "Atlas desktop wrapper requires the native ${provider} executable path" >&2
+  echo "Ocean desktop wrapper requires the native ${provider} executable path" >&2
   exit 64
 fi
 native="$1"
@@ -289,10 +289,10 @@ export async function wrapperDoctor(commandPath?: string): Promise<string[]> {
     .map((entry) => path.resolve(entry));
   const index = currentPath.indexOf(path.resolve(shimDirectory()));
   if (index < 0)
-    findings.push(`Atlas shim directory is not on PATH: ${shimDirectory()}`);
+    findings.push(`Ocean shim directory is not on PATH: ${shimDirectory()}`);
   else if (index > 0)
     findings.push(
-      `Atlas shim directory is after ${index} PATH entries; provider commands can bypass Atlas`,
+      `Ocean shim directory is after ${index} PATH entries; provider commands can bypass Ocean`,
     );
   const bypass = commandPath ? absolutePathBypassFinding(commandPath) : null;
   if (bypass) findings.push(bypass);
@@ -309,8 +309,8 @@ export function absolutePathBypassFinding(commandPath: string): string | null {
     (candidate) => candidate.command === command,
   );
   if (!provider)
-    return `BYPASS_DETECTED: absolute path is outside Atlas and is not a registered provider: ${resolved}`;
-  return `BYPASS_DETECTED: ${provider.id} was invoked by absolute path outside Atlas shims: ${resolved}`;
+    return `BYPASS_DETECTED: absolute path is outside Ocean and is not a registered provider: ${resolved}`;
+  return `BYPASS_DETECTED: ${provider.id} was invoked by absolute path outside Ocean shims: ${resolved}`;
 }
 
 export async function wrapperStatus(): Promise<

@@ -104,7 +104,7 @@ test("unknown session is reported as non-existent, never guessed", () =>
   withStore(async (store) => {
     const plan = await planSessionResume(store, randomUUID(), BUDGET);
     assert.equal(plan.ok, false);
-    assert.match(plan.reason, /does not exist in Atlas/);
+    assert.match(plan.reason, /does not exist in Ocean/);
   }));
 
 // ---------------------------------------------------------------- status handling

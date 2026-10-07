@@ -42,8 +42,8 @@ export function projectConfirmationQuestion(
 ): string | null {
   if (resolution.status === "bound") return null;
   if (resolution.status === "ambiguous")
-    return "Which Atlas project should this request use? Specify the project name or binding path.";
-  return "Which Atlas project should this request use? Provide the project name and path to bind it.";
+    return "Which Ocean project should this request use? Specify the project name or binding path.";
+  return "Which Ocean project should this request use? Provide the project name and path to bind it.";
 }
 
 function bindingsFile(): string {
@@ -86,7 +86,7 @@ async function saveProjectBindings(bindings: ProjectBinding[]): Promise<void> {
   await rename(tmp, file);
 }
 
-// Resolves the active Atlas project from a working directory: no terminal-in-Atlas
+// Resolves the active Ocean project from a working directory: no terminal-in-Atlas
 // requirement. Match order is git root, then the exact cwd, then (as a last resort) whether
 // the path is inside the Atlas workspace root itself, which is always project "atlas".
 export async function resolveProject(cwd: string): Promise<ProjectResolution> {

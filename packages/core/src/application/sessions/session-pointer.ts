@@ -34,7 +34,7 @@ export type ResumePlan = {
 };
 
 // Sessions are created with randomUUID(), so a pointer that is not a UUID did not come from
-// Atlas and is refused before any lookup.
+// Ocean and is refused before any lookup.
 const SESSION_ID_SHAPE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STALE_RESUME_MS = 24 * 60 * 60 * 1000;
@@ -50,7 +50,7 @@ export function validateSessionIdentifier(
   if (!SESSION_ID_SHAPE.test(sessionId))
     return {
       valid: false,
-      reason: `session pointer '${sessionId}' is not a valid Atlas session identifier`,
+      reason: `session pointer '${sessionId}' is not a valid Ocean session identifier`,
     };
   return { valid: true, value: sessionId };
 }
@@ -117,7 +117,7 @@ export async function planSessionResume(
 
   const session = store.get(identifier.value);
   if (!session)
-    return refused(`session ${identifier.value} does not exist in Atlas`);
+    return refused(`session ${identifier.value} does not exist in Ocean`);
 
   const pointer = await buildSessionPointer(session);
 
@@ -154,7 +154,7 @@ export async function planSessionResume(
   }
   if (session.status === "failed" || session.status === "cancelled") {
     return refused(
-      `session ${identifier.value} ended in terminal status '${session.status}' — a new session must be started explicitly, Atlas will not reassign it automatically`,
+      `session ${identifier.value} ended in terminal status '${session.status}' — a new session must be started explicitly, Ocean will not reassign it automatically`,
     );
   }
   if (
@@ -163,7 +163,7 @@ export async function planSessionResume(
     age > STALE_RESUME_MS
   ) {
     return refused(
-      `session ${identifier.value} is stale: last updated ${Math.floor(age / 3_600_000)}h ago while still marked running — run 'atlas session doctor' before resuming`,
+      `session ${identifier.value} is stale: last updated ${Math.floor(age / 3_600_000)}h ago while still marked running — run 'ocean session doctor' before resuming`,
       ["stale-session"],
     );
   }
@@ -214,7 +214,7 @@ export function validateParentSession(
   if (!parent)
     return {
       ok: false,
-      reason: `parent session ${identifier.value} does not exist in Atlas`,
+      reason: `parent session ${identifier.value} does not exist in Ocean`,
     };
   return { ok: true, parentSessionId: identifier.value };
 }

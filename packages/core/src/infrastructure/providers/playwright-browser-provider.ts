@@ -1,4 +1,4 @@
-// The only file in Atlas permitted to know a browser engine. Everything above the
+// The only file in Ocean permitted to know a browser engine. Everything above the
 // BrowserProvider boundary (browser-provider.ts) stays engine-neutral.
 //
 // Depends on `playwright-core`, not `playwright`: playwright-core ships the driver and

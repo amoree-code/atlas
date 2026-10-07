@@ -6,7 +6,7 @@ import test from "node:test";
 import { McpClient } from "../dist/infrastructure/mcp/mcp-client.js";
 
 test("discovers, filters, and approval-gates MCP tools", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-mcp-"));
   const server = path.join(root, "server.mjs");
   await writeFile(
     server,

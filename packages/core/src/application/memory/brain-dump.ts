@@ -168,7 +168,7 @@ export async function writeBrainDump(input: {
     "",
     "---",
     "",
-    `Session id: ${session.sessionId} · Raw events: \`atlas session events ${session.sessionId}\``,
+    `Session id: ${session.sessionId} · Raw events: \`ocean session events ${session.sessionId}\``,
   ];
 
   const directory = oceanPath(INBOX_DIR, "brain-dump");

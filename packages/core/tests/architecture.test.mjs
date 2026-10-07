@@ -37,12 +37,12 @@ test("no application/* file imports an infrastructure/* concrete", async () => {
 
 test("the MCP server does not import the CLI layer", async () => {
   const source = await readFile(
-    path.resolve("src/infrastructure/mcp/atlas-server.ts"),
+    path.resolve("src/infrastructure/mcp/ocean-server.ts"),
     "utf8",
   );
   for (const match of source.matchAll(IMPORT))
     assert.ok(
       !/interfaces\/cli/.test(match[1]),
-      `atlas-server must not import the CLI layer: ${match[1]}`,
+      `ocean-server must not import the CLI layer: ${match[1]}`,
     );
 });

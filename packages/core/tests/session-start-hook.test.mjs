@@ -25,7 +25,7 @@ test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutp
   );
 });
 
-test("claudeSessionStartHook reports unbound for a cwd with no Atlas binding, not a guess", async () => {
+test("claudeSessionStartHook reports unbound for a cwd with no Ocean binding, not a guess", async () => {
   const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-unbound-"));
   const oceanRoot = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-root-"));
   const previous = process.env.OCEAN_ROOT;
@@ -42,7 +42,7 @@ test("claudeSessionStartHook reports unbound for a cwd with no Atlas binding, no
   }
 });
 
-test("atlas hook session-start CLI: bounded stdout JSON, run from a cwd outside Atlas, no Atlas file content", () => {
+test("ocean hook session-start CLI: bounded stdout JSON, run from a cwd outside Ocean, no Ocean file content", () => {
   const outside = os.tmpdir();
   const payload = JSON.stringify({
     cwd: outside,
@@ -62,11 +62,11 @@ test("atlas hook session-start CLI: bounded stdout JSON, run from a cwd outside 
   );
   assert.doesNotMatch(
     parsed.hookSpecificOutput.additionalContext,
-    /MEMORY|KNOWLEDGE|## Atlas resource/,
+    /MEMORY|KNOWLEDGE|## Ocean resource/,
   );
 });
 
-test("atlas hook session-start CLI works with no stdin payload at all (falls back to process cwd)", () => {
+test("ocean hook session-start CLI works with no stdin payload at all (falls back to process cwd)", () => {
   const result = spawnSync(
     process.execPath,
     [path.resolve("dist/main.js"), "hook", "session-start"],

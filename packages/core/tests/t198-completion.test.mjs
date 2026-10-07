@@ -30,7 +30,7 @@ test("unbound and ambiguous project resolution each produce one focused confirma
       gitRoot: null,
       confidence: "none",
     }),
-    /which Atlas project/i,
+    /which Ocean project/i,
   );
   assert.match(
     projectConfirmationQuestion({
@@ -54,7 +54,7 @@ test("unbound and ambiguous project resolution each produce one focused confirma
   );
 });
 
-test("atlas operate routes deterministic natural-language reads through the Atlas operation layer", () => {
+test("ocean operate routes deterministic natural-language reads through the Ocean operation layer", () => {
   const root = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), "atlas-t198-cli-")),
   );

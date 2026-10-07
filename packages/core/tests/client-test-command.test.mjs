@@ -9,7 +9,7 @@ import { SYSTEM_DIR } from "../dist/paths.js";
 const sep = "[\\\\/]";
 const systemPattern = SYSTEM_DIR.split("/").join(sep);
 
-test("client test reports Atlas sources and Claude transport", () => {
+test("client test reports Ocean sources and Claude transport", () => {
   const result = spawnSync(
     process.execPath,
     [path.resolve("dist/main.js"), "client", "test", "claude", "--json"],

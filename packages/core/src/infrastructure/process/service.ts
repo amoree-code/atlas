@@ -27,7 +27,7 @@ export async function runService(shutdownAfterMs?: number): Promise<void> {
   await new Promise<void>((resolve) => {
     let testShutdown: NodeJS.Timeout | undefined;
     const shutdown = (signal: string) => {
-      console.log(`Atlas runtime received ${signal}, shutting down.`);
+      console.log(`Ocean runtime received ${signal}, shutting down.`);
       clearInterval(heartbeat);
       controller.abort();
       process.off("SIGINT", shutdown);
@@ -44,10 +44,10 @@ export async function runService(shutdownAfterMs?: number): Promise<void> {
     process.on("message", onMessage);
     // Only now is a SIGTERM handled gracefully; announcing earlier lets a signal that
     // arrives during startup kill the process before it can shut down cleanly.
-    console.log("Atlas runtime is running.");
+    console.log("Ocean runtime is running.");
     if (shutdownAfterMs !== undefined)
       testShutdown = setTimeout(() => shutdown("timer"), shutdownAfterMs);
   });
   await watcher;
-  console.log("Atlas runtime stopped.");
+  console.log("Ocean runtime stopped.");
 }

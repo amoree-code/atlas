@@ -231,7 +231,7 @@ test("claude memory is keyed by the git root, and a worktree by its main checkou
     assert.ok(!JSON.stringify(fromSubdir).includes(home));
   }));
 
-test("atlas context cost prints JSON and a table without contents or home paths", () =>
+test("ocean context cost prints JSON and a table without contents or home paths", () =>
   withFakeHome(async (home) => {
     const fixture = await writeHomeFixture(home);
     const env = { ...process.env, HOME: home, USERPROFILE: home };

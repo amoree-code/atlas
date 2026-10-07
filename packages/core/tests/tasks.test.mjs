@@ -73,7 +73,7 @@ test("tasks list returns live task summaries and filters by state", async () => 
   ]);
 });
 
-test("tasks list reads the selected project instead of Atlas only", async () => {
+test("tasks list reads the selected project instead of the default project only", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-project-tasks-"));
   await mkdir(path.join(root, PROJECTS_DIR, "frontend", "tasks", "T-101"), {
     recursive: true,

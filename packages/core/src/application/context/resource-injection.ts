@@ -1,14 +1,14 @@
 import { oceanEnvPair } from "../../paths.js";
 import type { ProjectResolution } from "./project-resolution.js";
 
-// This module used to read Atlas files (memory, knowledge, inbox, README, governance rules)
+// This module used to read Ocean files (memory, knowledge, inbox, README, governance rules)
 // and inject their full content into every provider launch. That bulk injection is removed
-// per T-198: providers get a tiny identity/bootstrap signal only, never Atlas file contents.
-// On-demand reads happen through explicit Atlas operations (tasks, memory, knowledge, …),
+// per T-198: providers get a tiny identity/bootstrap signal only, never Ocean file contents.
+// On-demand reads happen through explicit Ocean operations (tasks, memory, knowledge, …),
 // not through what gets stuffed into a launch argument or env var at startup.
 export const OCEAN_BOOTSTRAP_MAX_BYTES = 256;
 
-export type AtlasBootstrap = {
+export type OceanBootstrap = {
   content: string;
   manifest: { bytes: number; source: "atlas"; transport: "bootstrap-env" };
 };
@@ -20,16 +20,16 @@ function projectTag(project: ProjectResolution): string {
   return project.status;
 }
 
-// Bounded, client-neutral: identifies Atlas as canonical and the resolved project (or its
-// absence), and names the on-demand operations a client can call. Never Atlas file content.
-export function buildAtlasBootstrap(
+// Bounded, client-neutral: identifies Ocean as canonical and the resolved project (or its
+// absence), and names the on-demand operations a client can call. Never Ocean file content.
+export function buildOceanBootstrap(
   project: ProjectResolution,
-): AtlasBootstrap {
+): OceanBootstrap {
   const content = `atlas=1 project=${projectTag(project)} confidence=${project.confidence} ops=${SUPPORTED_OPERATIONS}`;
   const bytes = Buffer.byteLength(content, "utf8");
   if (bytes > OCEAN_BOOTSTRAP_MAX_BYTES) {
     throw new Error(
-      `Atlas bootstrap exceeds the ${OCEAN_BOOTSTRAP_MAX_BYTES}-byte budget (${bytes} bytes): ${content}`,
+      `Ocean bootstrap exceeds the ${OCEAN_BOOTSTRAP_MAX_BYTES}-byte budget (${bytes} bytes): ${content}`,
     );
   }
   return {
@@ -41,7 +41,7 @@ export function buildAtlasBootstrap(
 // Delivered as environment variables only — never written into provider argv or a
 // provider-owned context file, and never a second source of truth for provider memory.
 export function bootstrapEnvironment(
-  bootstrap: AtlasBootstrap,
+  bootstrap: OceanBootstrap,
 ): Record<string, string> {
   return {
     ...oceanEnvPair("BOOTSTRAP", bootstrap.content),

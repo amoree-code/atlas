@@ -53,7 +53,7 @@ async function withEnvironment(run) {
   }
 }
 
-test("resolves the real provider outside Atlas's shim directory", async () => {
+test("resolves the real provider outside Ocean's shim directory", async () => {
   await withEnvironment(async (root) => {
     const shim = path.join(root, SYSTEM_DIR, "runtime", "shims");
     const real = path.join(root, "bin");
@@ -68,7 +68,7 @@ test("resolves the real provider outside Atlas's shim directory", async () => {
   });
 });
 
-test("sync creates Atlas wrappers and shell activation", async () => {
+test("sync creates Ocean wrappers and shell activation", async () => {
   await withEnvironment(async (root) => {
     const result = await syncProviderWrappers();
     assert.ok(result.providers.some((provider) => provider.id === "claude"));
@@ -104,7 +104,7 @@ test("doctor reports a missing ocean CLI wrapper", async () => {
   });
 });
 
-unixOnly("the Atlas wrapper forwards CLI commands to the engine", async () => {
+unixOnly("the Ocean wrapper forwards CLI commands to the engine", async () => {
   await withEnvironment(async (root) => {
     const { directory } = await syncProviderWrappers();
     const result = spawnSync(
@@ -130,7 +130,7 @@ test("prefers the active parent shell over a stale login-shell environment", () 
 });
 
 unixOnly(
-  "the generated command wrapper routes the unchanged command through Atlas",
+  "the generated command wrapper routes the unchanged command through Ocean",
   async () => {
     await withEnvironment(async (root) => {
       const bin = path.join(root, "bin");
@@ -230,7 +230,7 @@ unixOnly("passes utility invocations through without a session", async () => {
 });
 
 unixOnly(
-  "finalizes a shim session when launched outside the Atlas directory",
+  "finalizes a shim session when launched outside the Ocean directory",
   async () => {
     await withEnvironment(async (root) => {
       const bin = path.join(root, "bin");

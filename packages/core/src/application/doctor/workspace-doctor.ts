@@ -181,7 +181,7 @@ async function checkWrappers(
         {
           code: "WRAPPERS_READY",
           severity: "OK",
-          message: "Atlas wrappers are synchronized",
+          message: "Ocean wrappers are synchronized",
           fixable: false,
         },
       ];

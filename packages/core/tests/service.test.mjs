@@ -54,9 +54,9 @@ test("service stays running until signaled, then exits cleanly", async () => {
   // Wait for the readiness line rather than a fixed sleep: it is printed once the signal
   // handlers are installed, so SIGTERM can never land during startup under load.
   const deadline = Date.now() + 20_000;
-  while (!/Atlas runtime is running/.test(stdout) && Date.now() < deadline)
+  while (!/Ocean runtime is running/.test(stdout) && Date.now() < deadline)
     await delay(20);
-  assert.match(stdout, /Atlas runtime is running/);
+  assert.match(stdout, /Ocean runtime is running/);
   assert.equal(
     child.exitCode,
     null,
@@ -71,8 +71,8 @@ test("service stays running until signaled, then exits cleanly", async () => {
   const code = await exited;
 
   assert.equal(code, 0);
-  assert.match(stdout, /Atlas runtime is running/);
-  assert.match(stdout, /Atlas runtime stopped/);
+  assert.match(stdout, /Ocean runtime is running/);
+  assert.match(stdout, /Ocean runtime stopped/);
 });
 
 test("persists and runs a due local schedule once", async () => {

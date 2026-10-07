@@ -23,12 +23,12 @@ Keep browser work bounded and token-efficient. Use one `observe` and one targete
 ## Workflow
 
 1. Treat the URL as the starting location, not as permission to perform every possible action on the site.
-2. Open or reconnect to an Atlas browser session with a persistent profile. Navigate to the URL.
+2. Open or reconnect to an Ocean browser session with a persistent profile. Navigate to the URL.
 3. Inspect the live page with `observe`, `read`, and targeted `extract`. Identify the page's current state, the user's intended outcome, required fields, available controls, and a concrete success signal.
 4. Build the smallest step sequence that reaches the requested outcome. Prefer stable labels, roles, names, ids, and visible text. Use editor selectors for `contenteditable`, CodeMirror/Monaco containers, and `frame >>> editor` for same-origin iframe editors.
 5. For code-editor changes, use `ocean browser replace-text <session-id> <selector> <old-text> <new-text> --occurrence <n>` when replacing a specific token. Never simulate a precise replacement by clicking and typing into the middle of a Monaco/CodeMirror line. Verify the returned editor value and then re-read the page.
-6. Execute through Atlas browser operations or a bounded browser task file. Keep the task file small, cap retries at 0–1, and cap total steps to the minimum needed. After every state-changing step, verify the live post-condition. Stop if the page state contradicts the plan.
-7. For forms, tests, purchases, uploads, messages, or other externally visible mutations, keep the existing Atlas approval gate. Ask for confirmation only at the final consequential action when approval is not already present.
+6. Execute through Ocean browser operations or a bounded browser task file. Keep the task file small, cap retries at 0–1, and cap total steps to the minimum needed. After every state-changing step, verify the live post-condition. Stop if the page state contradicts the plan.
+7. For forms, tests, purchases, uploads, messages, or other externally visible mutations, keep the existing Ocean approval gate. Ask for confirmation only at the final consequential action when approval is not already present.
 8. If a field is ambiguous, required data is missing, authentication is needed, or the page reports failure, stop with the exact blocker. Do not invent personal, financial, legal, academic, or credential data.
 9. Report the outcome, the verified success signal, and any unverified or blocked step. Close the browser session only if the user requested cleanup; otherwise preserve it for continuation.
 
@@ -46,7 +46,7 @@ verify: <observable success signal>
 Use one bounded loop, verify every state-changing action, and stop when the
 success signal is present or a required human decision is reached.
 
-## Atlas execution shape
+## Ocean execution shape
 
 Use the browser capability's session lifecycle and task runner:
 

@@ -47,7 +47,7 @@ const tools = [
   {
     name: "obsidian_sync",
     description:
-      "Compare the configured Obsidian vault with Atlas metadata state.",
+      "Compare the configured Obsidian vault with Ocean metadata state.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object",

@@ -46,7 +46,7 @@ function redactHighEntropyTokens(value: string): string {
 }
 
 // Pattern replacement only, no length bound — for callers that need to persist a redacted
-// payload of arbitrary size (e.g. `atlas observe`'s captured command output).
+// payload of arbitrary size (e.g. `ocean observe`'s captured command output).
 export function redactSecrets(value: string): string {
   let safe = value;
   for (const pattern of secretPatterns)

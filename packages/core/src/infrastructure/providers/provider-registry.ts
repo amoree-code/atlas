@@ -69,7 +69,7 @@ export function resolveOriginalExecutable(
       : [command];
 
   for (const directory of pathEntries) {
-    if (path.resolve(directory) === shimRoot || isAtlasShimDirectory(directory))
+    if (path.resolve(directory) === shimRoot || isOceanShimDirectory(directory))
       continue;
     for (const name of names) {
       const candidate = path.join(directory, name);
@@ -77,12 +77,12 @@ export function resolveOriginalExecutable(
         accessSync(candidate, constants.X_OK);
         return candidate;
       } catch {
-        // Continue through PATH until the first executable outside Atlas's shim directory.
+        // Continue through PATH until the first executable outside Ocean's shim directory.
       }
     }
   }
   throw new Error(
-    `Provider executable not found outside Atlas shims: ${command}`,
+    `Provider executable not found outside Ocean shims: ${command}`,
   );
 }
 
@@ -102,7 +102,7 @@ export function validateExplicitExecutable(commandPath: string): string {
   return resolved;
 }
 
-function isAtlasShimDirectory(directory: string): boolean {
+function isOceanShimDirectory(directory: string): boolean {
   const resolved = path.resolve(directory);
   return (
     path.basename(resolved) === "shims" &&

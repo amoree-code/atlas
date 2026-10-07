@@ -194,7 +194,7 @@ test("buildSelectedReferences preserves stable insertion order", () => {
 
 // --- explicit project path ---
 
-test("explicit project path (cwd inside the Atlas root) resolves a bound active project, never guessed", () =>
+test("explicit project path (cwd inside the Ocean root) resolves a bound active project, never guessed", () =>
   withTempTask(10, async (root) => {
     const classification = classifyIntent("what project am I in");
     const packet = await buildContextPacket(classification, GOOD_BUDGET, root);
@@ -204,7 +204,7 @@ test("explicit project path (cwd inside the Atlas root) resolves a bound active 
 
 // --- missing project ---
 
-test("missing project (cwd outside any binding and outside the Atlas root) reports unbound, not a guess", async () => {
+test("missing project (cwd outside any binding and outside the Ocean root) reports unbound, not a guess", async () => {
   const outside = await mkdtemp(
     path.join(os.tmpdir(), "atlas-packet-outside-"),
   );
