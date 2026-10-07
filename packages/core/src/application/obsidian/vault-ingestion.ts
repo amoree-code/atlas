@@ -77,9 +77,9 @@ export async function ingestVaultChanges(
       path: relative,
       baselineSha256: baseline[relative]?.sha256 ?? null,
       vaultSha256: contentHash(vaultContent),
-      atlasSha256: contentHash(atlasContent),
+      oceanSha256: contentHash(atlasContent),
       vaultContent,
-      atlasContent,
+      oceanContent: atlasContent,
       source: "vault-ingestion",
     });
     output.conflicts.push(record);

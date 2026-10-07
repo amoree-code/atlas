@@ -229,8 +229,10 @@ async function shellProfilePath(): Promise<string> {
 
 export async function installShellIntegration(): Promise<string> {
   const file = await shellProfilePath();
+  // "atlas interception" is the pre-rename marker; any block under either name is replaced,
+  // so re-running setup never leaves two interception blocks in the profile.
   const marker =
-    /\n?# >>> atlas interception >>>[\s\S]*?# <<< atlas interception <<<\n?/;
+    /\n?# >>> (atlas|ocean) interception >>>[\s\S]*?# <<< \1 interception <<<\n?/g;
   let existing = "";
   try {
     existing = await readFile(file, "utf8");
@@ -238,9 +240,12 @@ export async function installShellIntegration(): Promise<string> {
     /* new profile */
   }
   const line = await installShellPath();
-  const block = `\n# >>> atlas interception >>>\n${line}\n# <<< atlas interception <<<\n`;
+  const block = `# >>> ocean interception >>>\n${line}\n# <<< ocean interception <<<\n`;
+  // Strip every existing block and trailing blank lines first, so the result is the same
+  // however many times setup runs (it used to gain a blank line per run).
+  const rest = existing.replace(marker, "").trimEnd();
   await mkdir(path.dirname(file), { recursive: true });
-  await atomicWrite(file, existing.replace(marker, "\n") + block);
+  await atomicWrite(file, `${rest ? `${rest}\n\n` : ""}${block}`);
   return file;
 }
 

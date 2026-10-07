@@ -84,7 +84,36 @@ test("sync creates Ocean wrappers and shell activation", async () => {
     }
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
-    assert.match(await readFile(profile, "utf8"), /atlas interception/);
+    assert.match(
+      await readFile(profile, "utf8"),
+      /# >>> ocean interception >>>/,
+    );
+  });
+});
+
+test("shell integration replaces a pre-rename atlas block instead of adding a second one, and is idempotent", async () => {
+  await withEnvironment(async (root) => {
+    const profile = path.join(root, "profile");
+    await writeFile(
+      profile,
+      [
+        "export KEEP_ME=1",
+        "# >>> atlas interception >>>",
+        "export PATH=/old/shims:$PATH",
+        "# <<< atlas interception <<<",
+        "alias also-keep=true",
+        "",
+      ].join("\n"),
+    );
+    await installShellIntegration();
+    const once = await readFile(profile, "utf8");
+    assert.equal((once.match(/# >>> /g) ?? []).length, 1);
+    assert.match(once, /# >>> ocean interception >>>/);
+    assert.doesNotMatch(once, /atlas interception|\/old\/shims/);
+    assert.match(once, /export KEEP_ME=1/);
+    assert.match(once, /alias also-keep=true/);
+    await installShellIntegration();
+    assert.equal(await readFile(profile, "utf8"), once);
   });
 });
 

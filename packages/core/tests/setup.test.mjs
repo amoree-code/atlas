@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -17,11 +17,11 @@ function platformStartupFile(home) {
       home,
       "Library",
       "LaunchAgents",
-      "com.atlas.runtime.plist",
+      "com.ocean.runtime.plist",
     );
   }
   if (process.platform === "linux") {
-    return path.join(home, ".config", "systemd", "user", "atlas.service");
+    return path.join(home, ".config", "systemd", "user", "ocean.service");
   }
   return path.join(
     home,
@@ -32,7 +32,7 @@ function platformStartupFile(home) {
     "Start Menu",
     "Programs",
     "Startup",
-    "atlas.cmd",
+    "ocean.cmd",
   );
 }
 
@@ -107,4 +107,52 @@ test("setup isolates its writes to OCEAN_ROOT and the (fake) home directory, nev
     if (originalAppData === undefined) delete process.env.APPDATA;
     else process.env.APPDATA = originalAppData;
   }
+});
+
+function legacyStartupFile(home) {
+  return platformStartupFile(home)
+    .replace("com.ocean.runtime", "com.atlas.runtime")
+    .replace("ocean.service", "atlas.service")
+    .replace("ocean.cmd", "atlas.cmd");
+}
+
+test("setup reports a leftover pre-rename startup entry and leaves it in place", async () => {
+  const privateRoot = await mkdtemp(
+    path.join(os.tmpdir(), "ocean-setup-root-"),
+  );
+  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-setup-home-"));
+  const legacy = legacyStartupFile(fakeHome);
+  await mkdir(path.dirname(legacy), { recursive: true });
+  await writeFile(legacy, "legacy\n");
+  const saved = {
+    root: process.env.OCEAN_ROOT,
+    home: process.env.HOME,
+    appData: process.env.APPDATA,
+  };
+  process.env.OCEAN_ROOT = privateRoot;
+  process.env.HOME = fakeHome;
+  if (process.platform === "win32")
+    process.env.APPDATA = path.join(fakeHome, "AppData", "Roaming");
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(String(message));
+  try {
+    await setup();
+  } finally {
+    console.warn = originalWarn;
+    for (const [key, name] of [
+      ["root", "OCEAN_ROOT"],
+      ["home", "HOME"],
+      ["appData", "APPDATA"],
+    ]) {
+      if (saved[key] === undefined) delete process.env[name];
+      else process.env[name] = saved[key];
+    }
+  }
+  assert.equal(await readFile(legacy, "utf8"), "legacy\n");
+  assert.ok(
+    warnings.some((message) => message.includes(legacy)),
+    warnings.join("|"),
+  );
+  await stat(platformStartupFile(fakeHome));
 });
