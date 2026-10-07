@@ -68,7 +68,7 @@ test("atlas operate routes deterministic natural-language reads through the Atla
   const result = spawnSync(
     process.execPath,
     [path.resolve("dist/main.js"), "operate", "show", "T-198"],
-    { cwd: root, env: { ...process.env, ATLAS_ROOT: root }, encoding: "utf8" },
+    { cwd: root, env: { ...process.env, OCEAN_ROOT: root }, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
@@ -128,8 +128,8 @@ test("corrections are additive evidence and never overwrite the original record"
   const original = path.join(root, PERSONAL_DIR, "original.md");
   await writeFile(original, "---\nname: original\n---\noriginal evidence\n");
   const target = path.join(root, PERSONAL_DIR, "correction.md");
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     const scope = {
       action: "memory.write",
@@ -164,7 +164,7 @@ test("corrections are additive evidence and never overwrite the original record"
       "---\nname: original\n---\noriginal evidence\n",
     );
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });

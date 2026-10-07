@@ -51,7 +51,7 @@ test("rejects writable profiles without an approved run contract", async () => {
       writePolicy: "workspace",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   await assert.rejects(
     () =>
       runAgent(
@@ -60,7 +60,7 @@ test("rejects writable profiles without an approved run contract", async () => {
       ),
     /approved run contract/,
   );
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("allows an explicitly approved writable run contract", async () => {
@@ -76,7 +76,7 @@ test("allows an explicitly approved writable run contract", async () => {
       writePolicy: "workspace",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     const sessionId = "approved-write-session";
     const session = await runAgent(
@@ -101,7 +101,7 @@ test("allows an explicitly approved writable run contract", async () => {
     );
     assert.equal(session.status, "completed");
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -119,7 +119,7 @@ test("approval-required profiles fail closed without an approved run contract", 
       governance: { approvalRequired: true },
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     await assert.rejects(
       () =>
@@ -130,7 +130,7 @@ test("approval-required profiles fail closed without an approved run contract", 
       /requires an approved run contract/,
     );
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -156,7 +156,7 @@ test("connects profile, context, headless execution, and session storage", async
   );
   await writeFile(path.join(root, "README.md"), "project context");
   const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const session = await runAgent(
     { profileName: "reviewer", prompt: "Review", cwd: root },
     async (request) => {
@@ -192,7 +192,7 @@ test("connects profile, context, headless execution, and session storage", async
   assert.equal(session.closeoutStatus, "completed");
   assert.ok(session.summaryPath);
   store.close();
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("redacts provider output, stderr, errors, and secrets near the payload bound", async () => {
@@ -209,7 +209,7 @@ test("redacts provider output, stderr, errors, and secrets near the payload boun
   );
   const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
   const secret = `api_key=${"s".repeat(20)}`;
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const session = await runAgent(
     { profileName: "default", prompt: "start", cwd: root },
     async (request) => {
@@ -234,9 +234,9 @@ test("redacts provider output, stderr, errors, and secrets near the payload boun
     "[REDACTED]",
   );
   store.close();
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   await assert.rejects(
     runAgent(
       { profileName: "default", prompt: "start", cwd: root },
@@ -252,7 +252,7 @@ test("redacts provider output, stderr, errors, and secrets near the payload boun
     .flatMap((item) => failedStore.listEvents(item.sessionId));
   assert.ok(failedEvents.every((event) => !event.data.includes(secret)));
   failedStore.close();
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("applies one universal policy through every registered client adapter", async () => {
@@ -282,7 +282,7 @@ test("applies one universal policy through every registered client adapter", asy
       verification: { commands: ["node --version"] },
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const seen = [];
   try {
     for (const client of ["claude", "codex", "gemini", "antigravity", "kimi"]) {
@@ -303,7 +303,7 @@ test("applies one universal policy through every registered client adapter", asy
       assert.match(session.profileIdentity, /^[a-f0-9]{64}$/);
     }
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
   assert.deepEqual(
     seen.map((request) => request.provider),
@@ -332,7 +332,7 @@ test("injects bounded profile facts into a run", async () => {
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const facts = path.join(root, SYSTEM_DIR, "memory", "profiles");
   await mkdir(facts, { recursive: true });
   await writeFile(
@@ -348,7 +348,7 @@ test("injects bounded profile facts into a run", async () => {
       return { exitCode: 0, events: [], stderr: "" };
     },
   );
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("runs registered lifecycle hooks around a session", async () => {
@@ -363,7 +363,7 @@ test("runs registered lifecycle hooks around a session", async () => {
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const events = [];
   registerHook("session.start", (event) => events.push(event));
   registerHook("session.end", (event) => events.push(event));
@@ -373,7 +373,7 @@ test("runs registered lifecycle hooks around a session", async () => {
   );
   assert.deepEqual(events, ["session.start", "session.end"]);
   clearHooks();
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("a throwing lifecycle hook blocks the run", async () => {
@@ -388,7 +388,7 @@ test("a throwing lifecycle hook blocks the run", async () => {
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   registerHook("session.start", () => {
     throw new Error("blocked by hook");
   });
@@ -401,7 +401,7 @@ test("a throwing lifecycle hook blocks the run", async () => {
     /blocked by hook/,
   );
   clearHooks();
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("transitions status from created to running to completed, visible to a concurrent reader", async () => {
@@ -417,7 +417,7 @@ test("transitions status from created to running to completed, visible to a conc
     }),
   );
   const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const sessionId = "status-check-session";
   const session = await runAgent(
     { profileName: "default", prompt: "start", cwd: root, sessionId },
@@ -430,7 +430,7 @@ test("transitions status from created to running to completed, visible to a conc
     },
   );
   assert.equal(session.status, "completed");
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("resumes a Claude session using its provider session id", async () => {
@@ -445,7 +445,7 @@ test("resumes a Claude session using its provider session id", async () => {
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const first = await runAgent(
     { profileName: "default", prompt: "start", cwd: root },
     async (request) => {
@@ -462,7 +462,7 @@ test("resumes a Claude session using its provider session id", async () => {
     },
   );
   assert.equal(resumed.status, "completed");
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("marks the session failed and records the error event when the provider throws", async () => {
@@ -478,7 +478,7 @@ test("marks the session failed and records the error event when the provider thr
     }),
   );
   const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   await assert.rejects(
     runAgent(
@@ -505,7 +505,7 @@ test("marks the session failed and records the error event when the provider thr
     ],
   );
   store.close();
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("marks the session failed when the provider exits non-zero without throwing", async () => {
@@ -521,7 +521,7 @@ test("marks the session failed when the provider exits non-zero without throwing
     }),
   );
   const database = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   const session = await runAgent(
     { profileName: "default", prompt: "start", cwd: root },
@@ -537,7 +537,7 @@ test("marks the session failed when the provider exits non-zero without throwing
     .find((event) => event.type === "process_exit");
   assert.deepEqual(JSON.parse(exitEvent.data), { exitCode: 1, stderr: "boom" });
   store.close();
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("closes its session store exactly once, on both the success and failure paths", async () => {
@@ -552,7 +552,7 @@ test("closes its session store exactly once, on both the success and failure pat
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
 
   const originalClose = SessionStore.prototype.close;
   let closeCalls = 0;
@@ -581,6 +581,6 @@ test("closes its session store exactly once, on both the success and failure pat
     assert.equal(closeCalls, 2);
   } finally {
     SessionStore.prototype.close = originalClose;
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });

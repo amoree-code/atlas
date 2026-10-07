@@ -85,13 +85,13 @@ async function withFixture(fn) {
     path.join(root, KNOWLEDGE_DIR, "decisions", "adopt-atlas.md"),
     recordDoc("adopt-atlas", "Decision to adopt Atlas"),
   );
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 
@@ -831,15 +831,15 @@ test("private Atlas content is never written inside the public engine package", 
 
 test("write targets that escape the Atlas root are refused", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-escape-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     const rejected = validateWriteTarget("..", "..", "etc", "passwd");
     assert.equal(rejected.valid, false);
     assert.match(rejected.reason, /escapes the Atlas root/);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });
 

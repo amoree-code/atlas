@@ -9,8 +9,8 @@ import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-no-obsidian-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     const listed = await handleAtlasMcpRequest({
       jsonrpc: "2.0",
@@ -51,15 +51,15 @@ test("Atlas MCP exposes provider-neutral read-only tools without Obsidian", asyn
     });
     assert.deepEqual(legacy.result, status.result);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });
 
 test("read-only session tools do not initialize a missing session database", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-readonly-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     const response = await handleAtlasMcpRequest({
       jsonrpc: "2.0",
@@ -75,8 +75,8 @@ test("read-only session tools do not initialize a missing session database", asy
       access(path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite")),
     );
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });
 
@@ -149,8 +149,8 @@ test("legacy atlas_* names still work on prompts/get and keep approvals bound to
   assert.match(legacyPrompt.result.messages[0].content.text, /T-1/);
 
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-mcp-legacy-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     const actionArgs = { sessionId: "missing", target: "knowledge/results" };
     const promote = (name, fingerprint) =>
@@ -182,7 +182,7 @@ test("legacy atlas_* names still work on prompts/get and keep approvals bound to
     const wrong = await promote("atlas_session_promote", "0".repeat(64));
     assert.match(wrong.error.message, mismatch);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });

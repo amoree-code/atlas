@@ -17,14 +17,15 @@ test("engineRoot resolves to the engine package directory, one level above this 
 });
 
 test("default oceanRoot resolves to the private workspace sibling of engine, not inside it", () => {
+  delete process.env.OCEAN_ROOT;
   delete process.env.ATLAS_ROOT;
   assert.equal(oceanRoot(), path.resolve(engineRoot(), "..", "..", ".."));
   assert.notEqual(oceanRoot(), engineRoot());
 });
 
-test("ATLAS_ROOT explicitly overrides the default private root", () => {
-  const override = path.join(os.tmpdir(), "atlas-root-override");
-  process.env.ATLAS_ROOT = override;
+test("OCEAN_ROOT explicitly overrides the default private root", () => {
+  const override = path.join(os.tmpdir(), "ocean-root-override");
+  process.env.OCEAN_ROOT = override;
   try {
     assert.equal(oceanRoot(), path.resolve(override));
     assert.equal(
@@ -36,7 +37,7 @@ test("ATLAS_ROOT explicitly overrides the default private root", () => {
       path.join(path.resolve(override), "sessions", "sessions.sqlite"),
     );
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -54,15 +55,15 @@ test("OCEAN_ROOT wins over the older ATLAS_ROOT, and ATLAS_ROOT alone still work
   }
 });
 
-test("enginePath always resolves relative to engine root, ignoring ATLAS_ROOT", () => {
-  process.env.ATLAS_ROOT = path.join(os.tmpdir(), "atlas-root-unrelated");
+test("enginePath always resolves relative to engine root, ignoring OCEAN_ROOT", () => {
+  process.env.OCEAN_ROOT = path.join(os.tmpdir(), "ocean-root-unrelated");
   try {
     assert.equal(
       enginePath("dist", "main.js"),
       path.join(engineRoot(), "dist", "main.js"),
     );
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 

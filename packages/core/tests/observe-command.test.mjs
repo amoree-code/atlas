@@ -8,13 +8,13 @@ import { SYSTEM_DIR } from "../dist/paths.js";
 
 async function withAtlasRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-observe-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     await fn(root);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 

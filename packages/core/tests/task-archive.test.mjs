@@ -152,14 +152,14 @@ test("rejects traversal in task reads and archive metadata", async () => {
   const tasksRoot = path.join(root, PROJECTS_DIR, "atlas", "tasks");
   await mkdir(tasksRoot, { recursive: true });
   await writeFile(path.join(root, "outside.md"), task("outside"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     await assert.rejects(
       getTask("../outside"),
       /Path escapes its allowed root/,
     );
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 
   await mkdir(path.join(tasksRoot, "T-007"), { recursive: true });

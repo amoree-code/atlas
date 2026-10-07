@@ -37,13 +37,13 @@ const SKILLS = ["alpha-lean", "beta-lean", "gamma-lean"];
 
 async function withAtlasRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t227-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
     await rm(root, { recursive: true, force: true });
   }
 }

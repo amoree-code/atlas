@@ -61,7 +61,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-193", "task.md"),
     `---\nid: T-193\ntitle: Continuity test\nstate: in_progress\nrequirement: Share one bounded task context\n---\n\n## Objective\nKeep context small and provider-neutral.\n`,
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     const handoff = await createHandoff(
       {
@@ -139,6 +139,6 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     store.close();
     await assert.rejects(() => access(path.join(root, INBOX_DIR, "INBOX.md")));
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });

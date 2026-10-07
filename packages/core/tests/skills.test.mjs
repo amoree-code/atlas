@@ -72,8 +72,8 @@ test("the skill index rejects unknown skills", async () => {
 
 test("promoted skills are truncated by bytes with a marker naming the candidate", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-promoted-bytes-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     await addSkillCandidate({
       id: "arabic-review",
@@ -100,15 +100,15 @@ test("promoted skills are truncated by bytes with a marker naming the candidate"
     const [whole] = await loadPromotedSkills("apply arabic review");
     assert.equal(whole.truncated, false);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });
 
 test("auto-activates only owner-reviewed promoted skills matching the prompt", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-auto-skills-"));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     await addSkillCandidate({
       id: "typescript-review",
@@ -133,8 +133,8 @@ test("auto-activates only owner-reviewed promoted skills matching the prompt", a
       [],
     );
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });
 
@@ -159,7 +159,7 @@ test("resolves private and project skills without reading them from engine", asy
     path.join(projectSkills, "project", "project-only", "SKILL.md"),
     "Project instructions",
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const entries = await loadSkillIndex(
     ["project-only"],
     path.join(root, PROJECTS_DIR, "demo"),
@@ -169,7 +169,7 @@ test("resolves private and project skills without reading them from engine", asy
     path.join(projectSkills, "project", "project-only", "SKILL.md"),
   );
   assert.equal(entries[0].description, "Project skill");
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("the pinned local validator rejects malformed Agent Skills", async () => {
@@ -197,7 +197,7 @@ test("the pinned local validator rejects malformed Agent Skills", async () => {
 
 test("stores and requires review for skill candidates", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-skill-candidates-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   await addSkillCandidate({
     id: "review",
     name: "Review",
@@ -208,12 +208,12 @@ test("stores and requires review for skill candidates", async () => {
     (await reviewSkillCandidate("review", "promoted")).status,
     "promoted",
   );
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("learns a bounded skill candidate from a completed session without auto-promoting it", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-skill-learning-"));
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const sessionId = "learn-session";
   const store = await openSessionStore();
   store.create({
@@ -246,5 +246,5 @@ test("learns a bounded skill candidate from a completed session without auto-pro
   assert.equal(candidate.status, "candidate");
   assert.equal(candidate.sourceSessionId, sessionId);
   assert.match(candidate.instructions, /bounded review/);
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });

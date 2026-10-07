@@ -59,7 +59,7 @@ test("tasks list returns live task summaries and filters by state", async () => 
   const result = spawnSync(
     process.execPath,
     [path.resolve("dist/main.js"), "tasks", "list", "active"],
-    { env: { ...process.env, ATLAS_ROOT: root }, encoding: "utf8" },
+    { env: { ...process.env, OCEAN_ROOT: root }, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), [
@@ -82,8 +82,8 @@ test("tasks list reads the selected project instead of Atlas only", async () => 
     path.join(root, PROJECTS_DIR, "frontend", "tasks", "T-101", "task.md"),
     "---\nid: T-101\ntitle: Frontend\nstate: active\ngoal: Ship UI\n---\n",
   );
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     const { listTasks } = await import(
       "../dist/interfaces/cli/tasks-command.js"
@@ -93,7 +93,7 @@ test("tasks list reads the selected project instead of Atlas only", async () => 
       ["T-101"],
     );
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });

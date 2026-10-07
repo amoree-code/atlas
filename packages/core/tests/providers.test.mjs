@@ -222,11 +222,11 @@ unixOnly(
     );
     await chmod(original, 0o755);
 
-    const previousRoot = process.env.ATLAS_ROOT;
-    const previousShim = process.env.ATLAS_SHIM_DIR;
+    const previousRoot = process.env.OCEAN_ROOT;
+    const previousShim = process.env.OCEAN_SHIM_DIR;
     const previousPath = process.env.PATH;
-    process.env.ATLAS_ROOT = root;
-    process.env.ATLAS_SHIM_DIR = shim;
+    process.env.OCEAN_ROOT = root;
+    process.env.OCEAN_SHIM_DIR = shim;
     process.env.PATH = `${shim}${path.delimiter}${staleShim}${path.delimiter}${bin}`;
     try {
       const result = await runProvider({
@@ -240,10 +240,10 @@ unixOnly(
         data: { session_id: "codex-test" },
       });
     } finally {
-      if (previousRoot === undefined) delete process.env.ATLAS_ROOT;
-      else process.env.ATLAS_ROOT = previousRoot;
-      if (previousShim === undefined) delete process.env.ATLAS_SHIM_DIR;
-      else process.env.ATLAS_SHIM_DIR = previousShim;
+      if (previousRoot === undefined) delete process.env.OCEAN_ROOT;
+      else process.env.OCEAN_ROOT = previousRoot;
+      if (previousShim === undefined) delete process.env.OCEAN_SHIM_DIR;
+      else process.env.OCEAN_SHIM_DIR = previousShim;
       if (previousPath === undefined) delete process.env.PATH;
       else process.env.PATH = previousPath;
     }
@@ -251,9 +251,9 @@ unixOnly(
 );
 
 test("resolves a configured client home only inside Atlas system/clients", () => {
-  const previousRoot = process.env.ATLAS_ROOT;
+  const previousRoot = process.env.OCEAN_ROOT;
   const root = path.join(os.tmpdir(), "atlas-client-home-test");
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     const profile = validateProfile({
       name: "developer",
@@ -279,7 +279,7 @@ test("resolves a configured client home only inside Atlas system/clients", () =>
       /must stay under Atlas system\/clients/,
     );
   } finally {
-    if (previousRoot === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previousRoot;
+    if (previousRoot === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previousRoot;
   }
 });

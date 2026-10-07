@@ -17,7 +17,7 @@ import {
 
 async function fixture() {
   const base = await mkdtemp(path.join(os.tmpdir(), "atlas-hub-"));
-  process.env.ATLAS_ROOT = path.join(base, "root");
+  process.env.OCEAN_ROOT = path.join(base, "root");
   const home = path.join(base, "home");
   const extra = path.join(base, "extra");
   await mkdir(path.join(extra, "mine"), { recursive: true });

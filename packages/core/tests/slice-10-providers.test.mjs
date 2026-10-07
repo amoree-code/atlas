@@ -29,7 +29,9 @@ const SESSION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 // Live provider tests cost real API quota, so they run only when explicitly requested.
 // They are the ONLY evidence that counts for provider compatibility; the fake-executable
 // tests below prove the invocation boundary's error handling, never compatibility.
-const LIVE = process.env.ATLAS_LIVE_PROVIDER_TESTS === "1";
+const LIVE =
+  (process.env.OCEAN_LIVE_PROVIDER_TESTS ??
+    process.env.ATLAS_LIVE_PROVIDER_TESTS) === "1";
 const live = LIVE ? test : test.skip;
 const installedEnvironment = existsSync(
   path.join(os.homedir(), "atlas", SYSTEM_DIR, "runtime", "shims", "atlas"),
@@ -470,11 +472,11 @@ installed(
   async () => {
     // The shim always execs the engine checkout it was installed against, while "direct"
     // runs whichever dist/main.js happens to be built in the invoking checkout. Both
-    // resolve their project purely from ATLAS_ROOT and cwd, so pin those explicitly for
+    // resolve their project purely from OCEAN_ROOT and cwd, so pin those explicitly for
     // both invocations — otherwise this only passes by accident, when the suite happens
     // to run from inside the exact checkout the shim points at.
     const root = await mkdtemp(path.join(os.tmpdir(), "atlas-shim-parity-"));
-    const env = { ...process.env, ATLAS_ROOT: root };
+    const env = { ...process.env, OCEAN_ROOT: root };
     const shim = path.join(
       os.homedir(),
       "atlas",

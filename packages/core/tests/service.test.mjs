@@ -43,7 +43,7 @@ test("service stays running until signaled, then exits cleanly", async () => {
     stdio: "pipe",
     env:
       process.platform === "win32"
-        ? { ...process.env, ATLAS_SERVICE_TEST_SHUTDOWN_MS: "100" }
+        ? { ...process.env, OCEAN_SERVICE_TEST_SHUTDOWN_MS: "100" }
         : process.env,
   });
   let stdout = "";
@@ -87,7 +87,7 @@ test("persists and runs a due local schedule once", async () => {
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   await saveSchedule({
     id: "brief",
     profile: "default",
@@ -108,7 +108,7 @@ test("persists and runs a due local schedule once", async () => {
     (await listSchedules())[0].nextRunAt > new Date(0).toISOString(),
     true,
   );
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("run-due uses a cross-process lease for concurrent callers", async () => {
@@ -123,7 +123,7 @@ test("run-due uses a cross-process lease for concurrent callers", async () => {
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   await saveSchedule({
     id: "once",
     profile: "default",
@@ -144,7 +144,7 @@ test("run-due uses a cross-process lease for concurrent callers", async () => {
   ]);
   assert.equal(executions, 1);
   assert.equal(results.flat().filter((id) => id === "once").length, 1);
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("scheduler completion merges with concurrent schedule edits", async () => {
@@ -154,7 +154,7 @@ test("scheduler completion merges with concurrent schedule edits", async () => {
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({ name: "default", provider: "claude", role: "assistant" }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     await saveSchedule({
       id: "running",
@@ -188,7 +188,7 @@ test("scheduler completion merges with concurrent schedule edits", async () => {
       "running",
     ]);
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -204,7 +204,7 @@ test("gateway authenticates and triggers a bounded run request", async () => {
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const result = await handleGatewayRequest(
     {
       profile: "default",
@@ -227,7 +227,7 @@ test("gateway authenticates and triggers a bounded run request", async () => {
     (await handleGatewayRequest({}, "wrong", "secret", root)).status,
     401,
   );
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("normalizes Telegram-shaped messages without credentials or implicit approval", () => {
@@ -259,7 +259,7 @@ test("gateway binds identities and profile scopes to the exact approved request"
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const approval = {
     approved: true,
     fingerprint: actionFingerprint("gateway.run", {
@@ -290,7 +290,7 @@ test("gateway binds identities and profile scopes to the exact approved request"
     ).status,
     401,
   );
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("gateway rejects traversal profiles and hides profile loading errors", async () => {
@@ -305,7 +305,7 @@ test("gateway rejects traversal profiles and hides profile loading errors", asyn
       role: "outside",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const profile = "../outside";
   const approval = {
     approved: true,
@@ -319,7 +319,7 @@ test("gateway rejects traversal profiles and hides profile loading errors", asyn
   );
   assert.equal(result.status, 400);
   assert.equal(result.body, "Invalid profile");
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("HTTP gateway rate limiting persists across requests", async () => {
@@ -329,7 +329,7 @@ test("HTTP gateway rate limiting persists across requests", async () => {
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({ name: "default", provider: "claude", role: "assistant" }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   const gateway = createWebhookGateway(root, "secret", async () => ({
     exitCode: 0,
     events: [],
@@ -366,7 +366,7 @@ test("HTTP gateway rate limiting persists across requests", async () => {
     assert.equal(statuses[10], 429);
   } finally {
     await new Promise((resolve) => gateway.close(resolve));
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -382,7 +382,7 @@ test("scheduler worker records retry state and releases its lease", async () => 
       role: "assistant",
     }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   await saveSchedule({
     id: "retry",
     profile: "default",
@@ -395,7 +395,7 @@ test("scheduler worker records retry state and releases its lease", async () => 
     throw new Error("provider failed");
   });
   assert.equal((await listSchedules())[0].attempts, 1);
-  delete process.env.ATLAS_ROOT;
+  delete process.env.OCEAN_ROOT;
 });
 
 test("scheduler worker retries a provider non-zero exit", async () => {
@@ -405,7 +405,7 @@ test("scheduler worker retries a provider non-zero exit", async () => {
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({ name: "default", provider: "claude", role: "assistant" }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     await saveSchedule({
       id: "failed-exit",
@@ -425,7 +425,7 @@ test("scheduler worker retries a provider non-zero exit", async () => {
     );
     assert.equal((await listSchedules())[0].attempts, 1);
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 
@@ -439,7 +439,7 @@ test("scheduler worker reclaims a lease owned by a dead process", async () => {
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
     JSON.stringify({ name: "default", provider: "claude", role: "assistant" }),
   );
-  process.env.ATLAS_ROOT = root;
+  process.env.OCEAN_ROOT = root;
   try {
     await saveSchedule({
       id: "stale",
@@ -462,7 +462,7 @@ test("scheduler worker reclaims a lease owned by a dead process", async () => {
       ["stale"],
     );
   } finally {
-    delete process.env.ATLAS_ROOT;
+    delete process.env.OCEAN_ROOT;
   }
 });
 

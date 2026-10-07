@@ -41,8 +41,8 @@ async function withRoot(fn) {
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   const previous = process.env.OCEAN_ROOT;
   const previousLegacy = process.env.ATLAS_ROOT;
-  delete process.env.OCEAN_ROOT;
-  process.env.ATLAS_ROOT = root;
+  delete process.env.ATLAS_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root);
   } finally {

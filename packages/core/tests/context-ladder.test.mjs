@@ -28,13 +28,13 @@ async function withTempTask(bytes, fn) {
   const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1");
   await mkdir(taskDir, { recursive: true });
   await writeFile(path.join(taskDir, "task.md"), "x".repeat(bytes));
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 
@@ -382,13 +382,13 @@ async function withTempMemoryRoot(fn) {
     path.join(root, PERSONAL_DIR, "goals.md"),
     "---\nid: goals\ntitle: Goals\nsummary: long term objectives\ntags: []\ntype: fact\nconfidence: high\ncreated: 2026-01-01\nupdated: 2026-01-01\nlast_confirmed_at: 2026-01-01\n---\n\n# Goals\n\nLong term objectives fixture body.\n",
   );
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   try {
     return await fn(root);
   } finally {
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 }
 

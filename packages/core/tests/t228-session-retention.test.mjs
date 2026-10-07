@@ -19,15 +19,15 @@ async function withFixtureStore(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "atlas-retention-"));
   await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const dbFile = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
-  const previous = process.env.ATLAS_ROOT;
-  process.env.ATLAS_ROOT = root;
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
   const store = new SessionStore(dbFile);
   try {
     return await fn({ root, dbFile, store });
   } finally {
     store.close();
-    if (previous === undefined) delete process.env.ATLAS_ROOT;
-    else process.env.ATLAS_ROOT = previous;
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
     await rm(root, { recursive: true, force: true });
   }
 }
@@ -252,7 +252,7 @@ test("applyRetention summarizes unsummarized finished sessions before pruning th
     assert.ok(result.summarized.includes("s-summarize"));
     const after = store.get("s-summarize");
     assert.ok(after.summaryPath);
-    const summaryFile = path.join(process.env.ATLAS_ROOT, after.summaryPath);
+    const summaryFile = path.join(process.env.OCEAN_ROOT, after.summaryPath);
     const summaryContent = await readFile(summaryFile, "utf8");
     assert.ok(summaryContent.length > 0);
   }));
