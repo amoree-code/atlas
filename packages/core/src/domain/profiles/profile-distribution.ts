@@ -1,14 +1,21 @@
 import { z } from "zod";
 
-const profileDistributionSchema = z.object({
-  name: z.string().min(1),
-  version: z.string().min(1),
-  description: z.string().default(""),
-  atlasRequires: z.string().default("*"),
-  clients: z.array(z.string().min(1)).default([]),
-  files: z.array(z.string().min(1)).default([]),
-  distributionOwned: z.array(z.string().min(1)).default(["profile.json"]),
-});
+const profileDistributionSchema = z
+  .object({
+    name: z.string().min(1),
+    version: z.string().min(1),
+    description: z.string().default(""),
+    oceanRequires: z.string().optional(),
+    // "atlasRequires" is the pre-rename key; still accepted on read for one release.
+    atlasRequires: z.string().optional(),
+    clients: z.array(z.string().min(1)).default([]),
+    files: z.array(z.string().min(1)).default([]),
+    distributionOwned: z.array(z.string().min(1)).default(["profile.json"]),
+  })
+  .transform(({ atlasRequires, oceanRequires, ...rest }) => ({
+    ...rest,
+    oceanRequires: oceanRequires ?? atlasRequires ?? "*",
+  }));
 
 export type ProfileDistribution = z.infer<typeof profileDistributionSchema>;
 

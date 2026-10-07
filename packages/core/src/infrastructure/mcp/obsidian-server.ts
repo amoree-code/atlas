@@ -242,7 +242,7 @@ export async function handleObsidianMcpRequest(
       result: {
         protocolVersion: "2025-06-18",
         capabilities: { tools: {} },
-        serverInfo: { name: "atlas-obsidian", version: "0.3.6" },
+        serverInfo: { name: "ocean-obsidian", version: "0.3.6" },
       },
     };
   if (request.method === "tools/list")

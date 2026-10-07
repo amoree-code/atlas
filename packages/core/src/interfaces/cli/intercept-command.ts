@@ -187,7 +187,7 @@ export async function intercept(
           JSON.stringify({
             sessionId,
             type: "auth",
-            source: "atlas-interceptor",
+            source: "ocean-interceptor",
             result: "blocked_by_client_authentication",
             criterion: "provider login did not verify successfully",
           }),
@@ -313,7 +313,7 @@ export async function intercept(
       JSON.stringify({
         sessionId,
         type: "provider_exit",
-        source: "atlas-interceptor",
+        source: "ocean-interceptor",
         result: evidence.result,
         criterion: evidence.criterion,
       }),

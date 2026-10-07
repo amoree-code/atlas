@@ -169,7 +169,7 @@ export function buildSteps(deps: StepDependencies): OnboardingStep[] {
       },
     },
     guided("hooks", "SessionStart auto-sync hook", [
-      "Add before the exec in your atlas-session-bootstrap hook:",
+      "Add before the exec in your session-bootstrap hook:",
       'node "$HOME/ocean/kernel/packages/core/dist/main.js" client sync >/dev/null 2>&1 &',
     ]),
     guided("service", "Background service and schedules", [
