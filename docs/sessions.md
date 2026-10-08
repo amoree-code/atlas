@@ -8,7 +8,7 @@ inspected, or resumed later.
 ## Storage
 
 `SessionStore` (`src/infrastructure/persistence/session-store.ts`) opens
-`<workspace>/kernel/bridge/sessions/sessions.sqlite` (via `oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite")`,
+`<workspace>/bridge/sessions/sessions.sqlite` (via `oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite")`,
 see [workspace.md](workspace.md)) with `node:sqlite`, in WAL mode, and creates three tables
 if absent:
 
@@ -35,7 +35,7 @@ ocean skill observe [session-id]
 ocean skill observation-review <observation-id> discarded
 ```
 
-`openSessionStore()` ensures the `kernel/bridge/sessions/` directory exists and returns a `SessionStore`;
+`openSessionStore()` ensures the `bridge/sessions/` directory exists and returns a `SessionStore`;
 callers must `close()` it when done.
 
 ## Session schema (`src/domain/sessions/session.ts`)
@@ -91,7 +91,7 @@ node dist/main.js session resume <session-id> "<prompt>"
 - `show <id>` prints one session or exits 1 if not found.
 - `show <id>` includes the validated `entryContract`; `events <id>` prints the ordered evidence log.
 - `summary <id>` prints the bounded human-readable Markdown closeout written under
-  `<workspace>/kernel/bridge/sessions/summaries/`. The session row stores its relative summary path,
+  `<workspace>/bridge/sessions/summaries/`. The session row stores its relative summary path,
   SHA-256, byte count, closeout status, version, and close timestamp.
 - `resume <id> "<prompt>"` currently only supports sessions whose `provider` is `claude`
   and that already have a `providerSessionId`; it re-invokes the provider with
@@ -119,7 +119,7 @@ optional acceptance criterion, and bounded payload. Provider output is evidence 
 not a verified fact until a check records the corresponding result.
 
 Every governed closeout runs one idempotent finalizer. It writes one concise Markdown summary,
-updates structured session metadata in `kernel/bridge/sessions/sessions.sqlite`, and creates a bounded
+updates structured session metadata in `bridge/sessions/sessions.sqlite`, and creates a bounded
 handoff draft when the session has enough task evidence. It never promotes the session to memory,
 knowledge, inbox, daily, or skills automatically, and it never copies the complete provider
 transcript into the summary or database.
