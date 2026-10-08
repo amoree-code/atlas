@@ -1,8 +1,8 @@
 # Nothing in this repository is Prettier's to reformat.
 #
 # Ocean is zero-dependency by design: every YAML file here is read by a hand-written
-# parser (cli/ocean-adapter, borrowed by cli/ocean-capability), or by line-oriented shell
-# (grep '^key:' in cli/ocean-status, the tab-indentation check in cli/ocean-doctor).
+# parser in the former shell CLI (since removed), or by line-oriented shell
+# (grep '^key:' and a tab-indentation check).
 # Those parsers are deliberately strict — they reject what they do not understand rather
 # than guessing — so a purely cosmetic reflow is a breaking change.
 #
@@ -19,15 +19,15 @@
 # longer able to break the registry on its own. This file is the belt to that braces:
 # don't reflow files whose readers are stricter than YAML.
 
-# Adapter manifests — read by the strict subset parser in cli/ocean-adapter.
+# Adapter manifests — read by the strict subset parser.
 adapters/
 
-# Capability manifests — read by the same parser, via cli/ocean-capability.
+# Capability manifests — read by the same parser.
 capabilities/
 # Compatibility window: the pre-rename directory name, still ignored if one exists.
 plugins/
 
-# Domain manifests — read by the same parser, via cli/ocean-domain.
+# Domain manifests — read by the same parser.
 domains/
 
 # Governance policies — read by the same parser and by line-oriented shell.

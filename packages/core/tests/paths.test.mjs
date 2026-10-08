@@ -21,7 +21,6 @@ test("engineRoot resolves to the engine package directory, one level above this 
 
 test("default oceanRoot resolves to the private workspace sibling of engine, not inside it", () => {
   delete process.env.OCEAN_ROOT;
-  delete process.env.OCEAN_ROOT;
   assert.equal(oceanRoot(), path.resolve(engineRoot(), "..", "..", ".."));
   assert.notEqual(oceanRoot(), engineRoot());
 });

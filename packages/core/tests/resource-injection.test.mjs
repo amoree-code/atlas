@@ -40,7 +40,7 @@ test("bound project bootstrap stays within the 256-byte budget and carries no Oc
   );
   assert.equal(bootstrap.manifest.transport, "bootstrap-env");
   assert.match(bootstrap.content, /project=ocean/);
-  assert.doesNotMatch(bootstrap.content, /##\s*(?:Ocean|Ocean) resource/);
+  assert.doesNotMatch(bootstrap.content, /##\s*Ocean resource/);
 });
 
 test("unbound project bootstrap reports unbound rather than guessing a project", () => {

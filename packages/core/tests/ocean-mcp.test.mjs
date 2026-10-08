@@ -42,13 +42,13 @@ test("Ocean MCP exposes provider-neutral read-only tools without Obsidian", asyn
       params: { name: "ocean_status", arguments: {} },
     });
     assert.match(status.result.content[0].text, /"name":"Ocean"/);
-    const legacy = await handleOceanMcpRequest({
+    const retired = await handleOceanMcpRequest({
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
-      params: { name: "ocean_status", arguments: {} },
+      params: { name: "atlas_status", arguments: {} },
     });
-    assert.deepEqual(legacy.result, status.result);
+    assert.equal(retired.error?.message, "Unknown MCP tool");
   } finally {
     if (previous === undefined) delete process.env.OCEAN_ROOT;
     else process.env.OCEAN_ROOT = previous;
@@ -96,7 +96,7 @@ test("Ocean MCP exposes bounded resources and prompt templates", async () => {
     params: { uri: "ocean://status" },
   });
   assert.match(resource.result.contents[0].text, /"name": "Ocean"/);
-  for (const uri of ["ocean://tasks", "ocean://tasks"]) {
+  for (const uri of ["ocean://tasks"]) {
     const tasks = await handleOceanMcpRequest({
       jsonrpc: "2.0",
       id: 7,
@@ -114,6 +114,13 @@ test("Ocean MCP exposes bounded resources and prompt templates", async () => {
     params: { uri: "tasks" },
   });
   assert.ok(unknown.error);
+  const retired = await handleOceanMcpRequest({
+    jsonrpc: "2.0",
+    id: 10,
+    method: "resources/read",
+    params: { uri: "atlas://tasks" },
+  });
+  assert.ok(retired.error);
   const init = await handleOceanMcpRequest({
     jsonrpc: "2.0",
     id: 9,

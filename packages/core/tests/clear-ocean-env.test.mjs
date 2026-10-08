@@ -49,13 +49,13 @@ test("the preload points OCEAN_ROOT at an empty sandbox of its own, never the in
   assert.equal(existsSync(first), false, "the sandbox is removed on exit");
 });
 
-test("the preload keeps the opt-in test gates a developer sets on purpose, under either name", () => {
+test("the preload keeps the opt-in test gates a developer sets on purpose", () => {
   const gates = [
     "LIVE_PROVIDER_TESTS",
     "LIVE_EMBEDDER_TESTS",
     "BROWSER_INTEGRATION",
   ];
-  const names = gates.flatMap((gate) => [`OCEAN_${gate}`, `OCEAN_${gate}`]);
+  const names = gates.map((gate) => `OCEAN_${gate}`);
   const kept = seen(
     Object.fromEntries(names.map((name) => [name, "1"])),
     names,
