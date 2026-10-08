@@ -85,14 +85,14 @@ read back with `profileIdentity: ""`.
 These three are easy to conflate because all three can be named on the command line, but
 they answer different questions:
 
-- **Profile** (`kernel/bridge/profiles/<name>.json`) — *how* an agent runs: provider, model, role,
+- **Profile** (`bridge/profiles/<name>.json`) — *how* an agent runs: provider, model, role,
   skills, and read/write policy. It is configuration, reused across many runs, and owns no
   data of its own.
-- **Project** (`brain/04-projects/<name>/`) — *what* the work is about: the tasks, plans, and
+- **Project** (`04-projects/<name>/`) — *what* the work is about: the tasks, plans, and
   private notes for one piece of work (see the workspace-root layout in
   [workspace.md](workspace.md)). A project has no execution configuration; a profile
   points at paths, it does not define what lives there.
-- **Session** (one row in `kernel/bridge/sessions/sessions.sqlite`) — *one run*: the record of a single
+- **Session** (one row in `bridge/sessions/sessions.sqlite`) — *one run*: the record of a single
   agent invocation, which profile (and, via `profileIdentity`, which exact profile
   configuration) produced it, its status, and its transcript of events (see
   [sessions.md](sessions.md)). A session is created fresh every time `ocean run` starts,
@@ -103,7 +103,7 @@ A profile is loaded by name for a run; the run happens against a project's files
 
 ## Default profile
 
-`ocean setup` writes `kernel/bridge/profiles/default.json` from
+`ocean setup` writes `bridge/profiles/default.json` from
 `templates/profiles/default.json` if it does not already exist:
 
 ```json
@@ -126,7 +126,7 @@ A profile is loaded by name for a run; the run happens against a project's files
 
 `templates/profiles/` also ships public starter templates for three other roles; unlike
 `default`, `ocean setup` does not install these automatically — copy the one you need into
-`kernel/bridge/profiles/<name>.json` under the workspace root:
+`bridge/profiles/<name>.json` under the workspace root:
 
 - **`strategist.json`** — plans and reasons about approach; `writePolicy: "none"`.
 - **`developer.json`** — implements and fixes code; `writePolicy: "workspace"`.
@@ -141,8 +141,8 @@ The root-level JSON form is canonical. The older directory form with `profile.js
 ## Skill roots
 
 Profile skill names resolve progressively in this order: public `engine/skills/`, private
-`kernel/bridge/integrations/claude-code/skills/`, then the active project's `skills/` directory under
-`brain/04-projects/<project>/skills/`. Each private or project root uses the same `index.json` and
+`bridge/integrations/claude-code/skills/`, then the active project's `skills/` directory under
+`04-projects/<project>/skills/`. Each private or project root uses the same `index.json` and
 `<category>/<name>/SKILL.md` contract as the public catalog. The first matching name wins and
 duplicate profile names are listed once. The prompt carries a skill index (name, description,
 SKILL.md path); the provider reads a skill's body on demand. Owner-reviewed promoted skills,

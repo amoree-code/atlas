@@ -4,27 +4,29 @@ Ocean separates the public **engine** (`kernel/` in this repository) from a priv
 **workspace** (`~/ocean`) that holds every piece of user and runtime data. `kernel/` is
 `~/ocean`'s own git repository with its own remote — the workspace root above it is a
 separate, private, no-remote repository (see `git.md`'s policy for the boundary).
-`kernel/bridge/` is machine-local state physically nested inside this repository but
-git-ignored here; `brain/` is user-owned data that lives entirely outside this repository.
+The workspace root holds the user-owned records (PARA areas `00-inbox/` … `06-templates/`),
+the `charter/`, and `bridge/` — machine-local state with no git at all. None of it lives inside
+this repository. (Before T-243 the records sat under `brain/` and the bridge under `kernel/bridge/`;
+the engine still reads that layout, see below.)
 
 ## Layout
 
 ```text
 <workspace root>/           default: the parent directory of kernel/ (e.g. ~/ocean)
-├── brain/                   user-owned private data (PARA)
-│   ├── 00-inbox/ … 06-templates/, 99-archive/
+├── 00-inbox/ … 06-templates/   user-owned private data (PARA)
 │   └── 04-projects/         project data (registry, backlog, per-project tasks)
-├── kernel/                   this repository
-│   └── bridge/               machine-local state, git-ignored
-│       ├── profiles/         one JSON file per profile (see profiles.md)
-│       ├── sessions/
-│       │   └── sessions.sqlite   session store (see sessions.md)
-│       ├── config/
-│       │   ├── startup/
-│       │   └── CONFIG.md
-│       ├── registry/         machine-local provider, install and project registry
-│       ├── integrations/     private client integrations
-│       └── archive/          private retained legacy history
+├── charter/                 private governance: core.md, policies/
+├── kernel/                  this repository
+└── bridge/                  machine-local state, no git
+    ├── profiles/            one JSON file per profile (see profiles.md)
+    ├── sessions/
+    │   └── sessions.sqlite  session store (see sessions.md)
+    ├── config/
+    │   ├── startup/
+    │   └── CONFIG.md
+    ├── registry/            machine-local provider, install and project registry
+    ├── integrations/        private client integrations
+    └── archive/             private retained legacy history
 ```
 
 ## Root resolution (`src/paths.ts`)
@@ -34,10 +36,14 @@ git-ignored here; `brain/` is user-owned data that lives entirely outside this r
   from `src/`).
 - `oceanRoot()` — `OCEAN_ROOT` (or the older `ATLAS_ROOT`) if set (resolved to an absolute path),
   otherwise three directories above `engineRoot()` (`kernel/packages/core` → the workspace root). This is the default private-workspace
-  location: `kernel/` is expected to sit inside the workspace root as a sibling of `brain/`.
+  location: `kernel/` is expected to sit inside the workspace root as a sibling of `bridge/`.
 - `oceanPath(...)` — joins onto `<oceanRoot>/`, used for all private workspace state, via
-  the `PERSONAL_DIR`/`PROJECTS_DIR`/`SYSTEM_DIR` constants (currently `brain/02-personal`,
-  `brain/04-projects`, `kernel/bridge`).
+  the `PERSONAL_DIR`/`PROJECTS_DIR`/`SYSTEM_DIR` constants (`02-personal`, `04-projects`,
+  `bridge`). Each half of the layout is chosen once per process by a sentinel directory: the
+  records use `04-projects/` and fall back to `brain/04-projects/`; the bridge uses
+  `bridge/sessions/` and falls back to `bridge/sessions/`. A process started before a
+  layout move keeps the old layout until it restarts. `ocean layout plan | apply --yes |
+  rollback --yes` performs the move (macOS and Linux).
 
 Set `OCEAN_ROOT` to point Ocean at a different workspace root, for example to run multiple
 isolated workspaces from one engine checkout. The older `ATLAS_ROOT` is still read when `OCEAN_ROOT` is unset.
@@ -47,19 +53,18 @@ isolated workspaces from one engine checkout. The older `ATLAS_ROOT` is still re
 `src/interfaces/cli/setup-command.ts` creates the workspace on first run (paths below via
 the same three constants, so they track any future layout change):
 
-- Creates `brain/02-personal`, `brain/05-knowledge`, `brain/01-daily`, `brain/00-inbox`,
-  `brain/06-templates`, and `brain/04-projects/atlas/tasks`
+- Creates `02-personal`, `05-knowledge`, `01-daily`, `00-inbox`,
+  `06-templates`, and `04-projects/ocean/tasks`
   under the workspace root.
-- Creates `kernel/bridge/config/startup`, `kernel/bridge/profiles`,
-  `kernel/bridge/sessions`, `kernel/bridge/registry`, `kernel/bridge/integrations`, and
-  `kernel/bridge/archive` under the workspace root.
-- Writes `kernel/bridge/profiles/default.json` from the template in `packages/core/templates/`,
+- Creates `bridge/config/startup`, `bridge/profiles`, `bridge/sessions`, `bridge/registry`,
+  `bridge/integrations`, and `bridge/archive` under the workspace root.
+- Writes `bridge/profiles/default.json` from the template in `packages/core/templates/`,
   without overwriting existing files.
 - Installs a per-OS startup entry that launches `kernel/packages/core/dist/main.js service`
   with the workspace root as its working directory: a macOS `launchd` plist under
   `~/Library/LaunchAgents`, a Linux `systemd --user` unit under
   `~/.config/systemd/user`, or a Windows Startup-folder launcher script.
-- Restricts the private `kernel/bridge` tree to `0700` permissions.
+- Restricts the private `bridge` tree to `0700` permissions.
 
 Startup always points at `kernel/packages/core/dist/main.js` (the built engine), never at
 `src/`, and always runs with the private workspace directory as its current working

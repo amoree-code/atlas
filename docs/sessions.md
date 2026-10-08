@@ -35,7 +35,7 @@ ocean skill observe [session-id]
 ocean skill observation-review <observation-id> discarded
 ```
 
-`openSessionStore()` ensures the `kernel/bridge/sessions/` directory exists and returns a `SessionStore`;
+`openSessionStore()` ensures the `bridge/sessions/` directory exists and returns a `SessionStore`;
 callers must `close()` it when done.
 
 ## Session schema (`src/domain/sessions/session.ts`)
@@ -119,7 +119,7 @@ optional acceptance criterion, and bounded payload. Provider output is evidence 
 not a verified fact until a check records the corresponding result.
 
 Every governed closeout runs one idempotent finalizer. It writes one concise Markdown summary,
-updates structured session metadata in `kernel/bridge/sessions/sessions.sqlite`, and creates a bounded
+updates structured session metadata in `bridge/sessions/sessions.sqlite`, and creates a bounded
 handoff draft when the session has enough task evidence. It never promotes the session to memory,
 knowledge, inbox, daily, or skills automatically, and it never copies the complete provider
 transcript into the summary or database.
