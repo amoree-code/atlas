@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -259,6 +259,7 @@ async function withGitOceanRoot(run) {
   } finally {
     if (previous === undefined) delete process.env.OCEAN_ROOT;
     else process.env.OCEAN_ROOT = previous;
+    await rm(root, { recursive: true, force: true });
   }
 }
 
@@ -275,7 +276,14 @@ test("oceanWorktreeWarning names the uncommitted changes and the worktree comman
     await writeFile(path.join(root, "b.md"), "b\n");
     const warning = await oceanWorktreeWarning(path.join(root, "01-daily"));
     assert.match(warning, /^ocean-dirty=2: /);
-    assert.match(warning, /git worktree add ~\/ocean-worktrees\//);
+    // A temp root's worktree path is too long for the bound, so it shows as a placeholder;
+    // the command is never cut in half.
+    assert.ok(
+      /git worktree add (~?\/\S+-worktrees|<\S+-worktrees>)\/<slug> -b <branch>$/.test(
+        warning,
+      ),
+      warning,
+    );
     assert.ok(Buffer.byteLength(warning) <= WORKTREE_WARNING_MAX_BYTES);
 
     const result = await claudeSessionStartHook({ cwd: root });
@@ -291,6 +299,7 @@ test("oceanWorktreeWarning is silent outside the Ocean root and in a root that i
     await writeFile(path.join(root, "dirty.md"), "x\n");
     const outside = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-else-"));
     assert.equal(await oceanWorktreeWarning(outside), null);
+    await rm(outside, { recursive: true, force: true });
   });
   const plain = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-plain-"));
   await writeFile(path.join(plain, "dirty.md"), "x\n");
@@ -301,5 +310,6 @@ test("oceanWorktreeWarning is silent outside the Ocean root and in a root that i
   } finally {
     if (previous === undefined) delete process.env.OCEAN_ROOT;
     else process.env.OCEAN_ROOT = previous;
+    await rm(plain, { recursive: true, force: true });
   }
 });
