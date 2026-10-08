@@ -13,24 +13,15 @@ projects/*
 !personal/.gitkeep
 !projects/.gitkeep
 
-# Private/machine-local application state now lives inside kernel/bridge/ (was system/,
-# a sibling of engine/, before the Ocean T-224 rename) — never commit any of it.
-#
-# No exceptions, deliberately (T-243). T-240 carved one skill out of this rule so it could
-# be version-controlled; that made a file the running client reads a tracked file, and the
-# next branch switch deleted it from disk and broke /session-end. Live state under version
-# control in a branchy repo means branch operations mutate the machine.
-#
-# Publishable content does not belong here at all — it belongs in kernel/ proper. That is
-# what T-243 moves, and it is what makes this line safe to leave absolute.
-bridge/*
+# The bridge (machine-local state: sessions, config, integrations) moved out of this repo to
+# ~/ocean/bridge in T-243, so nothing here should ever be named bridge/. This line stays as a guard:
+# a process started before the move still resolves the old layout and could recreate it.
+/bridge/
 
 # --- credentials ---
 .env
 .env.*
-# Anchored (T-243). Unanchored, this negation reached into bridge/ and re-included
-# bridge/.env.example despite the bridge/* rule above — a committable path inside the
-# machine-local tree, in a repo whose whole premise is that none of it can publish.
+# Anchored (T-243): unanchored, this negation once re-included bridge/.env.example.
 !/.env.example
 *.pem
 *.key
