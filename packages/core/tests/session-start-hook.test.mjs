@@ -8,6 +8,8 @@ import { OCEAN_BOOTSTRAP_MAX_BYTES } from "../dist/application/context/resource-
 import {
   claudeNativeHookStatus,
   claudeSessionStartHook,
+  oceanWorktreeWarning,
+  WORKTREE_WARNING_MAX_BYTES,
 } from "../dist/application/hooks/session-start-hook.js";
 import { SYSTEM_DIR } from "../dist/paths.js";
 
@@ -243,5 +245,61 @@ test("claudeNativeHookStatus still reports a registration when no script is inst
     );
     assert.equal(status.scriptInstalled, false);
     assert.equal(status.registered, true, registered);
+  }
+});
+
+async function withGitOceanRoot(run) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-git-root-"));
+  const init = spawnSync("git", ["init", "-q", root], { encoding: "utf8" });
+  assert.equal(init.status, 0, init.stderr);
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = root;
+  try {
+    await run(root);
+  } finally {
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
+  }
+}
+
+test("oceanWorktreeWarning is silent for a clean Ocean repo", async () => {
+  await withGitOceanRoot(async (root) => {
+    assert.equal(await oceanWorktreeWarning(root), null);
+  });
+});
+
+test("oceanWorktreeWarning names the uncommitted changes and the worktree command, bounded", async () => {
+  await withGitOceanRoot(async (root) => {
+    await mkdir(path.join(root, "01-daily"), { recursive: true });
+    await writeFile(path.join(root, "01-daily", "a.md"), "a\n");
+    await writeFile(path.join(root, "b.md"), "b\n");
+    const warning = await oceanWorktreeWarning(path.join(root, "01-daily"));
+    assert.match(warning, /^ocean-dirty=2: /);
+    assert.match(warning, /git worktree add ~\/ocean-worktrees\//);
+    assert.ok(Buffer.byteLength(warning) <= WORKTREE_WARNING_MAX_BYTES);
+
+    const result = await claudeSessionStartHook({ cwd: root });
+    const [bootstrap, line] =
+      result.hookSpecificOutput.additionalContext.split("\n");
+    assert.ok(Buffer.byteLength(bootstrap) <= OCEAN_BOOTSTRAP_MAX_BYTES);
+    assert.equal(line, warning);
+  });
+});
+
+test("oceanWorktreeWarning is silent outside the Ocean root and in a root that is not a git repo", async () => {
+  await withGitOceanRoot(async (root) => {
+    await writeFile(path.join(root, "dirty.md"), "x\n");
+    const outside = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-else-"));
+    assert.equal(await oceanWorktreeWarning(outside), null);
+  });
+  const plain = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-plain-"));
+  await writeFile(path.join(plain, "dirty.md"), "x\n");
+  const previous = process.env.OCEAN_ROOT;
+  process.env.OCEAN_ROOT = plain;
+  try {
+    assert.equal(await oceanWorktreeWarning(plain), null);
+  } finally {
+    if (previous === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = previous;
   }
 });

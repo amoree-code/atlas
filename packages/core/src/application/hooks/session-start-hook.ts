@@ -1,8 +1,11 @@
-import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { readFile, realpath } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { SYSTEM_DIR } from "../../paths.js";
-import { resolveProject } from "../context/project-resolution.js";
+import { promisify } from "node:util";
+import { truncateUtf8 } from "../../fs-utils.js";
+import { oceanRoot, SYSTEM_DIR } from "../../paths.js";
+import { findGitRoot, resolveProject } from "../context/project-resolution.js";
 import { buildOceanBootstrap } from "../context/resource-injection.js";
 
 // The documented Claude Code SessionStart hook contract on this machine (verified against
@@ -44,16 +47,52 @@ export async function readBoundedStdin(
   return Buffer.concat(chunks).toString("utf8");
 }
 
+const execFileAsync = promisify(execFile);
+
+export const WORKTREE_WARNING_MAX_BYTES = 200;
+
+// Sessions share the Ocean working tree, so one session's `git add -A` can capture another's
+// in-progress files (T-257). When a session starts inside the Ocean workspace and its repo
+// already has uncommitted changes, say so in one bounded line, beside — not inside — the
+// 256-byte bootstrap. Anything that goes wrong here means no warning, never a failed hook.
+export async function oceanWorktreeWarning(
+  cwd: string,
+): Promise<string | null> {
+  try {
+    const root = await realpath(oceanRoot());
+    const here = await realpath(cwd);
+    if (here !== root && !here.startsWith(`${root}${path.sep}`)) return null;
+    const repo = findGitRoot(here);
+    if (!repo) return null;
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", repo, "status", "--porcelain"],
+      { timeout: 3_000, maxBuffer: 4 * 1024 * 1024 },
+    );
+    const changed = stdout.split("\n").filter((line) => line.trim()).length;
+    if (!changed) return null;
+    return truncateUtf8(
+      `ocean-dirty=${changed}: uncommitted changes already here. Change files in a worktree: git worktree add ~/ocean-worktrees/<slug> -b <branch>`,
+      WORKTREE_WARNING_MAX_BYTES,
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function claudeSessionStartHook(
   payload: ClaudeSessionStartPayload,
 ): Promise<ClaudeSessionStartResult> {
   const cwd = payload.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const project = await resolveProject(cwd);
   const bootstrap = buildOceanBootstrap(project);
+  const warning = await oceanWorktreeWarning(cwd);
   return {
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: bootstrap.content,
+      additionalContext: warning
+        ? `${bootstrap.content}\n${warning}`
+        : bootstrap.content,
     },
   };
 }
