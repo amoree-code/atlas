@@ -74,6 +74,8 @@ function fixture() {
 // Fault injection for the child process: patch node:fs/promises before the CLI loads it.
 //   OCEAN_TEST_DELETE_ON_COPY=<file> — delete <file> when the first tree copy starts;
 //   OCEAN_TEST_EDIT_ON_COPY=<file>   — append a line to <file> when the first tree copy starts;
+//   OCEAN_TEST_FAIL_COPY=1           — fail the first tree copy after it has written into staging
+//                                      (root ignores file modes, so a chmod 000 file cannot);
 //   OCEAN_TEST_FAIL_WRITE=1          — fail the first atomic pointer write (after the swap).
 const FAULTS = path.join(os.tmpdir(), `ocean-layout-faults-${process.pid}.mjs`);
 writeFileSync(
@@ -86,6 +88,7 @@ let copied = false, failed = false;
 fs.cp = async (...args) => {
   if (!copied && process.env.OCEAN_TEST_DELETE_ON_COPY) { copied = true; await rm(process.env.OCEAN_TEST_DELETE_ON_COPY); }
   if (!copied && process.env.OCEAN_TEST_EDIT_ON_COPY) { copied = true; await appendFile(process.env.OCEAN_TEST_EDIT_ON_COPY, "edited during the copy\\n"); }
+  if (process.env.OCEAN_TEST_FAIL_COPY) { await cp(...args); throw new Error("injected copy failure"); }
   return cp(...args);
 };
 fs.rename = async (from, to) => {
@@ -352,24 +355,22 @@ posixTest(
   "a run interrupted mid-copy blocks a new apply, and rollback restores the original tree",
   () => {
     const where = fixture();
-    const locked = path.join(where.root, "kernel/bridge/runtime/locked");
     try {
-      writeFileSync(locked, "unreadable");
       const before = tree(where.home);
-      chmodSync(locked, 0o000);
-      const failed = layout(where, "apply", "--yes");
-      assert.equal(failed.status, 1, "the copy fails on the unreadable file");
+      const failed = layout(where, "apply", "--yes", {
+        OCEAN_TEST_FAIL_COPY: "1",
+      });
+      assert.equal(failed.status, 1, "the copy fails");
+      assert.match(failed.stderr, /injected copy failure/);
       assert.ok(existsSync(path.join(where.root, ".layout-staging")));
       assert.match(
         layout(where, "apply", "--yes").stderr,
         /interrupted\. Run `ocean layout rollback` first/,
       );
-      chmodSync(locked, 0o644);
       const rolled = layout(where, "rollback", "--yes");
       assert.equal(rolled.status, 0, rolled.stderr);
       assert.deepEqual(tree(where.home), before);
     } finally {
-      chmodSync(locked, 0o644);
       rmSync(where.home, { recursive: true, force: true });
     }
   },
@@ -549,12 +550,10 @@ posixTest(
   () => {
     const where = fixture();
     const settings = path.join(where.home, ".claude/settings.json");
-    const locked = path.join(where.root, "kernel/bridge/runtime/locked");
     try {
-      writeFileSync(locked, "unreadable");
-      chmodSync(locked, 0o000);
       const failed = layout(where, "apply", "--yes", {
         OCEAN_TEST_EDIT_ON_COPY: settings,
+        OCEAN_TEST_FAIL_COPY: "1",
       });
       assert.equal(failed.status, 1, "the copy fails after the edit");
       const rolled = layout(where, "rollback", "--yes");
@@ -565,7 +564,6 @@ posixTest(
       );
       assert.equal(existsSync(path.join(where.root, ".layout-staging")), false);
     } finally {
-      chmodSync(locked, 0o644);
       rmSync(where.home, { recursive: true, force: true });
     }
   },
