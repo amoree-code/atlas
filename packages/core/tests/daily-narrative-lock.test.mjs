@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,6 +16,7 @@ import {
   appendDailyNarrative,
   appendObservations,
 } from "../dist/application/memory/daily-narrative.js";
+import { withFileLock } from "../dist/fs-utils.js";
 
 const moduleUrl = new URL(
   "../dist/application/memory/daily-narrative.js",
@@ -133,5 +142,34 @@ test("a lock left by a dead process is taken over", async () => {
     const content = await dailyContent(root);
     assert.match(content, /first —/);
     assert.match(content, /second —/);
+  });
+});
+
+test("a lock held past the age cap is stale even when its pid is alive", async () => {
+  await withRoot(async (root) => {
+    const date = new Date().toISOString().slice(0, 10);
+    const directory = path.join(root, "01-daily");
+    await appendDailyNarrative({
+      session: session("before", root),
+      events: [],
+    });
+    // A reused pid looks alive; only the lock's age shows it is abandoned.
+    const lock = path.join(directory, `${date}.md.lock`);
+    await writeFile(lock, `${process.pid} abandoned`);
+    const old = new Date(Date.now() - 120_000);
+    await utimes(lock, old, old);
+    await appendDailyNarrative({ session: session("after", root), events: [] });
+    assert.match(await dailyContent(root), /after —/);
+    await assert.rejects(stat(lock), { code: "ENOENT" });
+  });
+});
+
+test("withFileLock never removes a lock it no longer owns", async () => {
+  await withRoot(async (root) => {
+    const target = path.join(root, "shared.md");
+    await withFileLock(target, async () => {
+      await writeFile(`${target}.lock`, "1 someone-else");
+    });
+    assert.equal(await readFile(`${target}.lock`, "utf8"), "1 someone-else");
   });
 });

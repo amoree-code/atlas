@@ -1,17 +1,8 @@
-import { randomUUID } from "node:crypto";
-import {
-  link,
-  mkdir,
-  open,
-  readFile,
-  rename,
-  stat,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { redactRuntimeText } from "../../domain/redaction/redaction.js";
 import type { Session, SessionEvent } from "../../domain/sessions/session.js";
+import { atomicWrite, withFileLock } from "../../fs-utils.js";
 import { DAILY_DIR, oceanPath } from "../../paths.js";
 import { findGitRoot } from "../context/project-resolution.js";
 import type { TaskObservation } from "../skills/task-observer.js";
@@ -45,103 +36,30 @@ function insertUnderHeading(
   return `${content.slice(0, insertAt)}${line}\n${content.slice(insertAt)}`;
 }
 
-// Two sessions closing out at once each read the daily file, edit it in memory and write it
-// back; without a lock the later write drops the earlier one's lines (T-257). The lock is a
-// file created with "wx" beside the daily file, holding the owner's pid — the same pattern
-// as the scheduler lease. A lock whose owner is dead is stale and taken over.
-const LOCK_WAIT_MS = 10_000;
-const LOCK_RETRY_MS = 20;
-// The owner writes its pid right after creating the lock; an empty lock older than this
-// belongs to a writer that died in between.
-const EMPTY_LOCK_STALE_MS = 5_000;
-
-function processIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
-async function lockIsStale(lock: string): Promise<string | null> {
-  const contents = await readFile(lock, "utf8").catch(() => null);
-  if (contents === null) return null;
-  const owner = Number.parseInt(contents.trim(), 10);
-  if (Number.isInteger(owner) && owner > 0)
-    return processIsAlive(owner) ? null : contents;
-  const age = await stat(lock)
-    .then((info) => Date.now() - info.mtimeMs)
-    .catch(() => 0);
-  return age > EMPTY_LOCK_STALE_MS ? contents : null;
-}
-
-// Moves a stale lock aside atomically. If another writer replaced it with a live lock in
-// between, the moved file is not the stale one: put it back (link never overwrites).
-async function takeOverStaleLock(lock: string, stale: string): Promise<void> {
-  const aside = `${lock}.stale-${process.pid}-${randomUUID()}`;
-  try {
-    await rename(lock, aside);
-  } catch {
-    return;
-  }
-  const moved = await readFile(aside, "utf8").catch(() => stale);
-  if (moved !== stale) await link(aside, lock).catch(() => undefined);
-  await unlink(aside).catch(() => undefined);
-}
-
-async function acquireDailyLock(lock: string): Promise<void> {
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      const handle = await open(lock, "wx");
-      try {
-        await handle.writeFile(`${process.pid}\n`);
-      } finally {
-        await handle.close();
-      }
-      return;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    }
-    const stale = await lockIsStale(lock);
-    if (stale !== null) {
-      await takeOverStaleLock(lock, stale);
-      continue;
-    }
-    if (Date.now() > deadline)
-      throw new Error(
-        `Daily log lock ${lock} still held after ${LOCK_WAIT_MS} ms; entry not written`,
-      );
-    await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
-  }
-}
-
-// Read-modify-write of today's daily file under the lock, written atomically (temp file +
-// rename) so a reader never sees a half-written file.
+// Read-modify-write of today's daily file. Two sessions closing out at once would otherwise
+// each write back their own copy and drop the other's lines (T-257), so it runs under the
+// file lock and lands atomically.
 async function updateDailyFile(
   update: (content: string) => string,
 ): Promise<void> {
   const date = new Date().toISOString().slice(0, 10);
   const directory = oceanPath(DAILY_DIR);
   const file = path.join(directory, `${date}.md`);
-  const lock = `${file}.lock`;
   await mkdir(directory, { recursive: true });
-  await acquireDailyLock(lock);
-  try {
+  await withFileLock(file, async () => {
     let content: string;
     try {
       content = await readFile(file, "utf8");
-    } catch {
+    } catch (error) {
+      // Only a missing file starts from the template: any other read failure must not
+      // replace a real day's log with an empty one.
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       content = dailyTemplate(date);
     }
-    const next = update(content);
-    const temporary = `${file}.ocean-tmp-${process.pid}-${randomUUID()}`;
-    await writeFile(temporary, next, "utf8");
-    await rename(temporary, file);
-  } finally {
-    await unlink(lock).catch(() => undefined);
-  }
+    // A symlinked daily file keeps its link: the write goes to the real file.
+    const target = await realpath(file).catch(() => file);
+    await atomicWrite(target, update(content));
+  });
 }
 
 /**

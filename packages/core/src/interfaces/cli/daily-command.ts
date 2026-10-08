@@ -6,6 +6,7 @@ import {
   reviewObservation,
 } from "../../application/skills/task-observer.js";
 import type { Session } from "../../domain/sessions/session.js";
+import { withFileLock } from "../../fs-utils.js";
 import { openSessionStore } from "../../infrastructure/persistence/session-store.js";
 import { DAILY_DIR, oceanPath } from "../../paths.js";
 import { listTasks } from "./tasks-command.js";
@@ -129,10 +130,14 @@ export async function runDailyCommand(
     .slice(0, 12_000)}\n`;
   if (apply) {
     await mkdir(path.dirname(file), { recursive: true });
-    const existing = await readFile(file, "utf8").catch(() => "");
-    if (existing.trim())
-      throw new Error(`Daily file already has content: ${file}`);
-    await writeFile(file, content, "utf8");
+    // Same lock as the session-closeout writers: a closeout landing between the check and
+    // the write would otherwise be overwritten (T-257).
+    await withFileLock(file, async () => {
+      const existing = await readFile(file, "utf8").catch(() => "");
+      if (existing.trim())
+        throw new Error(`Daily file already has content: ${file}`);
+      await writeFile(file, content, "utf8");
+    });
   }
   console.log(
     JSON.stringify(
