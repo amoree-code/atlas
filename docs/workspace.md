@@ -34,7 +34,7 @@ the engine still reads that layout, see below.)
 - `engineRoot()` / `enginePath(...)` — always the directory containing this package
   (resolved from the running module, whether compiled under `dist/` or run under `tsx`
   from `src/`).
-- `oceanRoot()` — `OCEAN_ROOT` (or the older `ATLAS_ROOT`) if set (resolved to an absolute path),
+- `oceanRoot()` — `OCEAN_ROOT` if set (resolved to an absolute path),
   otherwise three directories above `engineRoot()` (`kernel/packages/core` → the workspace root). This is the default private-workspace
   location: `kernel/` is expected to sit inside the workspace root as a sibling of `bridge/`.
 - `oceanPath(...)` — joins onto `<oceanRoot>/`, used for all private workspace state, via
@@ -46,7 +46,7 @@ the engine still reads that layout, see below.)
   rollback --yes` performs the move (macOS and Linux).
 
 Set `OCEAN_ROOT` to point Ocean at a different workspace root, for example to run multiple
-isolated workspaces from one engine checkout. The older `ATLAS_ROOT` is still read when `OCEAN_ROOT` is unset.
+isolated workspaces from one engine checkout.
 
 ## Bootstrap (`ocean setup`)
 
@@ -54,8 +54,7 @@ isolated workspaces from one engine checkout. The older `ATLAS_ROOT` is still re
 the same three constants, so they track any future layout change):
 
 - Creates `02-personal`, `05-knowledge`, `01-daily`, `00-inbox`,
-  `06-templates`, and the workspace project's `04-projects/<ocean|atlas>/tasks` (an existing
-  `atlas/tasks` is kept)
+  `06-templates`, and the workspace project's `04-projects/ocean/tasks`
   under the workspace root.
 - Creates `bridge/config/startup`, `bridge/profiles`, `bridge/sessions`, `bridge/registry`,
   `bridge/integrations`, `bridge/archive` and `bridge/runtime/{shims,temporary}` under the
@@ -81,7 +80,7 @@ ocean tasks complete T-123
 ```
 
 It requires every checklist item to be checked, writes `state: done`, and moves the
-whole task directory (including sibling artifacts) into `projects/atlas/tasks/archive/`
+whole task directory (including sibling artifacts) into `04-projects/ocean/tasks/archive/Ocean/`
 in one operation. Read-only commands such as `ocean tasks list` do not mutate files.
 
 Tasks that were marked `done` by an external editor can be reconciled explicitly:

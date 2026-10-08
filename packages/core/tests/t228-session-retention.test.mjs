@@ -16,7 +16,7 @@ import { SYSTEM_DIR } from "../dist/paths.js";
 const openStore = (file) => new SessionStore(file);
 
 async function withFixtureStore(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-retention-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-retention-"));
   await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const dbFile = path.join(root, SYSTEM_DIR, "sessions", "sessions.sqlite");
   const previous = process.env.OCEAN_ROOT;

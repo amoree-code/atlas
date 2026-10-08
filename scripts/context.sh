@@ -2,7 +2,7 @@
 # Read-only. Prints the state Claude needs to resume work cold.
 set -u
 
-ROOT="${OCEAN_ROOT:-${ATLAS_ROOT:-$HOME/ocean}}"
+ROOT="${OCEAN_ROOT:-$HOME/ocean}"
 # Record areas sit at the root, or under brain/ before the T-243 layout move.
 BRAIN="$ROOT"
 if [ ! -d "$ROOT/04-projects" ] && [ -d "$ROOT/brain/04-projects" ]; then BRAIN="$ROOT/brain"; fi
@@ -13,25 +13,25 @@ echo "=== today: $D ==="
 if [ -f "$FILE" ]; then echo "daily record: $FILE"; else echo "daily record: NOT CREATED (run day-start.sh)"; fi
 
 echo
-echo "=== atlas context ==="
-atlas context 2>/dev/null
+echo "=== ocean context ==="
+ocean context 2>/dev/null
 
 echo
 echo "=== last 3 sessions ==="
-atlas session list 2>/dev/null | jq -r '.[0:3][] | "\(.updatedAt)  \(.status)  \(.title)  next: \(.nextAction // "-")"' 2>/dev/null \
-  || echo "(none yet, or atlas session list unavailable)"
+ocean session list 2>/dev/null | jq -r '.[0:3][] | "\(.updatedAt)  \(.status)  \(.title)  next: \(.nextAction // "-")"' 2>/dev/null \
+  || echo "(none yet, or ocean session list unavailable)"
 
 echo
 echo "=== active/blocked tasks ==="
 found=0
 for state in active blocked; do
-  count=$(atlas tasks list "$state" 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+  count=$(ocean tasks list "$state" 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
   if [ "$count" != "0" ]; then
-    atlas tasks list "$state" 2>/dev/null | jq -r --arg st "$state" '.[] | "  \(.id)  \($st)  \(.project)  \(.title)"'
+    ocean tasks list "$state" 2>/dev/null | jq -r --arg st "$state" '.[] | "  \(.id)  \($st)  \(.project)  \(.title)"'
     found=1
   fi
 done
-[ "$found" = 0 ] && echo "  (none — see atlas tasks list)"
+[ "$found" = 0 ] && echo "  (none — see ocean tasks list)"
 
 echo
 echo "=== registry active rows ==="

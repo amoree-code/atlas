@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -39,11 +39,11 @@ function platformStartupFile(home) {
 
 test("setup isolates its writes to OCEAN_ROOT and the (fake) home directory, never the engine tree", async () => {
   const privateRoot = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-setup-root-"),
+    path.join(os.tmpdir(), "ocean-setup-root-"),
   );
-  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "atlas-setup-home-"));
+  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-setup-home-"));
 
-  const originalAtlasRoot = process.env.OCEAN_ROOT;
+  const originalOceanRoot = process.env.OCEAN_ROOT;
   const originalHome = process.env.HOME;
   const originalAppData = process.env.APPDATA;
   process.env.OCEAN_ROOT = privateRoot;
@@ -101,61 +101,13 @@ test("setup isolates its writes to OCEAN_ROOT and the (fake) home directory, nev
       "startup entry should use the private root as its working directory",
     );
   } finally {
-    if (originalAtlasRoot === undefined) delete process.env.OCEAN_ROOT;
-    else process.env.OCEAN_ROOT = originalAtlasRoot;
+    if (originalOceanRoot === undefined) delete process.env.OCEAN_ROOT;
+    else process.env.OCEAN_ROOT = originalOceanRoot;
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
     if (originalAppData === undefined) delete process.env.APPDATA;
     else process.env.APPDATA = originalAppData;
   }
-});
-
-function legacyStartupFile(home) {
-  return platformStartupFile(home)
-    .replace("com.ocean.runtime", "com.atlas.runtime")
-    .replace("ocean.service", "atlas.service")
-    .replace("ocean.cmd", "atlas.cmd");
-}
-
-test("setup reports a leftover pre-rename startup entry and leaves it in place", async () => {
-  const privateRoot = await mkdtemp(
-    path.join(os.tmpdir(), "ocean-setup-root-"),
-  );
-  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-setup-home-"));
-  const legacy = legacyStartupFile(fakeHome);
-  await mkdir(path.dirname(legacy), { recursive: true });
-  await writeFile(legacy, "legacy\n");
-  const saved = {
-    root: process.env.OCEAN_ROOT,
-    home: process.env.HOME,
-    appData: process.env.APPDATA,
-  };
-  process.env.OCEAN_ROOT = privateRoot;
-  process.env.HOME = fakeHome;
-  if (process.platform === "win32")
-    process.env.APPDATA = path.join(fakeHome, "AppData", "Roaming");
-  const warnings = [];
-  const originalWarn = console.warn;
-  console.warn = (message) => warnings.push(String(message));
-  try {
-    await setup();
-  } finally {
-    console.warn = originalWarn;
-    for (const [key, name] of [
-      ["root", "OCEAN_ROOT"],
-      ["home", "HOME"],
-      ["appData", "APPDATA"],
-    ]) {
-      if (saved[key] === undefined) delete process.env[name];
-      else process.env[name] = saved[key];
-    }
-  }
-  assert.equal(await readFile(legacy, "utf8"), "legacy\n");
-  assert.ok(
-    warnings.some((message) => message.includes(legacy)),
-    warnings.join("|"),
-  );
-  await stat(platformStartupFile(fakeHome));
 });
 
 async function setupAt(root, prepare) {
@@ -190,14 +142,4 @@ test("setup creates the workspace project's tasks folder as ocean/ on a fresh ro
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-setup-fresh-"));
   await setupAt(root);
   await stat(path.join(root, PROJECTS_DIR, "ocean", "tasks"));
-  await assert.rejects(stat(path.join(root, PROJECTS_DIR, "atlas")));
-});
-
-test("setup on a machine that still has atlas/tasks keeps using it and creates no second, empty ocean/ folder", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-setup-legacy-"));
-  await setupAt(root, (r) =>
-    mkdir(path.join(r, PROJECTS_DIR, "atlas", "tasks"), { recursive: true }),
-  );
-  await stat(path.join(root, PROJECTS_DIR, "atlas", "tasks"));
-  await assert.rejects(stat(path.join(root, PROJECTS_DIR, "ocean")));
 });

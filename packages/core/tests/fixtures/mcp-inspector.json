@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "atlas-fixture": {
+    "ocean-fixture": {
       "type": "stdio",
       "command": "node",
       "args": ["tests/fixtures/mcp-server.mjs"]

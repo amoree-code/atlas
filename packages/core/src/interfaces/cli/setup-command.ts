@@ -1,11 +1,4 @@
-import {
-  chmod,
-  mkdir,
-  readdir,
-  readFile,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { connectObsidianVault } from "../../application/obsidian/vault-discovery.js";
@@ -71,19 +64,7 @@ async function restrictDirectories(directory: string): Promise<void> {
   }
 }
 
-// Startup entries were named "atlas" before the rename. Setup writes the Ocean-named entry and
-// reports a leftover legacy one; it never deletes or unloads it, so a running service is not
-// pulled out from under the user and the two never start side by side unnoticed.
-async function legacyStartupEntry(file: string): Promise<string | null> {
-  try {
-    await stat(file);
-    return file;
-  } catch {
-    return null;
-  }
-}
-
-async function installMacStartup(): Promise<string | null> {
+async function installMacStartup(): Promise<void> {
   const launchAgents = path.join(os.homedir(), "Library", "LaunchAgents");
   const label = "com.ocean.runtime";
   const plist = path.join(launchAgents, `${label}.plist`);
@@ -101,10 +82,9 @@ async function installMacStartup(): Promise<string | null> {
 `;
   await mkdir(launchAgents, { recursive: true });
   await writeFile(plist, contents);
-  return legacyStartupEntry(path.join(launchAgents, "com.atlas.runtime.plist"));
 }
 
-async function installLinuxStartup(): Promise<string | null> {
+async function installLinuxStartup(): Promise<void> {
   const systemdUser = path.join(os.homedir(), ".config", "systemd", "user");
   const unit = path.join(systemdUser, "ocean.service");
   const contents = `[Unit]
@@ -121,10 +101,9 @@ WantedBy=default.target
 `;
   await mkdir(systemdUser, { recursive: true });
   await writeFile(unit, contents);
-  return legacyStartupEntry(path.join(systemdUser, "atlas.service"));
 }
 
-async function installWindowsStartup(): Promise<string | null> {
+async function installWindowsStartup(): Promise<void> {
   const startup = path.join(
     process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"),
     "Microsoft",
@@ -137,7 +116,6 @@ async function installWindowsStartup(): Promise<string | null> {
   const contents = `@echo off\ncd /d "${oceanRoot()}"\n"${process.execPath}" "${enginePath("dist", "main.js")}" service\n`;
   await mkdir(startup, { recursive: true });
   await writeFile(launcher, contents);
-  return legacyStartupEntry(path.join(startup, "atlas.cmd"));
 }
 
 export type SetupOptions = {
@@ -149,8 +127,6 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   await Promise.all(
     [
       ...personalDirectories,
-      // Where the workspace project's tasks live today ("atlas/" until the layout migration),
-      // never a second, empty folder that would hide them.
       `${PROJECTS_DIR}/${projectFolder(WORKSPACE_PROJECT_ID)}/tasks`,
     ].map((directory) => mkdir(oceanPath(directory), { recursive: true })),
   );
@@ -182,15 +158,9 @@ export async function setup(options: SetupOptions = {}): Promise<void> {
   await syncProviderWrappers();
   const shellProfile = await installShellIntegration();
 
-  let legacyStartup: string | null = null;
-  if (process.platform === "darwin") legacyStartup = await installMacStartup();
-  if (process.platform === "linux") legacyStartup = await installLinuxStartup();
-  if (process.platform === "win32")
-    legacyStartup = await installWindowsStartup();
-  if (legacyStartup)
-    console.warn(
-      `Legacy startup entry still present: ${legacyStartup}. Remove it (and unload it if loaded) so the Ocean runtime does not start twice.`,
-    );
+  if (process.platform === "darwin") await installMacStartup();
+  if (process.platform === "linux") await installLinuxStartup();
+  if (process.platform === "win32") await installWindowsStartup();
   await restrictDirectories(oceanPath(SYSTEM_DIR));
   if (options.obsidianPath) {
     const result = await connectObsidianVault(

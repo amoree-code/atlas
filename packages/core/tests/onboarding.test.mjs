@@ -37,7 +37,7 @@ function fakeSteps(calls) {
 async function withTempRoot(fn) {
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-onboard-"),
+    path.join(os.tmpdir(), "ocean-onboard-"),
   );
   try {
     await fn();

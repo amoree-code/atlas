@@ -40,7 +40,7 @@ test("run contracts fail closed for invalid scope, approval, and budget", () => 
 });
 
 test("approval and refusal decisions persist as session events", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-run-contract-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-run-contract-"));
   const store = new SessionStore(path.join(root, "sessions.sqlite"));
   store.create({
     sessionId: "session-1",
@@ -77,7 +77,7 @@ test("approval and refusal decisions persist as session events", async () => {
 });
 
 test("run contracts are bound to the session profile and working directory", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-run-scope-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-run-scope-"));
   const store = new SessionStore(path.join(root, "sessions.sqlite"));
   store.create({
     sessionId: "session-1",

@@ -452,7 +452,6 @@ async function commandObsidian(): Promise<void> {
           const id = process.argv[5];
           const keepArg = process.argv.find((arg) => arg.startsWith("--keep="));
           const keep = keepArg?.slice("--keep=".length);
-          // "atlas" is the pre-rename name of the ocean side; still accepted.
           if (!id || !keep || !parseConflictSide(keep))
             throw new Error(
               "Usage: ocean obsidian conflicts resolve <id> --keep=vault|ocean",

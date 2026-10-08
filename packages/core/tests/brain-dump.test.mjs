@@ -37,7 +37,7 @@ function baseSession(overrides = {}) {
 }
 
 test("names the file from the date, time, and a slug of the work log — not the raw session id", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-brain-dump-"));
   process.env.OCEAN_ROOT = root;
 
   const result = await writeBrainDump({
@@ -59,7 +59,7 @@ test("names the file from the date, time, and a slug of the work log — not the
 });
 
 test("falls back to the project name, then the short session id, when the title has no usable Latin slug", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-brain-dump-"));
   process.env.OCEAN_ROOT = root;
 
   const withProject = await writeBrainDump({
@@ -93,7 +93,7 @@ test("falls back to the project name, then the short session id, when the title 
 });
 
 test("appends a numeric suffix instead of overwriting when two sessions land on the same slug", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-brain-dump-"));
   process.env.OCEAN_ROOT = root;
 
   const first = await writeBrainDump({
@@ -126,7 +126,7 @@ test("appends a numeric suffix instead of overwriting when two sessions land on 
 });
 
 test("mirrors task-observer signals under a Signals section when present, and omits it otherwise", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-dump-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-brain-dump-"));
   process.env.OCEAN_ROOT = root;
 
   const withSignals = await writeBrainDump({

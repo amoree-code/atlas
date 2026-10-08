@@ -15,16 +15,16 @@ function seen(env, names) {
   );
 }
 
-test("the preload clears inherited workspace variables, OCEAN_* and legacy ATLAS_*", () => {
-  const [atlas, other] = seen(
+test("the preload clears inherited OCEAN_* workspace variables", () => {
+  const [root, shim] = seen(
     {
       OCEAN_ROOT: "/inherited/ocean",
-      ATLAS_ROOT: "/inherited/atlas",
       OCEAN_SHIM_DIR: "/inherited/shims",
     },
-    ["ATLAS_ROOT", "OCEAN_SHIM_DIR"],
+    ["OCEAN_ROOT", "OCEAN_SHIM_DIR"],
   );
-  assert.deepEqual([atlas, other], [null, null]);
+  assert.notEqual(root, "/inherited/ocean");
+  assert.equal(shim, null);
 });
 
 test("the preload points OCEAN_ROOT at an empty sandbox of its own, never the inherited root", () => {
@@ -49,13 +49,13 @@ test("the preload points OCEAN_ROOT at an empty sandbox of its own, never the in
   assert.equal(existsSync(first), false, "the sandbox is removed on exit");
 });
 
-test("the preload keeps the opt-in test gates a developer sets on purpose, under either name", () => {
+test("the preload keeps the opt-in test gates a developer sets on purpose", () => {
   const gates = [
     "LIVE_PROVIDER_TESTS",
     "LIVE_EMBEDDER_TESTS",
     "BROWSER_INTEGRATION",
   ];
-  const names = gates.flatMap((gate) => [`OCEAN_${gate}`, `ATLAS_${gate}`]);
+  const names = gates.map((gate) => `OCEAN_${gate}`);
   const kept = seen(
     Object.fromEntries(names.map((name) => [name, "1"])),
     names,

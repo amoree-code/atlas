@@ -6,7 +6,7 @@ import test from "node:test";
 import { checkpointTask } from "../dist/application/tasks/checkpoint-task.js";
 
 test("checkpointTask writes a durable log entry and next action to the task file", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-checkpoint-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-checkpoint-"));
   try {
     const dir = path.join(root, "T-902");
     await mkdir(dir, { recursive: true });

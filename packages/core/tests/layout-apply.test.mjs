@@ -38,7 +38,7 @@ function fixture() {
   const home = mkdtempSync(path.join(os.tmpdir(), "ocean-layout-apply-"));
   const root = path.join(home, "ocean");
   const files = {
-    "ocean/brain/04-projects/atlas/tasks/T-1/task.md": "task",
+    "ocean/brain/04-projects/ocean/tasks/T-1/task.md": "task",
     "ocean/brain/01-daily/2026-10-07.md": "daily",
     "ocean/brain/charter/core.md":
       "policies: `~/ocean/brain/charter/policies`\n",
@@ -195,7 +195,7 @@ posixTest(
       assert.deepEqual(stale, [], "no old path is left outside the old trees");
 
       assert.equal(
-        read(path.join(root, "04-projects/atlas/tasks/T-1/task.md")),
+        read(path.join(root, "04-projects/ocean/tasks/T-1/task.md")),
         "task",
       );
       assert.equal(after["ocean/charter"], "dir:700", "modes are preserved");

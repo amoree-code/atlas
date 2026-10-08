@@ -12,7 +12,7 @@ import {
 } from "../dist/paths.js";
 
 async function fixture() {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-capture-cli-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-capture-cli-"));
   await mkdir(path.join(root, INBOX_DIR), { recursive: true });
   await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
   await mkdir(path.join(root, KNOWLEDGE_DIR, "results"), {

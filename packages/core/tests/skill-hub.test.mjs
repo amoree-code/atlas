@@ -16,7 +16,7 @@ import {
 } from "../dist/application/skills/skill-hub.js";
 
 async function fixture() {
-  const base = await mkdtemp(path.join(os.tmpdir(), "atlas-hub-"));
+  const base = await mkdtemp(path.join(os.tmpdir(), "ocean-hub-"));
   process.env.OCEAN_ROOT = path.join(base, "root");
   const home = path.join(base, "home");
   const extra = path.join(base, "extra");

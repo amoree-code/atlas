@@ -9,8 +9,8 @@ import { setup } from "../dist/interfaces/cli/setup-command.js";
 import { SYSTEM_DIR } from "../dist/paths.js";
 
 async function withRoot(run) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-registry-"));
-  const home = await mkdtemp(path.join(os.tmpdir(), "atlas-registry-home-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-registry-"));
+  const home = await mkdtemp(path.join(os.tmpdir(), "ocean-registry-home-"));
   const saved = {
     OCEAN_ROOT: process.env.OCEAN_ROOT,
     HOME: process.env.HOME,

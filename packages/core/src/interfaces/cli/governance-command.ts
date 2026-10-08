@@ -30,7 +30,7 @@ export async function runPolicyCommand(name = "list"): Promise<void> {
   if (name === "doctor") {
     const core = await readFile(rulesFile(), "utf8");
     const referenced = new Set(
-      [...core.matchAll(/(?:ocean|atlas) policy ([a-z-]+)/g)]
+      [...core.matchAll(/ocean policy ([a-z-]+)/g)]
         .map((match) => match[1])
         .filter((item) => item !== "list"),
     );

@@ -284,19 +284,10 @@ async function profiles(): Promise<string[]> {
   }
 }
 
-// Tool and prompt names were `atlas_*` before the rename. They are no longer
-// advertised, but callers that hard-code them still work for one release.
-function currentName(name: string): string {
-  return name.startsWith("atlas_")
-    ? `ocean_${name.slice("atlas_".length)}`
-    : name;
-}
-
 async function callTool(
-  requested: string,
+  name: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  const name = currentName(requested);
   if (name === "ocean_status")
     return {
       name: "Ocean",
@@ -391,12 +382,7 @@ async function callTool(
       target:
         typeof args.target === "string" ? args.target : "knowledge/results",
     };
-    // An approval is bound to the name the caller fingerprinted, which for a
-    // legacy caller is the `atlas_*` name it actually sent.
-    if (
-      approval.fingerprint !== actionFingerprint(name, actionArgs) &&
-      approval.fingerprint !== actionFingerprint(requested, actionArgs)
-    )
+    if (approval.fingerprint !== actionFingerprint(name, actionArgs))
       throw new Error(
         "Session promotion approval does not match the requested action",
       );
@@ -457,8 +443,7 @@ async function readResource(
   uri: string,
 ): Promise<{ uri: string; mimeType: string; text: string }> {
   let value: unknown;
-  // "atlas://" is the pre-rename scheme; still accepted on read for one release.
-  const resource = /^(?:ocean|atlas):\/\/(.*)$/.exec(uri)?.[1];
+  const resource = /^ocean:\/\/(.*)$/.exec(uri)?.[1];
   if (resource === "status") {
     const report = await workspaceReport(defaultWrapperManager);
     value = {
@@ -488,10 +473,9 @@ function requiredArgument(args: Record<string, unknown>, key: string): string {
 }
 
 async function getPrompt(
-  requested: string,
+  name: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  const name = currentName(requested);
   if (name === "ocean_review_workspace")
     return {
       description: "Ocean workspace review",
@@ -594,10 +578,7 @@ export async function handleOceanMcpRequest(
       },
     };
   const name = request.params?.name;
-  if (
-    typeof name !== "string" ||
-    !tools.some((tool) => tool.name === currentName(name))
-  )
+  if (typeof name !== "string" || !tools.some((tool) => tool.name === name))
     return {
       jsonrpc: "2.0",
       id: request.id,

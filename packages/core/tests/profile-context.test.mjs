@@ -10,7 +10,7 @@ import { executionPolicy } from "../dist/domain/profiles/profile-policy.js";
 import { validateProfile } from "../dist/domain/profiles/profile-validator.js";
 
 test("validates a profile and bounds context to allowed files", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-context-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-context-"));
   await writeFile(path.join(root, "allowed.md"), "allowed context");
   await writeFile(path.join(root, "private.md"), "private context");
   const profile = validateProfile({
@@ -96,7 +96,7 @@ test("defaults skills, allowedPaths, allowedCommands, contextSources, and writeP
 });
 
 test("skips context sources outside every allowed path", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-context-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-context-"));
   await writeFile(path.join(root, "secret.md"), "top secret");
   const profile = validateProfile({
     name: "reviewer",

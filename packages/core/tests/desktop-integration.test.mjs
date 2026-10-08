@@ -7,7 +7,7 @@ import { configureClaudeCodeWrapper } from "../dist/application/integrations/cla
 import { defaultWrapperManager } from "../dist/composition/runtime.js";
 
 test("Claude Code wrapper setup previews and backs up a plain JSON settings file", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-vscode-settings-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-vscode-settings-"));
   const settings = path.join(root, "settings.json");
   await (await import("node:fs/promises")).writeFile(
     settings,

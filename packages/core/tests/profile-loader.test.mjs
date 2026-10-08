@@ -9,7 +9,7 @@ import { openSessionStore } from "../dist/infrastructure/persistence/session-sto
 import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("loadProfile reads profiles from private OCEAN_ROOT/system/profiles, not the engine tree", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-profile-loader-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-profile-loader-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "reviewer.json"),
@@ -33,7 +33,7 @@ test("loadProfile reads profiles from private OCEAN_ROOT/system/profiles, not th
 
 test("loadProfile rejects a name whose file does not exist under OCEAN_ROOT", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-loader-missing-"),
+    path.join(os.tmpdir(), "ocean-profile-loader-missing-"),
   );
   process.env.OCEAN_ROOT = root;
   try {
@@ -45,7 +45,7 @@ test("loadProfile rejects a name whose file does not exist under OCEAN_ROOT", as
 
 test("loadProfile rejects traversal names before reading outside the profiles root", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-loader-traversal-"),
+    path.join(os.tmpdir(), "ocean-profile-loader-traversal-"),
   );
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
@@ -67,7 +67,7 @@ test("loadProfile rejects traversal names before reading outside the profiles ro
 
 test("loadProfile keeps legacy profile directories compatible during migration", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-directory-"),
+    path.join(os.tmpdir(), "ocean-profile-directory-"),
   );
   const directory = path.join(root, SYSTEM_DIR, "profiles", "developer");
   await mkdir(directory, { recursive: true });
@@ -99,7 +99,7 @@ test("loadProfile keeps legacy profile directories compatible during migration",
 
 test("all practical role profiles use the universal client contract", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-loader-universal-"),
+    path.join(os.tmpdir(), "ocean-profile-loader-universal-"),
   );
   const profilesDirectory = path.join(root, SYSTEM_DIR, "profiles");
   await mkdir(profilesDirectory, { recursive: true });
@@ -146,30 +146,22 @@ test("all practical role profiles use the universal client contract", async () =
   }
 });
 
-test("a profile distribution reads oceanRequires, or the pre-rename atlasRequires, oceanRequires winning", async () => {
+test("a profile distribution reads oceanRequires, defaulting to any version", async () => {
   const { validateProfileDistribution } = await import(
     "../dist/domain/profiles/profile-distribution.js"
   );
   const base = { name: "p", version: "1.0.0" };
   assert.equal(validateProfileDistribution(base).oceanRequires, "*");
   assert.equal(
-    validateProfileDistribution({ ...base, atlasRequires: ">=0.3" })
+    validateProfileDistribution({ ...base, oceanRequires: ">=0.4" })
       .oceanRequires,
-    ">=0.3",
-  );
-  assert.equal(
-    validateProfileDistribution({
-      ...base,
-      atlasRequires: ">=0.3",
-      oceanRequires: ">=0.4",
-    }).oceanRequires,
     ">=0.4",
   );
 });
 
 test("validates a profile distribution and rejects private state", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-distribution-"),
+    path.join(os.tmpdir(), "ocean-profile-distribution-"),
   );
   await writeFile(
     path.join(root, "distribution.yaml"),
@@ -184,7 +176,7 @@ test("validates a profile distribution and rejects private state", async () => {
   assert.equal((await loadProfileDistribution(root)).name, "developer");
 
   const unsafe = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-distribution-unsafe-"),
+    path.join(os.tmpdir(), "ocean-profile-distribution-unsafe-"),
   );
   await writeFile(
     path.join(unsafe, "distribution.yaml"),
@@ -196,7 +188,7 @@ test("validates a profile distribution and rejects private state", async () => {
   );
 
   const traversal = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-distribution-traversal-"),
+    path.join(os.tmpdir(), "ocean-profile-distribution-traversal-"),
   );
   await writeFile(
     path.join(traversal, "distribution.yaml"),
@@ -209,7 +201,7 @@ test("validates a profile distribution and rejects private state", async () => {
 });
 
 test("openSessionStore persists sessions under OCEAN_ROOT/system/sessions/sessions.sqlite", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-persist-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-session-persist-"));
   process.env.OCEAN_ROOT = root;
   try {
     const store = await openSessionStore();

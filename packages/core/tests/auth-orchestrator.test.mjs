@@ -13,7 +13,7 @@ import { defaultAuthDeps } from "../dist/composition/runtime.js";
 const unixOnly = process.platform === "win32" ? test.skip : test;
 
 async function withFakeProvider(command, script, run) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-auth-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-auth-"));
   const bin = path.join(root, "bin");
   await mkdir(bin, { recursive: true });
   const executable = path.join(bin, command);

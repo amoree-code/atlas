@@ -6,15 +6,13 @@ const profileDistributionSchema = z
     version: z.string().min(1),
     description: z.string().default(""),
     oceanRequires: z.string().optional(),
-    // "atlasRequires" is the pre-rename key; still accepted on read for one release.
-    atlasRequires: z.string().optional(),
     clients: z.array(z.string().min(1)).default([]),
     files: z.array(z.string().min(1)).default([]),
     distributionOwned: z.array(z.string().min(1)).default(["profile.json"]),
   })
-  .transform(({ atlasRequires, oceanRequires, ...rest }) => ({
+  .transform(({ oceanRequires, ...rest }) => ({
     ...rest,
-    oceanRequires: oceanRequires ?? atlasRequires ?? "*",
+    oceanRequires: oceanRequires ?? "*",
   }));
 
 export type ProfileDistribution = z.infer<typeof profileDistributionSchema>;

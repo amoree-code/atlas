@@ -2,4 +2,4 @@
 "ocean": minor
 ---
 
-Read `OCEAN_*` environment variables, with the older `ATLAS_*` names still honored for one release; child processes and generated shims receive both names. `ocean setup` from a checkout now installs an `ocean` command wrapper alongside `atlas`, and the doctor reports either one when missing.
+Read `OCEAN_*` environment variables; child processes and generated shims receive `OCEAN_*` names. `ocean setup` from a checkout installs an `ocean` command wrapper, and the doctor reports it when missing.

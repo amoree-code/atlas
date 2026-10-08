@@ -10,7 +10,7 @@ import {
 
 test("plans and explicitly applies safe Obsidian inbox promotion", async () => {
   const vaultPath = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-promotion-"),
+    path.join(os.tmpdir(), "ocean-obsidian-promotion-"),
   );
   await mkdir(path.join(vaultPath, "00-Inbox"), { recursive: true });
   await writeFile(

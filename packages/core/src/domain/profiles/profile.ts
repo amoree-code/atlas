@@ -52,11 +52,7 @@ const rawProfileSchema = z.object({
   verification: z
     .object({ commands: z.array(z.string()).default([]) })
     .default({ commands: [] }),
-  // "atlas-bounded" is the pre-rename value; still accepted on read for one release.
-  contextCompression: z
-    .enum(["none", "ocean-bounded", "atlas-bounded"])
-    .transform((mode) => (mode === "atlas-bounded" ? "ocean-bounded" : mode))
-    .default("none"),
+  contextCompression: z.enum(["none", "ocean-bounded"]).default("none"),
   instructions: z.string().default(""),
 });
 
@@ -149,11 +145,7 @@ export function profileIdentity(profile: Profile): string {
     defaultClient: profile.defaultClient,
     memory: profile.memory,
     verification: profile.verification,
-    // Hashed under its pre-rename name so sessions created before the rename still resume.
-    contextCompression:
-      profile.contextCompression === "ocean-bounded"
-        ? "atlas-bounded"
-        : profile.contextCompression,
+    contextCompression: profile.contextCompression,
     instructions: profile.instructions,
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");

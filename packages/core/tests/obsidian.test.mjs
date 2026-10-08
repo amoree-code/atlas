@@ -7,7 +7,7 @@ import { discoverObsidianVault } from "../dist/application/obsidian/vault-discov
 
 test("discovers an Obsidian vault read-only without indexing hidden metadata", async () => {
   const vaultPath = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-vault-"),
+    path.join(os.tmpdir(), "ocean-obsidian-vault-"),
   );
   await mkdir(path.join(vaultPath, ".obsidian"));
   await writeFile(

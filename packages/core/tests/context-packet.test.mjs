@@ -18,8 +18,8 @@ const GOOD_BUDGET = {
 };
 
 async function withTempTask(bytes, fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-"));
-  const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1");
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-packet-"));
+  const taskDir = path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1");
   await mkdir(taskDir, { recursive: true });
   const file = path.join(taskDir, "task.md");
   await writeFile(file, "x".repeat(bytes));
@@ -34,7 +34,7 @@ async function withTempTask(bytes, fn) {
 }
 
 async function withTempDecision(bytes, fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-packet-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-packet-"));
   const decisionsDir = path.join(root, KNOWLEDGE_DIR, "decisions");
   await mkdir(decisionsDir, { recursive: true });
   const file = path.join(decisionsDir, "decision-001.md");
@@ -133,7 +133,7 @@ test("buildSelectedReferences drops an exact duplicate (same identifier + source
   const candidate = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md`,
+    sourcePath: `${PROJECTS_DIR}/ocean/tasks/T-1/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "test",
@@ -152,7 +152,7 @@ test("buildSelectedReferences keeps multiple distinct references", () => {
   const a = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md`,
+    sourcePath: `${PROJECTS_DIR}/ocean/tasks/T-1/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "a",
@@ -160,7 +160,7 @@ test("buildSelectedReferences keeps multiple distinct references", () => {
   const b = {
     identifier: "T-2",
     recordType: "task",
-    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-2/task.md`,
+    sourcePath: `${PROJECTS_DIR}/ocean/tasks/T-2/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "b",
@@ -176,7 +176,7 @@ test("buildSelectedReferences preserves stable insertion order", () => {
   const c = (id) => ({
     identifier: id,
     recordType: "task",
-    sourcePath: `projects/atlas/tasks/${id}/task.md`,
+    sourcePath: `projects/ocean/tasks/${id}/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -206,13 +206,13 @@ test("explicit project path (cwd inside the Ocean root) resolves a bound active 
 
 test("missing project (cwd outside any binding and outside the Ocean root) reports unbound, not a guess", async () => {
   const outside = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-packet-outside-"),
+    path.join(os.tmpdir(), "ocean-packet-outside-"),
   );
-  const emptyAtlasRoot = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-packet-empty-root-"),
+  const emptyOceanRoot = await mkdtemp(
+    path.join(os.tmpdir(), "ocean-packet-empty-root-"),
   );
   const previous = process.env.OCEAN_ROOT;
-  process.env.OCEAN_ROOT = emptyAtlasRoot;
+  process.env.OCEAN_ROOT = emptyOceanRoot;
   try {
     const classification = classifyIntent("what project am I in");
     const packet = await buildContextPacket(
@@ -359,7 +359,7 @@ test("buildSelectedReferences rejects a traversal sourcePath even if identifier 
   const candidate = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: `${PROJECTS_DIR}/atlas/tasks/../../../etc/passwd`,
+    sourcePath: `${PROJECTS_DIR}/ocean/tasks/../../../etc/passwd`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -391,7 +391,7 @@ test("buildSelectedReferences rejects a null byte in the sourcePath or identifie
   const a = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md\0.png`,
+    sourcePath: `${PROJECTS_DIR}/ocean/tasks/T-1/task.md\0.png`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -399,7 +399,7 @@ test("buildSelectedReferences rejects a null byte in the sourcePath or identifie
   const b = {
     identifier: "T-1\0",
     recordType: "task",
-    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md`,
+    sourcePath: `${PROJECTS_DIR}/ocean/tasks/T-1/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -412,7 +412,7 @@ test("buildSelectedReferences rejects shell metacharacters in the sourcePath", (
   const candidate = {
     identifier: "T-1",
     recordType: "task",
-    sourcePath: `${PROJECTS_DIR}/atlas/tasks/T-1/task.md; rm -rf /`,
+    sourcePath: `${PROJECTS_DIR}/ocean/tasks/T-1/task.md; rm -rf /`,
     freshness: "current",
     confidence: "high",
     selectionReason: "x",
@@ -435,7 +435,7 @@ test("a pathologically large synthetic reference list is cleared rather than lef
   const candidates = Array.from({ length: 500 }, (_, index) => ({
     identifier: `T-${index}`,
     recordType: "task",
-    sourcePath: `projects/atlas/tasks/T-${index}/task.md`,
+    sourcePath: `projects/ocean/tasks/T-${index}/task.md`,
     freshness: "current",
     confidence: "high",
     selectionReason: "synthetic bulk candidate for bound testing",
@@ -463,7 +463,7 @@ test("identical classification + budget + cwd produces identical packets across 
 test("buildContextPacket never writes any file", () =>
   withTempTask(300, async (root) => {
     const { readdir } = await import("node:fs/promises");
-    const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1");
+    const taskDir = path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1");
     const before = (await readdir(taskDir)).sort();
     await buildContextPacket(classifyIntent("show T-1"), GOOD_BUDGET, root);
     await buildContextPacket(

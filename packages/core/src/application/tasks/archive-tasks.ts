@@ -1,4 +1,4 @@
-import { type Dirent, existsSync } from "node:fs";
+import type { Dirent } from "node:fs";
 import {
   access,
   mkdir,
@@ -32,18 +32,10 @@ const field = (source: string, name: string): string =>
     ?.trim()
     .replace(/^['"]|['"]$/g, "") ?? "";
 
-// Archive namespace per project. The workspace project's namespace was "Atlas" before the
-// rename; keep using it while that folder is the one in use, and use "Ocean" otherwise.
-const WORKSPACE_ARCHIVE_NAMESPACES = ["Ocean", "Atlas"] as const;
-
-const projectArchiveName = (project: string, archiveRoot: string): string => {
-  if (!isWorkspaceProject(project)) return project;
-  const [current, legacy] = WORKSPACE_ARCHIVE_NAMESPACES;
-  return !existsSync(path.join(archiveRoot, current)) &&
-    existsSync(path.join(archiveRoot, legacy))
-    ? legacy
-    : current;
-};
+// Archive namespace per project; the workspace project archives under "Ocean".
+const WORKSPACE_ARCHIVE_NAMESPACE = "Ocean";
+const projectArchiveName = (project: string): string =>
+  isWorkspaceProject(project) ? WORKSPACE_ARCHIVE_NAMESPACE : project;
 
 function setState(source: string, state: string): string {
   return source.replace(/^state:\s*.+$/m, `state: ${state}`);
@@ -109,18 +101,16 @@ export async function archiveDoneTasks(
     try {
       await access(taskFile);
     } catch {
-      let archivedDirectory: string | null = null;
-      for (const namespace of WORKSPACE_ARCHIVE_NAMESPACES) {
-        const candidate = resolveWithin(archiveRoot, namespace, entry.name);
-        try {
-          await access(path.join(candidate, "task.md"));
-          archivedDirectory = candidate;
-          break;
-        } catch {
-          // not archived under this namespace
-        }
+      const archivedDirectory = resolveWithin(
+        archiveRoot,
+        WORKSPACE_ARCHIVE_NAMESPACE,
+        entry.name,
+      );
+      try {
+        await access(path.join(archivedDirectory, "task.md"));
+      } catch {
+        continue; // not archived
       }
-      if (!archivedDirectory) continue;
       if (!apply) continue;
       for (const artifact of await readdir(sourceDirectory, {
         withFileTypes: true,
@@ -160,7 +150,7 @@ export async function archiveDoneTasks(
     const project = field(source, "project") || WORKSPACE_PROJECT_ID;
     const destinationDirectory = resolveWithin(
       archiveRoot,
-      projectArchiveName(project, archiveRoot),
+      projectArchiveName(project),
       id,
     );
     try {

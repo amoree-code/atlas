@@ -8,10 +8,10 @@ export type StdioMcpServer = {
   cwd: string;
 };
 
-export function oceanMcpConfig(): { mcpServers: { atlas: StdioMcpServer } } {
+export function oceanMcpConfig(): { mcpServers: { ocean: StdioMcpServer } } {
   return {
     mcpServers: {
-      atlas: {
+      ocean: {
         type: "stdio",
         command: process.execPath,
         args: [path.join(engineRoot(), "dist", "main.js"), "mcp", "serve"],
@@ -21,10 +21,10 @@ export function oceanMcpConfig(): { mcpServers: { atlas: StdioMcpServer } } {
   };
 }
 
-export function obsidianMcpConfig(): { mcpServers: { atlas: StdioMcpServer } } {
+export function obsidianMcpConfig(): { mcpServers: { ocean: StdioMcpServer } } {
   return {
     mcpServers: {
-      atlas: {
+      ocean: {
         type: "stdio",
         command: process.execPath,
         args: [path.join(engineRoot(), "dist", "main.js"), "obsidian", "mcp"],

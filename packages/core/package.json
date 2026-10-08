@@ -12,8 +12,7 @@
     "skills"
   ],
   "bin": {
-    "ocean": "./dist/main.js",
-    "atlas": "./dist/main.js"
+    "ocean": "./dist/main.js"
   },
   "scripts": {
     "prebuild": "node scripts/prepare-node-pty.mjs && node scripts/clean-dist.mjs",

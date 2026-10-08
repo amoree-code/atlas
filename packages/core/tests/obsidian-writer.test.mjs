@@ -10,22 +10,22 @@ const digest = (content) => createHash("sha256").update(content).digest("hex");
 
 test("writes Obsidian notes atomically and records stale-hash conflicts without overwriting", async () => {
   const vaultPath = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-writer-"),
+    path.join(os.tmpdir(), "ocean-obsidian-writer-"),
   );
   const conflictsDirectory = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-conflicts-"),
+    path.join(os.tmpdir(), "ocean-obsidian-conflicts-"),
   );
   const connection = { enabled: true, mode: "read-write", vaultPath };
   const planned = await writeObsidianNote(
     connection,
-    "01-Projects/Atlas.md",
+    "01-Projects/Ocean.md",
     "first",
     null,
   );
   assert.equal(planned.applied, false);
   const applied = await writeObsidianNote(
     connection,
-    "01-Projects/Atlas.md",
+    "01-Projects/Ocean.md",
     "first",
     null,
     true,
@@ -33,7 +33,7 @@ test("writes Obsidian notes atomically and records stale-hash conflicts without 
   assert.equal(applied.applied, true);
   const conflict = await writeObsidianNote(
     connection,
-    "01-Projects/Atlas.md",
+    "01-Projects/Ocean.md",
     "second",
     digest("stale"),
     true,
@@ -42,7 +42,7 @@ test("writes Obsidian notes atomically and records stale-hash conflicts without 
   assert.equal(conflict.applied, false);
   assert.ok(conflict.conflict?.record);
   assert.equal(
-    await readFile(path.join(vaultPath, "01-Projects/Atlas.md"), "utf8"),
+    await readFile(path.join(vaultPath, "01-Projects/Ocean.md"), "utf8"),
     "first",
   );
   await access(conflict.conflict.record);
@@ -50,7 +50,7 @@ test("writes Obsidian notes atomically and records stale-hash conflicts without 
 
 test("requires read-write mode for an applied Obsidian write", async () => {
   const vaultPath = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-writer-readonly-"),
+    path.join(os.tmpdir(), "ocean-obsidian-writer-readonly-"),
   );
   await assert.rejects(
     writeObsidianNote(

@@ -279,7 +279,7 @@ test("intent-router.ts imports nothing — structurally no fs, no network, no MC
   assert.doesNotMatch(source, /^import /m);
 });
 
-test("'atlas intent classify' CLI is reusable client-neutrally: same output as the direct call, no fs writes", () => {
+test("'ocean intent classify' CLI is reusable client-neutrally: same output as the direct call, no fs writes", () => {
   const before = spawnSync("git", ["status", "--porcelain"], {
     encoding: "utf8",
   }).stdout;

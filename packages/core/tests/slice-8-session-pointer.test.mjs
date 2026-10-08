@@ -22,7 +22,7 @@ const BUDGET = {
 };
 
 async function withStore(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-slice8-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-slice8-"));
   await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
@@ -243,13 +243,13 @@ test("cross-project resume is refused when the session belongs to another projec
     assert.match(plan.reason, /cross-project resume refused/);
   }));
 
-test("resuming with the workspace project's pre-rename id is not a cross-project resume", () =>
+test("resuming with the workspace project's id is not a cross-project resume", () =>
   withStore(async (store, root) => {
     const sessionId = createSession(store, {
       status: "running",
       workingDirectory: root,
     });
-    for (const requestedProject of ["atlas", "ocean"]) {
+    for (const requestedProject of ["ocean"]) {
       const plan = await planSessionResume(store, sessionId, BUDGET, {
         cwd: root,
         requestedProject,
@@ -261,7 +261,7 @@ test("resuming with the workspace project's pre-rename id is not a cross-project
 test("a session outside any project binding resolves projectId null rather than guessing", () =>
   withStore(async (store, root) => {
     const outside = await mkdtemp(
-      path.join(os.tmpdir(), "atlas-slice8-outside-"),
+      path.join(os.tmpdir(), "ocean-slice8-outside-"),
     );
     const sessionId = createSession(store, {
       status: "running",

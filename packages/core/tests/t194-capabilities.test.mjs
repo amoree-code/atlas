@@ -73,7 +73,7 @@ test("compression falls back to bounded original when required evidence cannot f
 });
 
 test("observer records proven repeated work without creating or promoting a skill", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-observer-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-t194-observer-"));
   process.env.OCEAN_ROOT = root;
   const store = await openSessionStore();
   const sessionId = "observer-session";
@@ -127,7 +127,7 @@ test("observer records proven repeated work without creating or promoting a skil
 });
 
 test("observer only treats real user corrections as repeated-correction, not provider output mentioning those words", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-observer-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-t194-observer-"));
   process.env.OCEAN_ROOT = root;
   const store = await openSessionStore();
   const sessionId = "observer-correction-session";
@@ -176,7 +176,7 @@ test("observer only treats real user corrections as repeated-correction, not pro
 });
 
 test("approving an observation creates a skill candidate, not just a status flag", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t194-observer-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-t194-observer-"));
   process.env.OCEAN_ROOT = root;
   const store = await openSessionStore();
   const sessionId = "observer-approval-session";

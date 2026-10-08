@@ -4,10 +4,9 @@ import path from "node:path";
 import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 export type ConflictSide = "vault" | "ocean";
-// "atlas" is the pre-rename name of the Ocean side; still accepted as input for one release.
 export function parseConflictSide(value: unknown): ConflictSide | null {
   if (value === "vault") return "vault";
-  if (value === "ocean" || value === "atlas") return "ocean";
+  if (value === "ocean") return "ocean";
   return null;
 }
 export type ObsidianConflict = {
@@ -56,19 +55,9 @@ export async function appendConflict(
   return file;
 }
 
-// Records written before the rename carry atlasSha256/atlasContent; read them as the ocean side.
 export function readConflictRecord(raw: unknown): ObsidianConflict {
-  const { atlasSha256, atlasContent, ...rest } = raw as ObsidianConflict & {
-    atlasSha256?: string | null;
-    atlasContent?: string;
-  };
-  return {
-    ...rest,
-    oceanSha256: rest.oceanSha256 ?? atlasSha256 ?? null,
-    ...(rest.oceanContent !== undefined || atlasContent !== undefined
-      ? { oceanContent: rest.oceanContent ?? atlasContent }
-      : {}),
-  };
+  const record = raw as ObsidianConflict;
+  return { ...record, oceanSha256: record.oceanSha256 ?? null };
 }
 
 function changedFromBaseline(

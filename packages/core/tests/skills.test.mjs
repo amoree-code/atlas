@@ -71,7 +71,7 @@ test("the skill index rejects unknown skills", async () => {
 });
 
 test("promoted skills are truncated by bytes with a marker naming the candidate", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-promoted-bytes-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-promoted-bytes-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
@@ -106,7 +106,7 @@ test("promoted skills are truncated by bytes with a marker naming the candidate"
 });
 
 test("auto-activates only owner-reviewed promoted skills matching the prompt", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-auto-skills-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-auto-skills-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
@@ -139,7 +139,7 @@ test("auto-activates only owner-reviewed promoted skills matching the prompt", a
 });
 
 test("resolves private and project skills without reading them from engine", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-private-skills-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-private-skills-"));
   const projectSkills = path.join(root, PROJECTS_DIR, "demo", "skills");
   await mkdir(path.join(projectSkills, "project", "project-only"), {
     recursive: true,
@@ -196,7 +196,7 @@ test("the pinned local validator rejects malformed Agent Skills", async () => {
 });
 
 test("stores and requires review for skill candidates", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-skill-candidates-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-skill-candidates-"));
   process.env.OCEAN_ROOT = root;
   await addSkillCandidate({
     id: "review",
@@ -212,7 +212,7 @@ test("stores and requires review for skill candidates", async () => {
 });
 
 test("learns a bounded skill candidate from a completed session without auto-promoting it", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-skill-learning-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-skill-learning-"));
   process.env.OCEAN_ROOT = root;
   const sessionId = "learn-session";
   const store = await openSessionStore();

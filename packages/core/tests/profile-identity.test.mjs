@@ -97,24 +97,9 @@ test("profileIdentity changes when any policy field changes", () => {
   assert.notEqual(profileIdentity(readOnly), profileIdentity(writable));
 });
 
-test("profileIdentity is unchanged by the atlas-bounded to ocean-bounded rename, so older sessions still resume", () => {
-  const preRenameIdentity =
-    "50187b1af661ae6d74515d7fa16a8536e8e37017cadb6393664a783a8934ae1e";
-  for (const contextCompression of ["atlas-bounded", "ocean-bounded"]) {
-    const profile = validateProfile({
-      name: "compressor",
-      provider: "claude",
-      model: "sonnet",
-      role: "assistant",
-      contextCompression,
-    });
-    assert.equal(profileIdentity(profile), preRenameIdentity);
-  }
-});
-
 test("a session created from a profile records that profile's deterministic identity", async () => {
   const directory = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-identity-"),
+    path.join(os.tmpdir(), "ocean-profile-identity-"),
   );
   const store = new SessionStore(path.join(directory, "sessions.sqlite"));
   const profile = validateProfile({
@@ -143,7 +128,7 @@ test("a session created from a profile records that profile's deterministic iden
 
 test("a session created without a profile identity defaults to an empty string, preserving older callers", async () => {
   const directory = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-identity-legacy-"),
+    path.join(os.tmpdir(), "ocean-profile-identity-legacy-"),
   );
   const store = new SessionStore(path.join(directory, "sessions.sqlite"));
 

@@ -81,8 +81,7 @@ Ocean does not scan all sessions, tasks, personal files, daily files, or transcr
 `contextCompression` stays in the profile schema and in the profile identity hash, but it has no
 effect on headless prompts now that no context body is inlined, and the profile contract does
 not mention it. `application/context/context-compression.ts` has no production caller; only its
-unit tests exercise it. A stored context reference with `base: "atlas-root"` is accepted and
-read as `"ocean-root"` for one release.
+unit tests exercise it.
 
 Read access: the prompt points the provider at files it must be able to open. `runAgent` passes
 these directories outside the run cwd as `readDirectories` on the provider request:

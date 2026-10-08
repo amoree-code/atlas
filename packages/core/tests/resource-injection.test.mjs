@@ -13,8 +13,8 @@ import {
   OCEAN_BOOTSTRAP_MAX_BYTES,
 } from "../dist/application/context/resource-injection.js";
 
-async function withTempAtlasRoot(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-bootstrap-"));
+async function withTempOceanRoot(fn) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-bootstrap-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
@@ -40,7 +40,7 @@ test("bound project bootstrap stays within the 256-byte budget and carries no Oc
   );
   assert.equal(bootstrap.manifest.transport, "bootstrap-env");
   assert.match(bootstrap.content, /project=ocean/);
-  assert.doesNotMatch(bootstrap.content, /##\s*(?:Atlas|Ocean) resource/);
+  assert.doesNotMatch(bootstrap.content, /##\s*Ocean resource/);
 });
 
 test("unbound project bootstrap reports unbound rather than guessing a project", () => {
@@ -63,25 +63,22 @@ test("bootstrap is delivered only as environment variables, never as file conten
   });
   const env = bootstrapEnvironment(bootstrap);
   assert.equal(env.OCEAN_BOOTSTRAP, bootstrap.content);
-  // The legacy ATLAS_* names are still emitted, one release, with identical values.
-  assert.equal(env.ATLAS_BOOTSTRAP, bootstrap.content);
-  assert.equal(env.OCEAN_BOOTSTRAP_BYTES, env.ATLAS_BOOTSTRAP_BYTES);
-  assert.equal(Object.keys(env).length, 4);
+  assert.equal(Object.keys(env).length, 2);
   assert.ok(
     Buffer.byteLength(env.OCEAN_BOOTSTRAP) <= OCEAN_BOOTSTRAP_MAX_BYTES,
   );
 });
 
 test("resolveProject reports unbound for an arbitrary cwd with no binding and no git root", async () => {
-  await withTempAtlasRoot(async (_root) => {
-    const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-outside-"));
+  await withTempOceanRoot(async (_root) => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), "ocean-outside-"));
     const resolution = await resolveProject(outside);
     assert.equal(resolution.status, "unbound");
   });
 });
 
-test("resolveProject resolves a cwd inside the Atlas root itself to the workspace project (ocean)", async () => {
-  await withTempAtlasRoot(async (root) => {
+test("resolveProject resolves a cwd inside the Ocean root itself to the workspace project (ocean)", async () => {
+  await withTempOceanRoot(async (root) => {
     const resolution = await resolveProject(root);
     assert.equal(resolution.status, "bound");
     assert.equal(resolution.projectId, "ocean");
@@ -90,8 +87,8 @@ test("resolveProject resolves a cwd inside the Atlas root itself to the workspac
 });
 
 test("bindProject creates a binding and resolveProject then finds it from that exact cwd", async () => {
-  await withTempAtlasRoot(async () => {
-    const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-"));
+  await withTempOceanRoot(async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), "ocean-project-"));
     const bound = await bindProject("demo", projectDir);
     assert.equal(bound.created, true);
     assert.equal(bound.conflict, undefined);
@@ -103,9 +100,9 @@ test("bindProject creates a binding and resolveProject then finds it from that e
 });
 
 test("resolveProject uses the deepest containing binding from a non-Git subdirectory", async () => {
-  await withTempAtlasRoot(async () => {
+  await withTempOceanRoot(async () => {
     const projectDir = await mkdtemp(
-      path.join(os.tmpdir(), "atlas-project-nested-"),
+      path.join(os.tmpdir(), "ocean-project-nested-"),
     );
     await bindProject("demo", projectDir);
     const nested = path.join(projectDir, "src", "components");
@@ -119,8 +116,8 @@ test("resolveProject uses the deepest containing binding from a non-Git subdirec
 });
 
 test("bindProject reports a conflict instead of silently overwriting an existing binding", async () => {
-  await withTempAtlasRoot(async () => {
-    const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-"));
+  await withTempOceanRoot(async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), "ocean-project-"));
     await bindProject("demo", projectDir);
     const second = await bindProject("other-name", projectDir);
     assert.equal(second.created, false);
@@ -130,8 +127,8 @@ test("bindProject reports a conflict instead of silently overwriting an existing
 });
 
 test("bindProject repeated with the same name and path is idempotent, not a conflict", async () => {
-  await withTempAtlasRoot(async () => {
-    const projectDir = await mkdtemp(path.join(os.tmpdir(), "atlas-project-"));
+  await withTempOceanRoot(async () => {
+    const projectDir = await mkdtemp(path.join(os.tmpdir(), "ocean-project-"));
     await bindProject("demo", projectDir);
     const second = await bindProject("demo", projectDir);
     assert.equal(second.created, false);

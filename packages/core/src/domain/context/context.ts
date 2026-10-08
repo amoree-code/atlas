@@ -4,10 +4,7 @@ import { z } from "zod";
 // for a profile contextSources entry, to the Ocean root for a context-packet record.
 export const contextReferenceSchema = z.object({
   path: z.string().min(1),
-  // "atlas-root" is the pre-rename value; still accepted on read for one release.
-  base: z
-    .enum(["cwd", "ocean-root", "atlas-root"])
-    .transform((base) => (base === "atlas-root" ? "ocean-root" : base)),
+  base: z.enum(["cwd", "ocean-root"]),
   recordType: z.string().min(1),
   reason: z.string().min(1),
   bytes: z.number().int().nonnegative().nullable(),

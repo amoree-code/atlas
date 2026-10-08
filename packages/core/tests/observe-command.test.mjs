@@ -6,8 +6,8 @@ import test from "node:test";
 import { runObserveCommand } from "../dist/interfaces/cli/observe-command.js";
 import { SYSTEM_DIR } from "../dist/paths.js";
 
-async function withAtlasRoot(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-observe-"));
+async function withOceanRoot(fn) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-observe-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
@@ -19,7 +19,7 @@ async function withAtlasRoot(fn) {
 }
 
 test("ocean observe redacts secrets in captured output before writing to disk", async () => {
-  await withAtlasRoot(async (root) => {
+  await withOceanRoot(async (root) => {
     const secretToken = `sk-ant-${"a".repeat(20)}`;
     await runObserveCommand([
       "--",

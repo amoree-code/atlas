@@ -76,7 +76,7 @@ test("service stays running until signaled, then exits cleanly", async () => {
 });
 
 test("persists and runs a due local schedule once", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-schedule-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-schedule-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -112,7 +112,7 @@ test("persists and runs a due local schedule once", async () => {
 });
 
 test("run-due uses a cross-process lease for concurrent callers", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-schedule-lease-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-schedule-lease-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -148,7 +148,7 @@ test("run-due uses a cross-process lease for concurrent callers", async () => {
 });
 
 test("scheduler completion merges with concurrent schedule edits", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-schedule-merge-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-schedule-merge-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -193,7 +193,7 @@ test("scheduler completion merges with concurrent schedule edits", async () => {
 });
 
 test("gateway authenticates and triggers a bounded run request", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-gateway-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -248,7 +248,7 @@ test("normalizes Telegram-shaped messages without credentials or implicit approv
 });
 
 test("gateway binds identities and profile scopes to the exact approved request", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-scope-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-gateway-scope-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -294,7 +294,7 @@ test("gateway binds identities and profile scopes to the exact approved request"
 });
 
 test("gateway rejects traversal profiles and hides profile loading errors", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-security-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-gateway-security-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, "outside.json"),
@@ -323,7 +323,7 @@ test("gateway rejects traversal profiles and hides profile loading errors", asyn
 });
 
 test("HTTP gateway rate limiting persists across requests", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-gateway-rate-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-gateway-rate-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -371,7 +371,7 @@ test("HTTP gateway rate limiting persists across requests", async () => {
 });
 
 test("scheduler worker records retry state and releases its lease", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-worker-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-worker-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -399,7 +399,7 @@ test("scheduler worker records retry state and releases its lease", async () => 
 });
 
 test("scheduler worker retries a provider non-zero exit", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-worker-exit-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-worker-exit-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -431,7 +431,7 @@ test("scheduler worker retries a provider non-zero exit", async () => {
 
 test("scheduler worker reclaims a lease owned by a dead process", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-worker-stale-lease-"),
+    path.join(os.tmpdir(), "ocean-worker-stale-lease-"),
   );
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await mkdir(path.join(root, SYSTEM_DIR, "schedules"), { recursive: true });

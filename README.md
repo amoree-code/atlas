@@ -58,7 +58,7 @@ By default, `setup` creates the Ocean workspace as a private sibling directory n
 this repository (e.g. `ocean/` next to `ocean/kernel/`), not inside it, and installs
 user-level startup integration pointed at this repository's `packages/core/dist/main.js`.
 Later logins
-start the local runtime automatically. Set `OCEAN_ROOT` (the older `ATLAS_ROOT` is still read) to use a different workspace
+start the local runtime automatically. Set `OCEAN_ROOT` to use a different workspace
 location instead.
 
 Run an agent:
@@ -146,7 +146,7 @@ ocean/                      private workspace root (local-only repo, no remote)
 Only `kernel/` is this repository. The records, `charter/` and `bridge/` are siblings in the
 private workspace and are not part of it.
 
-The workspace root resolves to the parent directory by default; set `OCEAN_ROOT` (the older `ATLAS_ROOT` is still read) to choose
+The workspace root resolves to the parent directory by default; set `OCEAN_ROOT` to choose
 another. Startup entries execute the engine from
 `kernel/packages/core/dist/main.js` while using the private workspace as their working
 directory.
