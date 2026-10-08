@@ -65,11 +65,9 @@ export type ClaudeNativeHookStatus = {
   registered: boolean;
 };
 
-// The hook script and its registration are named after the product; the pre-rename name
-// ("atlas-session-bootstrap") and workspace folder ("~/atlas") are still recognised so a machine
-// that has not re-copied the hook keeps reporting the truth.
-const HOOK_NAMES = ["ocean-session-bootstrap", "atlas-session-bootstrap"];
-const WORKSPACE_FOLDERS = ["ocean", "atlas"];
+// The hook script and its registration are named after the product.
+const HOOK_NAMES = ["ocean-session-bootstrap"];
+const WORKSPACE_FOLDERS = ["ocean"];
 
 // Read-only status check: does the hook script exist on disk, and is it actually registered
 // under hooks.SessionStart in the live Claude Code settings? Registration is never done

@@ -6,12 +6,10 @@ import test from "node:test";
 import { PlaywrightBrowserProvider } from "../dist/infrastructure/providers/playwright-browser-provider.js";
 
 test("real Playwright browser lifecycle and basic operations", {
-  skip:
-    (process.env.OCEAN_BROWSER_INTEGRATION ??
-      process.env.ATLAS_BROWSER_INTEGRATION) !== "1",
+  skip: process.env.OCEAN_BROWSER_INTEGRATION !== "1",
 }, async () => {
   const profileDir = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-browser-integration-"),
+    path.join(os.tmpdir(), "ocean-browser-integration-"),
   );
   const provider = new PlaywrightBrowserProvider();
   const detected = await provider.detect();
@@ -22,12 +20,12 @@ test("real Playwright browser lifecycle and basic operations", {
   try {
     handle = await provider.connect(launch);
     const page = await handle.navigate(
-      "data:text/html,<button id='go'>Go</button><main>Atlas browser</main>",
+      "data:text/html,<button id='go'>Go</button><main>Ocean browser</main>",
     );
     assert.match(page.url, /^data:text\/html/);
     assert.equal(
       (await handle.extract("main", null)).values[0],
-      "Atlas browser",
+      "Ocean browser",
     );
     await handle.click("#go");
     assert.equal(

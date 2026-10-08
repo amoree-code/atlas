@@ -4,10 +4,9 @@ import path from "node:path";
 import { oceanPath, SYSTEM_DIR } from "../../paths.js";
 
 export type ConflictSide = "vault" | "ocean";
-// "atlas" is the pre-rename name of the Ocean side; still accepted as input for one release.
 export function parseConflictSide(value: unknown): ConflictSide | null {
   if (value === "vault") return "vault";
-  if (value === "ocean" || value === "atlas") return "ocean";
+  if (value === "ocean") return "ocean";
   return null;
 }
 export type ObsidianConflict = {

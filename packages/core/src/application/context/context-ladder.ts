@@ -226,7 +226,7 @@ async function planExactTaskRecord(
     resolvedPath = resolveWithin(
       resolveWithin(
         path.join(root, PROJECTS_DIR),
-        projectFolder(projectId, root),
+        projectFolder(projectId),
         "tasks",
       ),
       normalized,

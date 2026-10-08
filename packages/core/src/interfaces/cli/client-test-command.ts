@@ -58,10 +58,7 @@ async function buildReport(
     store.list().find((session) => session.provider === provider.id) ?? null;
   const events = latest ? store.listEvents(latest.sessionId) : [];
   const entry = events.find((event) => event.type === "session_entry_contract");
-  const manifest = events.find(
-    (event) =>
-      event.type === "ocean_bootstrap" || event.type === "atlas_bootstrap",
-  );
+  const manifest = events.find((event) => event.type === "ocean_bootstrap");
   const entryBoundary =
     provider.id === "claude"
       ? await claudeEntryBoundaryStatus()
@@ -79,20 +76,9 @@ async function buildReport(
       shimDirectory: shimDirectory(),
       nativeExecutable: executable,
       oceanEngine: enginePath("dist", "main.js"),
-      // Pre-rename key, kept one release for scripts that read the JSON report.
-      atlasEngine: enginePath("dist", "main.js"),
     },
     project,
     ocean: {
-      root: oceanPath(),
-      bootstrapBytes: bootstrap.manifest.bytes,
-      bootstrapTransport: bootstrap.manifest.transport,
-      sessionStore: oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite"),
-      runtimeLogs: oceanPath(SYSTEM_DIR, "runtime", "logs", "runtime.jsonl"),
-      sessionSummaries: oceanPath(SYSTEM_DIR, "sessions", "summaries"),
-    },
-    // Pre-rename key, kept one release for scripts that read the JSON report.
-    atlas: {
       root: oceanPath(),
       bootstrapBytes: bootstrap.manifest.bytes,
       bootstrapTransport: bootstrap.manifest.transport,

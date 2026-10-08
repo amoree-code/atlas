@@ -64,7 +64,7 @@ still require `--approve`.
 
 ## Browser availability
 
-Use `OCEAN_BROWSER_EXECUTABLE` (older `ATLAS_BROWSER_EXECUTABLE` still read) to select a Chromium-family executable when the
+Use `OCEAN_BROWSER_EXECUTABLE` to select a Chromium-family executable when the
 automatic paths are insufficient. The default unit suite uses the fake provider:
 
 ```text

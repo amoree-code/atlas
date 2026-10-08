@@ -114,7 +114,7 @@ test("profileIdentity is unchanged by the atlas-bounded to ocean-bounded rename,
 
 test("a session created from a profile records that profile's deterministic identity", async () => {
   const directory = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-identity-"),
+    path.join(os.tmpdir(), "ocean-profile-identity-"),
   );
   const store = new SessionStore(path.join(directory, "sessions.sqlite"));
   const profile = validateProfile({
@@ -143,7 +143,7 @@ test("a session created from a profile records that profile's deterministic iden
 
 test("a session created without a profile identity defaults to an empty string, preserving older callers", async () => {
   const directory = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-profile-identity-legacy-"),
+    path.join(os.tmpdir(), "ocean-profile-identity-legacy-"),
   );
   const store = new SessionStore(path.join(directory, "sessions.sqlite"));
 

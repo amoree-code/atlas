@@ -109,8 +109,8 @@ Every governed session also records a `session_entry_contract` event. It declare
 the entry point (`ocean-run`, `terminal-shim`, `interactive-managed`, or
 `desktop-wrapper`), control level, input-capture boundary, context transport,
 policy enforcement, promotion rule, and resume capability. Events stored with the older
-`atlas-run` entry point are still accepted for one release. The shim bootstrap manifest is
-recorded as an `ocean_bootstrap` event (older sessions carry `atlas_bootstrap`; both are read). The contract prevents
+`atlas-run` entry point are still read (never written). The shim bootstrap manifest is
+recorded as an `ocean_bootstrap` event (sessions recorded before the rename carry `atlas_bootstrap`, which is no longer read). The contract prevents
 a successful command resolution from being misreported as full Ocean governance.
 
 Successful and unsuccessful provider exits also append a bounded `evidence` event. Evidence

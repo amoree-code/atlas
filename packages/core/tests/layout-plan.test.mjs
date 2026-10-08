@@ -64,7 +64,7 @@ function snapshot(directory) {
 }
 
 const NESTED = {
-  "ocean/brain/04-projects/atlas/tasks/T-1/task.md": "task",
+  "ocean/brain/04-projects/ocean/tasks/T-1/task.md": "task",
   "ocean/brain/charter/core.md":
     "policies live in `~/ocean/brain/charter/policies`\n",
   "ocean/brain/README.md": "brain readme",

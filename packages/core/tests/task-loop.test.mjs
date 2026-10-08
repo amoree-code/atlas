@@ -10,7 +10,7 @@ import {
 } from "../dist/application/loops/task-loop.js";
 
 test("task loop persists bounded state and stops explicitly", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-loop-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-loop-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {

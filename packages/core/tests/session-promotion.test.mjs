@@ -10,7 +10,7 @@ import { KNOWLEDGE_DIR, PERSONAL_DIR } from "../dist/paths.js";
 
 test("promotes an approved completed session into knowledge and rejects missing approval", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-session-promotion-"),
+    path.join(os.tmpdir(), "ocean-session-promotion-"),
   );
   process.env.OCEAN_ROOT = root;
   await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });

@@ -15,7 +15,7 @@ process.stdin.on("data", (chunk) => {
         ? {
             protocolVersion: "2025-06-18",
             capabilities: { tools: {} },
-            serverInfo: { name: "atlas-fixture", version: "0.0.0" },
+            serverInfo: { name: "ocean-fixture", version: "0.0.0" },
           }
         : request.method === "tools/list"
           ? {

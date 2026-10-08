@@ -23,7 +23,7 @@ async function put(file, text) {
 }
 
 async function withFakeHome(fn) {
-  const home = await mkdtemp(path.join(os.tmpdir(), "atlas-cost-"));
+  const home = await mkdtemp(path.join(os.tmpdir(), "ocean-cost-"));
   try {
     return await fn(home);
   } finally {

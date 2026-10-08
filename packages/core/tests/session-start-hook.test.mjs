@@ -12,7 +12,7 @@ import {
 import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutput shape", async () => {
-  const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-outside-"));
+  const outside = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-outside-"));
   const result = await claudeSessionStartHook({ cwd: outside });
   assert.equal(result.hookSpecificOutput.hookEventName, "SessionStart");
   assert.ok(
@@ -26,8 +26,8 @@ test("claudeSessionStartHook returns the documented Claude Code hookSpecificOutp
 });
 
 test("claudeSessionStartHook reports unbound for a cwd with no Ocean binding, not a guess", async () => {
-  const outside = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-unbound-"));
-  const oceanRoot = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-root-"));
+  const outside = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-unbound-"));
+  const oceanRoot = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-root-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = oceanRoot;
   try {
@@ -62,7 +62,7 @@ test("ocean hook session-start CLI: bounded stdout JSON, run from a cwd outside 
   );
   assert.doesNotMatch(
     parsed.hookSpecificOutput.additionalContext,
-    /MEMORY|KNOWLEDGE|## (?:Atlas|Ocean) resource/,
+    /MEMORY|KNOWLEDGE|## (?:Ocean|Ocean) resource/,
   );
 });
 
@@ -88,18 +88,18 @@ test("readBoundedStdin rejects a payload larger than its bound instead of buffer
 });
 
 test("claudeNativeHookStatus reports not-installed/not-registered honestly when neither exists", async () => {
-  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "atlas-fake-home-"));
+  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-fake-home-"));
   const status = await claudeNativeHookStatus(fakeHome);
   assert.equal(status.scriptInstalled, false);
   assert.equal(status.registered, false);
 });
 
 test("claudeNativeHookStatus reports installed-but-not-registered when the script exists but settings.json does not reference it", async () => {
-  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "atlas-fake-home-"));
+  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-fake-home-"));
   await mkdir(
     path.join(
       fakeHome,
-      "atlas",
+      "ocean",
       SYSTEM_DIR,
       "integrations",
       "claude-code",
@@ -112,12 +112,12 @@ test("claudeNativeHookStatus reports installed-but-not-registered when the scrip
   await writeFile(
     path.join(
       fakeHome,
-      "atlas",
+      "ocean",
       SYSTEM_DIR,
       "integrations",
       "claude-code",
       "hooks",
-      "atlas-session-bootstrap",
+      "ocean-session-bootstrap",
     ),
     "#!/bin/sh\n",
   );
@@ -132,11 +132,11 @@ test("claudeNativeHookStatus reports installed-but-not-registered when the scrip
 });
 
 test("claudeNativeHookStatus reports registered only when settings.json actually references the script", async () => {
-  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "atlas-fake-home-"));
+  const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-fake-home-"));
   await mkdir(
     path.join(
       fakeHome,
-      "atlas",
+      "ocean",
       SYSTEM_DIR,
       "integrations",
       "claude-code",
@@ -148,12 +148,12 @@ test("claudeNativeHookStatus reports registered only when settings.json actually
   );
   const scriptPath = path.join(
     fakeHome,
-    "atlas",
+    "ocean",
     SYSTEM_DIR,
     "integrations",
     "claude-code",
     "hooks",
-    "atlas-session-bootstrap",
+    "ocean-session-bootstrap",
   );
   await writeFile(scriptPath, "#!/bin/sh\n");
   await mkdir(path.join(fakeHome, ".claude"), { recursive: true });
@@ -169,11 +169,7 @@ test("claudeNativeHookStatus reports registered only when settings.json actually
   assert.equal(status.registered, true);
 });
 
-for (const [folder, hook] of [
-  ["ocean", "ocean-session-bootstrap"],
-  ["ocean", "atlas-session-bootstrap"],
-  ["atlas", "ocean-session-bootstrap"],
-]) {
+for (const [folder, hook] of [["ocean", "ocean-session-bootstrap"]]) {
   test(`claudeNativeHookStatus finds ${hook} under ~/${folder} and its registration`, async () => {
     const fakeHome = await mkdtemp(path.join(os.tmpdir(), "ocean-fake-home-"));
     const hooks = path.join(
@@ -233,29 +229,15 @@ test("claudeNativeHookStatus does not count a registration of the other hook nam
   const status = await claudeNativeHookStatus(
     await hookHome({
       script: "ocean-session-bootstrap",
-      registered: "atlas-session-bootstrap",
+      registered: "other-session-bootstrap",
     }),
   );
   assert.equal(status.scriptInstalled, true);
   assert.equal(status.registered, false);
 });
 
-test("claudeNativeHookStatus counts the registration of the installed legacy-named script", async () => {
-  const status = await claudeNativeHookStatus(
-    await hookHome({
-      script: "atlas-session-bootstrap",
-      registered: "atlas-session-bootstrap",
-    }),
-  );
-  assert.equal(status.scriptInstalled, true);
-  assert.equal(status.registered, true);
-});
-
-test("claudeNativeHookStatus still reports a registration under either name when no script is installed", async () => {
-  for (const registered of [
-    "ocean-session-bootstrap",
-    "atlas-session-bootstrap",
-  ]) {
+test("claudeNativeHookStatus still reports a registration when no script is installed", async () => {
+  for (const registered of ["ocean-session-bootstrap"]) {
     const status = await claudeNativeHookStatus(
       await hookHome({ script: null, registered }),
     );

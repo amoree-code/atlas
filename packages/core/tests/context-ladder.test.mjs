@@ -24,8 +24,8 @@ const GOOD_BUDGET = {
 };
 
 async function withTempTask(bytes, fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ladder-"));
-  const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1");
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-ladder-"));
+  const taskDir = path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1");
   await mkdir(taskDir, { recursive: true });
   await writeFile(path.join(taskDir, "task.md"), "x".repeat(bytes));
   const previous = process.env.OCEAN_ROOT;
@@ -328,7 +328,7 @@ test("planContextRead never writes any file (no persistence of user content or r
   withTempTask(500, async (root) => {
     const before = JSON.stringify(
       await import("node:fs/promises").then((fs) =>
-        fs.readdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1")),
+        fs.readdir(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1")),
       ),
     );
     await planContextRead(classifyIntent("show T-1"), GOOD_BUDGET);
@@ -338,7 +338,7 @@ test("planContextRead never writes any file (no persistence of user content or r
     );
     const after = JSON.stringify(
       await import("node:fs/promises").then((fs) =>
-        fs.readdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1")),
+        fs.readdir(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1")),
       ),
     );
     assert.equal(before, after);
@@ -376,7 +376,7 @@ test("context-ladder.ts imports only node:fs/promises, node:path, and the existi
 // --- ranked-references: query-driven brain-index path (T-228) ---
 
 async function withTempMemoryRoot(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-ladder-brain-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-ladder-brain-"));
   await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
   await writeFile(
     path.join(root, PERSONAL_DIR, "goals.md"),
@@ -401,7 +401,7 @@ test("ranked-references with a query and a built brain index is ranked by the in
       classification,
       GOOD_BUDGET,
       root,
-      "atlas",
+      "ocean",
       { query: "goals", indexPort: defaultBrainIndexPort },
     );
     assert.equal(result.rung, "ranked-references");
@@ -417,7 +417,7 @@ test("ranked-references with a query but no brain index built falls back to the 
       classification,
       GOOD_BUDGET,
       root,
-      "atlas",
+      "ocean",
       { query: "goals", indexPort: defaultBrainIndexPort },
     );
     assert.equal(result.rung, "ranked-references");
@@ -427,7 +427,7 @@ test("ranked-references with a query but no brain index built falls back to the 
       classification,
       GOOD_BUDGET,
       root,
-      "atlas",
+      "ocean",
     );
     assert.deepEqual(result.files, withoutQuery.files);
   }));

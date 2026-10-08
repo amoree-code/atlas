@@ -3,7 +3,6 @@ import { access, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { actionFingerprint } from "../dist/domain/mcp/mcp-contract.js";
 import { handleOceanMcpRequest } from "../dist/infrastructure/mcp/ocean-server.js";
 import { SYSTEM_DIR } from "../dist/paths.js";
 
@@ -47,7 +46,7 @@ test("Ocean MCP exposes provider-neutral read-only tools without Obsidian", asyn
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
-      params: { name: "atlas_status", arguments: {} },
+      params: { name: "ocean_status", arguments: {} },
     });
     assert.deepEqual(legacy.result, status.result);
   } finally {
@@ -97,7 +96,7 @@ test("Ocean MCP exposes bounded resources and prompt templates", async () => {
     params: { uri: "ocean://status" },
   });
   assert.match(resource.result.contents[0].text, /"name": "Ocean"/);
-  for (const uri of ["ocean://tasks", "atlas://tasks"]) {
+  for (const uri of ["ocean://tasks", "ocean://tasks"]) {
     const tasks = await handleOceanMcpRequest({
       jsonrpc: "2.0",
       id: 7,
@@ -137,52 +136,4 @@ test("Ocean MCP exposes bounded resources and prompt templates", async () => {
     params: { name: "ocean_review_task", arguments: { task: "T-1" } },
   });
   assert.match(prompt.result.messages[0].content.text, /T-1/);
-});
-
-test("legacy atlas_* names still work on prompts/get and keep approvals bound to the sent name", async () => {
-  const legacyPrompt = await handleOceanMcpRequest({
-    jsonrpc: "2.0",
-    id: 20,
-    method: "prompts/get",
-    params: { name: "atlas_review_task", arguments: { task: "T-1" } },
-  });
-  assert.match(legacyPrompt.result.messages[0].content.text, /T-1/);
-
-  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-mcp-legacy-"));
-  const previous = process.env.OCEAN_ROOT;
-  process.env.OCEAN_ROOT = root;
-  try {
-    const actionArgs = { sessionId: "missing", target: "knowledge/results" };
-    const promote = (name, fingerprint) =>
-      handleOceanMcpRequest({
-        jsonrpc: "2.0",
-        id: 21,
-        method: "tools/call",
-        params: {
-          name,
-          arguments: {
-            sessionId: "missing",
-            approval: { approved: true, fingerprint },
-          },
-        },
-      });
-    const mismatch = /approval does not match/;
-    for (const [sent, fingerprinted] of [
-      ["atlas_session_promote", "atlas_session_promote"],
-      ["atlas_session_promote", "ocean_session_promote"],
-      ["ocean_session_promote", "ocean_session_promote"],
-    ]) {
-      const response = await promote(
-        sent,
-        actionFingerprint(fingerprinted, actionArgs),
-      );
-      assert.ok(response.error, "promotion of a missing session must fail");
-      assert.doesNotMatch(response.error.message, mismatch);
-    }
-    const wrong = await promote("atlas_session_promote", "0".repeat(64));
-    assert.match(wrong.error.message, mismatch);
-  } finally {
-    if (previous === undefined) delete process.env.OCEAN_ROOT;
-    else process.env.OCEAN_ROOT = previous;
-  }
 });

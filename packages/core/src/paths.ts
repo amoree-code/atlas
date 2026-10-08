@@ -97,21 +97,15 @@ export const BRAIN_RECORD_DIRS = [
   KNOWLEDGE_DIR,
   TEMPLATES_DIR,
 ] as const;
-// The workspace's own project. It was called "atlas" before the rename, and on a machine that
-// has not been through the layout migration (T-243) its folder under PROJECTS_DIR, its archive
-// namespace and the `project:` field of every task record still say so. Callers use these
-// helpers instead of a literal, so both spellings resolve to the folder that actually holds the
-// tasks and the migration needs no further code change.
+// The workspace's own project. Callers use these helpers instead of a literal.
 export const WORKSPACE_PROJECT_ID = "ocean";
-const LEGACY_WORKSPACE_PROJECT_ID = "atlas";
 
 export function sameProject(a: string, b: string): boolean {
   return a === b || (isWorkspaceProject(a) && isWorkspaceProject(b));
 }
 
 export function isWorkspaceProject(projectId: string): boolean {
-  const id = projectId.toLowerCase();
-  return id === WORKSPACE_PROJECT_ID || id === LEGACY_WORKSPACE_PROJECT_ID;
+  return projectId.toLowerCase() === WORKSPACE_PROJECT_ID;
 }
 
 function isDirectory(target: string): boolean {
@@ -122,29 +116,13 @@ function isDirectory(target: string): boolean {
   }
 }
 
-// The folder name to use under PROJECTS_DIR for a project id. The workspace project keys on the
-// `tasks` directory it already has — never on the bare folder — so an empty `ocean/` created by
-// accident cannot hide the real tasks that still live under `atlas/`.
-export function projectFolder(
-  projectId: string,
-  root: string = oceanRoot(),
-): string {
-  if (!isWorkspaceProject(projectId)) return projectId;
-  const tasks = (folder: string) =>
-    path.join(root, PROJECTS_DIR, folder, "tasks");
-  if (isDirectory(tasks(WORKSPACE_PROJECT_ID))) return WORKSPACE_PROJECT_ID;
-  if (isDirectory(tasks(LEGACY_WORKSPACE_PROJECT_ID)))
-    return LEGACY_WORKSPACE_PROJECT_ID;
-  return WORKSPACE_PROJECT_ID;
+// The folder name to use under PROJECTS_DIR for a project id.
+export function projectFolder(projectId: string): string {
+  return isWorkspaceProject(projectId) ? WORKSPACE_PROJECT_ID : projectId;
 }
 
 export function workspaceTasksRoot(root: string = oceanRoot()): string {
-  return path.join(
-    root,
-    PROJECTS_DIR,
-    projectFolder(WORKSPACE_PROJECT_ID, root),
-    "tasks",
-  );
+  return path.join(root, PROJECTS_DIR, WORKSPACE_PROJECT_ID, "tasks");
 }
 
 export const SYSTEM_DIR = bridgePrefix(oceanRoot());
@@ -185,14 +163,14 @@ export function oceanEnv(
   name: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
-  return env[`OCEAN_${name}`] ?? env[`ATLAS_${name}`];
+  return env[`OCEAN_${name}`];
 }
 
 export function oceanEnvPair(
   name: string,
   value: string,
 ): Record<string, string> {
-  return { [`OCEAN_${name}`]: value, [`ATLAS_${name}`]: value };
+  return { [`OCEAN_${name}`]: value };
 }
 
 export function oceanRoot(): string {

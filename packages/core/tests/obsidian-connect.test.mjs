@@ -8,10 +8,10 @@ import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("connects an Obsidian vault with read-only default", async () => {
   const vaultPath = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-connect-"),
+    path.join(os.tmpdir(), "ocean-obsidian-connect-"),
   );
   const oceanRoot = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-connect-state-"),
+    path.join(os.tmpdir(), "ocean-obsidian-connect-state-"),
   );
   const configFile = path.join(
     oceanRoot,

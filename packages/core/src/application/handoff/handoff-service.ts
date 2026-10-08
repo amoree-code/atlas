@@ -157,9 +157,7 @@ export async function getTask(id: string): Promise<Task> {
   const tasksRoot = workspaceTasksRoot();
   const candidates = [
     resolveWithin(tasksRoot, id, "task.md"),
-    // Archived under "Ocean", or under the pre-rename "Atlas" namespace.
     resolveWithin(tasksRoot, "archive", "Ocean", id, "task.md"),
-    resolveWithin(tasksRoot, "archive", "Atlas", id, "task.md"),
   ];
   let file = "";
   for (const candidate of candidates) {

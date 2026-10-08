@@ -29,12 +29,10 @@ const SESSION = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 // Live provider tests cost real API quota, so they run only when explicitly requested.
 // They are the ONLY evidence that counts for provider compatibility; the fake-executable
 // tests below prove the invocation boundary's error handling, never compatibility.
-const LIVE =
-  (process.env.OCEAN_LIVE_PROVIDER_TESTS ??
-    process.env.ATLAS_LIVE_PROVIDER_TESTS) === "1";
+const LIVE = process.env.OCEAN_LIVE_PROVIDER_TESTS === "1";
 const live = LIVE ? test : test.skip;
 const installedEnvironment = existsSync(
-  path.join(os.homedir(), "atlas", SYSTEM_DIR, "runtime", "shims", "atlas"),
+  path.join(os.homedir(), "ocean", SYSTEM_DIR, "runtime", "shims", "ocean"),
 );
 const installed = installedEnvironment ? test : test.skip;
 const unixOnly = process.platform === "win32" ? test.skip : test;
@@ -47,7 +45,7 @@ function guardFor(
     action: "provider.invoke",
     target: provider,
     identifier: null,
-    projectId: "atlas",
+    projectId: "ocean",
   };
   return {
     sessionId: SESSION,
@@ -59,7 +57,7 @@ function guardFor(
 }
 
 async function fakeProvider(script) {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "atlas-slice10-fake-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ocean-slice10-fake-"));
   const file = path.join(dir, "fake-provider");
   await writeFile(file, script);
   await chmod(file, 0o755);
@@ -152,7 +150,7 @@ test("consent rejection (revoked/expired/wrong-session) blocks provider invocati
     action: "provider.invoke",
     target: "claude",
     identifier: null,
-    projectId: "atlas",
+    projectId: "ocean",
   };
   const foreignGrant = createGrant(
     "99999999-9999-9999-9999-999999999999",
@@ -196,7 +194,7 @@ test("path/scope rejection: an invalid budget denies the invocation", async () =
     action: "provider.invoke",
     target: "claude",
     identifier: null,
-    projectId: "atlas",
+    projectId: "ocean",
   };
   const result = await invokeProviderHeadless({
     provider: "claude",
@@ -223,7 +221,7 @@ test("invalid provider command produces a structured unavailable/failed result, 
     prompt: "x",
     oceanSessionId: SESSION,
     cwd: os.tmpdir(),
-    executable: "/nonexistent/atlas-provider-binary",
+    executable: "/nonexistent/ocean-provider-binary",
     guard: guardFor("claude"),
   });
   assert.ok(["failed", "unavailable"].includes(result.status), result.status);
@@ -406,11 +404,11 @@ installed(
   () => {
     const shim = path.join(
       os.homedir(),
-      "atlas",
+      "ocean",
       SYSTEM_DIR,
       "runtime",
       "shims",
-      "atlas",
+      "ocean",
     );
     const result = spawnSync(shim, ["context", "--json"], {
       encoding: "utf8",
@@ -472,15 +470,15 @@ installed(
     // resolve their project purely from OCEAN_ROOT and cwd, so pin those explicitly for
     // both invocations — otherwise this only passes by accident, when the suite happens
     // to run from inside the exact checkout the shim points at.
-    const root = await mkdtemp(path.join(os.tmpdir(), "atlas-shim-parity-"));
+    const root = await mkdtemp(path.join(os.tmpdir(), "ocean-shim-parity-"));
     const env = { ...process.env, OCEAN_ROOT: root };
     const shim = path.join(
       os.homedir(),
-      "atlas",
+      "ocean",
       SYSTEM_DIR,
       "runtime",
       "shims",
-      "atlas",
+      "ocean",
     );
     const viaShim = spawnSync(shim, ["context", "--json"], {
       cwd: root,
@@ -509,7 +507,7 @@ live(
   async () => {
     const executable = resolvesOrNull("claude");
     assert.ok(executable, "claude must resolve for this live test");
-    const dir = await mkdtemp(path.join(os.tmpdir(), "atlas-live-claude-"));
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ocean-live-claude-"));
     const result = await invokeProviderHeadless({
       provider: "claude",
       prompt: "Reply with exactly: OK",
@@ -535,7 +533,7 @@ live(
 live("live smoke: codex headless completes", async () => {
   const executable = resolvesOrNull("codex");
   assert.ok(executable, "codex must resolve for this live test");
-  const dir = await mkdtemp(path.join(os.tmpdir(), "atlas-live-codex-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ocean-live-codex-"));
   await mkdir(path.join(dir, ".git"), { recursive: true });
   const result = await invokeProviderHeadless({
     provider: "codex",
@@ -556,7 +554,7 @@ live("live smoke: codex headless completes", async () => {
 live("live smoke: gemini headless completes", async () => {
   const executable = resolvesOrNull("gemini");
   assert.ok(executable, "gemini must resolve for this live test");
-  const dir = await mkdtemp(path.join(os.tmpdir(), "atlas-live-gemini-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ocean-live-gemini-"));
   const result = await invokeProviderHeadless({
     provider: "gemini",
     prompt: "Reply with exactly: OK",

@@ -50,5 +50,5 @@ if (findings.length) {
   console.error(findings.join("\n"));
   process.exitCode = 1;
 } else {
-  console.log(`Package boundary valid for Atlas ${version}`);
+  console.log(`Package boundary valid for Ocean ${version}`);
 }

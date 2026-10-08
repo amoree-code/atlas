@@ -11,10 +11,10 @@ import {
 import { PROJECTS_DIR } from "../dist/paths.js";
 
 const task = (id, state = "done", checklist = "[x]") =>
-  `---\nid: ${id}\nproject: atlas\nstate: ${state}\n---\n\nchecklist:\n  - "${checklist} work"\n`;
+  `---\nid: ${id}\nproject: ocean\nstate: ${state}\n---\n\nchecklist:\n  - "${checklist} work"\n`;
 
 test("archives verified done tasks and leaves other states live", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-task-archive-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-task-archive-"));
   await mkdir(path.join(root, "T-001"), { recursive: true });
   await mkdir(path.join(root, "T-002"), { recursive: true });
   await mkdir(path.join(root, "T-003"), { recursive: true });
@@ -56,7 +56,7 @@ test("archives verified done tasks and leaves other states live", async () => {
 
 test("archives cancelled tasks alongside done ones", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-task-archive-cancelled-"),
+    path.join(os.tmpdir(), "ocean-task-archive-cancelled-"),
   );
   await mkdir(path.join(root, "T-009"), { recursive: true });
   await writeFile(
@@ -80,14 +80,14 @@ test("archives cancelled tasks alongside done ones", async () => {
 
 test("repairs artifacts left by the old task-only archiver", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-task-archive-repair-"),
+    path.join(os.tmpdir(), "ocean-task-archive-repair-"),
   );
   await mkdir(path.join(root, "T-004"), { recursive: true });
-  await mkdir(path.join(root, "archive", "Atlas", "T-004"), {
+  await mkdir(path.join(root, "archive", "Ocean", "T-004"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, "archive", "Atlas", "T-004", "task.md"),
+    path.join(root, "archive", "Ocean", "T-004", "task.md"),
     task("T-004"),
   );
   await writeFile(
@@ -99,7 +99,7 @@ test("repairs artifacts left by the old task-only archiver", async () => {
   assert.deepEqual(repaired.repaired, ["T-004"]);
   assert.equal(
     await readFile(
-      path.join(root, "archive", "Atlas", "T-004", "migration-manifest.md"),
+      path.join(root, "archive", "Ocean", "T-004", "migration-manifest.md"),
       "utf8",
     ),
     "legacy artifact",
@@ -108,7 +108,7 @@ test("repairs artifacts left by the old task-only archiver", async () => {
 });
 
 test("completes and archives a task in one governed transition", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-task-complete-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-task-complete-"));
   await mkdir(path.join(root, "T-005"), { recursive: true });
   await writeFile(path.join(root, "T-005", "task.md"), task("T-005", "active"));
   await writeFile(path.join(root, "T-005", "notes.md"), "preserve me");
@@ -134,7 +134,7 @@ test("completes and archives a task in one governed transition", async () => {
 
 test("completion refuses an unchecked task without changing it", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-task-complete-blocked-"),
+    path.join(os.tmpdir(), "ocean-task-complete-blocked-"),
   );
   await mkdir(path.join(root, "T-006"), { recursive: true });
   const source = task("T-006", "active", "[ ]");
@@ -148,8 +148,8 @@ test("completion refuses an unchecked task without changing it", async () => {
 });
 
 test("rejects traversal in task reads and archive metadata", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-task-traversal-"));
-  const tasksRoot = path.join(root, PROJECTS_DIR, "atlas", "tasks");
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-task-traversal-"));
+  const tasksRoot = path.join(root, PROJECTS_DIR, "ocean", "tasks");
   await mkdir(tasksRoot, { recursive: true });
   await writeFile(path.join(root, "outside.md"), task("outside"));
   process.env.OCEAN_ROOT = root;
@@ -175,7 +175,7 @@ test("rejects traversal in task reads and archive metadata", async () => {
   await mkdir(path.join(tasksRoot, "T-008"), { recursive: true });
   await writeFile(
     path.join(tasksRoot, "T-008", "task.md"),
-    task("T-008").replace("project: atlas", "project: ../../outside"),
+    task("T-008").replace("project: ocean", "project: ../../outside"),
   );
   await assert.rejects(
     archiveDoneTasks(tasksRoot, true),
@@ -183,57 +183,7 @@ test("rejects traversal in task reads and archive metadata", async () => {
   );
 });
 
-test("an existing pre-rename Atlas archive namespace keeps being used until the Ocean one exists", async () => {
-  const root = await mkdtemp(
-    path.join(os.tmpdir(), "ocean-archive-legacy-ns-"),
-  );
-  await mkdir(path.join(root, "archive", "Atlas", "T-100"), {
-    recursive: true,
-  });
-  await writeFile(
-    path.join(root, "archive", "Atlas", "T-100", "task.md"),
-    task("T-100"),
-  );
-  await mkdir(path.join(root, "T-101"), { recursive: true });
-  await writeFile(path.join(root, "T-101", "task.md"), task("T-101"));
-  const result = await archiveDoneTasks(root, true);
-  assert.deepEqual(result.moved, ["T-101"]);
-  await access(path.join(root, "archive", "Atlas", "T-101", "task.md"));
-  await assert.rejects(access(path.join(root, "archive", "Ocean")));
-});
-
-test("once the Ocean archive namespace exists it wins over the Atlas one, and the repair path finds either", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-archive-both-ns-"));
-  await mkdir(path.join(root, "archive", "Atlas", "T-200"), {
-    recursive: true,
-  });
-  await mkdir(path.join(root, "archive", "Ocean", "T-201"), {
-    recursive: true,
-  });
-  await writeFile(
-    path.join(root, "archive", "Atlas", "T-200", "task.md"),
-    task("T-200"),
-  );
-  await writeFile(
-    path.join(root, "archive", "Ocean", "T-201", "task.md"),
-    task("T-201"),
-  );
-  await mkdir(path.join(root, "T-202"), { recursive: true });
-  await writeFile(path.join(root, "T-202", "task.md"), task("T-202"));
-  // leftovers of tasks already archived under each namespace
-  await mkdir(path.join(root, "T-200"), { recursive: true });
-  await writeFile(path.join(root, "T-200", "extra.md"), "a");
-  await mkdir(path.join(root, "T-201"), { recursive: true });
-  await writeFile(path.join(root, "T-201", "extra.md"), "b");
-  const result = await archiveDoneTasks(root, true);
-  assert.deepEqual(result.moved, ["T-202"]);
-  assert.deepEqual(result.repaired.sort(), ["T-200", "T-201"]);
-  await access(path.join(root, "archive", "Ocean", "T-202", "task.md"));
-  await access(path.join(root, "archive", "Atlas", "T-200", "extra.md"));
-  await access(path.join(root, "archive", "Ocean", "T-201", "extra.md"));
-});
-
-test("a task whose project field says ocean archives like an atlas one, other projects keep their own namespace", async () => {
+test("a task whose project field says ocean archives under Ocean, other projects keep their own namespace", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-archive-project-"));
   for (const [id, project] of [
     ["T-300", "ocean"],
@@ -253,11 +203,11 @@ test("a task whose project field says ocean archives like an atlas one, other pr
   );
 });
 
-test("getTask finds an archived task under the Ocean or the pre-rename Atlas namespace", async () => {
+test("getTask finds an archived task under the Ocean namespace, not the retired Atlas one", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-gettask-ns-"));
-  const tasksRoot = path.join(root, PROJECTS_DIR, "atlas", "tasks");
+  const tasksRoot = path.join(root, PROJECTS_DIR, "ocean", "tasks");
   for (const [namespace, id] of [
-    ["Atlas", "T-400"],
+    ["Atlas", "T-400"], // retired namespace
     ["Ocean", "T-401"],
   ]) {
     await mkdir(path.join(tasksRoot, "archive", namespace, id), {
@@ -270,7 +220,7 @@ test("getTask finds an archived task under the Ocean or the pre-rename Atlas nam
   }
   process.env.OCEAN_ROOT = root;
   try {
-    assert.equal((await getTask("T-400")).id, "T-400");
+    await assert.rejects(getTask("T-400"));
     assert.equal((await getTask("T-401")).id, "T-401");
   } finally {
     delete process.env.OCEAN_ROOT;

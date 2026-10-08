@@ -29,8 +29,8 @@ async function fixture(projectFolder) {
 
 const sync = (added) => ({ added, changed: [], removed: [] });
 
-test("the vault mirror of the workspace project may be named Ocean or the pre-rename Atlas, against whichever project folder exists", async () => {
-  for (const projectFolder of ["atlas", "ocean"]) {
+test("the vault mirror of the workspace project may be named Ocean or the pre-rename Atlas", async () => {
+  for (const projectFolder of ["ocean"]) {
     for (const note of ["01-Projects/Ocean.md", "01-Projects/Atlas.md"]) {
       const { root, vaultPath } = await fixture(projectFolder);
       await writeFile(path.join(vaultPath, note), "vault side\n");
@@ -55,10 +55,10 @@ test("the vault mirror of the workspace project may be named Ocean or the pre-re
 });
 
 test("a vault holding both the Ocean and the Atlas mirror of the same file logs one conflict, not two", async () => {
-  const { root, vaultPath } = await fixture("atlas");
+  const { root, vaultPath } = await fixture("ocean");
   await writeFile(path.join(vaultPath, "01-Projects/Ocean/plan.md"), "a\n");
   await writeFile(path.join(vaultPath, "01-Projects/Atlas/plan.md"), "b\n");
-  await mkdir(path.dirname(path.join(root, PROJECTS_DIR, "atlas", "plan.md")), {
+  await mkdir(path.dirname(path.join(root, PROJECTS_DIR, "ocean", "plan.md")), {
     recursive: true,
   });
   process.env.OCEAN_ROOT = root;

@@ -12,7 +12,7 @@ import { openSessionStore } from "../dist/infrastructure/persistence/session-sto
 import { INBOX_DIR, SYSTEM_DIR } from "../dist/paths.js";
 
 test("readTranscriptEvents extracts bounded user/assistant text turns and skips everything else", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "atlas-transcript-"));
+  const dir = await mkdtemp(path.join(os.tmpdir(), "ocean-transcript-"));
   const file = path.join(dir, "transcript.jsonl");
   const lines = [
     JSON.stringify({ type: "queue-operation", operation: "enqueue" }),
@@ -49,7 +49,7 @@ test("readTranscriptEvents returns no events for a missing or oversized transcri
 });
 
 test("claudeSessionEndHook registers a desktop session from its transcript and runs the closeout pipeline", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-end-hook-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-session-end-hook-"));
   const projectDir = path.join(root, "project");
   await mkdir(path.join(projectDir, ".git"), { recursive: true });
   process.env.OCEAN_ROOT = root;
@@ -126,7 +126,7 @@ test("claudeSessionEndHook is a no-op without a session_id and never throws", as
 });
 
 test("claudeSessionEndHook is idempotent for a session that already closed out", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-end-hook-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-session-end-hook-"));
   process.env.OCEAN_ROOT = root;
 
   const payload = {

@@ -34,9 +34,9 @@ test("context returns a compact JSON packet without loading task bodies", async 
 });
 
 test("context rejects symlinks that escape allowed paths", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-context-link-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-context-link-"));
   const outside = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-context-outside-"),
+    path.join(os.tmpdir(), "ocean-context-outside-"),
   );
   await mkdir(path.join(root, "allowed"));
   await writeFile(path.join(outside, "secret.md"), "outside secret");
@@ -65,7 +65,7 @@ test("context rejects symlinks that escape allowed paths", async () => {
 });
 
 test("context sources are referenced, never read", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-context-ref-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-context-ref-"));
   const rel = "notes.md";
   await writeFile(path.join(root, rel), "UNIQUE-BODY-MARKER مرحبا");
   const profile = validateProfile({

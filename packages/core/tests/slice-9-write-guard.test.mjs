@@ -26,13 +26,13 @@ const BUDGET = {
 };
 
 async function withRoot(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-slice9-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-slice9-"));
   await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
-  await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1"), {
+  await mkdir(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1", "task.md"),
+    path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1", "task.md"),
     "---\nid: T-1\nstate: active\n---\n\nbody\n",
   );
   const previous = process.env.OCEAN_ROOT;
@@ -53,7 +53,7 @@ function scopeFor(root, slug = "note") {
     action: "memory.write",
     target: path.join(root, PERSONAL_DIR, `${slug}.md`),
     identifier: slug,
-    projectId: "atlas",
+    projectId: "ocean",
   };
 }
 
@@ -196,7 +196,7 @@ test("scope hashes are deterministic and differ for any changed field", () => {
     action: "memory.write",
     target: "/tmp/a.md",
     identifier: "a",
-    projectId: "atlas",
+    projectId: "ocean",
   };
   assert.equal(computeScopeHash(base), computeScopeHash({ ...base }));
   for (const change of [
@@ -235,7 +235,7 @@ test("ambiguous intent can never write, execute, or invoke a provider", () =>
       action: "provider.invoke",
       target: "claude",
       identifier: null,
-      projectId: "atlas",
+      projectId: "ocean",
     };
     const grant = createGrant(SESSION, scope);
     const verdict = evaluateGuard({
@@ -296,7 +296,7 @@ test("a target outside the Ocean root is denied for a record write", () =>
       action: "memory.write",
       target: "/etc/passwd",
       identifier: "x",
-      projectId: "atlas",
+      projectId: "ocean",
     };
     const grant = createGrant(SESSION, scope);
     const verdict = evaluateGuard({
@@ -316,7 +316,7 @@ test("a null byte in the target is denied", () =>
       action: "memory.write",
       target: `${path.join(root, PERSONAL_DIR, "x.md")}\0`,
       identifier: "x",
-      projectId: "atlas",
+      projectId: "ocean",
     };
     const grant = createGrant(SESSION, scope);
     const verdict = evaluateGuard({
@@ -376,7 +376,7 @@ test("execute rejection: a command execution without a grant is denied", () => {
     action: "execute.command",
     target: "pnpm build",
     identifier: null,
-    projectId: "atlas",
+    projectId: "ocean",
   };
   const verdict = evaluateGuard({
     sessionId: SESSION,
@@ -393,7 +393,7 @@ test("provider rejection: invoking a provider without a grant is denied", () => 
     action: "provider.invoke",
     target: "claude",
     identifier: null,
-    projectId: "atlas",
+    projectId: "ocean",
   };
   const verdict = evaluateGuard({
     sessionId: SESSION,
@@ -410,7 +410,7 @@ test("an allowed provider invocation yields no record approval object", () => {
     action: "provider.invoke",
     target: "claude",
     identifier: null,
-    projectId: "atlas",
+    projectId: "ocean",
   };
   const grant = createGrant(SESSION, scope);
   const verdict = evaluateGuard({
@@ -429,7 +429,7 @@ test("read operations pass the guard without requiring approval", () => {
     action: "task.get",
     target: "/tmp",
     identifier: "T-1",
-    projectId: "atlas",
+    projectId: "ocean",
   };
   const verdict = evaluateGuard({
     sessionId: SESSION,
@@ -662,7 +662,7 @@ test("Arabic and English requests are guarded identically", () =>
       action: "knowledge.write",
       target: path.join(root, KNOWLEDGE_DIR, "decisions", "d.md"),
       identifier: "d",
-      projectId: "atlas",
+      projectId: "ocean",
     };
     const now = Date.now();
     const english = evaluateGuard({

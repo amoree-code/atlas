@@ -29,23 +29,6 @@ function validate(taskDirs) {
   }
 }
 
-test("validate-tasks falls back to the pre-rename atlas folder", () => {
-  assert.equal(
-    validate({ "brain/04-projects/atlas/tasks": ["T-1", "T-2"] }),
-    "Validated 2 live and 0 archived tasks",
-  );
-});
-
-test("validate-tasks prefers the ocean folder when both exist", () => {
-  assert.equal(
-    validate({
-      "brain/04-projects/ocean/tasks": ["T-1"],
-      "brain/04-projects/atlas/tasks": ["T-1", "T-2"],
-    }),
-    "Validated 1 live and 0 archived tasks",
-  );
-});
-
 test("validate-tasks skips cleanly when there is no private workspace", () => {
   assert.equal(
     validate({}),
@@ -57,7 +40,7 @@ test("validate-tasks prefers the flat layout over brain/ once the records have m
   assert.equal(
     validate({
       "04-projects/ocean/tasks": ["T-1", "T-2", "T-3"],
-      "brain/04-projects/atlas/tasks": ["T-1"],
+      "brain/04-projects/ocean/tasks": ["T-1"],
     }),
     "Validated 3 live and 0 archived tasks",
   );

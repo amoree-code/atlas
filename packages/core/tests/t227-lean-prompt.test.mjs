@@ -35,8 +35,8 @@ import {
 
 const SKILLS = ["alpha-lean", "beta-lean", "gamma-lean"];
 
-async function withAtlasRoot(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t227-"));
+async function withOceanRoot(fn) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-t227-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
@@ -161,7 +161,7 @@ function legacyPromptBytes(fixture, request) {
 }
 
 test("headless prompt carries a skill index, compact contract, facts digest and references", (t) =>
-  withAtlasRoot(async (root) => {
+  withOceanRoot(async (root) => {
     const fixture = await writeFixture(root);
     const request = "Review the change";
     let captured = "";
@@ -418,8 +418,8 @@ test("formatPromotedSkills marks only truncated skills", () => {
 });
 
 test("buildContextReferences references a single task record without reading it", () =>
-  withAtlasRoot(async (root) => {
-    const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-9");
+  withOceanRoot(async (root) => {
+    const taskDir = path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-9");
     await mkdir(taskDir, { recursive: true });
     await writeFile(path.join(taskDir, "task.md"), "TASK-BODY-SENTINEL");
     const profile = validateProfile({
@@ -437,7 +437,7 @@ test("buildContextReferences references a single task record without reading it"
     const [reference] = result.manifest.references;
     assert.equal(reference.base, "ocean-root");
     assert.equal(reference.recordType, "task");
-    assert.equal(reference.path, `${PROJECTS_DIR}/atlas/tasks/T-9/task.md`);
+    assert.equal(reference.path, `${PROJECTS_DIR}/ocean/tasks/T-9/task.md`);
     assert.equal(reference.bytes, Buffer.byteLength("TASK-BODY-SENTINEL"));
     assert.match(reference.reason, /within budget/);
     assert.ok(result.content.includes(path.join("tasks", "T-9", "task.md")));
@@ -478,7 +478,7 @@ test("buildContextReferences references a single task record without reading it"
   }));
 
 test("packet references stay inside allowedPaths and skip keyword lookups", () =>
-  withAtlasRoot(async (root) => {
+  withOceanRoot(async (root) => {
     const memoryDir = path.join(root, PERSONAL_DIR);
     const knowledgeDir = path.join(root, KNOWLEDGE_DIR, "decisions");
     await mkdir(memoryDir, { recursive: true });
@@ -489,7 +489,7 @@ test("packet references stay inside allowedPaths and skip keyword lookups", () =
       "KNOWLEDGE-SENTINEL",
     );
     await writeFile(path.join(knowledgeDir, "d-1.md"), "DECISION-SENTINEL");
-    const taskDir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-9");
+    const taskDir = path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-9");
     await mkdir(taskDir, { recursive: true });
     await writeFile(path.join(taskDir, "task.md"), "TASK-BODY-SENTINEL");
     await mkdir(path.join(root, "src"), { recursive: true });
@@ -533,13 +533,13 @@ test("packet references stay inside allowedPaths and skip keyword lookups", () =
     });
     assert.deepEqual(narrow.manifest.references, []);
     assert.deepEqual(narrow.manifest.omitted, [
-      `${PROJECTS_DIR}/atlas/tasks/T-9/task.md`,
+      `${PROJECTS_DIR}/ocean/tasks/T-9/task.md`,
     ]);
     assert.equal(narrow.content, "");
   }));
 
 test("skills outside cwd are granted to workspace-restricted providers", (t) =>
-  withAtlasRoot(async (root) => {
+  withOceanRoot(async (root) => {
     await writeFixture(root);
     const cwd = path.join(root, "work");
     await mkdir(cwd, { recursive: true });
@@ -598,7 +598,7 @@ test("skills outside cwd are granted to workspace-restricted providers", (t) =>
   }));
 
 test("a resumed Claude session gets the same read grant as its first turn", () =>
-  withAtlasRoot(async (root) => {
+  withOceanRoot(async (root) => {
     await writeFixture(root);
     const cwd = path.join(root, "work");
     await mkdir(cwd, { recursive: true });
@@ -641,7 +641,7 @@ test("a resumed Claude session gets the same read grant as its first turn", () =
   }));
 
 test("a resume whose skill or facts lookup fails narrows the grant, not the turn", () =>
-  withAtlasRoot(async (root) => {
+  withOceanRoot(async (root) => {
     await writeFixture(root);
     const cwd = path.join(root, "work");
     await mkdir(cwd, { recursive: true });
@@ -691,7 +691,7 @@ test("a resume whose skill or facts lookup fails narrows the grant, not the turn
   }));
 
 test("context reference grants stay inside allowedPaths", (t) =>
-  withAtlasRoot(async (root) => {
+  withOceanRoot(async (root) => {
     const cwd = path.join(root, "work");
     await mkdir(cwd, { recursive: true });
     await mkdir(path.join(root, "shared"), { recursive: true });
@@ -767,8 +767,8 @@ test("context reference grants stay inside allowedPaths", (t) =>
   }));
 
 test("readDirectoriesOutside keeps only directories outside cwd, deduped", () => {
-  const cwd = path.join(os.tmpdir(), "atlas-cwd");
-  const outside = path.join(os.tmpdir(), "atlas-other", "skill");
+  const cwd = path.join(os.tmpdir(), "ocean-cwd");
+  const outside = path.join(os.tmpdir(), "ocean-other", "skill");
   assert.deepEqual(
     readDirectoriesOutside(cwd, [
       path.join(cwd, "a", "SKILL.md"),

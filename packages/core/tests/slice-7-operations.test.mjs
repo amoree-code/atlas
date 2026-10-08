@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
 import {
   mkdir,
   mkdtemp,
@@ -47,7 +46,7 @@ const BUDGET = {
 
 function taskDoc(id, state = "active", checked = true) {
   const item = checked ? '- "[x] done work"' : '- "[ ] unfinished work"';
-  return `---\nkind: task\nid: ${id}\ntitle: Task ${id}\nstate: ${state}\nproject: atlas\ngoal: goal for ${id}\npriority: level_2\nupdated_at: 2026-09-16\n---\n\nchecklist:\n  ${item}\n\n## Objective\nbody of ${id}\n`;
+  return `---\nkind: task\nid: ${id}\ntitle: Task ${id}\nstate: ${state}\nproject: ocean\ngoal: goal for ${id}\npriority: level_2\nupdated_at: 2026-09-16\n---\n\nchecklist:\n  ${item}\n\n## Objective\nbody of ${id}\n`;
 }
 
 function recordDoc(name, description) {
@@ -55,19 +54,19 @@ function recordDoc(name, description) {
 }
 
 async function withFixture(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-slice7-"));
-  await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1"), {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-slice7-"));
+  await mkdir(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-1", "task.md"),
+    path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-1", "task.md"),
     taskDoc("T-1"),
   );
-  await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-2"), {
+  await mkdir(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-2"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-2", "task.md"),
+    path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-2", "task.md"),
     taskDoc("T-2"),
   );
   await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
@@ -83,8 +82,8 @@ async function withFixture(fn) {
     recursive: true,
   });
   await writeFile(
-    path.join(root, KNOWLEDGE_DIR, "decisions", "adopt-atlas.md"),
-    recordDoc("adopt-atlas", "Decision to adopt Atlas"),
+    path.join(root, KNOWLEDGE_DIR, "decisions", "adopt-ocean.md"),
+    recordDoc("adopt-ocean", "Decision to adopt Ocean"),
   );
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
@@ -123,7 +122,7 @@ test("every required intent maps to exactly one operation", () => {
 
 test("task.create requires explicit title and approval, then creates the next bounded task", async () => {
   await withFixture(async (root) => {
-    await bindProject("atlas", root);
+    await bindProject("ocean", root);
     const classification = classifyIntent(
       "create a new task called Improve onboarding",
     );
@@ -137,7 +136,7 @@ test("task.create requires explicit title and approval, then creates the next bo
     const target = path.join(
       root,
       PROJECTS_DIR,
-      "atlas",
+      "ocean",
       "tasks",
       "T-3",
       "task.md",
@@ -146,7 +145,7 @@ test("task.create requires explicit title and approval, then creates the next bo
       action: "task.create",
       target,
       identifier: null,
-      projectId: "atlas",
+      projectId: "ocean",
     };
     const sessionId = "task-create-session";
     const grant = createGrant(sessionId, scope);
@@ -162,47 +161,6 @@ test("task.create requires explicit title and approval, then creates the next bo
     assert.equal(decision.allowed, true, decision.reason);
     assert.equal(result.ok, true, result.reason);
     assert.match(await readFile(target, "utf8"), /title: Improve onboarding/);
-  });
-});
-
-test("task.create under the ocean id writes next to the tasks that still live in atlas/", async () => {
-  await withFixture(async (root) => {
-    await bindProject("ocean", root);
-    const classification = classifyIntent(
-      "create a new task called Improve onboarding",
-    );
-    const budget = BUDGET;
-    // The id scan and the write target share one folder: T-1 and T-2 live under atlas/, so the
-    // new task is atlas/tasks/T-3, never a fresh ocean/tasks/T-1 beside them.
-    const target = path.join(
-      root,
-      PROJECTS_DIR,
-      "atlas",
-      "tasks",
-      "T-3",
-      "task.md",
-    );
-    const scope = {
-      action: "task.create",
-      target,
-      identifier: null,
-      projectId: "ocean",
-    };
-    const sessionId = "task-create-ocean-session";
-    const grant = createGrant(sessionId, scope);
-    const { decision, result } = await guardedRunOperation(
-      { sessionId, classification, scope, budget, grant },
-      (approval) =>
-        runOperation("task.create", classification, budget, {
-          cwd: root,
-          approval,
-        }),
-    );
-    assert.equal(decision.allowed, true, decision.reason);
-    assert.equal(result.ok, true, result.reason);
-    assert.match(result.reason, /^T-3 created for project 'ocean'/);
-    assert.match(await readFile(target, "utf8"), /project: ocean/);
-    assert.equal(existsSync(path.join(root, PROJECTS_DIR, "ocean")), false);
   });
 });
 
@@ -243,7 +201,7 @@ test("task.get returns one bounded record with selected fields only", () =>
     const record = result.records[0];
     assert.equal(record.identifier, "T-1");
     assert.equal(record.recordType, "task");
-    assert.equal(record.sourcePath, `${PROJECTS_DIR}/atlas/tasks/T-1/task.md`);
+    assert.equal(record.sourcePath, `${PROJECTS_DIR}/ocean/tasks/T-1/task.md`);
     assert.deepEqual(Object.keys(record.fields).sort(), [
       "goal",
       "id",
@@ -296,11 +254,11 @@ test("task.list returns every live task, stably ordered, never the archive direc
 
 test("task.list ordering is stable regardless of filesystem ordering", () =>
   withFixture(async (root) => {
-    await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-10"), {
+    await mkdir(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-10"), {
       recursive: true,
     });
     await writeFile(
-      path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-10", "task.md"),
+      path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-10", "task.md"),
       taskDoc("T-10"),
     );
     const listable = {
@@ -343,7 +301,7 @@ test("task.get freshness reports stale for an old record", () =>
     const file = path.join(
       root,
       PROJECTS_DIR,
-      "atlas",
+      "ocean",
       "tasks",
       "T-1",
       "task.md",
@@ -427,9 +385,9 @@ test("knowledge.search returns only personal/knowledge records", () =>
   withFixture(async (root) => {
     const result = await runOperation(
       "knowledge.search",
-      classifyIntent("what did we decide about atlas"),
+      classifyIntent("what did we decide about ocean"),
       BUDGET,
-      { cwd: root, query: "atlas" },
+      { cwd: root, query: "ocean" },
     );
     assert.equal(result.ok, true);
     assert.ok(
@@ -681,7 +639,7 @@ test("task.update patches only allow-listed frontmatter fields, atomically", () 
     const target = path.join(
       root,
       PROJECTS_DIR,
-      "atlas",
+      "ocean",
       "tasks",
       "T-1",
       "task.md",
@@ -712,7 +670,7 @@ test("task.update patches only allow-listed frontmatter fields, atomically", () 
 
 test("task.complete reuses the governed completion path and refuses unchecked work", () =>
   withFixture(async (root) => {
-    const dir = path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-3");
+    const dir = path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-3");
     await mkdir(dir, { recursive: true });
     await writeFile(path.join(dir, "task.md"), taskDoc("T-3", "active", false));
     const classification = {
@@ -737,7 +695,7 @@ test("task.complete succeeds for a fully checked task", () =>
     const target = path.join(
       root,
       PROJECTS_DIR,
-      "atlas",
+      "ocean",
       "tasks",
       "T-2",
       "task.md",
@@ -775,7 +733,7 @@ test("project.detect reports the bound project without guessing", () =>
 test("project.detect reports unbound for a directory outside any binding", () =>
   withFixture(async () => {
     const outside = await mkdtemp(
-      path.join(os.tmpdir(), "atlas-slice7-outside-"),
+      path.join(os.tmpdir(), "ocean-slice7-outside-"),
     );
     const result = await runOperation(
       "project.detect",
@@ -820,7 +778,7 @@ test("project.update confirms the active project binding only", () =>
     const classification = {
       intent: "project-create",
       entityType: "project",
-      identifier: "atlas",
+      identifier: "ocean",
       action: "create",
       confidence: "high",
       ambiguityReason: null,
@@ -834,7 +792,7 @@ test("project.update confirms the active project binding only", () =>
         projectPath: root,
         approval: approval(
           "project.update",
-          path.join(root, PROJECTS_DIR, "atlas"),
+          path.join(root, PROJECTS_DIR, "ocean"),
         ),
       },
     );
@@ -862,9 +820,9 @@ test("a cross-project request is refused explicitly", () =>
     assert.match(result.reason, /cross-project request refused/);
   }));
 
-test("a request naming the workspace project by its pre-rename id is not a cross-project request", () =>
+test("a request naming the workspace project by its id is not a cross-project request", () =>
   withFixture(async (root) => {
-    for (const requestedProject of ["atlas", "ocean"]) {
+    for (const requestedProject of ["ocean"]) {
       const result = await runOperation(
         "task.get",
         classifyIntent("show T-1"),
@@ -897,7 +855,7 @@ test("private Ocean content is never written inside the public engine package", 
 });
 
 test("write targets that escape the Ocean root are refused", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-escape-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-escape-"));
   const previous = process.env.OCEAN_ROOT;
   process.env.OCEAN_ROOT = root;
   try {
@@ -961,7 +919,7 @@ test("exact-limit success: a task exactly at budget.maxBytes is returned", () =>
     const file = path.join(
       root,
       PROJECTS_DIR,
-      "atlas",
+      "ocean",
       "tasks",
       "T-1",
       "task.md",
@@ -981,7 +939,7 @@ test("one-over-limit failure: a task one byte over budget.maxBytes is refused, n
     const file = path.join(
       root,
       PROJECTS_DIR,
-      "atlas",
+      "ocean",
       "tasks",
       "T-1",
       "task.md",

@@ -9,7 +9,7 @@ import {
 } from "../dist/application/skills/core-skill-sync.js";
 
 test("core skill sync copies canonical skills and preserves non-core skills", async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), "atlas-skills-"));
+  const home = await mkdtemp(path.join(os.tmpdir(), "ocean-skills-"));
   try {
     await mkdir(path.join(home, ".claude", "skills", "custom"), {
       recursive: true,

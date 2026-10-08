@@ -59,7 +59,7 @@ test("a fresh root gets the flat layout", () => {
 test("a root that has not been migrated keeps brain/ and kernel/bridge", () => {
   assert.deepEqual(
     layoutOf([
-      "brain/04-projects/atlas/tasks",
+      "brain/04-projects/ocean/tasks",
       "brain/charter/policies",
       "kernel/bridge/sessions",
     ]),
@@ -71,7 +71,7 @@ test("a root that has not been migrated keeps brain/ and kernel/bridge", () => {
       records: FLAT.records.map((dir) => `brain/${dir}`),
       system: "kernel/bridge",
       registry: "kernel/bridge/registry",
-      tasks: "brain/04-projects/atlas/tasks",
+      tasks: "brain/04-projects/ocean/tasks",
     },
   );
 });
@@ -79,7 +79,7 @@ test("a root that has not been migrated keeps brain/ and kernel/bridge", () => {
 test("while both layouts exist mid-migration, the new one wins", () => {
   assert.deepEqual(
     layoutOf([
-      "brain/04-projects/atlas/tasks",
+      "brain/04-projects/ocean/tasks",
       "kernel/bridge/sessions",
       "04-projects/ocean/tasks",
       "bridge/sessions",

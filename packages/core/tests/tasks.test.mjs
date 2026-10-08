@@ -24,7 +24,7 @@ const task = (id, state, checklist = "[x]") =>
   `---\nid: ${id}\ntitle: Test\nstate: ${state}\nproject: test\ngoal: Test\nreferences: [T-001]\n---\n\nchecklist:\n  - "${checklist} work"\n`;
 
 test("task validator accepts live plus archived references", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-tasks-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-tasks-"));
   await mkdir(path.join(root, "T-001"), { recursive: true });
   await writeFile(path.join(root, "T-001", "task.md"), task("T-001", "done"));
   await mkdir(path.join(root, "archive", "T-002"), { recursive: true });
@@ -36,7 +36,7 @@ test("task validator accepts live plus archived references", async () => {
   assert.equal(result.code, 0);
 });
 test("task validator rejects inconsistent done tasks", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-tasks-invalid-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-tasks-invalid-"));
   await mkdir(path.join(root, "T-003"), { recursive: true });
   await writeFile(
     path.join(root, "T-003", "task.md"),
@@ -48,12 +48,12 @@ test("task validator rejects inconsistent done tasks", async () => {
 });
 
 test("tasks list returns live task summaries and filters by state", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-tasks-list-"));
-  await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-001"), {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-tasks-list-"));
+  await mkdir(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-001"), {
     recursive: true,
   });
   await writeFile(
-    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-001", "task.md"),
+    path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-001", "task.md"),
     "---\nid: T-001\ntitle: First\nstate: active\ngoal: Test goal\nupdated_at: 2026-09-13\n---\n",
   );
   const result = spawnSync(
@@ -74,7 +74,7 @@ test("tasks list returns live task summaries and filters by state", async () => 
 });
 
 test("tasks list reads the selected project instead of the default project only", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-project-tasks-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-project-tasks-"));
   await mkdir(path.join(root, PROJECTS_DIR, "frontend", "tasks", "T-101"), {
     recursive: true,
   });

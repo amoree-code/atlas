@@ -429,7 +429,7 @@ async function checkGovernance(): Promise<Finding[]> {
       .filter((name) => name.endsWith(".md"))
       .map((name) => name.slice(0, -3)),
   );
-  const referenced = [...source.matchAll(/(?:ocean|atlas) policy ([a-z-]+)/g)]
+  const referenced = [...source.matchAll(/ocean policy ([a-z-]+)/g)]
     .map((match) => match[1])
     .filter((name) => name !== "list");
   const missing = [

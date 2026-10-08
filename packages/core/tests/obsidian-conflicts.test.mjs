@@ -10,10 +10,10 @@ import {
   resolveConflict,
 } from "../dist/application/obsidian/conflict-log.js";
 
-test("a conflict side is vault or ocean, and the pre-rename atlas name still means ocean", () => {
+test("a conflict side is vault or ocean, and the retired atlas name is refused", () => {
   assert.equal(parseConflictSide("vault"), "vault");
   assert.equal(parseConflictSide("ocean"), "ocean");
-  assert.equal(parseConflictSide("atlas"), "ocean");
+  assert.equal(parseConflictSide("atlas"), null);
   assert.equal(parseConflictSide("both"), null);
   assert.equal(parseConflictSide(undefined), null);
 });
@@ -52,7 +52,7 @@ test("a record written before the rename (atlasSha256/atlasContent) is read as t
   assert.ok(!("atlasSha256" in record));
 });
 
-test("resolveConflict reads old records and accepts --keep=atlas as the ocean side", async () => {
+test("resolveConflict reads records stored before the rename as the ocean side", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "ocean-conflicts-"));
   await mkdir(directory, { recursive: true });
   await writeFile(
@@ -68,7 +68,7 @@ test("resolveConflict reads old records and accepts --keep=atlas as the ocean si
     }),
   );
   let applied;
-  const result = await resolveConflict("old", "atlas", {
+  const result = await resolveConflict("old", "ocean", {
     directory,
     apply: async (record, keep) => {
       applied = { keep, ocean: record.oceanSha256 };

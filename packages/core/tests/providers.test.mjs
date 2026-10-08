@@ -203,7 +203,7 @@ unixOnly(
   "headless providers bypass Ocean shims and run the original executable",
   async () => {
     const root = await mkdtemp(
-      path.join(os.tmpdir(), "atlas-headless-provider-"),
+      path.join(os.tmpdir(), "ocean-headless-provider-"),
     );
     const shim = path.join(root, "shims");
     const staleShim = path.join(root, "old", "runtime", "shims");
@@ -252,7 +252,7 @@ unixOnly(
 
 test("resolves a configured client home only inside Ocean system/clients", () => {
   const previousRoot = process.env.OCEAN_ROOT;
-  const root = path.join(os.tmpdir(), "atlas-client-home-test");
+  const root = path.join(os.tmpdir(), "ocean-client-home-test");
   process.env.OCEAN_ROOT = root;
   try {
     const profile = validateProfile({

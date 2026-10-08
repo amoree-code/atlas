@@ -22,9 +22,9 @@ const runAgent = (request, execute) =>
   );
 
 test("one bounded handoff keeps semantic context equivalent across read-only clients", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-t193-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-t193-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
-  await mkdir(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-193"), {
+  await mkdir(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-193"), {
     recursive: true,
   });
   await writeFile(
@@ -58,7 +58,7 @@ test("one bounded handoff keeps semantic context equivalent across read-only cli
     }),
   );
   await writeFile(
-    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-193", "task.md"),
+    path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-193", "task.md"),
     `---\nid: T-193\ntitle: Continuity test\nstate: in_progress\nrequirement: Share one bounded task context\n---\n\n## Objective\nKeep context small and provider-neutral.\n`,
   );
   process.env.OCEAN_ROOT = root;

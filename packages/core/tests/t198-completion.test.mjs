@@ -44,9 +44,9 @@ test("unbound and ambiguous project resolution each produce one focused confirma
   assert.equal(
     projectConfirmationQuestion({
       status: "bound",
-      projectId: "atlas",
-      name: "Atlas",
-      path: "/tmp/atlas",
+      projectId: "ocean",
+      name: "Ocean",
+      path: "/tmp/ocean",
       matchedOn: "ocean-root",
       confidence: "high",
     }),
@@ -56,14 +56,14 @@ test("unbound and ambiguous project resolution each produce one focused confirma
 
 test("ocean operate routes deterministic natural-language reads through the Ocean operation layer", () => {
   const root = fs.realpathSync(
-    fs.mkdtempSync(path.join(os.tmpdir(), "atlas-t198-cli-")),
+    fs.mkdtempSync(path.join(os.tmpdir(), "ocean-t198-cli-")),
   );
-  fs.mkdirSync(path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-198"), {
+  fs.mkdirSync(path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-198"), {
     recursive: true,
   });
   fs.writeFileSync(
-    path.join(root, PROJECTS_DIR, "atlas", "tasks", "T-198", "task.md"),
-    "---\nid: T-198\ntitle: Test task\nstate: active\nproject: atlas\ngoal: test\npriority: level_2\nupdated_at: 2026-09-16\n---\n",
+    path.join(root, PROJECTS_DIR, "ocean", "tasks", "T-198", "task.md"),
+    "---\nid: T-198\ntitle: Test task\nstate: active\nproject: ocean\ngoal: test\npriority: level_2\nupdated_at: 2026-09-16\n---\n",
   );
   const result = spawnSync(
     process.execPath,
@@ -78,7 +78,7 @@ test("ocean operate routes deterministic natural-language reads through the Ocea
   assert.equal(output.records[0].provenance, "task");
 });
 
-test("atlas operate routes durable capture to the guarded path and refuses without approval", () => {
+test("ocean operate routes durable capture to the guarded path and refuses without approval", () => {
   const result = spawnSync(
     process.execPath,
     ["dist/main.js", "operate", "save", "this"],
@@ -99,22 +99,22 @@ test("metadata-first task linking ranks explicit relationships before project, s
         projectId: "other",
         state: "active",
         updatedAt: "2026-09-16",
-        keywords: ["atlas"],
+        keywords: ["ocean"],
         relationships: [],
       },
       {
         id: "T-1",
-        projectId: "atlas",
+        projectId: "ocean",
         state: "active",
         updatedAt: "2026-09-16",
-        keywords: ["atlas"],
+        keywords: ["ocean"],
         relationships: ["T-99"],
       },
     ],
     {
-      projectId: "atlas",
+      projectId: "ocean",
       state: "active",
-      keywords: ["atlas"],
+      keywords: ["ocean"],
       relationshipIds: ["T-99"],
     },
   );
@@ -123,7 +123,7 @@ test("metadata-first task linking ranks explicit relationships before project, s
 });
 
 test("corrections are additive evidence and never overwrite the original record", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-correction-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-correction-"));
   await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
   const original = path.join(root, PERSONAL_DIR, "original.md");
   await writeFile(original, "---\nname: original\n---\noriginal evidence\n");
@@ -135,7 +135,7 @@ test("corrections are additive evidence and never overwrite the original record"
       action: "memory.write",
       target,
       identifier: "correction",
-      projectId: "atlas",
+      projectId: "ocean",
     };
     const grant = createGrant("session-correction", scope);
     const result = await guardedRunOperation(
@@ -169,7 +169,7 @@ test("corrections are additive evidence and never overwrite the original record"
   }
 });
 
-test("task linking treats the workspace project's old and new ids as one project, and other projects as different", () => {
+test("task linking matches the workspace project's id, and other projects as different", () => {
   const candidate = (projectId) => ({
     id: "T-1",
     projectId,
@@ -181,8 +181,8 @@ test("task linking treats the workspace project's old and new ids as one project
   const reasons = (candidateId, requestId) =>
     rankTaskCandidates([candidate(candidateId)], { projectId: requestId })[0]
       .reasons;
-  assert.ok(reasons("atlas", "ocean").includes("project match"));
-  assert.ok(reasons("ocean", "atlas").includes("project match"));
+  assert.ok(reasons("ocean", "ocean").includes("project match"));
+  assert.ok(!reasons("atlas", "ocean").includes("project match"));
   assert.ok(reasons("acme", "acme").includes("project match"));
   assert.ok(!reasons("ocean-language", "ocean").includes("project match"));
 });

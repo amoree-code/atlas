@@ -7,10 +7,10 @@ import {
 
 test("generates one provider-neutral stdio MCP config", () => {
   const config = obsidianMcpConfig();
-  assert.equal(config.mcpServers.atlas.type, "stdio");
-  assert.equal(config.mcpServers.atlas.args.at(-2), "obsidian");
-  assert.equal(config.mcpServers.atlas.args.at(-1), "mcp");
-  assert.match(config.mcpServers.atlas.command, /node/);
+  assert.equal(config.mcpServers.ocean.type, "stdio");
+  assert.equal(config.mcpServers.ocean.args.at(-2), "obsidian");
+  assert.equal(config.mcpServers.ocean.args.at(-1), "mcp");
+  assert.match(config.mcpServers.ocean.command, /node/);
 });
 
 test("generates a client-neutral Playwright MCP config", () => {

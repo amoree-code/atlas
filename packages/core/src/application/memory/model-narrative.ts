@@ -115,7 +115,7 @@ export function parseResult(stdout: string): ModelNarrative | null {
  * Returns null on any failure (auth, timeout, parse error) so the caller falls
  * back to the deterministic heuristic in daily-narrative.ts. Never throws.
  *
- * Guarded against recursion: the spawned call carries OCEAN_NARRATIVE_CALL=1 (and ATLAS_NARRATIVE_CALL=1),
+ * Guarded against recursion: the spawned call carries OCEAN_NARRATIVE_CALL=1,
  * and session-closeout.ts skips calling this again when that flag is already
  * set on the current process (i.e. this IS a narrative-generation session).
  */

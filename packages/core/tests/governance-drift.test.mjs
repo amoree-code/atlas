@@ -8,16 +8,16 @@ import { CHARTER_DIR, POLICIES_DIR } from "../dist/paths.js";
 
 // One doctor run costs ~10s, and the runner gives each test file 30s, so this lives in its
 // own file and runs the doctor exactly once.
-test("doctor GOVERNANCE_DRIFT reads policy references written as `ocean policy` or the legacy `atlas policy`", async () => {
+test("doctor GOVERNANCE_DRIFT reads policy references written as `ocean policy`", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-doctor-drift-"));
   await mkdir(path.join(root, POLICIES_DIR), { recursive: true });
   await writeFile(path.join(root, POLICIES_DIR, "task.md"), "# task\n");
   await writeFile(
     path.join(root, CHARTER_DIR, "core.md"),
     [
-      "Present under both spellings: `ocean policy task`, `atlas policy task`.",
-      "Missing, new spelling: `ocean policy gone-new`.",
-      "Missing, legacy spelling: `atlas policy gone-old`.",
+      "Present: `ocean policy task`.",
+      "Missing: `ocean policy gone-new`.",
+      "Not a reference any more: `atlas policy gone-old`.",
     ].join("\n"),
   );
   const result = spawnSync(
@@ -37,6 +37,6 @@ test("doctor GOVERNANCE_DRIFT reads policy references written as `ocean policy` 
   );
   assert.equal(drift.length, 1);
   assert.match(drift[0].message, /gone-new/);
-  assert.match(drift[0].message, /gone-old/);
+  assert.doesNotMatch(drift[0].message, /gone-old/);
   assert.doesNotMatch(drift[0].message, /\btask\b/);
 });

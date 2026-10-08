@@ -39,7 +39,7 @@ test("bounds provider session identifiers before persistence", () => {
 });
 
 test("rejects writable profiles without an approved run contract", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-policy-boundary-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-policy-boundary-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "writer.json"),
@@ -64,7 +64,7 @@ test("rejects writable profiles without an approved run contract", async () => {
 });
 
 test("allows an explicitly approved writable run contract", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-approved-write-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-approved-write-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "writer.json"),
@@ -107,7 +107,7 @@ test("allows an explicitly approved writable run contract", async () => {
 
 test("approval-required profiles fail closed without an approved run contract", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-approval-boundary-"),
+    path.join(os.tmpdir(), "ocean-approval-boundary-"),
   );
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
@@ -135,7 +135,7 @@ test("approval-required profiles fail closed without an approved run contract", 
 });
 
 test("connects profile, context, headless execution, and session storage", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-agent-"));
   const profileDirectory = path.join(root, SYSTEM_DIR, "profiles", "reviewer");
   await mkdir(profileDirectory, { recursive: true });
   await writeFile(
@@ -196,7 +196,7 @@ test("connects profile, context, headless execution, and session storage", async
 });
 
 test("redacts provider output, stderr, errors, and secrets near the payload bound", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-agent-redaction-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-agent-redaction-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -257,7 +257,7 @@ test("redacts provider output, stderr, errors, and secrets near the payload boun
 
 test("applies one universal policy through every registered client adapter", async () => {
   const root = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-universal-profile-"),
+    path.join(os.tmpdir(), "ocean-universal-profile-"),
   );
   const profileDirectory = path.join(root, SYSTEM_DIR, "profiles", "universal");
   await mkdir(profileDirectory, { recursive: true });
@@ -321,7 +321,7 @@ test("applies one universal policy through every registered client adapter", asy
 });
 
 test("injects bounded profile facts into a run", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-facts-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-facts-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -352,7 +352,7 @@ test("injects bounded profile facts into a run", async () => {
 });
 
 test("runs registered lifecycle hooks around a session", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-hooks-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-hooks-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -377,7 +377,7 @@ test("runs registered lifecycle hooks around a session", async () => {
 });
 
 test("a throwing lifecycle hook blocks the run", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-hook-block-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-block-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -405,7 +405,7 @@ test("a throwing lifecycle hook blocks the run", async () => {
 });
 
 test("transitions status from created to running to completed, visible to a concurrent reader", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-status-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-status-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -434,7 +434,7 @@ test("transitions status from created to running to completed, visible to a conc
 });
 
 test("resumes a Claude session using its provider session id", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-resume-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-resume-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -466,7 +466,7 @@ test("resumes a Claude session using its provider session id", async () => {
 });
 
 test("marks the session failed and records the error event when the provider throws", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-fail-throw-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-fail-throw-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -509,7 +509,7 @@ test("marks the session failed and records the error event when the provider thr
 });
 
 test("marks the session failed when the provider exits non-zero without throwing", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-fail-exit-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-fail-exit-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),
@@ -541,7 +541,7 @@ test("marks the session failed when the provider exits non-zero without throwing
 });
 
 test("closes its session store exactly once, on both the success and failure paths", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-shutdown-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-shutdown-"));
   await mkdir(path.join(root, SYSTEM_DIR, "profiles"), { recursive: true });
   await writeFile(
     path.join(root, SYSTEM_DIR, "profiles", "default.json"),

@@ -10,7 +10,7 @@ import { SYSTEM_DIR } from "../dist/paths.js";
 
 test("Obsidian MCP exposes bounded tools and requires approval for writes", async () => {
   const vaultPath = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-mcp-"),
+    path.join(os.tmpdir(), "ocean-obsidian-mcp-"),
   );
   await mkdir(path.join(vaultPath, ".obsidian"));
   await writeFile(path.join(vaultPath, "note.md"), "# Note\n");
@@ -45,8 +45,8 @@ test("Obsidian MCP exposes bounded tools and requires approval for writes", asyn
   assert.match(rejected.error.message, /expected true|Required/);
 });
 
-test("MCP client completes a real Atlas-to-Obsidian round trip", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-obsidian-mcp-e2e-"));
+test("MCP client completes a real Ocean-to-Obsidian round trip", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-obsidian-mcp-e2e-"));
   const vaultPath = path.join(root, "vault");
   await mkdir(path.join(root, SYSTEM_DIR, "integrations", "obsidian"), {
     recursive: true,
@@ -68,18 +68,18 @@ test("MCP client completes a real Atlas-to-Obsidian round trip", async () => {
     await client.connect();
     const written = await client.callTool(
       "obsidian_write",
-      { path: "01-Projects/round-trip.md", content: "from Atlas" },
+      { path: "01-Projects/round-trip.md", content: "from Ocean" },
       true,
     );
     assert.match(written.content[0].text, /"applied":true/);
     assert.equal(
       await readFile(path.join(vaultPath, "01-Projects/round-trip.md"), "utf8"),
-      "from Atlas",
+      "from Ocean",
     );
     const read = await client.callTool("obsidian_read", {
       path: "01-Projects/round-trip.md",
     });
-    assert.match(read.content[0].text, /from Atlas/);
+    assert.match(read.content[0].text, /from Ocean/);
   } finally {
     client.close();
   }
@@ -87,7 +87,7 @@ test("MCP client completes a real Atlas-to-Obsidian round trip", async () => {
 
 test("MCP rejects an approval fingerprint for a different write", async () => {
   const vaultPath = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-mcp-fingerprint-"),
+    path.join(os.tmpdir(), "ocean-obsidian-mcp-fingerprint-"),
   );
   await mkdir(path.join(vaultPath, ".obsidian"));
   const connection = { enabled: true, mode: "read-write", vaultPath };

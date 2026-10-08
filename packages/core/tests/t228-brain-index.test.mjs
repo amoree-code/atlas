@@ -37,7 +37,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.join(here, "fixtures", "brain");
 
 async function withFixtureRoot(fn) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-brain-"));
   await mkdir(path.join(root, STORE_DIR.memory), { recursive: true });
   await mkdir(path.join(root, STORE_DIR.knowledge), { recursive: true });
   await cp(
@@ -289,7 +289,7 @@ test("CRLF frontmatter (e.g. a Windows git checkout) parses the same as LF", asy
 });
 
 test("brainSearch without an index built throws an explicit error, not a crash", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-brain-noindex-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-brain-noindex-"));
   try {
     await assert.rejects(
       () => brainSearch({ query: "anything", root }),
@@ -367,9 +367,7 @@ test("ollama embedder against a local stub server succeeds for a loopback, non-c
 });
 
 test("live Ollama embedder round trip (opt-in only)", {
-  skip:
-    (process.env.OCEAN_LIVE_EMBEDDER_TESTS ??
-      process.env.ATLAS_LIVE_EMBEDDER_TESTS) !== "1",
+  skip: process.env.OCEAN_LIVE_EMBEDDER_TESTS !== "1",
 }, async () => {
   await withFixtureRoot(async (root) => {
     const embedder = await createOllamaEmbedder({ model: "embeddinggemma" });

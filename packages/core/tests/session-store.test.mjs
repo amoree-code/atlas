@@ -9,12 +9,12 @@ import { SessionStore } from "../dist/infrastructure/persistence/session-store.j
 import { validateSession } from "../dist/infrastructure/persistence/session-validator.js";
 
 async function openStore() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "atlas-session-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "ocean-session-"));
   return new SessionStore(path.join(directory, "sessions.sqlite"));
 }
 
 test("stores a session and its events without extra application data", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "atlas-session-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "ocean-session-"));
   const store = new SessionStore(path.join(directory, "sessions.sqlite"));
   store.create({
     sessionId: "parent-1",
@@ -45,7 +45,7 @@ test("stores a session and its events without extra application data", async () 
 });
 
 test("stages user inputs as capture references without duplicating event content", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "atlas-capture-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "ocean-capture-"));
   const store = new SessionStore(path.join(directory, "sessions.sqlite"));
   store.create({
     sessionId: "capture-1",

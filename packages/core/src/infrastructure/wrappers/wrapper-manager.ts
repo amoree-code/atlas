@@ -22,7 +22,7 @@ import {
 
 const execFile = promisify(execFileCallback);
 
-const CLI_WRAPPER_NAMES = ["ocean", "atlas"] as const;
+const CLI_WRAPPER_NAMES = ["ocean"] as const;
 
 export function shimDirectory(): string {
   return oceanPath(SYSTEM_DIR, "runtime", "shims");
@@ -50,9 +50,9 @@ function wrapperContents(provider: ProviderRecord): string {
   const node = shellQuote(process.execPath);
   const entry = shellQuote(enginePath("dist", "main.js"));
   if (process.platform === "win32") {
-    return `@echo off\r\nset "OCEAN_SHIM_DIR=${shimDirectory()}"\r\nset "ATLAS_SHIM_DIR=${shimDirectory()}"\r\n"${process.execPath}" "${enginePath("dist", "main.js")}" intercept --client "${provider.id}" -- %*\r\n`;
+    return `@echo off\r\nset "OCEAN_SHIM_DIR=${shimDirectory()}"\r\n"${process.execPath}" "${enginePath("dist", "main.js")}" intercept --client "${provider.id}" -- %*\r\n`;
   }
-  return `#!/bin/sh\nexport OCEAN_SHIM_DIR=${shellQuote(shimDirectory())}\nexport ATLAS_SHIM_DIR=${shellQuote(shimDirectory())}\nexec ${node} ${entry} intercept --client ${shellQuote(provider.id)} -- "$@"\n`;
+  return `#!/bin/sh\nexport OCEAN_SHIM_DIR=${shellQuote(shimDirectory())}\nexec ${node} ${entry} intercept --client ${shellQuote(provider.id)} -- "$@"\n`;
 }
 
 function cliWrapperContents(): string {
@@ -227,13 +227,13 @@ async function shellProfilePath(): Promise<string> {
   return path.join(home, ".profile");
 }
 
-const BLOCK_BEGIN = /^# >>> (atlas|ocean) interception >>>$/;
+const BLOCK_BEGIN = /^# >>> (ocean) interception >>>$/;
 
 function withoutEol(line: string): string {
   return line.replace(/\r?\n$/, "");
 }
 
-// Removes every managed interception block ("atlas" is the pre-rename marker) and nothing else:
+// Removes every managed interception block and nothing else:
 // all other lines keep their exact bytes and line endings. Only the single blank separator the
 // installer puts above its block goes with it. A begin marker without a matching end marker is
 // left alone rather than guessed at.

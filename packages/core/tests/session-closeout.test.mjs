@@ -19,7 +19,7 @@ async function readBrainDump(root) {
 }
 
 test("finalizes a session with a bounded human summary, metadata, and handoff", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-session-closeout-"));
   process.env.OCEAN_ROOT = root;
   await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const store = new SessionStore(
@@ -126,7 +126,7 @@ test("finalizes a session with a bounded human summary, metadata, and handoff", 
 });
 
 test("skips the daily Work log line and the brain-dump for a generic, no-project session", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-session-closeout-"));
   process.env.OCEAN_ROOT = root;
   await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const store = new SessionStore(
@@ -171,7 +171,7 @@ test("skips the daily Work log line and the brain-dump for a generic, no-project
 });
 
 test("still logs a generic-title session and its brain-dump when it has a real git project", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-session-closeout-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-session-closeout-"));
   process.env.OCEAN_ROOT = root;
   await mkdir(path.join(root, SYSTEM_DIR, "sessions"), { recursive: true });
   const projectDir = path.join(root, "project");

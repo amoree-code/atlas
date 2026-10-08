@@ -51,7 +51,7 @@ test("every browser operation has an explicit authority, idempotency, and approv
 test("upload, download, and submit require owner approval before executing", async () => {
   const provider = new FakeBrowserProvider();
   const service = new BrowserService(provider);
-  const launch = await service.launch("/tmp/atlas-browser-test-profile");
+  const launch = await service.launch("/tmp/ocean-browser-test-profile");
   const handle = await service.connect(launch);
 
   await assert.rejects(
@@ -77,7 +77,7 @@ test("upload, download, and submit require owner approval before executing", asy
 test("navigate requires approval only when crossing origins, never on the first navigation", async () => {
   const provider = new FakeBrowserProvider();
   const service = new BrowserService(provider);
-  const launch = await service.launch("/tmp/atlas-browser-test-profile-2");
+  const launch = await service.launch("/tmp/ocean-browser-test-profile-2");
   const handle = await service.connect(launch);
 
   const first = await service.navigate(handle, "https://example.com/a");
@@ -104,7 +104,7 @@ test("navigate requires approval only when crossing origins, never on the first 
 test("click, type, and select report verification against live state, not the request", async () => {
   const provider = new FakeBrowserProvider();
   const service = new BrowserService(provider);
-  const launch = await service.launch("/tmp/atlas-browser-test-profile-3");
+  const launch = await service.launch("/tmp/ocean-browser-test-profile-3");
   const handle = await service.connect(launch);
 
   const typed = await service.type(handle, "#name", "hello");
@@ -119,7 +119,7 @@ test("replace-text changes only the requested occurrence and verifies the live v
   const provider = new FakeBrowserProvider();
   const service = new BrowserService(provider);
   const launch = await service.launch(
-    "/tmp/atlas-browser-test-profile-replace",
+    "/tmp/ocean-browser-test-profile-replace",
   );
   const handle = await service.connect(launch);
 
@@ -139,7 +139,7 @@ test("replace-text changes only the requested occurrence and verifies the live v
 test("click verification reflects the live post-click state, navigation and non-navigation alike", async () => {
   const provider = new FakeBrowserProvider();
   const service = new BrowserService(provider);
-  const launch = await service.launch("/tmp/atlas-browser-test-profile-click");
+  const launch = await service.launch("/tmp/ocean-browser-test-profile-click");
   const handle = await service.connect(launch);
 
   // A link click that is expected to navigate, and does.
@@ -186,7 +186,7 @@ test("click verification reflects the live post-click state, navigation and non-
 
 test("download path is sanitized against a hostile suggested filename", async () => {
   const directory = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-browser-download-"),
+    path.join(os.tmpdir(), "ocean-browser-download-"),
   );
 
   assert.equal(safeDownloadFilename("../../etc/passwd"), "passwd");
@@ -207,7 +207,7 @@ test("download path is sanitized against a hostile suggested filename", async ()
 });
 
 test("browser sessions persist launch metadata and reconnect through the session store", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-browser-session-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-browser-session-"));
   const store = new SessionStore(path.join(root, "sessions.sqlite"));
   const provider = new FakeBrowserProvider();
   const manager = new BrowserSessionManager(

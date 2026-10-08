@@ -6,7 +6,7 @@ const profileDistributionSchema = z
     version: z.string().min(1),
     description: z.string().default(""),
     oceanRequires: z.string().optional(),
-    // "atlasRequires" is the pre-rename key; still accepted on read for one release.
+    // "atlasRequires" is the pre-rename key; read-only: records stored before the rename still carry it. Never written.
     atlasRequires: z.string().optional(),
     clients: z.array(z.string().min(1)).default([]),
     files: z.array(z.string().min(1)).default([]),

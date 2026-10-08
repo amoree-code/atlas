@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// "atlas-run" is the pre-rename value; still accepted on read for one release.
+// "atlas-run" is the pre-rename value; read-only: records stored before the rename still carry it. Never written.
 const sessionEntryPointSchema = z
   .enum([
     "ocean-run",

@@ -41,7 +41,6 @@ test("the pre-rename atlas-run entry point is read as ocean-run", () => {
 });
 
 for (const [label, entryPoint, eventType] of [
-  ["stored", "atlas-run", "atlas_bootstrap"],
   ["new", "ocean-run", "ocean_bootstrap"],
 ]) {
   test(`client-test reads ${label} entry contract and bootstrap events`, async () => {

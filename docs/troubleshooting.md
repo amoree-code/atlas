@@ -35,7 +35,7 @@ cannot be resumed.
 ## Workspace ends up in the wrong place
 
 `oceanRoot()` defaults to the workspace root three directories above `kernel/packages/core`; set
-`OCEAN_ROOT` (older name `ATLAS_ROOT`) to point at a different workspace root (see [workspace.md](workspace.md)).
+`OCEAN_ROOT` to point at a different workspace root (see [workspace.md](workspace.md)).
 Re-run `ocean setup` after changing `OCEAN_ROOT` to bootstrap the new location.
 
 ## Private workspace directories show up in `git status`

@@ -12,10 +12,10 @@ import {
 } from "../dist/paths.js";
 
 test("doctor reports missing roots and broken active links without mutating", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-doctor-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-doctor-"));
   await mkdir(path.join(root, PERSONAL_DIR), { recursive: true });
   await mkdir(path.join(root, KNOWLEDGE_DIR), { recursive: true });
-  await mkdir(path.join(root, PROJECTS_DIR, "atlas"), { recursive: true });
+  await mkdir(path.join(root, PROJECTS_DIR, "ocean"), { recursive: true });
   await mkdir(path.join(root, SYSTEM_DIR), { recursive: true });
   await writeFile(
     path.join(root, PERSONAL_DIR, "MEMORY.md"),
@@ -49,7 +49,7 @@ test("doctor reports missing roots and broken active links without mutating", as
   );
 });
 
-test("policy doctor reads policy references written as `ocean policy` or the legacy `atlas policy`", async () => {
+test("policy doctor reads policy references written as `ocean policy`, not the retired `atlas policy`", async () => {
   const { CHARTER_DIR, POLICIES_DIR } = await import("../dist/paths.js");
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-policy-doctor-"));
   await mkdir(path.join(root, POLICIES_DIR), { recursive: true });
@@ -58,7 +58,7 @@ test("policy doctor reads policy references written as `ocean policy` or the leg
     path.join(root, CHARTER_DIR, "core.md"),
     [
       "Load `ocean policy task` when starting work.",
-      "Load `atlas policy task` too (legacy wording).",
+      "Load `atlas policy task` too (retired wording).",
       "Load `ocean policy list` to see them all.",
       "Load `ocean policy missing-one` and `atlas policy missing-two`.",
     ].join("\n"),
@@ -69,6 +69,6 @@ test("policy doctor reads policy references written as `ocean policy` or the leg
     { encoding: "utf8", env: { ...process.env, OCEAN_ROOT: root } },
   );
   const report = JSON.parse(result.stdout);
-  assert.deepEqual(report.missing.sort(), ["missing-one", "missing-two"]);
+  assert.deepEqual(report.missing.sort(), ["missing-one"]);
   assert.equal(report.ok, false);
 });

@@ -30,7 +30,7 @@ const unixOnly = process.platform === "win32" ? test.skip : test;
 
 async function withEnvironment(run) {
   const root = await import("node:fs/promises").then(({ mkdtemp }) =>
-    mkdtemp(path.join(os.tmpdir(), "atlas-intercept-")),
+    mkdtemp(path.join(os.tmpdir(), "ocean-intercept-")),
   );
   const oldRoot = process.env.OCEAN_ROOT;
   const oldPath = process.env.PATH;
@@ -74,13 +74,12 @@ test("sync creates Ocean wrappers and shell activation", async () => {
     assert.ok(result.providers.some((provider) => provider.id === "claude"));
     const wrapper = await readFile(providerWrapperPath("claude"), "utf8");
     assert.match(wrapper, /intercept --client/);
-    const atlasWrapper = await readFile(providerWrapperPath("atlas"), "utf8");
-    assert.match(atlasWrapper, /dist[\\/]main\.js/);
     const oceanWrapper = await readFile(providerWrapperPath("ocean"), "utf8");
-    assert.equal(oceanWrapper, atlasWrapper);
+    assert.match(oceanWrapper, /dist[\\/]main\.js/);
+    await assert.rejects(readFile(providerWrapperPath("atlas"), "utf8"));
     if (process.platform !== "win32") {
       assert.match(wrapper, /export OCEAN_SHIM_DIR=/);
-      assert.match(wrapper, /export ATLAS_SHIM_DIR=/);
+      assert.doesNotMatch(wrapper, /ATLAS_/);
     }
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
@@ -91,8 +90,8 @@ test("sync creates Ocean wrappers and shell activation", async () => {
   });
 });
 
-const ATLAS_BLOCK =
-  "# >>> atlas interception >>>\nexport PATH=/old/shims:$PATH\n# <<< atlas interception <<<\n";
+const OCEAN_BLOCK =
+  "# >>> ocean interception >>>\nexport PATH=/old/shims:$PATH\n# <<< ocean interception <<<\n";
 
 async function installOver(root, before) {
   const profile = path.join(root, "profile");
@@ -101,23 +100,9 @@ async function installOver(root, before) {
   return readFile(profile, "utf8");
 }
 
-test("shell integration replaces a pre-rename atlas block, keeps every other line byte-for-byte, and is idempotent", async () => {
-  await withEnvironment(async (root) => {
-    const once = await installOver(
-      root,
-      `export KEEP_ME=1\n\n${ATLAS_BLOCK}alias also-keep=true\n`,
-    );
-    assert.equal((once.match(/# >>> /g) ?? []).length, 1);
-    assert.match(once, /# >>> ocean interception >>>/);
-    assert.doesNotMatch(once, /atlas interception|\/old\/shims/);
-    assert.ok(once.startsWith("export KEEP_ME=1\nalias also-keep=true\n"));
-    assert.equal(await installOver(root, once), once);
-  });
-});
-
 test("shell integration never joins the lines around a block, even with no blank line above it", async () => {
   await withEnvironment(async (root) => {
-    const out = await installOver(root, `pre\n${ATLAS_BLOCK}post\n`);
+    const out = await installOver(root, `pre\n${OCEAN_BLOCK}post\n`);
     assert.ok(out.startsWith("pre\npost\n"), JSON.stringify(out));
     assert.equal((out.match(/# >>> /g) ?? []).length, 1);
   });
@@ -125,7 +110,7 @@ test("shell integration never joins the lines around a block, even with no blank
 
 test("shell integration keeps CRLF profiles CRLF without stray carriage returns", async () => {
   await withEnvironment(async (root) => {
-    const crlf = ATLAS_BLOCK.replaceAll("\n", "\r\n");
+    const crlf = OCEAN_BLOCK.replaceAll("\n", "\r\n");
     const out = await installOver(
       root,
       `alias a=1\r\n\r\n${crlf}alias b=2\r\n`,
@@ -139,21 +124,9 @@ test("shell integration keeps CRLF profiles CRLF without stray carriage returns"
   });
 });
 
-test("shell integration collapses an atlas block and an ocean block into one without merging neighbours", async () => {
-  await withEnvironment(async (root) => {
-    const ocean = ATLAS_BLOCK.replaceAll("atlas", "ocean");
-    const out = await installOver(
-      root,
-      `pre\n${ATLAS_BLOCK}mid\n${ocean}post\n`,
-    );
-    assert.ok(out.startsWith("pre\nmid\npost\n"), JSON.stringify(out));
-    assert.equal((out.match(/# >>> /g) ?? []).length, 1);
-  });
-});
-
 test("shell integration leaves an unterminated begin marker alone and appends its own block", async () => {
   await withEnvironment(async (root) => {
-    const before = "# >>> atlas interception >>>\nexport PATH=/old:$PATH\n";
+    const before = "# >>> ocean interception >>>\nexport PATH=/old:$PATH\n";
     const out = await installOver(root, before);
     assert.ok(out.startsWith(before));
     assert.match(
@@ -183,7 +156,7 @@ unixOnly("the Ocean wrapper forwards CLI commands to the engine", async () => {
   await withEnvironment(async (root) => {
     const { directory } = await syncProviderWrappers();
     const result = spawnSync(
-      path.join(directory, "atlas"),
+      path.join(directory, "ocean"),
       ["client", "list"],
       {
         env: {

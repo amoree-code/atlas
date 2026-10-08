@@ -6,7 +6,7 @@ import test from "node:test";
 import { readWorkspaceFile } from "../dist/infrastructure/filesystem/workspace-capability.js";
 
 test("reference capability reads only allowed files and returns a post-condition hash", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-capability-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-capability-"));
   await mkdir(path.join(root, "allowed"));
   await writeFile(path.join(root, "allowed", "note.txt"), "hello");
   await writeFile(path.join(root, "secret.txt"), "secret");

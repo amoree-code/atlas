@@ -3,13 +3,11 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const explicitRoot = process.argv[2];
-// The workspace project's folder is "ocean", or the pre-rename "atlas" until the layout migration,
-// under the flat layout (04-projects/) or the pre-T-243 brain/04-projects/.
+// The workspace project's folder, under the flat layout (04-projects/) or the pre-T-243
+// brain/04-projects/.
 const defaultRoots = [
   "../04-projects/ocean/tasks",
-  "../04-projects/atlas/tasks",
   "../brain/04-projects/ocean/tasks",
-  "../brain/04-projects/atlas/tasks",
 ].map((candidate) => path.resolve(candidate));
 let root = defaultRoots[0];
 if (explicitRoot) root = path.resolve(explicitRoot);
@@ -128,10 +126,10 @@ for (const record of records) {
       errors.push(`${record.file}: broken reference ${ref}`);
 }
 // Nothing closes tasks on its own (no watcher): a `done` task left in the live tree needs
-// `atlas tasks archive --apply`. A warning, not an error, so a hand-edit never blocks a build.
+// `ocean tasks archive --apply`. A warning, not an error, so a hand-edit never blocks a build.
 for (const record of live.filter((entry) => entry.fields.state === "done"))
   console.warn(
-    `${record.file}: done but not archived (run: atlas tasks archive --apply)`,
+    `${record.file}: done but not archived (run: ocean tasks archive --apply)`,
   );
 if (errors.length) {
   console.error(errors.join("\n"));

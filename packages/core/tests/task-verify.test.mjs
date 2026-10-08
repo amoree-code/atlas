@@ -22,7 +22,7 @@ const taskBody = (state) => `---
 id: T-900
 title: "verifier fixture"
 state: ${state}
-project: atlas
+project: ocean
 ---
 
 ## Objective
@@ -75,7 +75,7 @@ state: active
 });
 
 test("verifyTask passes only when every declared check exits zero", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-verify-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-verify-"));
   try {
     await writeTask(root, "T-900", taskBody("active"));
     const pass = await verifyTask("T-900", root, {
@@ -95,7 +95,7 @@ test("verifyTask passes only when every declared check exits zero", async () => 
 });
 
 test("verifyTask refuses a task with no runnable commands", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-verify-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-verify-"));
   try {
     await writeTask(
       root,
@@ -113,7 +113,7 @@ test("verifyTask refuses a task with no runnable commands", async () => {
 });
 
 test("completeTask with verify refuses when the independent check fails", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-verify-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-verify-"));
   try {
     await writeTask(root, "T-900", taskBody("active"));
     await assert.rejects(
@@ -129,7 +129,7 @@ test("completeTask with verify refuses when the independent check fails", async 
 });
 
 test("completeTask with verify succeeds when the independent check passes", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-verify-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-verify-"));
   try {
     await writeTask(root, "T-900", taskBody("active"));
     const result = await completeTask("T-900", root, {
@@ -143,7 +143,7 @@ test("completeTask with verify succeeds when the independent check passes", asyn
 });
 
 test("verifyTask defaults its working directory to the engine repo root", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "atlas-verify-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "ocean-verify-"));
   try {
     await writeTask(root, "T-900", taskBody("active"));
     let seen = "";
@@ -160,7 +160,7 @@ test("verifyTask defaults its working directory to the engine repo root", async 
   }
 });
 
-test("extractVerificationCommands allows the ocean and the legacy atlas command, and still rejects chained foreign commands", () => {
+test("extractVerificationCommands allows the ocean command and rejects the retired atlas one and chained foreign commands", () => {
   const body = `---
 id: T-903
 state: active
@@ -174,6 +174,5 @@ state: active
 `;
   assert.deepEqual(extractVerificationCommands(body), [
     "ocean tasks verify T-1",
-    "atlas tasks verify T-1",
   ]);
 });

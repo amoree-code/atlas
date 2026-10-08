@@ -7,10 +7,10 @@ import { syncObsidianVault } from "../dist/application/obsidian/vault-sync.js";
 
 test("syncs Obsidian hashes and reports additions, changes, and removals without copying note content", async () => {
   const vaultPath = await mkdtemp(
-    path.join(os.tmpdir(), "atlas-obsidian-sync-"),
+    path.join(os.tmpdir(), "ocean-obsidian-sync-"),
   );
   const stateFile = path.join(
-    await mkdtemp(path.join(os.tmpdir(), "atlas-obsidian-state-")),
+    await mkdtemp(path.join(os.tmpdir(), "ocean-obsidian-state-")),
     "sync-state.json",
   );
   await mkdir(path.join(vaultPath, ".obsidian"));
