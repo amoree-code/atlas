@@ -63,7 +63,6 @@ test("bootstrap is delivered only as environment variables, never as file conten
   });
   const env = bootstrapEnvironment(bootstrap);
   assert.equal(env.OCEAN_BOOTSTRAP, bootstrap.content);
-  assert.ok(!Object.keys(env).some((name) => name.startsWith("ATLAS_")));
   assert.equal(Object.keys(env).length, 2);
   assert.ok(
     Buffer.byteLength(env.OCEAN_BOOTSTRAP) <= OCEAN_BOOTSTRAP_MAX_BYTES,

@@ -55,19 +55,9 @@ export async function appendConflict(
   return file;
 }
 
-// Records written before the rename carry atlasSha256/atlasContent; read them as the ocean side.
 export function readConflictRecord(raw: unknown): ObsidianConflict {
-  const { atlasSha256, atlasContent, ...rest } = raw as ObsidianConflict & {
-    atlasSha256?: string | null;
-    atlasContent?: string;
-  };
-  return {
-    ...rest,
-    oceanSha256: rest.oceanSha256 ?? atlasSha256 ?? null,
-    ...(rest.oceanContent !== undefined || atlasContent !== undefined
-      ? { oceanContent: rest.oceanContent ?? atlasContent }
-      : {}),
-  };
+  const record = raw as ObsidianConflict;
+  return { ...record, oceanSha256: record.oceanSha256 ?? null };
 }
 
 function changedFromBaseline(

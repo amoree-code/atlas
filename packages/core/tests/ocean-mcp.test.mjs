@@ -46,7 +46,7 @@ test("Ocean MCP exposes provider-neutral read-only tools without Obsidian", asyn
       jsonrpc: "2.0",
       id: 3,
       method: "tools/call",
-      params: { name: "atlas_status", arguments: {} },
+      params: { name: "legacy_status", arguments: {} },
     });
     assert.equal(retired.error?.message, "Unknown MCP tool");
   } finally {
@@ -118,7 +118,7 @@ test("Ocean MCP exposes bounded resources and prompt templates", async () => {
     jsonrpc: "2.0",
     id: 10,
     method: "resources/read",
-    params: { uri: "atlas://tasks" },
+    params: { uri: "legacy://tasks" },
   });
   assert.ok(retired.error);
   const init = await handleOceanMcpRequest({

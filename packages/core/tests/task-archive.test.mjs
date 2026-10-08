@@ -203,11 +203,11 @@ test("a task whose project field says ocean archives under Ocean, other projects
   );
 });
 
-test("getTask finds an archived task under the Ocean namespace, not the retired Atlas one", async () => {
+test("getTask finds an archived task under the Ocean namespace only", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-gettask-ns-"));
   const tasksRoot = path.join(root, PROJECTS_DIR, "ocean", "tasks");
   for (const [namespace, id] of [
-    ["Atlas", "T-400"], // retired namespace
+    ["Legacy", "T-400"],
     ["Ocean", "T-401"],
   ]) {
     await mkdir(path.join(tasksRoot, "archive", namespace, id), {

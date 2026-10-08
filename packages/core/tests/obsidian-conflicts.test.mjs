@@ -10,10 +10,10 @@ import {
   resolveConflict,
 } from "../dist/application/obsidian/conflict-log.js";
 
-test("a conflict side is vault or ocean, and the retired atlas name is refused", () => {
+test("a conflict side is vault or ocean, and nothing else", () => {
   assert.equal(parseConflictSide("vault"), "vault");
   assert.equal(parseConflictSide("ocean"), "ocean");
-  assert.equal(parseConflictSide("atlas"), null);
+  assert.equal(parseConflictSide("legacy"), null);
   assert.equal(parseConflictSide("both"), null);
   assert.equal(parseConflictSide(undefined), null);
 });
@@ -33,23 +33,6 @@ test("new conflict records are written with ocean keys only", async () => {
   const stored = JSON.parse(await readFile(file, "utf8"));
   assert.equal(stored.oceanSha256, "ocean");
   assert.equal(stored.oceanContent, "from ocean");
-  assert.ok(!("atlasSha256" in stored) && !("atlasContent" in stored));
-});
-
-test("a record written before the rename (atlasSha256/atlasContent) is read as the ocean side", () => {
-  const record = readConflictRecord({
-    version: 1,
-    id: "x",
-    path: "p.md",
-    baselineSha256: "b",
-    vaultSha256: "v",
-    atlasSha256: "a",
-    atlasContent: "old",
-    createdAt: "2026-01-01T00:00:00.000Z",
-  });
-  assert.equal(record.oceanSha256, "a");
-  assert.equal(record.oceanContent, "old");
-  assert.ok(!("atlasSha256" in record));
 });
 
 test("resolveConflict reads records stored before the rename as the ocean side", async () => {
@@ -63,7 +46,7 @@ test("resolveConflict reads records stored before the rename as the ocean side",
       path: "p.md",
       baselineSha256: "base",
       vaultSha256: "base",
-      atlasSha256: "changed",
+      oceanSha256: "changed",
       createdAt: "2026-01-01T00:00:00.000Z",
     }),
   );

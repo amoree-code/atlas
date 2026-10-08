@@ -14,18 +14,18 @@
 - Surface task observations in the daily narrative, and generate a human-readable session
   closeout and daily narrative with an opt-in model call.
 - Wire in `graft` for local code-graph context during development.
-- Harden Atlas runtime contracts and recovery, and fix newline-delimited JSON-RPC framing
+- Harden Ocean runtime contracts and recovery, and fix newline-delimited JSON-RPC framing
   for the MCP stdio transport.
 - Add reviewed skill learning from completed sessions, with auto-activation of reviewed skills.
 - Add Kilo and Kimi as supported headless providers.
-- Add provider-neutral MCP setup and complete Atlas client integration.
+- Add provider-neutral MCP setup and complete Ocean client integration.
 - Add governed Obsidian vault integration: read-only discovery, automatic hash sync, guarded
   writes, inbox promotion, and exposure through the provider-neutral MCP server.
-- Make Atlas client-neutral with bounded context and cross-client sync (T-198); remediate
+- Make Ocean client-neutral with bounded context and cross-client sync (T-198); remediate
   security-audit findings.
-- Add workspace context and safe maintenance commands (`atlas doctor`, `atlas repair`),
+- Add workspace context and safe maintenance commands (`ocean doctor`, `ocean repair`),
   `.nvmrc`/lefthook for local dev tooling, and a cross-platform Docker release gate.
-- Fix a test that depended on the ambient `ATLAS_ROOT` instead of an isolated workspace,
+- Fix a test that depended on the ambient `OCEAN_ROOT` instead of an isolated workspace,
   causing a false failure whenever a real Obsidian vault is connected on the host.
 - Generate `skills/index.json` from each `SKILL.md`'s frontmatter instead of hand-maintaining
   it; `pnpm check:skills` now fails if the catalog drifts from the skill files.
@@ -38,7 +38,7 @@
 
 ### Patch Changes
 
-- [#92](https://github.com/amoree-code/atlas/pull/92) [`6e7274c`](https://github.com/amoree-code/atlas/commit/6e7274ccb96e945b94d00afdd587a8dd4285e8d8) Thanks [@amoree-code](https://github.com/amoree-code)! - Adopt changesets for versioning: add `.changeset/` config (GitHub-flavored changelog,
+- [#92](https://github.com/amoree-code/ocean/pull/92) [`6e7274c`](https://github.com/amoree-code/ocean/commit/6e7274ccb96e945b94d00afdd587a8dd4285e8d8) Thanks [@amoree-code](https://github.com/amoree-code)! - Adopt changesets for versioning: add `.changeset/` config (GitHub-flavored changelog,
   restricted access, patch bump for internal dependencies) and a `pnpm changeset` script.
 
 ## 0.3.6
@@ -48,22 +48,22 @@
 
 ## 0.3.5
 
-- Run headless providers through their original executable when Atlas shims are on `PATH`.
+- Run headless providers through their original executable when Ocean shims are on `PATH`.
 - Add coverage proving headless execution bypasses the managed shims.
 
 ## 0.3.4
 
-- Make the `atlas` CLI available through the managed shell shim after setup.
-- Verify the generated Atlas CLI wrapper forwards commands to the engine.
+- Make the `ocean` CLI available through the managed shell shim after setup.
+- Verify the generated Ocean CLI wrapper forwards commands to the engine.
 
 ## 0.3.3
 
-- Fix shell detection for Atlas CLI shim setup.
+- Fix shell detection for Ocean CLI shim setup.
 - Keep the public release gate green on the current mainline.
 
 ## 0.3.2
 
-Release candidate for the Atlas v2 public engine foundation.
+Release candidate for the Ocean v2 public engine foundation.
 
 - Provider-neutral headless CLI execution for Claude, Codex, Gemini, and Antigravity.
 - Validated profiles, bounded context, SQLite sessions, evidence, capabilities, MCP approval,

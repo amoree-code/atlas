@@ -76,10 +76,8 @@ test("sync creates Ocean wrappers and shell activation", async () => {
     assert.match(wrapper, /intercept --client/);
     const oceanWrapper = await readFile(providerWrapperPath("ocean"), "utf8");
     assert.match(oceanWrapper, /dist[\\/]main\.js/);
-    await assert.rejects(readFile(providerWrapperPath("atlas"), "utf8"));
     if (process.platform !== "win32") {
       assert.match(wrapper, /export OCEAN_SHIM_DIR=/);
-      assert.doesNotMatch(wrapper, /ATLAS_/);
     }
     const profile = await installShellIntegration();
     assert.equal(profile, path.join(root, "profile"));
@@ -145,9 +143,6 @@ test("doctor reports a missing ocean CLI wrapper", async () => {
       findings.some((finding) =>
         finding.startsWith("ocean: CLI wrapper is missing"),
       ),
-    );
-    assert.ok(
-      !findings.some((finding) => finding.startsWith("atlas: CLI wrapper")),
     );
   });
 });

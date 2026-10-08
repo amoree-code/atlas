@@ -49,7 +49,7 @@ test("doctor reports missing roots and broken active links without mutating", as
   );
 });
 
-test("policy doctor reads policy references written as `ocean policy`, not the retired `atlas policy`", async () => {
+test("policy doctor reads policy references written as `ocean policy` only", async () => {
   const { CHARTER_DIR, POLICIES_DIR } = await import("../dist/paths.js");
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-policy-doctor-"));
   await mkdir(path.join(root, POLICIES_DIR), { recursive: true });
@@ -58,9 +58,9 @@ test("policy doctor reads policy references written as `ocean policy`, not the r
     path.join(root, CHARTER_DIR, "core.md"),
     [
       "Load `ocean policy task` when starting work.",
-      "Load `atlas policy task` too (retired wording).",
+      "Load `legacy policy task` too (not a reference).",
       "Load `ocean policy list` to see them all.",
-      "Load `ocean policy missing-one` and `atlas policy missing-two`.",
+      "Load `ocean policy missing-one` and `legacy policy missing-two`.",
     ].join("\n"),
   );
   const result = spawnSync(

@@ -182,7 +182,7 @@ test("task linking matches the workspace project's id, and other projects as dif
     rankTaskCandidates([candidate(candidateId)], { projectId: requestId })[0]
       .reasons;
   assert.ok(reasons("ocean", "ocean").includes("project match"));
-  assert.ok(!reasons("atlas", "ocean").includes("project match"));
+  assert.ok(!reasons("legacy", "ocean").includes("project match"));
   assert.ok(reasons("acme", "acme").includes("project match"));
   assert.ok(!reasons("ocean-language", "ocean").includes("project match"));
 });

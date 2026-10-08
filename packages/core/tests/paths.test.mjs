@@ -112,7 +112,7 @@ test("other projects keep their own folder name untouched, and only the workspac
   assert.equal(projectFolder("ocean-language", root), "ocean-language");
   assert.equal(projectFolder("freelance/acme", root), "freelance/acme");
   assert.equal(sameProject("Ocean", "ocean"), true);
-  assert.equal(sameProject("atlas", "ocean"), false);
+  assert.equal(sameProject("legacy", "ocean"), false);
   assert.equal(sameProject("ocean", "ocean-language"), false);
   assert.equal(sameProject("acme", "acme"), true);
 });

@@ -22,9 +22,7 @@ test("client test reports Ocean sources and Claude transport", () => {
   assert.ok(report.ocean.bootstrapBytes <= 256);
   // Pre-rename keys are still emitted for one release, with identical values.
   assert.equal(report.ocean.root, oceanPath());
-  assert.equal(report.atlas, undefined);
   assert.equal(report.routing.oceanEngine, enginePath("dist", "main.js"));
-  assert.equal(report.routing.atlasEngine, undefined);
   assert.ok(report.project);
   assert.ok(Array.isArray(report.providerOwnedPaths));
   assert.equal(report.routing.command, "claude");

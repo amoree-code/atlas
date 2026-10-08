@@ -17,7 +17,7 @@ test("doctor GOVERNANCE_DRIFT reads policy references written as `ocean policy`"
     [
       "Present: `ocean policy task`.",
       "Missing: `ocean policy gone-new`.",
-      "Not a reference any more: `atlas policy gone-old`.",
+      "Not a reference any more: `legacy policy gone-old`.",
     ].join("\n"),
   );
   const result = spawnSync(

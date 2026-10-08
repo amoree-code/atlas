@@ -10,7 +10,7 @@ import { runClientTestCommand } from "../dist/interfaces/cli/client-test-command
 test("validates the full-head entry contract", () => {
   assert.deepEqual(
     validateSessionEntryContract({
-      entryPoint: "atlas-run",
+      entryPoint: "ocean-run",
       controlLevel: "full-head",
       inputCapture: "semantic",
       contextTransport: "profile-context-and-provider-adapter",
@@ -19,24 +19,6 @@ test("validates the full-head entry contract", () => {
       resume: "provider-session-id",
     }).controlLevel,
     "full-head",
-  );
-});
-
-test("the pre-rename atlas-run entry point is read as ocean-run", () => {
-  const contract = {
-    entryPoint: "atlas-run",
-    controlLevel: "full-head",
-    inputCapture: "semantic",
-    contextTransport: "t",
-    policyEnforcement: "p",
-    promotion: "explicit-review",
-    resume: "r",
-  };
-  assert.equal(validateSessionEntryContract(contract).entryPoint, "ocean-run");
-  assert.equal(
-    validateSessionEntryContract({ ...contract, entryPoint: "ocean-run" })
-      .entryPoint,
-    "ocean-run",
   );
 });
 

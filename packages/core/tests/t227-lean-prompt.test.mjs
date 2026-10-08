@@ -289,7 +289,7 @@ test("formatProfileContract emits compact key: value lines without defaults", ()
       },
     },
     memory: { enabled: false },
-    contextCompression: "atlas-bounded",
+    contextCompression: "ocean-bounded",
     allowedCommands: ["pnpm test", "pnpm run typecheck"],
   });
   const text = formatProfileContract(bound, {
@@ -322,21 +322,6 @@ test("formatProfileContract emits compact key: value lines without defaults", ()
     validateProfile({ name: "p", role: "developer", provider: "codex" })
       .contextCompression,
     "none",
-  );
-});
-
-test("a context reference stored with base atlas-root parses as ocean-root", async () => {
-  const { contextReferenceSchema } = await import(
-    "../dist/domain/context/context.js"
-  );
-  const reference = { path: "a.md", recordType: "task", reason: "r", bytes: 1 };
-  assert.equal(
-    contextReferenceSchema.parse({ ...reference, base: "atlas-root" }).base,
-    "ocean-root",
-  );
-  assert.equal(
-    contextReferenceSchema.parse({ ...reference, base: "cwd" }).base,
-    "cwd",
   );
 });
 

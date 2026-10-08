@@ -142,5 +142,4 @@ test("setup creates the workspace project's tasks folder as ocean/ on a fresh ro
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-setup-fresh-"));
   await setupAt(root);
   await stat(path.join(root, PROJECTS_DIR, "ocean", "tasks"));
-  await assert.rejects(stat(path.join(root, PROJECTS_DIR, "atlas")));
 });

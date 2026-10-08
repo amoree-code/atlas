@@ -1,17 +1,11 @@
 import { z } from "zod";
 
-// "atlas-run" is the pre-rename value; read-only: records stored before the rename still carry it. Never written.
-const sessionEntryPointSchema = z
-  .enum([
-    "ocean-run",
-    "atlas-run",
-    "terminal-shim",
-    "interactive-managed",
-    "desktop-wrapper",
-  ])
-  .transform((entryPoint) =>
-    entryPoint === "atlas-run" ? "ocean-run" : entryPoint,
-  );
+const sessionEntryPointSchema = z.enum([
+  "ocean-run",
+  "terminal-shim",
+  "interactive-managed",
+  "desktop-wrapper",
+]);
 const sessionControlLevelSchema = z.enum([
   "full-head",
   "managed-partial",

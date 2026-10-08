@@ -25,9 +25,8 @@ function isPromotionArea(file: string): boolean {
     file.startsWith(root),
   );
 }
-// The workspace project's mirror in the vault: 01-Projects/Ocean(.md|/), or the pre-rename
-// 01-Projects/Atlas(.md|/) in a vault that has not been renamed.
-const PROJECT_MIRRORS = ["Ocean", "Atlas"] as const;
+// The workspace project's mirror in the vault: 01-Projects/Ocean(.md|/).
+const PROJECT_MIRRORS = ["Ocean"] as const;
 
 function projectMirror(file: string): { relative: string } | null {
   for (const name of PROJECT_MIRRORS) {
@@ -78,7 +77,6 @@ export async function ingestVaultChanges(
     }
     const mirror = projectMirror(relative);
     if (!mirror) continue;
-    // 01-Projects/Ocean and the pre-rename 01-Projects/Atlas mirror the same project file.
     if (seenMirrors.has(mirror.relative)) continue;
     seenMirrors.add(mirror.relative);
     const vaultContent = await readOptional(
