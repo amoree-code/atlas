@@ -41,7 +41,7 @@ the engine still reads that layout, see below.)
   the `PERSONAL_DIR`/`PROJECTS_DIR`/`SYSTEM_DIR` constants (`02-personal`, `04-projects`,
   `bridge`). Each half of the layout is chosen once per process by a sentinel directory: the
   records use `04-projects/` and fall back to `brain/04-projects/`; the bridge uses
-  `bridge/sessions/` and falls back to `bridge/sessions/`. A process started before a
+  `bridge/sessions/` and falls back to `kernel/bridge/sessions/`. A process started before a
   layout move keeps the old layout until it restarts. `ocean layout plan | apply --yes |
   rollback --yes` performs the move (macOS and Linux).
 
@@ -54,10 +54,12 @@ isolated workspaces from one engine checkout. The older `ATLAS_ROOT` is still re
 the same three constants, so they track any future layout change):
 
 - Creates `02-personal`, `05-knowledge`, `01-daily`, `00-inbox`,
-  `06-templates`, and `04-projects/ocean/tasks`
+  `06-templates`, and the workspace project's `04-projects/<ocean|atlas>/tasks` (an existing
+  `atlas/tasks` is kept)
   under the workspace root.
 - Creates `bridge/config/startup`, `bridge/profiles`, `bridge/sessions`, `bridge/registry`,
-  `bridge/integrations`, and `bridge/archive` under the workspace root.
+  `bridge/integrations`, `bridge/archive` and `bridge/runtime/{shims,temporary}` under the
+  workspace root.
 - Writes `bridge/profiles/default.json` from the template in `packages/core/templates/`,
   without overwriting existing files.
 - Installs a per-OS startup entry that launches `kernel/packages/core/dist/main.js service`

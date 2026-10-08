@@ -136,16 +136,15 @@ ocean/                      private workspace root (local-only repo, no remote)
 │   │       ├── templates/
 │   │       ├── tests/
 │   │       └── package.json
-│   ├── scripts/
-│   └── bridge/             machine-local state — git-ignored, never published
-│                           profiles, sessions, config, registry, integrations
-├── brain/                  private user, project and knowledge records
-└── sessions/               narrative session records
+│   └── scripts/
+├── 00-inbox/ … 06-templates/   private user, project and knowledge records (PARA)
+├── charter/                private governance: core.md, policies/
+└── bridge/                 machine-local state — no git, never published
+                            profiles, sessions, config, registry, integrations
 ```
 
-Only `kernel/` is this repository. `brain/` and `sessions/` are siblings in the private
-workspace and are not part of it. `bridge/` sits physically inside this repo but is
-git-ignored in full and is never part of a public commit.
+Only `kernel/` is this repository. The records, `charter/` and `bridge/` are siblings in the
+private workspace and are not part of it.
 
 The workspace root resolves to the parent directory by default; set `OCEAN_ROOT` (the older `ATLAS_ROOT` is still read) to choose
 another. Startup entries execute the engine from

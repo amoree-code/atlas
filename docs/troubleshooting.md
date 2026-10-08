@@ -7,7 +7,7 @@ as the prompt text (`src/main.ts`), so pass it last.
 
 ## Profile load fails
 
-`loadProfile` reads `<workspace>/kernel/bridge/profiles/<name>.json` and validates it with Zod
+`loadProfile` reads `<workspace>/bridge/profiles/<name>.json` and validates it with Zod
 (see [profiles.md](profiles.md)). Failures mean either the file does not exist (run
 `ocean setup` to create `bridge/profiles/default.json`, or add the named profile yourself)
 or it does not match the schema — check `provider` is one of `claude`/`codex`/`gemini`/`antigravity`/

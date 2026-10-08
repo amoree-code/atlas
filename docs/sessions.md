@@ -8,7 +8,7 @@ inspected, or resumed later.
 ## Storage
 
 `SessionStore` (`src/infrastructure/persistence/session-store.ts`) opens
-`<workspace>/kernel/bridge/sessions/sessions.sqlite` (via `oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite")`,
+`<workspace>/bridge/sessions/sessions.sqlite` (via `oceanPath(SYSTEM_DIR, "sessions", "sessions.sqlite")`,
 see [workspace.md](workspace.md)) with `node:sqlite`, in WAL mode, and creates three tables
 if absent:
 
@@ -91,7 +91,7 @@ node dist/main.js session resume <session-id> "<prompt>"
 - `show <id>` prints one session or exits 1 if not found.
 - `show <id>` includes the validated `entryContract`; `events <id>` prints the ordered evidence log.
 - `summary <id>` prints the bounded human-readable Markdown closeout written under
-  `<workspace>/kernel/bridge/sessions/summaries/`. The session row stores its relative summary path,
+  `<workspace>/bridge/sessions/summaries/`. The session row stores its relative summary path,
   SHA-256, byte count, closeout status, version, and close timestamp.
 - `resume <id> "<prompt>"` currently only supports sessions whose `provider` is `claude`
   and that already have a `providerSessionId`; it re-invokes the provider with

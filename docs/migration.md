@@ -8,7 +8,7 @@ Ocean provides an explicit, local migration command. Preview the operation with
 
 `SessionStore` (`src/infrastructure/persistence/session-store.ts`) creates missing tables
 and applies additive column migrations. `ocean migrate --apply` is the explicit upgrade
-boundary. Back up `<workspace>/kernel/bridge/sessions/sessions.sqlite` before upgrading if you
+boundary. Back up `<workspace>/bridge/sessions/sessions.sqlite` before upgrading if you
 want a rollback point (see [sessions.md](sessions.md)).
 
 ## Profiles

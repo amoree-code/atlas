@@ -5,7 +5,7 @@ contract, including concise instructions and verification commands.
 
 ## Storage and loading
 
-Profiles live at `<workspace>/kernel/bridge/profiles/<name>.json` (see [workspace.md](workspace.md)).
+Profiles live at `<workspace>/bridge/profiles/<name>.json` (see [workspace.md](workspace.md)).
 `loadProfile(name)` (`src/infrastructure/filesystem/profile-loader.ts`) reads and validates the single
 canonical JSON file; legacy profile directories are read only for compatibility during migration.
 
@@ -133,7 +133,7 @@ A profile is loaded by name for a run; the run happens against a project's files
 - **`reviewer.json`** — reviews changes and reports findings; `writePolicy: "none"`.
 
 The active instances a workspace actually runs with live only at `<workspace
-root>/kernel/bridge/profiles/<name>.json` — never inside `kernel/`.
+root>/bridge/profiles/<name>.json` — never inside `kernel/`.
 
 The root-level JSON form is canonical. The older directory form with `profile.json` and
 `instructions.md` remains read-compatible during migration; it is not a second authority.
