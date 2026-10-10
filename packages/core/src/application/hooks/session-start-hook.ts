@@ -73,7 +73,7 @@ export async function oceanWorktreeWarning(
       ? `~${worktrees.slice(home.length)}`
       : worktrees;
     const line = (dir: string) =>
-      `ocean-dirty=${changed}: uncommitted changes already here. Change files in a worktree: git worktree add ${dir}/<slug> -b <branch>`;
+      `ocean-dirty=${changed}: uncommitted changes already here. Change files in a worktree: git worktree add ${dir}${path.sep}<slug> -b <branch>`;
     // Never cut the command in half: a path too long for the bound becomes a placeholder.
     const full = line(shown);
     return Buffer.byteLength(full) <= WORKTREE_WARNING_MAX_BYTES

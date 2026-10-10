@@ -279,9 +279,7 @@ test("oceanWorktreeWarning names the uncommitted changes and the worktree comman
     // A temp root's worktree path is too long for the bound, so it shows as a placeholder;
     // the command is never cut in half.
     assert.ok(
-      /git worktree add (~?\/\S+-worktrees|<\S+-worktrees>)\/<slug> -b <branch>$/.test(
-        warning,
-      ),
+      /git worktree add \S+-worktrees>?[\\/]<slug> -b <branch>$/.test(warning),
       warning,
     );
     assert.ok(Buffer.byteLength(warning) <= WORKTREE_WARNING_MAX_BYTES);
