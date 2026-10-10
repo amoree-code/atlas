@@ -248,6 +248,10 @@ test("claudeNativeHookStatus still reports a registration when no script is inst
   }
 });
 
+// The Docker image ships without git; these tests need it to build their sample repos.
+const noGit =
+  spawnSync("git", ["--version"]).status !== 0 && "git is not installed";
+
 async function withGitOceanRoot(run) {
   const root = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-git-root-"));
   const init = spawnSync("git", ["init", "-q", root], { encoding: "utf8" });
@@ -263,13 +267,17 @@ async function withGitOceanRoot(run) {
   }
 }
 
-test("oceanWorktreeWarning is silent for a clean Ocean repo", async () => {
+test("oceanWorktreeWarning is silent for a clean Ocean repo", {
+  skip: noGit,
+}, async () => {
   await withGitOceanRoot(async (root) => {
     assert.equal(await oceanWorktreeWarning(root), null);
   });
 });
 
-test("oceanWorktreeWarning names the uncommitted changes and the worktree command, bounded", async () => {
+test("oceanWorktreeWarning names the uncommitted changes and the worktree command, bounded", {
+  skip: noGit,
+}, async () => {
   await withGitOceanRoot(async (root) => {
     await mkdir(path.join(root, "01-daily"), { recursive: true });
     await writeFile(path.join(root, "01-daily", "a.md"), "a\n");
@@ -292,7 +300,9 @@ test("oceanWorktreeWarning names the uncommitted changes and the worktree comman
   });
 });
 
-test("oceanWorktreeWarning is silent outside the Ocean root and in a root that is not a git repo", async () => {
+test("oceanWorktreeWarning is silent outside the Ocean root and in a root that is not a git repo", {
+  skip: noGit,
+}, async () => {
   await withGitOceanRoot(async (root) => {
     await writeFile(path.join(root, "dirty.md"), "x\n");
     const outside = await mkdtemp(path.join(os.tmpdir(), "ocean-hook-else-"));
