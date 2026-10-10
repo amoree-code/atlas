@@ -1,8 +1,7 @@
-import { execFile as execFileCallback } from "node:child_process";
-import { promisify } from "node:util";
 import type { SessionStorePort } from "../../domain/ports/session-store-port.js";
 import type { SessionEvent } from "../../domain/sessions/session.js";
 import { safeJsonParse } from "../../fs-utils.js";
+import { gitChangedFiles } from "../context/project-resolution.js";
 import { createHandoffWithStore } from "../handoff/handoff-service.js";
 import {
   observeSessionWithStore,
@@ -16,28 +15,13 @@ import {
   writeSessionSummary,
 } from "./session-summary.js";
 
-const execFile = promisify(execFileCallback);
-
 export type SessionCloseoutResult = SessionSummaryResult & {
   handoffId: string | null;
   closeoutStatus: "completed" | "failed";
 };
 
 async function changedFiles(workingDirectory: string): Promise<string[]> {
-  try {
-    const result = await execFile(
-      "git",
-      ["-C", workingDirectory, "status", "--short"],
-      { timeout: 1_000, maxBuffer: 16_384 },
-    );
-    return result.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .slice(0, 100);
-  } catch {
-    return [];
-  }
+  return (await gitChangedFiles(workingDirectory)).slice(0, 100);
 }
 
 function lastEvent(

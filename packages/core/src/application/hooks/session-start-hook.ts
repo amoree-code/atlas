@@ -1,8 +1,12 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { SYSTEM_DIR } from "../../paths.js";
-import { resolveProject } from "../context/project-resolution.js";
+import { truncateUtf8 } from "../../fs-utils.js";
+import { oceanRoot, SYSTEM_DIR } from "../../paths.js";
+import {
+  gitChangedFiles,
+  resolveProject,
+} from "../context/project-resolution.js";
 import { buildOceanBootstrap } from "../context/resource-injection.js";
 
 // The documented Claude Code SessionStart hook contract on this machine (verified against
@@ -44,16 +48,60 @@ export async function readBoundedStdin(
   return Buffer.concat(chunks).toString("utf8");
 }
 
+export const WORKTREE_WARNING_MAX_BYTES = 200;
+
+// Sessions share the Ocean working tree, so one session's `git add -A` can capture another's
+// in-progress files (T-257). When a session starts inside the Ocean workspace and its repo
+// already has uncommitted changes, say so in one bounded line, beside — not inside — the
+// 256-byte bootstrap. Anything that goes wrong here means no warning, never a failed hook.
+export async function oceanWorktreeWarning(
+  cwd: string,
+): Promise<string | null> {
+  try {
+    const root = await realpath(oceanRoot());
+    const here = await realpath(cwd);
+    if (here !== root && !here.startsWith(`${root}${path.sep}`)) return null;
+    const changed = (await gitChangedFiles(here, 3_000)).length;
+    if (!changed) return null;
+    // House convention: worktrees live beside the workspace, e.g. ~/ocean-worktrees/<slug>.
+    const home = os.homedir();
+    const worktrees = path.join(
+      path.dirname(root),
+      `${path.basename(root)}-worktrees`,
+    );
+    const shown = worktrees.startsWith(`${home}${path.sep}`)
+      ? `~${worktrees.slice(home.length)}`
+      : worktrees;
+    const line = (dir: string) =>
+      `ocean-dirty=${changed}: uncommitted changes already here. Change files in a worktree: git worktree add ${dir}${path.sep}<slug> -b <branch>`;
+    // Never cut the command in half: a path too long for the bound becomes a placeholder.
+    const full = line(shown);
+    return Buffer.byteLength(full) <= WORKTREE_WARNING_MAX_BYTES
+      ? full
+      : truncateUtf8(
+          line(`<${path.basename(root)}-worktrees>`),
+          WORKTREE_WARNING_MAX_BYTES,
+        );
+  } catch {
+    return null;
+  }
+}
+
 export async function claudeSessionStartHook(
   payload: ClaudeSessionStartPayload,
 ): Promise<ClaudeSessionStartResult> {
   const cwd = payload.cwd ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
-  const project = await resolveProject(cwd);
+  const [project, warning] = await Promise.all([
+    resolveProject(cwd),
+    oceanWorktreeWarning(cwd),
+  ]);
   const bootstrap = buildOceanBootstrap(project);
   return {
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: bootstrap.content,
+      additionalContext: warning
+        ? `${bootstrap.content}\n${warning}`
+        : bootstrap.content,
     },
   };
 }

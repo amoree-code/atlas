@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { registryFile } from "../../fs-utils.js";
 import { oceanRoot, WORKSPACE_PROJECT_ID } from "../../paths.js";
 
@@ -57,6 +59,30 @@ export function findGitRoot(startDir: string): string | null {
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
+  }
+}
+
+const execFileAsync = promisify(execFile);
+
+// `git status --short` lines for the repo containing `directory`; [] when it is not a repo or
+// git fails. --no-optional-locks: sessions share working trees, and a status that refreshes the
+// index would take index.lock and fail another session's concurrent add/commit (T-257).
+export async function gitChangedFiles(
+  directory: string,
+  timeout = 1_000,
+): Promise<string[]> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["--no-optional-locks", "-C", directory, "status", "--short"],
+      { timeout, maxBuffer: 1024 * 1024 },
+    );
+    return stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
   }
 }
 
