@@ -1,5 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, renameSync } from "node:fs";
-import { readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { LEGACY_REGISTRY_DIR, oceanPath, REGISTRY_DIR } from "./paths.js";
@@ -21,6 +30,98 @@ export async function atomicWrite(
   } catch (error) {
     await rm(temp, { force: true });
     throw error;
+  }
+}
+
+// Exclusive cross-process lock around a read-modify-write of `target` (T-257): concurrent
+// session closeouts each read a shared file, edit it and write it back, and without a lock
+// the later write drops the earlier one's changes. The lock is `<target>.lock`, holding a
+// token unique to this acquisition. It is created by linking a fully written temp file into
+// place, so it is never seen empty, and released only while it still holds our token.
+const LOCK_WAIT_MS = 10_000;
+const LOCK_RETRY_MS = 20;
+// The sections this guards take milliseconds. A lock older than this belongs to a writer that
+// died or whose pid was reused, and is stale whoever it appears to belong to.
+const LOCK_STALE_MS = 60_000;
+// The takeover guard is only ever held for a read and an unlink.
+const TAKEOVER_STALE_MS = 5_000;
+
+async function createLockFile(lock: string, token: string): Promise<boolean> {
+  const temp = `${lock}.ocean-tmp-${randomUUID()}`;
+  await writeFile(temp, token, "utf8");
+  try {
+    await link(temp, lock);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+    throw error;
+  } finally {
+    await rm(temp, { force: true });
+  }
+}
+
+function ownerIsGone(token: string): boolean {
+  const pid = Number.parseInt(token, 10);
+  if (!Number.isInteger(pid) || pid <= 0) return true;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "EPERM";
+  }
+}
+
+async function staleLockToken(lock: string): Promise<string | null> {
+  const token = await readFile(lock, "utf8").catch(() => null);
+  const info = await stat(lock).catch(() => null);
+  if (token === null || info === null) return null;
+  return Date.now() - info.mtimeMs > LOCK_STALE_MS || ownerIsGone(token)
+    ? token
+    : null;
+}
+
+// Removes a stale lock, but only under a takeover guard and only if the lock still holds the
+// token judged stale: two waiters that both saw the same stale lock can never end up deleting
+// a live lock one of them has just created. Returns whether the stale lock was removed.
+async function removeStaleLock(lock: string, stale: string): Promise<boolean> {
+  const guard = `${lock}.takeover`;
+  if (!(await createLockFile(guard, `${process.pid} ${randomUUID()}`))) {
+    const info = await stat(guard).catch(() => null);
+    if (info && Date.now() - info.mtimeMs > TAKEOVER_STALE_MS)
+      await rm(guard, { force: true });
+    return false;
+  }
+  try {
+    if ((await readFile(lock, "utf8").catch(() => null)) !== stale)
+      return false;
+    await rm(lock, { force: true });
+    return true;
+  } finally {
+    await rm(guard, { force: true });
+  }
+}
+
+export async function withFileLock<T>(
+  target: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const lock = `${target}.lock`;
+  const token = `${process.pid} ${randomUUID()}`;
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  await mkdir(path.dirname(lock), { recursive: true });
+  for (;;) {
+    if (await createLockFile(lock, token)) break;
+    const stale = await staleLockToken(lock);
+    if (stale !== null && (await removeStaleLock(lock, stale))) continue;
+    if (Date.now() > deadline)
+      throw new Error(`Lock ${lock} still held after ${LOCK_WAIT_MS} ms`);
+    await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
+  }
+  try {
+    return await run();
+  } finally {
+    if ((await readFile(lock, "utf8").catch(() => null)) === token)
+      await rm(lock, { force: true });
   }
 }
 
